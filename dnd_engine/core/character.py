@@ -2,7 +2,9 @@
 # ABOUTME: Adds class, level, XP, proficiency bonus, and combat bonuses
 
 from enum import Enum
+from typing import Optional
 from dnd_engine.core.creature import Creature, Abilities
+from dnd_engine.systems.inventory import Inventory
 
 
 class CharacterClass(Enum):
@@ -19,6 +21,7 @@ class Character(Creature):
     - Experience points
     - Proficiency bonus
     - Attack and damage bonuses
+    - Inventory management
     """
 
     def __init__(
@@ -30,7 +33,8 @@ class Character(Creature):
         max_hp: int,
         ac: int,
         current_hp: int | None = None,
-        xp: int = 0
+        xp: int = 0,
+        inventory: Optional[Inventory] = None
     ):
         """
         Initialize a player character.
@@ -44,6 +48,7 @@ class Character(Creature):
             ac: Armor class
             current_hp: Starting HP (defaults to max_hp)
             xp: Starting experience points
+            inventory: Inventory instance (creates new one if not provided)
         """
         super().__init__(
             name=name,
@@ -56,6 +61,7 @@ class Character(Creature):
         self.character_class = character_class
         self.level = level
         self.xp = xp
+        self.inventory = inventory if inventory is not None else Inventory()
 
     @property
     def proficiency_bonus(self) -> int:

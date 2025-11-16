@@ -31,6 +31,12 @@ class EventType(Enum):
     ROOM_ENTER = "room_enter"
     ITEM_ACQUIRED = "item_acquired"
 
+    # Inventory events
+    ITEM_EQUIPPED = "item_equipped"
+    ITEM_UNEQUIPPED = "item_unequipped"
+    ITEM_USED = "item_used"
+    GOLD_ACQUIRED = "gold_acquired"
+
     # Character progression events
     LEVEL_UP = "level_up"
 
