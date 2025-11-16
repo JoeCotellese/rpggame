@@ -1,0 +1,82 @@
+{
+  "weapons": {
+    "longsword": {
+      "name": "Longsword",
+      "type": "weapon",
+      "weapon_type": "martial",
+      "damage": "1d8",
+      "damage_type": "slashing",
+      "properties": ["versatile"],
+      "value": 15
+    },
+    "shortsword": {
+      "name": "Shortsword",
+      "type": "weapon",
+      "weapon_type": "martial",
+      "damage": "1d6",
+      "damage_type": "piercing",
+      "properties": ["finesse", "light"],
+      "value": 10
+    },
+    "dagger": {
+      "name": "Dagger",
+      "type": "weapon",
+      "weapon_type": "simple",
+      "damage": "1d4",
+      "damage_type": "piercing",
+      "properties": ["finesse", "light", "thrown"],
+      "value": 2
+    },
+    "greataxe": {
+      "name": "Greataxe",
+      "type": "weapon",
+      "weapon_type": "martial",
+      "damage": "1d12",
+      "damage_type": "slashing",
+      "properties": ["heavy", "two-handed"],
+      "value": 30
+    }
+  },
+  "armor": {
+    "leather_armor": {
+      "name": "Leather Armor",
+      "type": "armor",
+      "armor_type": "light",
+      "ac": 11,
+      "ac_bonus_dex": true,
+      "value": 10
+    },
+    "chain_mail": {
+      "name": "Chain Mail",
+      "type": "armor",
+      "armor_type": "heavy",
+      "ac": 16,
+      "ac_bonus_dex": false,
+      "value": 75
+    },
+    "studded_leather": {
+      "name": "Studded Leather",
+      "type": "armor",
+      "armor_type": "light",
+      "ac": 12,
+      "ac_bonus_dex": true,
+      "value": 45
+    }
+  },
+  "consumables": {
+    "potion_of_healing": {
+      "name": "Potion of Healing",
+      "type": "consumable",
+      "effect": "heal",
+      "amount": "2d4+2",
+      "value": 50
+    },
+    "potion_of_greater_healing": {
+      "name": "Potion of Greater Healing",
+      "type": "consumable",
+      "effect": "heal",
+      "amount": "4d4+4",
+      "value": 150
+    }
+  }
+}

@@ -1,0 +1,114 @@
+{
+  "name": "Goblin Warren",
+  "description": "A network of caves inhabited by goblins and their cruel leader",
+  "start_room": "entrance",
+  "rooms": {
+    "entrance": {
+      "name": "Cave Entrance",
+      "description": "A dark opening in the hillside. The smell of unwashed bodies and rotting meat wafts from within.",
+      "exits": {
+        "north": "guard_post"
+      },
+      "enemies": [],
+      "items": [],
+      "searched": false
+    },
+    "guard_post": {
+      "name": "Guard Post",
+      "description": "A small chamber with crude wooden spikes pointing outward. Torch sconces cast flickering shadows on the walls.",
+      "exits": {
+        "south": "entrance",
+        "east": "storage_room",
+        "north": "main_hall"
+      },
+      "enemies": ["goblin", "goblin"],
+      "items": [
+        {
+          "type": "gold",
+          "amount": 15
+        }
+      ],
+      "searched": false
+    },
+    "storage_room": {
+      "name": "Storage Room",
+      "description": "Piles of stolen goods and provisions are scattered about. Barrels of ale line one wall.",
+      "exits": {
+        "west": "guard_post"
+      },
+      "enemies": [],
+      "items": [
+        {
+          "type": "gold",
+          "amount": 25
+        },
+        {
+          "type": "item",
+          "id": "potion_of_healing"
+        },
+        {
+          "type": "item",
+          "id": "shortsword"
+        }
+      ],
+      "searched": false,
+      "searchable": true
+    },
+    "main_hall": {
+      "name": "Main Hall",
+      "description": "A large cavern lit by a central fire pit. Crude beds and cooking implements suggest this is where the goblins live.",
+      "exits": {
+        "south": "guard_post",
+        "west": "prison",
+        "north": "throne_room"
+      },
+      "enemies": ["goblin", "wolf"],
+      "items": [
+        {
+          "type": "gold",
+          "amount": 30
+        }
+      ],
+      "searched": false
+    },
+    "prison": {
+      "name": "Prison Cell",
+      "description": "Iron bars separate a small cell from the main passage. The cell appears empty now, but old bloodstains tell grim stories.",
+      "exits": {
+        "east": "main_hall"
+      },
+      "enemies": [],
+      "items": [
+        {
+          "type": "item",
+          "id": "dagger"
+        }
+      ],
+      "searched": false,
+      "searchable": true
+    },
+    "throne_room": {
+      "name": "Throne Room",
+      "description": "A grotesque throne made from bones and scrap metal dominates this chamber. The goblin boss sits here, surrounded by his most loyal guards.",
+      "exits": {
+        "south": "main_hall"
+      },
+      "enemies": ["goblin_boss", "goblin"],
+      "items": [
+        {
+          "type": "gold",
+          "amount": 100
+        },
+        {
+          "type": "item",
+          "id": "potion_of_greater_healing"
+        },
+        {
+          "type": "item",
+          "id": "chain_mail"
+        }
+      ],
+      "searched": false
+    }
+  }
+}

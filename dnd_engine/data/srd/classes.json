@@ -1,0 +1,40 @@
+{
+  "fighter": {
+    "name": "Fighter",
+    "description": "A master of martial combat, skilled with a variety of weapons and armor",
+    "hit_die": "1d10",
+    "primary_ability": "str",
+    "saving_throw_proficiencies": ["str", "con"],
+    "armor_proficiencies": ["light", "medium", "heavy", "shields"],
+    "weapon_proficiencies": ["simple", "martial"],
+    "starting_equipment": {
+      "weapon": "longsword",
+      "armor": "chain_mail",
+      "gold": 10
+    },
+    "features_by_level": {
+      "1": [
+        {
+          "name": "Fighting Style",
+          "description": "You adopt a particular style of fighting as your specialty."
+        },
+        {
+          "name": "Second Wind",
+          "description": "You have a limited well of stamina. Once per short rest, you can use a bonus action to regain 1d10 + fighter level HP."
+        }
+      ],
+      "2": [
+        {
+          "name": "Action Surge",
+          "description": "You can push yourself beyond your normal limits. Once per short rest, you can take one additional action on your turn."
+        }
+      ],
+      "3": [
+        {
+          "name": "Martial Archetype",
+          "description": "You choose an archetype that represents your martial training and techniques."
+        }
+      ]
+    }
+  }
+}
