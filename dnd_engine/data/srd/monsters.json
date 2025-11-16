@@ -1,0 +1,113 @@
+{
+  "goblin": {
+    "name": "Goblin",
+    "size": "small",
+    "type": "humanoid",
+    "ac": 15,
+    "hp": "2d6",
+    "speed": 30,
+    "abilities": {
+      "str": 8,
+      "dex": 14,
+      "con": 10,
+      "int": 10,
+      "wis": 8,
+      "cha": 8
+    },
+    "actions": [
+      {
+        "name": "Scimitar",
+        "type": "melee-weapon-attack",
+        "attack_bonus": 4,
+        "damage": "1d6+2",
+        "damage_type": "slashing"
+      }
+    ],
+    "xp": 50
+  },
+  "bandit": {
+    "name": "Bandit",
+    "size": "medium",
+    "type": "humanoid",
+    "ac": 12,
+    "hp": "2d8+2",
+    "speed": 30,
+    "abilities": {
+      "str": 11,
+      "dex": 12,
+      "con": 12,
+      "int": 10,
+      "wis": 10,
+      "cha": 10
+    },
+    "actions": [
+      {
+        "name": "Scimitar",
+        "type": "melee-weapon-attack",
+        "attack_bonus": 3,
+        "damage": "1d6+1",
+        "damage_type": "slashing"
+      }
+    ],
+    "xp": 25
+  },
+  "goblin_boss": {
+    "name": "Goblin Boss",
+    "size": "small",
+    "type": "humanoid",
+    "ac": 17,
+    "hp": "6d6+12",
+    "speed": 30,
+    "abilities": {
+      "str": 10,
+      "dex": 14,
+      "con": 14,
+      "int": 10,
+      "wis": 8,
+      "cha": 10
+    },
+    "actions": [
+      {
+        "name": "Scimitar",
+        "type": "melee-weapon-attack",
+        "attack_bonus": 4,
+        "damage": "1d6+2",
+        "damage_type": "slashing"
+      },
+      {
+        "name": "Javelin",
+        "type": "melee-weapon-attack",
+        "attack_bonus": 4,
+        "damage": "1d6+2",
+        "damage_type": "piercing"
+      }
+    ],
+    "xp": 200
+  },
+  "wolf": {
+    "name": "Wolf",
+    "size": "medium",
+    "type": "beast",
+    "ac": 13,
+    "hp": "2d8+2",
+    "speed": 40,
+    "abilities": {
+      "str": 12,
+      "dex": 15,
+      "con": 12,
+      "int": 3,
+      "wis": 12,
+      "cha": 6
+    },
+    "actions": [
+      {
+        "name": "Bite",
+        "type": "melee-weapon-attack",
+        "attack_bonus": 4,
+        "damage": "2d4+2",
+        "damage_type": "piercing"
+      }
+    ],
+    "xp": 50
+  }
+}
