@@ -1,0 +1,156 @@
+# ABOUTME: Base Creature class representing any living entity in the game
+# ABOUTME: Handles HP, abilities, conditions, damage, and healing
+
+from dataclasses import dataclass, field
+from typing import Set
+
+
+@dataclass
+class Abilities:
+    """
+    D&D 5E ability scores (STR, DEX, CON, INT, WIS, CHA).
+
+    Ability scores typically range from 1-20 for player characters and monsters.
+    Each score provides a modifier calculated as: (score - 10) // 2
+    """
+    strength: int
+    dexterity: int
+    constitution: int
+    intelligence: int
+    wisdom: int
+    charisma: int
+
+    @property
+    def str_mod(self) -> int:
+        """Calculate Strength modifier"""
+        return (self.strength - 10) // 2
+
+    @property
+    def dex_mod(self) -> int:
+        """Calculate Dexterity modifier"""
+        return (self.dexterity - 10) // 2
+
+    @property
+    def con_mod(self) -> int:
+        """Calculate Constitution modifier"""
+        return (self.constitution - 10) // 2
+
+    @property
+    def int_mod(self) -> int:
+        """Calculate Intelligence modifier"""
+        return (self.intelligence - 10) // 2
+
+    @property
+    def wis_mod(self) -> int:
+        """Calculate Wisdom modifier"""
+        return (self.wisdom - 10) // 2
+
+    @property
+    def cha_mod(self) -> int:
+        """Calculate Charisma modifier"""
+        return (self.charisma - 10) // 2
+
+
+class Creature:
+    """
+    Base class for all living entities (PCs, NPCs, monsters).
+
+    Handles core D&D 5E mechanics: HP, AC, abilities, conditions, damage, and healing.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        max_hp: int,
+        ac: int,
+        abilities: Abilities,
+        current_hp: int | None = None
+    ):
+        """
+        Initialize a creature.
+
+        Args:
+            name: Creature's name
+            max_hp: Maximum hit points
+            ac: Armor class (target number for attacks)
+            abilities: Ability scores (STR, DEX, CON, INT, WIS, CHA)
+            current_hp: Starting HP (defaults to max_hp if not specified)
+        """
+        self.name = name
+        self.max_hp = max_hp
+        self.current_hp = current_hp if current_hp is not None else max_hp
+        self.ac = ac
+        self.abilities = abilities
+        self.conditions: Set[str] = set()
+
+    @property
+    def is_alive(self) -> bool:
+        """Check if the creature is alive (HP > 0)"""
+        return self.current_hp > 0
+
+    @property
+    def initiative_modifier(self) -> int:
+        """Initiative modifier (uses Dexterity)"""
+        return self.abilities.dex_mod
+
+    def take_damage(self, amount: int) -> None:
+        """
+        Apply damage to the creature.
+
+        HP cannot go below 0.
+
+        Args:
+            amount: Amount of damage to apply
+        """
+        self.current_hp = max(0, self.current_hp - amount)
+
+    def heal(self, amount: int) -> None:
+        """
+        Heal the creature.
+
+        Cannot heal dead creatures (HP = 0).
+        Cannot exceed max HP.
+
+        Args:
+            amount: Amount of HP to restore
+        """
+        if not self.is_alive:
+            # Dead creatures cannot be healed (would need resurrection)
+            return
+
+        self.current_hp = min(self.max_hp, self.current_hp + amount)
+
+    def add_condition(self, condition: str) -> None:
+        """
+        Add a condition to the creature (e.g., 'prone', 'stunned').
+
+        Args:
+            condition: Name of the condition to add
+        """
+        self.conditions.add(condition.lower())
+
+    def remove_condition(self, condition: str) -> None:
+        """
+        Remove a condition from the creature.
+
+        Args:
+            condition: Name of the condition to remove
+        """
+        self.conditions.discard(condition.lower())
+
+    def has_condition(self, condition: str) -> bool:
+        """
+        Check if the creature has a specific condition.
+
+        Args:
+            condition: Name of the condition to check
+
+        Returns:
+            True if the creature has the condition
+        """
+        return condition.lower() in self.conditions
+
+    def __str__(self) -> str:
+        """String representation of the creature"""
+        status = "alive" if self.is_alive else "dead"
+        return f"{self.name} (HP: {self.current_hp}/{self.max_hp}, AC: {self.ac}, {status})"

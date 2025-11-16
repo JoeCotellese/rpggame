@@ -72,18 +72,32 @@ This project delivers a command-line interface (CLI) D&D gaming experience built
 git clone https://github.com/yourusername/rpggame.git
 cd rpggame
 
-# Install dependencies (coming soon)
-pip install -r requirements.txt
+# Create virtual environment with uv
+uv venv
+
+# Activate virtual environment
+source .venv/bin/activate  # On Linux/Mac
+# .venv\Scripts\activate   # On Windows
+
+# Install dependencies
+uv pip install -r requirements.txt
 
 # Set up your Anthropic API key
 export ANTHROPIC_API_KEY=your_key_here
+# Or create a .env file with: ANTHROPIC_API_KEY=your_key_here
 ```
 
 ## Usage
 
 ```bash
 # Run the game (coming soon)
-python main.py
+python -m dnd_engine.main
+
+# Run tests
+pytest
+
+# Run tests with coverage
+pytest --cov=dnd_engine tests/
 ```
 
 ## Project Structure
