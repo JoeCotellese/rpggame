@@ -126,6 +126,8 @@ class GameState:
         """
         Search the current room for hidden items.
 
+        Adds items to player inventory and emits events.
+
         Returns:
             List of items found
         """
@@ -140,9 +142,45 @@ class GameState:
         # Mark as searched
         room["searched"] = True
 
-        # Return items (if any)
-        # Note: In a full implementation, this would add items to inventory
-        return room.get("items", [])
+        # Get items and add to inventory
+        items = room.get("items", [])
+        for item in items:
+            if item["type"] == "gold":
+                amount = item["amount"]
+                self.player.inventory.add_gold(amount)
+                # Emit gold acquired event
+                self.event_bus.emit(Event(
+                    type=EventType.GOLD_ACQUIRED,
+                    data={"amount": amount}
+                ))
+            elif item["type"] == "item":
+                item_id = item["id"]
+                category = self._get_item_category(item_id)
+                if category:
+                    self.player.inventory.add_item(item_id, category)
+                    # Emit item acquired event
+                    self.event_bus.emit(Event(
+                        type=EventType.ITEM_ACQUIRED,
+                        data={"item_id": item_id, "category": category}
+                    ))
+
+        return items
+
+    def _get_item_category(self, item_id: str) -> Optional[str]:
+        """
+        Determine the category of an item by ID.
+
+        Args:
+            item_id: ID of the item
+
+        Returns:
+            Category name ("weapons", "armor", "consumables") or None if not found
+        """
+        items_data = self.data_loader.load_items()
+        for category in ["weapons", "armor", "consumables"]:
+            if item_id in items_data.get(category, {}):
+                return category
+        return None
 
     def get_room_description(self) -> str:
         """

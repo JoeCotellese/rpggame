@@ -35,6 +35,8 @@ class CLI:
         self.game_state.event_bus.subscribe(EventType.COMBAT_START, self._on_combat_start)
         self.game_state.event_bus.subscribe(EventType.COMBAT_END, self._on_combat_end)
         self.game_state.event_bus.subscribe(EventType.DAMAGE_DEALT, self._on_damage_dealt)
+        self.game_state.event_bus.subscribe(EventType.ITEM_ACQUIRED, self._on_item_acquired)
+        self.game_state.event_bus.subscribe(EventType.GOLD_ACQUIRED, self._on_gold_acquired)
 
     def display_banner(self) -> None:
         """Display the game banner."""
@@ -112,6 +114,25 @@ class CLI:
 
         if command in ["search"]:
             self.handle_search()
+            return
+
+        if command in ["inventory", "i", "inv"]:
+            self.display_inventory()
+            return
+
+        if command.startswith("equip "):
+            item_id = " ".join(command.split()[1:])
+            self.handle_equip(item_id)
+            return
+
+        if command.startswith("unequip "):
+            slot_name = " ".join(command.split()[1:])
+            self.handle_unequip(slot_name)
+            return
+
+        if command.startswith("use "):
+            item_id = " ".join(command.split()[1:])
+            self.handle_use_item(item_id)
             return
 
         print("Unknown command. Type 'help' for available commands.")
@@ -294,12 +315,196 @@ class CLI:
             if not self.game_state.player.is_alive:
                 break
 
+    def display_inventory(self) -> None:
+        """Display the player's inventory with item details."""
+        inventory = self.game_state.player.inventory
+        items_data = self.game_state.data_loader.load_items()
+
+        print("\n" + "=" * 60)
+        print("INVENTORY")
+        print("=" * 60)
+
+        # Display gold
+        print(f"\nGold: {inventory.gold} gp")
+
+        # Display equipped items
+        print("\nEquipped:")
+        from dnd_engine.systems.inventory import EquipmentSlot
+
+        weapon_id = inventory.get_equipped_item(EquipmentSlot.WEAPON)
+        armor_id = inventory.get_equipped_item(EquipmentSlot.ARMOR)
+
+        if weapon_id:
+            weapon_data = items_data["weapons"].get(weapon_id, {})
+            weapon_name = weapon_data.get("name", weapon_id)
+            print(f"  Weapon: {weapon_name}")
+        else:
+            print(f"  Weapon: (none)")
+
+        if armor_id:
+            armor_data = items_data["armor"].get(armor_id, {})
+            armor_name = armor_data.get("name", armor_id)
+            print(f"  Armor: {armor_name}")
+        else:
+            print(f"  Armor: (none)")
+
+        # Display items by category
+        if inventory.is_empty():
+            print("\nItems: (none)")
+        else:
+            print("\nItems:")
+            for category in ["weapons", "armor", "consumables"]:
+                category_items = inventory.get_items_by_category(category)
+                if category_items:
+                    print(f"\n  {category.title()}:")
+                    for inv_item in category_items:
+                        item_data = items_data[category].get(inv_item.item_id, {})
+                        item_name = item_data.get("name", inv_item.item_id)
+                        qty_str = f" x{inv_item.quantity}" if inv_item.quantity > 1 else ""
+                        equipped = ""
+                        if inv_item.item_id == weapon_id or inv_item.item_id == armor_id:
+                            equipped = " [equipped]"
+                        print(f"    - {item_name}{qty_str}{equipped}")
+
+        print("=" * 60)
+
+    def handle_equip(self, item_id: str) -> None:
+        """Handle equipping an item."""
+        inventory = self.game_state.player.inventory
+        items_data = self.game_state.data_loader.load_items()
+
+        # Find the item in inventory (by ID or name)
+        target_item = None
+        target_category = None
+
+        for category in ["weapons", "armor"]:
+            category_items = inventory.get_items_by_category(category)
+            for inv_item in category_items:
+                item_data = items_data[category].get(inv_item.item_id, {})
+                if inv_item.item_id == item_id or item_data.get("name", "").lower() == item_id.lower():
+                    target_item = inv_item.item_id
+                    target_category = category
+                    break
+            if target_item:
+                break
+
+        if not target_item:
+            print(f"You don't have '{item_id}' in your inventory.")
+            return
+
+        # Equip the item
+        from dnd_engine.systems.inventory import EquipmentSlot
+
+        if target_category == "weapons":
+            slot = EquipmentSlot.WEAPON
+        elif target_category == "armor":
+            slot = EquipmentSlot.ARMOR
+        else:
+            print(f"Cannot equip {item_id}")
+            return
+
+        inventory.equip_item(target_item, slot)
+
+        item_data = items_data[target_category][target_item]
+        item_name = item_data.get("name", target_item)
+        print(f"\nEquipped {item_name}")
+
+        # Emit event
+        self.game_state.event_bus.emit(Event(
+            type=EventType.ITEM_EQUIPPED,
+            data={"item_id": target_item, "slot": slot.value}
+        ))
+
+    def handle_unequip(self, slot_name: str) -> None:
+        """Handle unequipping an item."""
+        from dnd_engine.systems.inventory import EquipmentSlot
+
+        slot = None
+        if slot_name.lower() in ["weapon", "w"]:
+            slot = EquipmentSlot.WEAPON
+        elif slot_name.lower() in ["armor", "a"]:
+            slot = EquipmentSlot.ARMOR
+        else:
+            print(f"Unknown equipment slot: {slot_name}. Use 'weapon' or 'armor'.")
+            return
+
+        inventory = self.game_state.player.inventory
+        item_id = inventory.unequip_item(slot)
+
+        if item_id:
+            items_data = self.game_state.data_loader.load_items()
+            category = "weapons" if slot == EquipmentSlot.WEAPON else "armor"
+            item_data = items_data[category].get(item_id, {})
+            item_name = item_data.get("name", item_id)
+            print(f"\nUnequipped {item_name}")
+
+            # Emit event
+            self.game_state.event_bus.emit(Event(
+                type=EventType.ITEM_UNEQUIPPED,
+                data={"item_id": item_id, "slot": slot.value}
+            ))
+        else:
+            print(f"\nNothing equipped in {slot_name} slot.")
+
+    def handle_use_item(self, item_id: str) -> None:
+        """Handle using a consumable item."""
+        inventory = self.game_state.player.inventory
+        items_data = self.game_state.data_loader.load_items()
+
+        # Find the item in consumables
+        target_item = None
+        consumables = inventory.get_items_by_category("consumables")
+
+        for inv_item in consumables:
+            item_data = items_data["consumables"].get(inv_item.item_id, {})
+            if inv_item.item_id == item_id or item_data.get("name", "").lower() == item_id.lower():
+                target_item = inv_item.item_id
+                break
+
+        if not target_item:
+            print(f"You don't have a consumable '{item_id}' in your inventory.")
+            return
+
+        # Get item data
+        item_data = items_data["consumables"][target_item]
+        item_name = item_data.get("name", target_item)
+
+        # Process the effect
+        effect = item_data.get("effect")
+        if effect == "heal":
+            amount_dice = item_data.get("amount", "1d4")
+            roll = self.game_state.dice_roller.roll(amount_dice)
+            healing = roll.total
+
+            old_hp = self.game_state.player.current_hp
+            self.game_state.player.heal(healing)
+            actual_healing = self.game_state.player.current_hp - old_hp
+
+            print(f"\nYou use {item_name}")
+            print(f"Healing: {roll} = {healing} HP")
+            print(f"You recover {actual_healing} HP (now at {self.game_state.player.current_hp}/{self.game_state.player.max_hp})")
+        else:
+            print(f"\nYou use {item_name}")
+
+        # Remove the item from inventory
+        inventory.remove_item(target_item, 1)
+
+        # Emit event
+        self.game_state.event_bus.emit(Event(
+            type=EventType.ITEM_USED,
+            data={"item_id": target_item, "effect": effect}
+        ))
+
     def display_help_exploration(self) -> None:
         """Display help for exploration commands."""
         print("\nExploration Commands:")
         print("  move <direction>  - Move in a direction (north, south, east, west)")
         print("  look              - Look around the current room")
         print("  search            - Search the room for items")
+        print("  inventory         - Show your inventory (shortcut: i)")
+        print("  equip <item>      - Equip a weapon or armor")
+        print("  unequip <slot>    - Unequip weapon or armor")
+        print("  use <item>        - Use a consumable item")
         print("  status            - Show your character status")
         print("  help              - Show this help message")
         print("  quit              - Exit the game")
@@ -352,4 +557,14 @@ class CLI:
 
     def _on_damage_dealt(self, event: Event) -> None:
         """Handle damage dealt event (currently just passes through)."""
+        pass
+
+    def _on_item_acquired(self, event: Event) -> None:
+        """Handle item acquired event."""
+        # Events are already displayed during search, so we can pass
+        pass
+
+    def _on_gold_acquired(self, event: Event) -> None:
+        """Handle gold acquired event."""
+        # Events are already displayed during search, so we can pass
         pass
