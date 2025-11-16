@@ -20,6 +20,7 @@ This document tracks remaining implementation tasks to complete the MVP and futu
   - ✅ Inventory system with equipment slots (`dnd_engine/systems/inventory.py`)
   - ✅ Game state manager (`dnd_engine/core/game_state.py`)
   - ✅ Event bus for pub/sub (`dnd_engine/utils/events.py`)
+  - ✅ Party system for 4-character gameplay (`dnd_engine/core/party.py`)
 
 - **Data Layer**
   - ✅ JSON data loader (`dnd_engine/rules/loader.py`)
