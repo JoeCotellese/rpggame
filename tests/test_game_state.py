@@ -4,6 +4,7 @@
 import pytest
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.character import Character, CharacterClass
+from dnd_engine.core.party import Party
 from dnd_engine.core.creature import Abilities
 from dnd_engine.core.game_state import GameState
 from dnd_engine.rules.loader import DataLoader
@@ -37,8 +38,11 @@ class TestGameState:
             ac=16
         )
 
+        # Create party with the character
+        self.party = Party(characters=[self.character])
+
         self.game_state = GameState(
-            player=self.character,
+            party=self.party,
             dungeon_name="goblin_warren",
             event_bus=self.event_bus,
             data_loader=self.loader,
@@ -47,7 +51,8 @@ class TestGameState:
 
     def test_game_state_creation(self):
         """Test creating a game state"""
-        assert self.game_state.player == self.character
+        assert self.game_state.party == self.party
+        assert self.character in self.game_state.party.characters
         assert self.game_state.dungeon is not None
         assert self.game_state.current_room_id is not None
         assert not self.game_state.in_combat
@@ -213,8 +218,11 @@ class TestGameStateActions:
             ac=16
         )
 
+        # Create party with the character
+        self.party = Party(characters=[self.character])
+
         self.game_state = GameState(
-            player=self.character,
+            party=self.party,
             dungeon_name="goblin_warren",
             event_bus=self.event_bus,
             data_loader=self.loader,
@@ -231,15 +239,17 @@ class TestGameStateActions:
     def test_get_player_status(self):
         """Test getting player status"""
         status = self.game_state.get_player_status()
-        assert "name" in status
-        assert "hp" in status
-        assert "max_hp" in status
+        assert isinstance(status, list)
+        assert len(status) == 1  # One character in party
+        assert "name" in status[0]
+        assert "hp" in status[0]
+        assert "max_hp" in status[0]
 
     def test_is_game_over_player_alive(self):
-        """Test game over check when player is alive"""
+        """Test game over check when party has living members"""
         assert not self.game_state.is_game_over()
 
     def test_is_game_over_player_dead(self):
-        """Test game over check when player is dead"""
+        """Test game over check when entire party is dead"""
         self.character.take_damage(999)
         assert self.game_state.is_game_over()

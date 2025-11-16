@@ -3,6 +3,7 @@
 
 from typing import Dict, List, Any, Optional
 from dnd_engine.core.character import Character
+from dnd_engine.core.party import Party
 from dnd_engine.core.creature import Creature
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.combat import CombatEngine
@@ -16,7 +17,7 @@ class GameState:
     Central game state manager.
 
     Coordinates all game systems and maintains the complete game state:
-    - Player character
+    - Party of player characters
     - Current dungeon and room
     - Combat state and active enemies
     - Game events
@@ -26,7 +27,7 @@ class GameState:
 
     def __init__(
         self,
-        player: Character,
+        party: Party,
         dungeon_name: str,
         event_bus: Optional[EventBus] = None,
         data_loader: Optional[DataLoader] = None,
@@ -36,13 +37,13 @@ class GameState:
         Initialize the game state.
 
         Args:
-            player: The player character
+            party: The party of player characters
             dungeon_name: Name of the dungeon to load
             event_bus: Event bus for game events (creates new if not provided)
             data_loader: Data loader for loading content (creates new if not provided)
             dice_roller: Dice roller (creates new if not provided)
         """
-        self.player = player
+        self.party = party
         self.event_bus = event_bus or EventBus()
         self.data_loader = data_loader or DataLoader()
         self.dice_roller = dice_roller or DiceRoller()
@@ -126,7 +127,9 @@ class GameState:
         """
         Search the current room for hidden items.
 
-        Adds items to player inventory and emits events.
+        Adds items to party members' inventories and emits events.
+        Gold is split evenly among all party members.
+        Items go to the first living party member.
 
         Returns:
             List of items found
@@ -144,10 +147,18 @@ class GameState:
 
         # Get items and add to inventory
         items = room.get("items", [])
+        living_members = self.party.get_living_members()
+
+        if not living_members:
+            return items  # No one alive to pick up items
+
         for item in items:
             if item["type"] == "gold":
                 amount = item["amount"]
-                self.player.inventory.add_gold(amount)
+                # Split gold evenly among all party members (living and dead)
+                split_amount = amount // len(self.party.characters)
+                for character in self.party.characters:
+                    character.inventory.add_gold(split_amount)
                 # Emit gold acquired event
                 self.event_bus.emit(Event(
                     type=EventType.GOLD_ACQUIRED,
@@ -157,11 +168,12 @@ class GameState:
                 item_id = item["id"]
                 category = self._get_item_category(item_id)
                 if category:
-                    self.player.inventory.add_item(item_id, category)
+                    # Add item to first living party member's inventory
+                    living_members[0].inventory.add_item(item_id, category)
                     # Emit item acquired event
                     self.event_bus.emit(Event(
                         type=EventType.ITEM_ACQUIRED,
-                        data={"item_id": item_id, "category": category}
+                        data={"item_id": item_id, "category": category, "character": living_members[0].name}
                     ))
 
         return items
@@ -206,30 +218,34 @@ class GameState:
 
         return desc
 
-    def get_player_status(self) -> Dict[str, Any]:
+    def get_player_status(self) -> List[Dict[str, Any]]:
         """
-        Get player character status.
+        Get status for all party members.
 
         Returns:
-            Dictionary with player stats
+            List of dictionaries with character stats for each party member
         """
-        return {
-            "name": self.player.name,
-            "hp": self.player.current_hp,
-            "max_hp": self.player.max_hp,
-            "ac": self.player.ac,
-            "level": self.player.level,
-            "xp": self.player.xp
-        }
+        return [
+            {
+                "name": char.name,
+                "hp": char.current_hp,
+                "max_hp": char.max_hp,
+                "ac": char.ac,
+                "level": char.level,
+                "xp": char.xp,
+                "alive": char.is_alive
+            }
+            for char in self.party.characters
+        ]
 
     def is_game_over(self) -> bool:
         """
         Check if the game is over.
 
         Returns:
-            True if game should end (player dead)
+            True if game should end (entire party is dead)
         """
-        return not self.player.is_alive
+        return self.party.is_wiped()
 
     def _check_for_enemies(self) -> None:
         """Check current room for enemies and start combat if found."""
@@ -253,8 +269,9 @@ class GameState:
         self.in_combat = True
         self.initiative_tracker = InitiativeTracker(self.dice_roller)
 
-        # Add player to initiative
-        self.initiative_tracker.add_combatant(self.player)
+        # Add all living party members to initiative
+        for character in self.party.get_living_members():
+            self.initiative_tracker.add_combatant(character)
 
         # Add enemies to initiative
         for enemy in self.active_enemies:
@@ -264,7 +281,8 @@ class GameState:
         self.event_bus.emit(Event(
             type=EventType.COMBAT_START,
             data={
-                "enemies": [e.name for e in self.active_enemies]
+                "enemies": [e.name for e in self.active_enemies],
+                "party": [c.name for c in self.party.get_living_members()]
             }
         ))
 
@@ -275,9 +293,13 @@ class GameState:
             if not enemy.is_alive and self.initiative_tracker:
                 self.initiative_tracker.remove_combatant(enemy)
 
-        # Check if combat is over
-        if self.initiative_tracker and self.initiative_tracker.is_combat_over():
-            self._end_combat()
+        # Check if combat is over (all enemies dead OR party wiped)
+        if self.initiative_tracker:
+            all_enemies_dead = all(not enemy.is_alive for enemy in self.active_enemies)
+            party_wiped = self.party.is_wiped()
+
+            if all_enemies_dead or party_wiped:
+                self._end_combat()
 
     def _end_combat(self) -> None:
         """End combat and perform cleanup."""
@@ -293,9 +315,11 @@ class GameState:
                         total_xp += monster_data.get("xp", 0)
                         break
 
-        # Award XP to player
-        if total_xp > 0:
-            self.player.gain_xp(total_xp)
+        # Award XP to all party members (split evenly)
+        if total_xp > 0 and len(self.party.characters) > 0:
+            xp_per_character = total_xp // len(self.party.characters)
+            for character in self.party.characters:
+                character.gain_xp(xp_per_character)
 
         # Clear combat state
         self.in_combat = False
@@ -310,6 +334,7 @@ class GameState:
             type=EventType.COMBAT_END,
             data={
                 "victory": True,
-                "xp_gained": total_xp
+                "xp_gained": total_xp,
+                "xp_per_character": total_xp // len(self.party.characters) if len(self.party.characters) > 0 else 0
             }
         ))

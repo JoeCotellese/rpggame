@@ -1,55 +1,110 @@
 # ABOUTME: Main entry point for the D&D 5E terminal game
-# ABOUTME: Sets up the character, game state, and starts the CLI
+# ABOUTME: Sets up the party, game state, and starts the CLI
 
 from dnd_engine.core.character import Character, CharacterClass
+from dnd_engine.core.party import Party
 from dnd_engine.core.creature import Abilities
 from dnd_engine.core.game_state import GameState
 from dnd_engine.ui.cli import CLI
 from dnd_engine.utils.events import EventBus
 
 
-def create_default_character() -> Character:
+def create_default_party() -> Party:
     """
-    Create a default level 1 fighter character.
+    Create a default party of 4 level 1 fighters.
 
     Returns:
-        Pre-configured fighter character
+        Party with 4 pre-configured fighter characters
     """
-    # Fighter with standard array stats
-    abilities = Abilities(
-        strength=16,     # Primary stat for fighter
-        dexterity=14,    # Good for AC and initiative
-        constitution=15, # Good HP
-        intelligence=10,
-        wisdom=12,
-        charisma=8
-    )
-
-    # Level 1 fighter with 1d10 + CON mod HP (12 HP avg)
-    character = Character(
+    # Fighter 1: Thorin Ironshield - STR-focused tank
+    thorin = Character(
         name="Thorin Ironshield",
         character_class=CharacterClass.FIGHTER,
         level=1,
-        abilities=abilities,
+        abilities=Abilities(
+            strength=16,     # Primary stat - high STR for attacks
+            dexterity=12,    # Moderate DEX
+            constitution=15, # Good HP
+            intelligence=10,
+            wisdom=12,
+            charisma=8
+        ),
         max_hp=12,  # 10 (avg d10) + 2 (CON mod)
         ac=16,      # Chain mail
         xp=0
     )
 
-    return character
+    # Fighter 2: Bjorn Axebearer - Balanced melee
+    bjorn = Character(
+        name="Bjorn Axebearer",
+        character_class=CharacterClass.FIGHTER,
+        level=1,
+        abilities=Abilities(
+            strength=15,     # Good STR
+            dexterity=14,    # Good DEX
+            constitution=14, # Good CON
+            intelligence=10,
+            wisdom=10,
+            charisma=10
+        ),
+        max_hp=12,  # 10 (avg d10) + 2 (CON mod)
+        ac=16,      # Chain mail
+        xp=0
+    )
+
+    # Fighter 3: Eldric Swiftblade - DEX-focused fighter
+    eldric = Character(
+        name="Eldric Swiftblade",
+        character_class=CharacterClass.FIGHTER,
+        level=1,
+        abilities=Abilities(
+            strength=14,     # Good STR
+            dexterity=16,    # Primary stat - high DEX for initiative and AC
+            constitution=13, # Moderate CON
+            intelligence=10,
+            wisdom=12,
+            charisma=8
+        ),
+        max_hp=11,  # 10 (avg d10) + 1 (CON mod)
+        ac=16,      # Chain mail
+        xp=0
+    )
+
+    # Fighter 4: Gareth Stormwind - CON-focused, high HP
+    gareth = Character(
+        name="Gareth Stormwind",
+        character_class=CharacterClass.FIGHTER,
+        level=1,
+        abilities=Abilities(
+            strength=15,     # Good STR
+            dexterity=12,    # Moderate DEX
+            constitution=16, # Primary stat - high CON for HP
+            intelligence=10,
+            wisdom=10,
+            charisma=10
+        ),
+        max_hp=13,  # 10 (avg d10) + 3 (CON mod)
+        ac=16,      # Chain mail
+        xp=0
+    )
+
+    # Create party with all 4 fighters
+    party = Party(characters=[thorin, bjorn, eldric, gareth])
+
+    return party
 
 
 def main():
     """Main entry point for the game."""
-    # Create the player character
-    player = create_default_character()
+    # Create the party
+    party = create_default_party()
 
     # Create event bus
     event_bus = EventBus()
 
     # Create game state
     game_state = GameState(
-        player=player,
+        party=party,
         dungeon_name="goblin_warren",
         event_bus=event_bus
     )
