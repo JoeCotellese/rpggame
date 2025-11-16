@@ -52,10 +52,16 @@ class CLI:
         print("-" * 60)
 
     def display_player_status(self) -> None:
-        """Display player character status."""
-        status = self.game_state.get_player_status()
-        print(f"\n{status['name']} (Level {status['level']} Fighter)")
-        print(f"HP: {status['hp']}/{status['max_hp']} | AC: {status['ac']} | XP: {status['xp']}")
+        """Display status for all party members."""
+        party_status = self.game_state.get_player_status()
+        print("\n" + "=" * 60)
+        print("PARTY STATUS")
+        print("=" * 60)
+        for status in party_status:
+            alive_marker = "💀" if not status['alive'] else "✓"
+            print(f"{alive_marker} {status['name']} (Level {status['level']} Fighter)")
+            print(f"   HP: {status['hp']}/{status['max_hp']} | AC: {status['ac']} | XP: {status['xp']}")
+        print("=" * 60)
 
     def display_combat_status(self) -> None:
         """Display combat status and initiative order."""
@@ -198,10 +204,16 @@ class CLI:
             print("You're not in combat!")
             return
 
-        # Check if it's the player's turn
+        # Check if it's a party member's turn
         current = self.game_state.initiative_tracker.get_current_combatant()
-        if current.creature != self.game_state.player:
-            print(f"It's {current.creature.name}'s turn, not yours!")
+        attacker = None
+        for character in self.game_state.party.characters:
+            if current.creature == character:
+                attacker = character
+                break
+
+        if not attacker:
+            print(f"It's {current.creature.name}'s turn, not a party member's!")
             return
 
         # Find target
@@ -220,10 +232,10 @@ class CLI:
 
         # Perform attack
         result = self.game_state.combat_engine.resolve_attack(
-            attacker=self.game_state.player,
+            attacker=attacker,
             defender=target,
-            attack_bonus=self.game_state.player.melee_attack_bonus,
-            damage_dice=f"1d8+{self.game_state.player.melee_damage_bonus}",
+            attack_bonus=attacker.melee_attack_bonus,
+            damage_dice=f"1d8+{attacker.melee_damage_bonus}",
             apply_damage=True
         )
 
@@ -261,13 +273,19 @@ class CLI:
             self.process_enemy_turns()
 
     def process_enemy_turns(self) -> None:
-        """Process all enemy turns until it's the player's turn again."""
+        """Process all enemy turns until it's a party member's turn again."""
         while self.game_state.in_combat:
             current = self.game_state.initiative_tracker.get_current_combatant()
 
-            # If it's the player's turn, stop
-            if current.creature == self.game_state.player:
-                print(f"\n--- Your turn ---")
+            # If it's a party member's turn, stop
+            is_party_turn = False
+            for character in self.game_state.party.characters:
+                if current.creature == character:
+                    is_party_turn = True
+                    print(f"\n--- {character.name}'s turn ---")
+                    break
+
+            if is_party_turn:
                 break
 
             # Enemy turn
@@ -278,7 +296,14 @@ class CLI:
 
             print(f"\n{enemy.name}'s turn...")
 
-            # Simple AI: attack the player
+            # Choose target from living party members (lowest HP)
+            living_party = self.game_state.party.get_living_members()
+            if not living_party:
+                break  # No one to attack
+
+            target = min(living_party, key=lambda c: c.current_hp)
+
+            # Get monster data for attack
             monsters = self.game_state.data_loader.load_monsters()
             monster_data = None
             for mid, mdata in monsters.items():
@@ -290,7 +315,7 @@ class CLI:
                 action = monster_data["actions"][0]
                 result = self.game_state.combat_engine.resolve_attack(
                     attacker=enemy,
-                    defender=self.game_state.player,
+                    defender=target,
                     attack_bonus=action["attack_bonus"],
                     damage_dice=action["damage"],
                     apply_damage=True
@@ -303,74 +328,91 @@ class CLI:
                         type=EventType.DAMAGE_DEALT,
                         data={
                             "attacker": enemy.name,
-                            "defender": self.game_state.player.name,
+                            "defender": target.name,
                             "damage": result.damage
                         }
+                    ))
+
+                # Check if party member died
+                if not target.is_alive:
+                    print(f"\n{target.name} has fallen!")
+                    self.game_state.event_bus.emit(Event(
+                        type=EventType.CHARACTER_DEATH,
+                        data={"name": target.name}
                     ))
 
             # Next turn
             self.game_state.initiative_tracker.next_turn()
 
-            # Check if player died
-            if not self.game_state.player.is_alive:
+            # Check if entire party is dead
+            if self.game_state.party.is_wiped():
                 break
 
     def display_inventory(self) -> None:
-        """Display the player's inventory with item details."""
-        inventory = self.game_state.player.inventory
+        """Display all party members' inventories with item details."""
         items_data = self.game_state.data_loader.load_items()
-
-        print("\n" + "=" * 60)
-        print("INVENTORY")
-        print("=" * 60)
-
-        # Display gold
-        print(f"\nGold: {inventory.gold} gp")
-
-        # Display equipped items
-        print("\nEquipped:")
         from dnd_engine.systems.inventory import EquipmentSlot
 
-        weapon_id = inventory.get_equipped_item(EquipmentSlot.WEAPON)
-        armor_id = inventory.get_equipped_item(EquipmentSlot.ARMOR)
+        print("\n" + "=" * 60)
+        print("PARTY INVENTORY")
+        print("=" * 60)
 
-        if weapon_id:
-            weapon_data = items_data["weapons"].get(weapon_id, {})
-            weapon_name = weapon_data.get("name", weapon_id)
-            print(f"  Weapon: {weapon_name}")
-        else:
-            print(f"  Weapon: (none)")
+        for character in self.game_state.party.characters:
+            inventory = character.inventory
+            status = "💀" if not character.is_alive else ""
+            print(f"\n{status} {character.name}:")
 
-        if armor_id:
-            armor_data = items_data["armor"].get(armor_id, {})
-            armor_name = armor_data.get("name", armor_id)
-            print(f"  Armor: {armor_name}")
-        else:
-            print(f"  Armor: (none)")
+            # Display gold
+            print(f"  Gold: {inventory.gold} gp")
 
-        # Display items by category
-        if inventory.is_empty():
-            print("\nItems: (none)")
-        else:
-            print("\nItems:")
-            for category in ["weapons", "armor", "consumables"]:
-                category_items = inventory.get_items_by_category(category)
-                if category_items:
-                    print(f"\n  {category.title()}:")
-                    for inv_item in category_items:
-                        item_data = items_data[category].get(inv_item.item_id, {})
-                        item_name = item_data.get("name", inv_item.item_id)
-                        qty_str = f" x{inv_item.quantity}" if inv_item.quantity > 1 else ""
-                        equipped = ""
-                        if inv_item.item_id == weapon_id or inv_item.item_id == armor_id:
-                            equipped = " [equipped]"
-                        print(f"    - {item_name}{qty_str}{equipped}")
+            # Display equipped items
+            weapon_id = inventory.get_equipped_item(EquipmentSlot.WEAPON)
+            armor_id = inventory.get_equipped_item(EquipmentSlot.ARMOR)
+
+            print("  Equipped:")
+            if weapon_id:
+                weapon_data = items_data["weapons"].get(weapon_id, {})
+                weapon_name = weapon_data.get("name", weapon_id)
+                print(f"    Weapon: {weapon_name}")
+            else:
+                print(f"    Weapon: (none)")
+
+            if armor_id:
+                armor_data = items_data["armor"].get(armor_id, {})
+                armor_name = armor_data.get("name", armor_id)
+                print(f"    Armor: {armor_name}")
+            else:
+                print(f"    Armor: (none)")
+
+            # Display items by category
+            if inventory.is_empty():
+                print("  Items: (none)")
+            else:
+                print("  Items:")
+                for category in ["weapons", "armor", "consumables"]:
+                    category_items = inventory.get_items_by_category(category)
+                    if category_items:
+                        print(f"    {category.title()}:")
+                        for inv_item in category_items:
+                            item_data = items_data[category].get(inv_item.item_id, {})
+                            item_name = item_data.get("name", inv_item.item_id)
+                            qty_str = f" x{inv_item.quantity}" if inv_item.quantity > 1 else ""
+                            equipped = ""
+                            if inv_item.item_id == weapon_id or inv_item.item_id == armor_id:
+                                equipped = " [equipped]"
+                            print(f"      - {item_name}{qty_str}{equipped}")
 
         print("=" * 60)
 
     def handle_equip(self, item_id: str) -> None:
-        """Handle equipping an item."""
-        inventory = self.game_state.player.inventory
+        """Handle equipping an item for the first living party member."""
+        living_members = self.game_state.party.get_living_members()
+        if not living_members:
+            print("No living party members to equip items!")
+            return
+
+        character = living_members[0]
+        inventory = character.inventory
         items_data = self.game_state.data_loader.load_items()
 
         # Find the item in inventory (by ID or name)
@@ -407,7 +449,7 @@ class CLI:
 
         item_data = items_data[target_category][target_item]
         item_name = item_data.get("name", target_item)
-        print(f"\nEquipped {item_name}")
+        print(f"\n{character.name} equipped {item_name}")
 
         # Emit event
         self.game_state.event_bus.emit(Event(
@@ -416,7 +458,13 @@ class CLI:
         ))
 
     def handle_unequip(self, slot_name: str) -> None:
-        """Handle unequipping an item."""
+        """Handle unequipping an item for the first living party member."""
+        living_members = self.game_state.party.get_living_members()
+        if not living_members:
+            print("No living party members to unequip items!")
+            return
+
+        character = living_members[0]
         from dnd_engine.systems.inventory import EquipmentSlot
 
         slot = None
@@ -428,7 +476,7 @@ class CLI:
             print(f"Unknown equipment slot: {slot_name}. Use 'weapon' or 'armor'.")
             return
 
-        inventory = self.game_state.player.inventory
+        inventory = character.inventory
         item_id = inventory.unequip_item(slot)
 
         if item_id:
@@ -436,7 +484,7 @@ class CLI:
             category = "weapons" if slot == EquipmentSlot.WEAPON else "armor"
             item_data = items_data[category].get(item_id, {})
             item_name = item_data.get("name", item_id)
-            print(f"\nUnequipped {item_name}")
+            print(f"\n{character.name} unequipped {item_name}")
 
             # Emit event
             self.game_state.event_bus.emit(Event(
@@ -447,8 +495,14 @@ class CLI:
             print(f"\nNothing equipped in {slot_name} slot.")
 
     def handle_use_item(self, item_id: str) -> None:
-        """Handle using a consumable item."""
-        inventory = self.game_state.player.inventory
+        """Handle using a consumable item for the first living party member."""
+        living_members = self.game_state.party.get_living_members()
+        if not living_members:
+            print("No living party members to use items!")
+            return
+
+        character = living_members[0]
+        inventory = character.inventory
         items_data = self.game_state.data_loader.load_items()
 
         # Find the item in consumables
@@ -462,7 +516,7 @@ class CLI:
                 break
 
         if not target_item:
-            print(f"You don't have a consumable '{item_id}' in your inventory.")
+            print(f"{character.name} doesn't have a consumable '{item_id}' in inventory.")
             return
 
         # Get item data
@@ -476,15 +530,15 @@ class CLI:
             roll = self.game_state.dice_roller.roll(amount_dice)
             healing = roll.total
 
-            old_hp = self.game_state.player.current_hp
-            self.game_state.player.heal(healing)
-            actual_healing = self.game_state.player.current_hp - old_hp
+            old_hp = character.current_hp
+            character.heal(healing)
+            actual_healing = character.current_hp - old_hp
 
-            print(f"\nYou use {item_name}")
+            print(f"\n{character.name} uses {item_name}")
             print(f"Healing: {roll} = {healing} HP")
-            print(f"You recover {actual_healing} HP (now at {self.game_state.player.current_hp}/{self.game_state.player.max_hp})")
+            print(f"{character.name} recovers {actual_healing} HP (now at {character.current_hp}/{character.max_hp})")
         else:
-            print(f"\nYou use {item_name}")
+            print(f"\n{character.name} uses {item_name}")
 
         # Remove the item from inventory
         inventory.remove_item(target_item, 1)
@@ -529,7 +583,14 @@ class CLI:
                 self.display_combat_status()
                 current = self.game_state.initiative_tracker.get_current_combatant()
 
-                if current.creature == self.game_state.player:
+                # Check if it's a party member's turn
+                is_party_turn = False
+                for character in self.game_state.party.characters:
+                    if current.creature == character:
+                        is_party_turn = True
+                        break
+
+                if is_party_turn:
                     command = self.get_player_command()
                     self.process_combat_command(command)
                 else:
@@ -542,7 +603,7 @@ class CLI:
         if self.game_state.is_game_over():
             print("\n" + "=" * 60)
             print("GAME OVER")
-            print("You have been defeated!")
+            print("Your party has been wiped out!")
             print("=" * 60)
 
     def _on_combat_start(self, event: Event) -> None:
@@ -552,8 +613,9 @@ class CLI:
 
     def _on_combat_end(self, event: Event) -> None:
         """Handle combat end event."""
-        xp = event.data.get("xp_gained", 0)
-        print(f"\n✓ Victory! You gained {xp} XP.")
+        total_xp = event.data.get("xp_gained", 0)
+        xp_per_char = event.data.get("xp_per_character", 0)
+        print(f"\n✓ Victory! Party gained {total_xp} XP ({xp_per_char} XP per character).")
 
     def _on_damage_dealt(self, event: Event) -> None:
         """Handle damage dealt event (currently just passes through)."""

@@ -3,6 +3,7 @@
 
 import pytest
 from dnd_engine.core.character import Character, CharacterClass
+from dnd_engine.core.party import Party
 from dnd_engine.core.creature import Abilities
 from dnd_engine.core.game_state import GameState
 from dnd_engine.systems.inventory import Inventory, EquipmentSlot
@@ -99,12 +100,15 @@ class TestInventoryGameStateIntegration:
             ac=16
         )
 
+        # Create party with the player
+        self.party = Party(characters=[self.player])
+
         self.event_bus = EventBus()
         self.data_loader = DataLoader()
         self.dice_roller = DiceRoller(seed=42)
 
         self.game_state = GameState(
-            player=self.player,
+            party=self.party,
             dungeon_name="goblin_warren",
             event_bus=self.event_bus,
             data_loader=self.data_loader,
