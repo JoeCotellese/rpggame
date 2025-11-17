@@ -2,7 +2,7 @@
 # ABOUTME: Adds class, level, XP, proficiency bonus, and combat bonuses
 
 from enum import Enum
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from dnd_engine.core.creature import Creature, Abilities
 from dnd_engine.systems.inventory import Inventory
 
@@ -35,7 +35,8 @@ class Character(Creature):
         current_hp: int | None = None,
         xp: int = 0,
         inventory: Optional[Inventory] = None,
-        race: str = "human"
+        race: str = "human",
+        saving_throw_proficiencies: Optional[List[str]] = None
     ):
         """
         Initialize a player character.
@@ -51,6 +52,7 @@ class Character(Creature):
             xp: Starting experience points
             inventory: Inventory instance (creates new one if not provided)
             race: Character race (human, mountain_dwarf, high_elf, halfling)
+            saving_throw_proficiencies: List of abilities the character is proficient in saving throws for (e.g., ["str", "con"])
         """
         super().__init__(
             name=name,
@@ -65,6 +67,7 @@ class Character(Creature):
         self.xp = xp
         self.race = race
         self.inventory = inventory if inventory is not None else Inventory()
+        self.saving_throw_proficiencies = saving_throw_proficiencies if saving_throw_proficiencies is not None else []
 
     @property
     def proficiency_bonus(self) -> int:
@@ -105,6 +108,158 @@ class Character(Creature):
             Damage bonus for melee attacks
         """
         return self.abilities.str_mod
+
+    def get_saving_throw_modifier(self, ability: str) -> int:
+        """
+        Calculate saving throw modifier for an ability.
+
+        Returns the ability modifier plus proficiency bonus if the character
+        is proficient in saving throws for that ability.
+
+        Args:
+            ability: Ability name (e.g., "str", "dex", "con", "int", "wis", "cha")
+                    or full name (e.g., "strength", "dexterity")
+
+        Returns:
+            Saving throw modifier (ability_modifier + proficiency_bonus if proficient)
+
+        Raises:
+            ValueError: If ability name is invalid
+        """
+        # Map short ability names to full names and vice versa
+        short_to_full = {
+            "str": "strength", "dex": "dexterity", "con": "constitution",
+            "int": "intelligence", "wis": "wisdom", "cha": "charisma"
+        }
+        full_to_short = {
+            "strength": "str", "dexterity": "dex", "constitution": "con",
+            "intelligence": "int", "wisdom": "wis", "charisma": "cha"
+        }
+
+        # Normalize to short ability name
+        ability_lower = ability.lower()
+        if ability_lower in short_to_full:
+            ability_short = ability_lower
+            ability_full = short_to_full[ability_lower]
+        elif ability_lower in full_to_short:
+            ability_short = full_to_short[ability_lower]
+            ability_full = ability_lower
+        else:
+            raise ValueError(f"Invalid ability name: {ability}")
+
+        # Get ability modifier
+        if ability_full == "strength":
+            modifier = self.abilities.str_mod
+        elif ability_full == "dexterity":
+            modifier = self.abilities.dex_mod
+        elif ability_full == "constitution":
+            modifier = self.abilities.con_mod
+        elif ability_full == "intelligence":
+            modifier = self.abilities.int_mod
+        elif ability_full == "wisdom":
+            modifier = self.abilities.wis_mod
+        elif ability_full == "charisma":
+            modifier = self.abilities.cha_mod
+        else:
+            raise ValueError(f"Invalid ability name: {ability}")
+
+        # Add proficiency bonus if proficient in this save (check short name)
+        if ability_short in self.saving_throw_proficiencies:
+            modifier += self.proficiency_bonus
+
+        return modifier
+
+    def make_saving_throw(
+        self,
+        ability: str,
+        dc: int,
+        advantage: bool = False,
+        disadvantage: bool = False,
+        event_bus=None
+    ) -> Dict[str, Any]:
+        """
+        Roll a saving throw against a DC.
+
+        Args:
+            ability: Ability to save with (e.g., "str", "dex", "con", "int", "wis", "cha")
+            dc: Difficulty class to beat
+            advantage: Roll with advantage (roll twice, take higher)
+            disadvantage: Roll with disadvantage (roll twice, take lower)
+            event_bus: Optional EventBus instance to emit saving throw event
+
+        Returns:
+            Dictionary with:
+            - "success": bool (total >= dc)
+            - "roll": int (the d20 roll before modifier)
+            - "modifier": int (saving throw modifier)
+            - "total": int (roll + modifier)
+            - "dc": int (the DC that was beaten)
+            - "ability": str (the ability that was saved with, in short form)
+
+        Raises:
+            ValueError: If ability name is invalid
+        """
+        from dnd_engine.core.dice import DiceRoller
+        from dnd_engine.utils.events import Event, EventType
+
+        # Normalize ability to short name
+        short_to_full = {
+            "str": "strength", "dex": "dexterity", "con": "constitution",
+            "int": "intelligence", "wis": "wisdom", "cha": "charisma"
+        }
+        full_to_short = {
+            "strength": "str", "dexterity": "dex", "constitution": "con",
+            "intelligence": "int", "wisdom": "wis", "charisma": "cha"
+        }
+
+        ability_lower = ability.lower()
+        if ability_lower in short_to_full:
+            ability_short = ability_lower
+        elif ability_lower in full_to_short:
+            ability_short = full_to_short[ability_lower]
+        else:
+            raise ValueError(f"Invalid ability name: {ability}")
+
+        # Roll the saving throw
+        roller = DiceRoller()
+        roll_result = roller.roll("d20", advantage=advantage, disadvantage=disadvantage)
+
+        # Get the saving throw modifier
+        modifier = self.get_saving_throw_modifier(ability)
+
+        # Calculate total
+        total = roll_result.total + modifier
+
+        # Determine success
+        success = total >= dc
+
+        # Create result dict
+        result = {
+            "success": success,
+            "roll": roll_result.rolls[0] if len(roll_result.rolls) == 1 else max(roll_result.rolls) if advantage else min(roll_result.rolls),
+            "modifier": modifier,
+            "total": total,
+            "dc": dc,
+            "ability": ability_short
+        }
+
+        # Emit event if event bus is provided
+        if event_bus is not None:
+            event = Event(
+                type=EventType.SAVING_THROW,
+                data={
+                    "character": self.name,
+                    "ability": ability_short,
+                    "dc": dc,
+                    "roll": result["roll"],
+                    "modifier": modifier,
+                    "total": total,
+                    "success": success
+                }
+            )
+            event_bus.emit(event)
+
+        return result
 
     def gain_xp(self, amount: int) -> None:
         """
