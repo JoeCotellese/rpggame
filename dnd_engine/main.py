@@ -224,7 +224,7 @@ def main() -> None:
             for char in characters:
                 race_name = races_data.get(char.race, {}).get("name", char.race)
                 class_name = classes_data.get("fighter", {}).get("name", "Fighter")
-                print(f"  • {char.name} ({race_name} {class_name}) - HP: {char.max_hp}, AC: {char.armor_class}")
+                print(f"  • {char.name} ({race_name} {class_name}) - HP: {char.max_hp}, AC: {char.ac}")
             print(f"{'=' * 60}")
 
         print("\nPress Enter to begin your adventure...")
