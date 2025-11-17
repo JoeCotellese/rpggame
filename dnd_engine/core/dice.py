@@ -120,13 +120,28 @@ class DiceRoller:
             # Roll the specified number of dice
             rolls = [self._roll_die(sides) for _ in range(count)]
 
-        return DiceRoll(
+        result = DiceRoll(
             rolls=rolls,
             modifier=modifier,
             notation=notation,
             advantage=advantage,
             disadvantage=disadvantage
         )
+
+        # Log the roll if debug mode is enabled
+        from dnd_engine.utils.logging_config import get_logging_config
+        logging_config = get_logging_config()
+        if logging_config:
+            logging_config.log_dice_roll(
+                notation=notation,
+                rolls=rolls,
+                modifier=modifier,
+                total=result.total,
+                advantage=advantage,
+                disadvantage=disadvantage
+            )
+
+        return result
 
     def _parse_notation(self, notation: str) -> tuple[int, int, int]:
         """
