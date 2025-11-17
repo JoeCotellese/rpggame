@@ -13,6 +13,7 @@ from dnd_engine.core.party import Party
 from dnd_engine.core.game_state import GameState
 from dnd_engine.systems.inventory import Inventory, InventoryItem, EquipmentSlot
 from dnd_engine.systems.currency import Currency
+from dnd_engine.systems.resources import ResourcePool
 from dnd_engine.utils.events import EventBus
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.core.dice import DiceRoller
@@ -255,7 +256,8 @@ class SaveManager:
             "ac": character.ac,
             "abilities": asdict(character.abilities),
             "inventory": self._serialize_inventory(character.inventory),
-            "conditions": list(character.conditions)
+            "conditions": list(character.conditions),
+            "resource_pools": self._serialize_resource_pools(character)
         }
 
     def _serialize_inventory(self, inventory: Inventory) -> Dict[str, Any]:
@@ -283,6 +285,26 @@ class SaveManager:
             },
             "currency": asdict(inventory.currency)
         }
+
+    def _serialize_resource_pools(self, character: Character) -> List[Dict[str, Any]]:
+        """
+        Serialize character resource pools to a list of dictionaries.
+
+        Args:
+            character: Character to serialize resource pools from
+
+        Returns:
+            List of dictionaries representing each resource pool
+        """
+        return [
+            {
+                "name": pool.name,
+                "current": pool.current,
+                "maximum": pool.maximum,
+                "recovery_type": pool.recovery_type
+            }
+            for pool in character.resource_pools.values()
+        ]
 
     def _serialize_dungeon_state(self, dungeon: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -390,6 +412,11 @@ class SaveManager:
         # Restore conditions
         for condition in char_data.get("conditions", []):
             character.add_condition(condition)
+
+        # Restore resource pools
+        for pool_data in char_data.get("resource_pools", []):
+            pool = ResourcePool(**pool_data)
+            character.add_resource_pool(pool)
 
         return character
 

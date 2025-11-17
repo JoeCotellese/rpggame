@@ -7,6 +7,7 @@ from dnd_engine.core.creature import Abilities
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.systems.inventory import Inventory, EquipmentSlot
+from dnd_engine.systems.resources import ResourcePool
 from dnd_engine.ui.rich_ui import (
     print_section,
     print_choice_menu,
@@ -401,6 +402,52 @@ class CharacterFactory:
         if starting_gold > 0:
             character.inventory.add_gold(starting_gold)
 
+    @staticmethod
+    def initialize_class_resources(
+        character: Character,
+        class_data: Dict[str, Any],
+        level: int
+    ) -> None:
+        """
+        Initialize resource pools from class features.
+
+        Iterates through all class features up to the character's level and creates
+        resource pools for any features that have a "resource" definition.
+
+        Args:
+            character: Character object to add resource pools to
+            class_data: Class definition with features_by_level
+            level: Character level (determines which features are available)
+
+        Side Effects:
+            - Adds ResourcePool instances to character.resource_pools
+        """
+        features_by_level = class_data.get("features_by_level", {})
+
+        # Track resource pools we've already added to avoid duplicates
+        added_pools = set()
+
+        # Iterate through each level from 1 to character level
+        for lvl in range(1, level + 1):
+            features = features_by_level.get(str(lvl), [])
+
+            for feature in features:
+                if "resource" in feature:
+                    resource_data = feature["resource"]
+                    pool_name = resource_data["pool"]
+
+                    # Only add pool if we haven't already added it
+                    # (e.g., multiple features might share the same pool)
+                    if pool_name not in added_pools:
+                        pool = ResourcePool(
+                            name=pool_name,
+                            current=resource_data["max_uses"],
+                            maximum=resource_data["max_uses"],
+                            recovery_type=resource_data["recovery"]
+                        )
+                        character.add_resource_pool(pool)
+                        added_pools.add(pool_name)
+
     def create_character_interactive(
         self,
         ui,
@@ -665,6 +712,9 @@ class CharacterFactory:
 
         # Store race (will add field to Character class)
         character.race = race_choice
+
+        # Initialize class resources (spell slots, ki points, etc.)
+        self.initialize_class_resources(character, class_data, 1)
 
         print_section("Adding Starting Equipment")
 

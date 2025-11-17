@@ -6,6 +6,7 @@ from typing import Optional, List, Dict, Any
 from dnd_engine.core.creature import Creature, Abilities
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.systems.inventory import Inventory
+from dnd_engine.systems.resources import ResourcePool
 
 
 class CharacterClass(Enum):
@@ -82,6 +83,7 @@ class Character(Creature):
         self.expertise_skills = expertise_skills if expertise_skills is not None else []
         self.weapon_proficiencies = weapon_proficiencies if weapon_proficiencies is not None else []
         self.armor_proficiencies = armor_proficiencies if armor_proficiencies is not None else []
+        self.resource_pools: Dict[str, ResourcePool] = {}
         self._dice_roller = DiceRoller()
 
     @property
@@ -594,6 +596,45 @@ class Character(Creature):
 
         # Can use sneak attack if attack has advantage or ally is nearby
         return has_advantage or ally_nearby
+
+    def add_resource_pool(self, pool: ResourcePool) -> None:
+        """
+        Add a resource pool to character.
+
+        Args:
+            pool: ResourcePool instance to add
+
+        Side Effects:
+            Stores the pool in resource_pools dictionary keyed by pool name
+        """
+        self.resource_pools[pool.name] = pool
+
+    def use_resource(self, pool_name: str, amount: int = 1) -> bool:
+        """
+        Use resource from a pool.
+
+        Args:
+            pool_name: Name of the resource pool
+            amount: Number of resources to use (default 1)
+
+        Returns:
+            True if resource was used, False if pool not found or insufficient resources
+        """
+        if pool_name in self.resource_pools:
+            return self.resource_pools[pool_name].use(amount)
+        return False
+
+    def get_resource_pool(self, pool_name: str) -> Optional[ResourcePool]:
+        """
+        Get a resource pool by name.
+
+        Args:
+            pool_name: Name of the resource pool
+
+        Returns:
+            ResourcePool instance or None if not found
+        """
+        return self.resource_pools.get(pool_name)
 
     def __str__(self) -> str:
         """String representation of the character"""
