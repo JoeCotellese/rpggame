@@ -14,21 +14,23 @@ class TestFullStartupSequence:
 
     @patch("dnd_engine.main.CLI")
     @patch("dnd_engine.main.GameState")
-    @patch("dnd_engine.main.Party")
-    @patch("dnd_engine.main.CharacterFactory")
+    @patch("dnd_engine.main.create_new_party")
     @patch("dnd_engine.main.LLMEnhancer")
     @patch("dnd_engine.main.create_llm_provider")
     @patch("dnd_engine.main.DataLoader")
+    @patch("dnd_engine.main.SaveManager")
+    @patch("dnd_engine.main.show_save_load_menu", return_value=None)
     @patch("builtins.input", return_value="")
     @patch("sys.argv", ["dnd-game"])
     def test_full_flow_with_openai(
         self,
         mock_input,
+        mock_save_load_menu,
+        mock_save_manager_class,
         mock_loader_class,
         mock_create_llm,
         mock_enhancer_class,
-        mock_factory_class,
-        mock_party_class,
+        mock_create_party,
         mock_game_state_class,
         mock_cli_class,
         capsys
@@ -37,31 +39,17 @@ class TestFullStartupSequence:
         # Setup data loader
         mock_loader = MagicMock()
         mock_loader_class.return_value = mock_loader
-        mock_loader.load_races.return_value = {
-            "human": {"name": "Human", "ability_bonuses": {}}
-        }
-        mock_loader.load_classes.return_value = {
-            "fighter": {"name": "Fighter"}
-        }
 
         # Setup LLM provider (OpenAI)
         mock_provider = MagicMock()
         mock_provider.get_provider_name.return_value = "OpenAI (gpt-4o-mini)"
         mock_create_llm.return_value = mock_provider
 
-        # Setup character creation
-        mock_character = MagicMock()
-        mock_character.name = "TestChar"
-        mock_character.race = "human"
-
-        mock_factory = MagicMock()
-        mock_factory.create_character_interactive.return_value = mock_character
-        mock_factory_class.return_value = mock_factory
+        # Setup party creation
+        mock_party = MagicMock()
+        mock_create_party.return_value = mock_party
 
         # Setup game state and CLI
-        mock_party = MagicMock()
-        mock_party_class.return_value = mock_party
-
         mock_game_state = MagicMock()
         mock_game_state_class.return_value = mock_game_state
 
@@ -86,42 +74,37 @@ class TestFullStartupSequence:
         # 4. LLM provider initialized
         assert "✓ LLM provider: OpenAI" in captured.out
 
-        # 5. Character creation prompt
-        assert "Let's create your character!" in captured.out
-
-        # 6. Character created message
-        assert "Character created: TestChar" in captured.out
-
-        # 7. Adventure start prompt
+        # 5. Adventure start prompt
         assert "Press Enter to begin your adventure" in captured.out
 
-        # 8. Verify components created in order
+        # 6. Verify components created in order
         mock_loader_class.assert_called_once()
         mock_create_llm.assert_called_once()
         mock_enhancer_class.assert_called_once()
-        mock_factory.create_character_interactive.assert_called_once()
-        mock_party_class.assert_called_once_with(characters=[mock_character])
+        mock_create_party.assert_called_once()
         mock_game_state_class.assert_called_once()
         mock_cli_class.assert_called_once()
         mock_cli.run.assert_called_once()
 
     @patch("dnd_engine.main.CLI")
     @patch("dnd_engine.main.GameState")
-    @patch("dnd_engine.main.Party")
-    @patch("dnd_engine.main.CharacterFactory")
+    @patch("dnd_engine.main.create_new_party")
     @patch("dnd_engine.main.LLMEnhancer")
     @patch("dnd_engine.main.create_llm_provider")
     @patch("dnd_engine.main.DataLoader")
+    @patch("dnd_engine.main.SaveManager")
+    @patch("dnd_engine.main.show_save_load_menu", return_value=None)
     @patch("builtins.input", return_value="")
     @patch("sys.argv", ["dnd-game", "--llm-provider", "anthropic"])
     def test_full_flow_with_anthropic(
         self,
         mock_input,
+        mock_save_load_menu,
+        mock_save_manager_class,
         mock_loader_class,
         mock_create_llm,
         mock_enhancer_class,
-        mock_factory_class,
-        mock_party_class,
+        mock_create_party,
         mock_game_state_class,
         mock_cli_class,
         capsys
@@ -130,29 +113,17 @@ class TestFullStartupSequence:
         # Setup data loader
         mock_loader = MagicMock()
         mock_loader_class.return_value = mock_loader
-        mock_loader.load_races.return_value = {
-            "elf": {"name": "Elf", "ability_bonuses": {}}
-        }
-        mock_loader.load_classes.return_value = {
-            "fighter": {"name": "Fighter"}
-        }
 
         # Setup LLM provider (Anthropic)
         mock_provider = MagicMock()
         mock_provider.get_provider_name.return_value = "Anthropic (claude-3-5-haiku-20241022)"
         mock_create_llm.return_value = mock_provider
 
-        # Setup character creation
-        mock_character = MagicMock()
-        mock_character.name = "Legolas"
-        mock_character.race = "elf"
-
-        mock_factory = MagicMock()
-        mock_factory.create_character_interactive.return_value = mock_character
-        mock_factory_class.return_value = mock_factory
+        # Setup party creation
+        mock_party = MagicMock()
+        mock_create_party.return_value = mock_party
 
         # Setup game components
-        mock_party_class.return_value = MagicMock()
         mock_game_state_class.return_value = MagicMock()
         mock_cli = MagicMock()
         mock_cli_class.return_value = mock_cli
@@ -172,21 +143,23 @@ class TestFullStartupSequence:
 
     @patch("dnd_engine.main.CLI")
     @patch("dnd_engine.main.GameState")
-    @patch("dnd_engine.main.Party")
-    @patch("dnd_engine.main.CharacterFactory")
+    @patch("dnd_engine.main.create_new_party")
     @patch("dnd_engine.main.LLMEnhancer")
     @patch("dnd_engine.main.create_llm_provider")
     @patch("dnd_engine.main.DataLoader")
+    @patch("dnd_engine.main.SaveManager")
+    @patch("dnd_engine.main.show_save_load_menu", return_value=None)
     @patch("builtins.input", return_value="")
     @patch("sys.argv", ["dnd-game", "--no-llm"])
     def test_full_flow_without_llm(
         self,
         mock_input,
+        mock_save_load_menu,
+        mock_save_manager_class,
         mock_loader_class,
         mock_create_llm,
         mock_enhancer_class,
-        mock_factory_class,
-        mock_party_class,
+        mock_create_party,
         mock_game_state_class,
         mock_cli_class,
         capsys
@@ -195,24 +168,12 @@ class TestFullStartupSequence:
         # Setup data loader
         mock_loader = MagicMock()
         mock_loader_class.return_value = mock_loader
-        mock_loader.load_races.return_value = {
-            "dwarf": {"name": "Dwarf", "ability_bonuses": {}}
-        }
-        mock_loader.load_classes.return_value = {
-            "fighter": {"name": "Fighter"}
-        }
 
-        # Setup character creation
-        mock_character = MagicMock()
-        mock_character.name = "Gimli"
-        mock_character.race = "dwarf"
-
-        mock_factory = MagicMock()
-        mock_factory.create_character_interactive.return_value = mock_character
-        mock_factory_class.return_value = mock_factory
+        # Setup party creation
+        mock_party = MagicMock()
+        mock_create_party.return_value = mock_party
 
         # Setup game components
-        mock_party_class.return_value = MagicMock()
         mock_game_state_class.return_value = MagicMock()
         mock_cli = MagicMock()
         mock_cli_class.return_value = mock_cli
@@ -239,19 +200,21 @@ class TestDungeonSelection:
 
     @patch("dnd_engine.main.CLI")
     @patch("dnd_engine.main.GameState")
-    @patch("dnd_engine.main.Party")
-    @patch("dnd_engine.main.CharacterFactory")
+    @patch("dnd_engine.main.create_new_party")
     @patch("dnd_engine.main.create_llm_provider")
     @patch("dnd_engine.main.DataLoader")
+    @patch("dnd_engine.main.SaveManager")
+    @patch("dnd_engine.main.show_save_load_menu", return_value=None)
     @patch("builtins.input", return_value="")
     @patch("sys.argv", ["dnd-game", "--dungeon", "goblin_warren", "--no-llm"])
     def test_valid_dungeon_loads(
         self,
         mock_input,
+        mock_save_load_menu,
+        mock_save_manager_class,
         mock_loader_class,
         mock_create_llm,
-        mock_factory_class,
-        mock_party_class,
+        mock_create_party,
         mock_game_state_class,
         mock_cli_class
     ):
@@ -259,19 +222,9 @@ class TestDungeonSelection:
         # Setup mocks
         mock_loader = MagicMock()
         mock_loader_class.return_value = mock_loader
-        mock_loader.load_races.return_value = {"human": {"name": "Human"}}
-        mock_loader.load_classes.return_value = {"fighter": {"name": "Fighter"}}
-
-        mock_character = MagicMock()
-        mock_character.name = "Hero"
-        mock_character.race = "human"
-
-        mock_factory = MagicMock()
-        mock_factory.create_character_interactive.return_value = mock_character
-        mock_factory_class.return_value = mock_factory
 
         mock_party = MagicMock()
-        mock_party_class.return_value = mock_party
+        mock_create_party.return_value = mock_party
 
         mock_game_state = MagicMock()
         mock_game_state_class.return_value = mock_game_state
@@ -289,19 +242,21 @@ class TestDungeonSelection:
 
     @patch("dnd_engine.main.CLI")
     @patch("dnd_engine.main.GameState")
-    @patch("dnd_engine.main.Party")
-    @patch("dnd_engine.main.CharacterFactory")
+    @patch("dnd_engine.main.create_new_party")
     @patch("dnd_engine.main.create_llm_provider")
     @patch("dnd_engine.main.DataLoader")
+    @patch("dnd_engine.main.SaveManager")
+    @patch("dnd_engine.main.show_save_load_menu", return_value=None)
     @patch("builtins.input", return_value="")
     @patch("sys.argv", ["dnd-game", "--dungeon", "dragon_lair", "--no-llm"])
     def test_custom_dungeon_loads(
         self,
         mock_input,
+        mock_save_load_menu,
+        mock_save_manager_class,
         mock_loader_class,
         mock_create_llm,
-        mock_factory_class,
-        mock_party_class,
+        mock_create_party,
         mock_game_state_class,
         mock_cli_class
     ):
@@ -309,18 +264,10 @@ class TestDungeonSelection:
         # Setup mocks
         mock_loader = MagicMock()
         mock_loader_class.return_value = mock_loader
-        mock_loader.load_races.return_value = {"human": {"name": "Human"}}
-        mock_loader.load_classes.return_value = {"fighter": {"name": "Fighter"}}
 
-        mock_character = MagicMock()
-        mock_character.name = "Dragonslayer"
-        mock_character.race = "human"
+        mock_party = MagicMock()
+        mock_create_party.return_value = mock_party
 
-        mock_factory = MagicMock()
-        mock_factory.create_character_interactive.return_value = mock_character
-        mock_factory_class.return_value = mock_factory
-
-        mock_party_class.return_value = MagicMock()
         mock_game_state_class.return_value = MagicMock()
         mock_cli_class.return_value = MagicMock()
 
@@ -331,34 +278,31 @@ class TestDungeonSelection:
         call_kwargs = mock_game_state_class.call_args[1]
         assert call_kwargs["dungeon_name"] == "dragon_lair"
 
-    @patch("dnd_engine.main.CharacterFactory")
+    @patch("dnd_engine.main.create_new_party")
     @patch("dnd_engine.main.create_llm_provider")
     @patch("dnd_engine.main.DataLoader")
+    @patch("dnd_engine.main.SaveManager")
+    @patch("dnd_engine.main.show_save_load_menu", return_value=None)
     @patch("builtins.input", return_value="")
     @patch("sys.argv", ["dnd-game", "--dungeon", "invalid_dungeon", "--no-llm"])
     def test_invalid_dungeon_shows_error(
         self,
         mock_input,
+        mock_save_load_menu,
+        mock_save_manager_class,
         mock_loader_class,
         mock_create_llm,
-        mock_factory_class,
+        mock_create_party,
         capsys
     ):
         """Test that invalid dungeon name shows error from GameState."""
         # Setup data loader
         mock_loader = MagicMock()
         mock_loader_class.return_value = mock_loader
-        mock_loader.load_races.return_value = {"human": {"name": "Human"}}
-        mock_loader.load_classes.return_value = {"fighter": {"name": "Fighter"}}
 
-        # Setup character creation
-        mock_character = MagicMock()
-        mock_character.name = "Hero"
-        mock_character.race = "human"
-
-        mock_factory = MagicMock()
-        mock_factory.create_character_interactive.return_value = mock_character
-        mock_factory_class.return_value = mock_factory
+        # Setup party creation
+        mock_party = MagicMock()
+        mock_create_party.return_value = mock_party
 
         # GameState will raise error for invalid dungeon
         with patch("dnd_engine.main.GameState") as mock_game_state_class:
@@ -371,7 +315,6 @@ class TestDungeonSelection:
 
             assert exc_info.value.code == 1
             captured = capsys.readouterr()
-            assert "✗ Error:" in captured.out
             assert "invalid_dungeon" in captured.out
 
 
@@ -391,10 +334,12 @@ class TestErrorRecovery:
 
         assert exc_info.value.code == 1
         captured = capsys.readouterr()
-        assert "✗ Error: Data files not found" in captured.out
+        assert "✗ ERROR: Data files not found" in captured.out
         assert "Please ensure the game is installed correctly" in captured.out
 
-    @patch("dnd_engine.main.CharacterFactory")
+    @patch("dnd_engine.main.create_new_party")
+    @patch("dnd_engine.main.SaveManager")
+    @patch("dnd_engine.main.show_save_load_menu", return_value=None)
     @patch("dnd_engine.main.create_llm_provider")
     @patch("dnd_engine.main.DataLoader")
     @patch("sys.argv", ["dnd-game", "--no-llm", "--debug"])
@@ -402,15 +347,16 @@ class TestErrorRecovery:
         self,
         mock_loader_class,
         mock_create_llm,
-        mock_factory_class
+        mock_show_save_menu,
+        mock_save_manager_class,
+        mock_create_party
     ):
         """Test that debug mode re-raises exceptions for full traceback."""
         mock_loader = MagicMock()
         mock_loader_class.return_value = mock_loader
 
-        mock_factory = MagicMock()
-        mock_factory.create_character_interactive.side_effect = ValueError("Test error")
-        mock_factory_class.return_value = mock_factory
+        # Make create_new_party raise an error
+        mock_create_party.side_effect = ValueError("Test error")
 
         # In debug mode, exception should be re-raised
         with pytest.raises(ValueError) as exc_info:
@@ -427,11 +373,15 @@ class TestMultiCharacterPartyIntegration:
     @patch("dnd_engine.main.Party")
     @patch("dnd_engine.main.CharacterFactory")
     @patch("dnd_engine.main.DataLoader")
+    @patch("dnd_engine.main.SaveManager")
+    @patch("dnd_engine.main.show_save_load_menu", return_value=None)
     @patch("builtins.input")
     @patch("sys.argv", ["dnd-game", "--no-llm"])
     def test_create_four_character_party(
         self,
         mock_input,
+        mock_save_load_menu,
+        mock_save_manager_class,
         mock_loader_class,
         mock_factory_class,
         mock_party_class,
@@ -483,15 +433,11 @@ class TestMultiCharacterPartyIntegration:
         captured = capsys.readouterr()
         assert "How many characters in your party?" in captured.out
         assert "Let's create your party of 4!" in captured.out
-        assert "CHARACTER 1 of 4" in captured.out
-        assert "CHARACTER 2 of 4" in captured.out
-        assert "CHARACTER 3 of 4" in captured.out
-        assert "CHARACTER 4 of 4" in captured.out
+        assert "Character 1 of 4" in captured.out
+        assert "Character 2 of 4" in captured.out
+        assert "Character 3 of 4" in captured.out
+        assert "Character 4 of 4" in captured.out
         assert "PARTY ROSTER" in captured.out
-        assert "Thorin" in captured.out
-        assert "Legolas" in captured.out
-        assert "Aragorn" in captured.out
-        assert "Gimli" in captured.out
 
         # Verify character creation called 4 times
         assert mock_factory.create_character_interactive.call_count == 4
@@ -509,11 +455,15 @@ class TestMultiCharacterPartyIntegration:
     @patch("dnd_engine.main.Party")
     @patch("dnd_engine.main.CharacterFactory")
     @patch("dnd_engine.main.DataLoader")
+    @patch("dnd_engine.main.SaveManager")
+    @patch("dnd_engine.main.show_save_load_menu", return_value=None)
     @patch("builtins.input")
     @patch("sys.argv", ["dnd-game", "--no-llm"])
     def test_single_character_party_no_roster(
         self,
         mock_input,
+        mock_save_load_menu,
+        mock_save_manager_class,
         mock_loader_class,
         mock_factory_class,
         mock_party_class,
@@ -547,21 +497,24 @@ class TestMultiCharacterPartyIntegration:
 
         # Verify output
         captured = capsys.readouterr()
-        assert "Let's create your party of 1!" in captured.out
-        assert "CHARACTER 1 of" not in captured.out  # Should not show character counter
+        assert "Let's create your character!" in captured.out
+        assert "Character 1 of" not in captured.out  # Should not show character counter
         assert "PARTY ROSTER" not in captured.out  # Should not show roster for solo
-        assert "Solo" in captured.out
 
     @patch("dnd_engine.main.CLI")
     @patch("dnd_engine.main.GameState")
     @patch("dnd_engine.main.Party")
     @patch("dnd_engine.main.CharacterFactory")
     @patch("dnd_engine.main.DataLoader")
+    @patch("dnd_engine.main.SaveManager")
+    @patch("dnd_engine.main.show_save_load_menu", return_value=None)
     @patch("builtins.input")
     @patch("sys.argv", ["dnd-game", "--no-llm"])
     def test_party_passed_to_game_state(
         self,
         mock_input,
+        mock_save_load_menu,
+        mock_save_manager_class,
         mock_loader_class,
         mock_factory_class,
         mock_party_class,

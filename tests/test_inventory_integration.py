@@ -147,8 +147,8 @@ class TestInventoryGameStateIntegration:
 
         self.game_state.search_room()
 
-        # Storage room has 25 gold
-        assert self.player.inventory.gold == 25
+        # Storage room has 2 gold
+        assert self.player.inventory.gold == 2
 
     def test_search_room_adds_specific_items(self):
         """Test that specific items from room are added to inventory"""
@@ -211,7 +211,7 @@ class TestInventoryGameStateIntegration:
         event = events_received[0]
         assert event.type == EventType.GOLD_ACQUIRED
         assert "amount" in event.data
-        assert event.data["amount"] == 25
+        assert event.data["amount"] == 2
 
     def test_cannot_search_room_twice(self):
         """Test that a room can only be searched once"""

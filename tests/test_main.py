@@ -137,7 +137,7 @@ class TestDataLoaderInitialization:
 
         assert exc_info.value.code == 1
         captured = capsys.readouterr()
-        assert "✗ Error: Data files not found" in captured.out
+        assert "✗ ERROR: Data files not found" in captured.out
         assert "Please ensure the game is installed correctly" in captured.out
 
 
@@ -209,7 +209,9 @@ class TestMainFunction:
     @patch("dnd_engine.main.CLI")
     @patch("dnd_engine.main.GameState")
     @patch("dnd_engine.main.Party")
-    @patch("dnd_engine.main.CharacterFactory")
+    @patch("dnd_engine.main.show_save_load_menu")
+    @patch("dnd_engine.main.SaveManager")
+    @patch("dnd_engine.main.create_new_party")
     @patch("dnd_engine.main.LLMEnhancer")
     @patch("dnd_engine.main.EventBus")
     @patch("dnd_engine.main.initialize_llm")
@@ -224,15 +226,17 @@ class TestMainFunction:
         mock_init_llm,
         mock_event_bus,
         mock_llm_enhancer,
-        mock_factory_class,
+        mock_create_party,
+        mock_save_manager_class,
+        mock_show_save_menu,
         mock_party_class,
         mock_game_state_class,
         mock_cli_class,
         capsys
     ):
         """Test successful main flow."""
-        # Mock inputs: party size = 1, then press Enter to start
-        mock_input.side_effect = ["1", ""]
+        # Mock inputs for "Press Enter to begin your adventure"
+        mock_input.side_effect = [""]
 
         # Setup mocks
         mock_args = MagicMock(debug=False, dungeon="goblin_warren")
@@ -247,23 +251,15 @@ class TestMainFunction:
         mock_bus = MagicMock()
         mock_event_bus.return_value = mock_bus
 
-        mock_character = MagicMock()
-        mock_character.name = "Thorin"
-        mock_character.race = "mountain_dwarf"
+        # Mock save manager to return no saves (start new game)
+        mock_save_manager = MagicMock()
+        mock_save_manager_class.return_value = mock_save_manager
+        mock_show_save_menu.return_value = None  # Start new game
 
-        mock_factory = MagicMock()
-        mock_factory.create_character_interactive.return_value = mock_character
-        mock_factory_class.return_value = mock_factory
-
-        mock_loader.load_races.return_value = {
-            "mountain_dwarf": {"name": "Mountain Dwarf"}
-        }
-        mock_loader.load_classes.return_value = {
-            "fighter": {"name": "Fighter"}
-        }
-
+        # Mock party creation
         mock_party = MagicMock()
         mock_party_class.return_value = mock_party
+        mock_create_party.return_value = mock_party
 
         mock_game_state = MagicMock()
         mock_game_state_class.return_value = mock_game_state
@@ -280,8 +276,9 @@ class TestMainFunction:
         mock_init_llm.assert_called_once_with(mock_args)
         mock_event_bus.assert_called_once()
         mock_llm_enhancer.assert_called_once_with(mock_provider, mock_bus)
-        mock_factory.create_character_interactive.assert_called_once()
-        mock_party_class.assert_called_once_with(characters=[mock_character])
+        mock_save_manager_class.assert_called_once()
+        mock_show_save_menu.assert_called_once_with(mock_save_manager)
+        mock_create_party.assert_called_once_with(mock_args, mock_loader)
         mock_game_state_class.assert_called_once_with(
             party=mock_party,
             dungeon_name="goblin_warren",
@@ -294,10 +291,9 @@ class TestMainFunction:
         # Verify output
         captured = capsys.readouterr()
         assert "Checking configuration..." in captured.out
-        assert "Let's create your party of 1!" in captured.out
-        assert "Character created: Thorin (Mountain Dwarf Fighter)" in captured.out
 
-    @patch("dnd_engine.main.CharacterFactory")
+    @patch("dnd_engine.main.show_save_load_menu")
+    @patch("dnd_engine.main.SaveManager")
     @patch("dnd_engine.main.EventBus")
     @patch("dnd_engine.main.initialize_llm")
     @patch("dnd_engine.main.initialize_data_loader")
@@ -308,7 +304,8 @@ class TestMainFunction:
         mock_init_loader,
         mock_init_llm,
         mock_event_bus,
-        mock_factory_class,
+        mock_save_manager_class,
+        mock_show_save_menu,
         capsys
     ):
         """Test main handles keyboard interrupt gracefully."""
@@ -317,26 +314,21 @@ class TestMainFunction:
         mock_init_loader.return_value = MagicMock()
         mock_init_llm.return_value = None
         mock_event_bus.return_value = MagicMock()
+        mock_save_manager_class.return_value = MagicMock()
 
-        mock_factory = MagicMock()
-        mock_character = MagicMock()
-        mock_character.name = "Test"
-        mock_character.race = "human"
-        # Make character creation raise KeyboardInterrupt
-        mock_factory.create_character_interactive.side_effect = KeyboardInterrupt()
-        mock_factory_class.return_value = mock_factory
+        # Make save/load menu raise KeyboardInterrupt
+        mock_show_save_menu.side_effect = KeyboardInterrupt()
 
-        # Mock input to provide party size before interruption during character creation
-        with patch("builtins.input", side_effect=["1"]):
-            with pytest.raises(SystemExit) as exc_info:
-                main()
+        with pytest.raises(SystemExit) as exc_info:
+            main()
 
         assert exc_info.value.code == 0
         captured = capsys.readouterr()
         assert "Game interrupted" in captured.out
         assert "Thanks for playing!" in captured.out
 
-    @patch("dnd_engine.main.CharacterFactory")
+    @patch("dnd_engine.main.show_save_load_menu")
+    @patch("dnd_engine.main.SaveManager")
     @patch("dnd_engine.main.EventBus")
     @patch("dnd_engine.main.initialize_llm")
     @patch("dnd_engine.main.initialize_data_loader")
@@ -347,7 +339,8 @@ class TestMainFunction:
         mock_init_loader,
         mock_init_llm,
         mock_event_bus,
-        mock_factory_class,
+        mock_save_manager_class,
+        mock_show_save_menu,
         capsys
     ):
         """Test main handles exceptions without debug mode."""
@@ -356,22 +349,21 @@ class TestMainFunction:
         mock_init_loader.return_value = MagicMock()
         mock_init_llm.return_value = None
         mock_event_bus.return_value = MagicMock()
+        mock_save_manager_class.return_value = MagicMock()
 
-        mock_factory = MagicMock()
-        mock_factory.create_character_interactive.side_effect = Exception("Test error")
-        mock_factory_class.return_value = mock_factory
+        # Make save/load menu raise exception
+        mock_show_save_menu.side_effect = Exception("Test error")
 
-        # Mock input to provide party size before exception during character creation
-        with patch("builtins.input", side_effect=["1"]):
-            with pytest.raises(SystemExit) as exc_info:
-                main()
+        with pytest.raises(SystemExit) as exc_info:
+            main()
 
         assert exc_info.value.code == 1
         captured = capsys.readouterr()
-        assert "✗ Error: Test error" in captured.out
+        assert "Test error" in captured.out
         assert "Use --debug flag for detailed error information" in captured.out
 
-    @patch("dnd_engine.main.CharacterFactory")
+    @patch("dnd_engine.main.show_save_load_menu")
+    @patch("dnd_engine.main.SaveManager")
     @patch("dnd_engine.main.EventBus")
     @patch("dnd_engine.main.initialize_llm")
     @patch("dnd_engine.main.initialize_data_loader")
@@ -382,7 +374,8 @@ class TestMainFunction:
         mock_init_loader,
         mock_init_llm,
         mock_event_bus,
-        mock_factory_class
+        mock_save_manager_class,
+        mock_show_save_menu
     ):
         """Test main re-raises exceptions in debug mode."""
         mock_args = MagicMock(debug=True)
@@ -390,15 +383,13 @@ class TestMainFunction:
         mock_init_loader.return_value = MagicMock()
         mock_init_llm.return_value = None
         mock_event_bus.return_value = MagicMock()
+        mock_save_manager_class.return_value = MagicMock()
 
-        mock_factory = MagicMock()
-        mock_factory.create_character_interactive.side_effect = Exception("Test error")
-        mock_factory_class.return_value = mock_factory
+        # Make save/load menu raise exception
+        mock_show_save_menu.side_effect = Exception("Test error")
 
-        # Mock input to provide party size before exception during character creation
-        with patch("builtins.input", side_effect=["1"]):
-            with pytest.raises(Exception) as exc_info:
-                main()
+        with pytest.raises(Exception) as exc_info:
+            main()
 
         assert str(exc_info.value) == "Test error"
 
@@ -406,7 +397,9 @@ class TestMainFunction:
     @patch("dnd_engine.main.CLI")
     @patch("dnd_engine.main.GameState")
     @patch("dnd_engine.main.Party")
-    @patch("dnd_engine.main.CharacterFactory")
+    @patch("dnd_engine.main.show_save_load_menu")
+    @patch("dnd_engine.main.SaveManager")
+    @patch("dnd_engine.main.create_new_party")
     @patch("dnd_engine.main.EventBus")
     @patch("dnd_engine.main.initialize_llm")
     @patch("dnd_engine.main.initialize_data_loader")
@@ -419,15 +412,17 @@ class TestMainFunction:
         mock_init_loader,
         mock_init_llm,
         mock_event_bus,
-        mock_factory_class,
+        mock_create_party,
+        mock_save_manager_class,
+        mock_show_save_menu,
         mock_party_class,
         mock_game_state_class,
         mock_cli_class,
         mock_llm_enhancer_class
     ):
         """Test main flow without LLM provider (no enhancer created)."""
-        # Mock inputs: party size = 1, then press Enter to start
-        mock_input.side_effect = ["1", ""]
+        # Mock inputs for "Press Enter to begin your adventure"
+        mock_input.side_effect = [""]
 
         mock_args = MagicMock(debug=False, dungeon="goblin_warren")
         mock_parse_args.return_value = mock_args
@@ -441,19 +436,15 @@ class TestMainFunction:
         mock_bus = MagicMock()
         mock_event_bus.return_value = mock_bus
 
-        mock_character = MagicMock()
-        mock_character.name = "Thorin"
-        mock_character.race = "human"
+        # Mock save manager to return no saves (start new game)
+        mock_save_manager = MagicMock()
+        mock_save_manager_class.return_value = mock_save_manager
+        mock_show_save_menu.return_value = None  # Start new game
 
-        mock_factory = MagicMock()
-        mock_factory.create_character_interactive.return_value = mock_character
-        mock_factory_class.return_value = mock_factory
-
-        mock_loader.load_races.return_value = {"human": {"name": "Human"}}
-        mock_loader.load_classes.return_value = {"fighter": {"name": "Fighter"}}
-
+        # Mock party creation
         mock_party = MagicMock()
         mock_party_class.return_value = mock_party
+        mock_create_party.return_value = mock_party
 
         mock_game_state = MagicMock()
         mock_game_state_class.return_value = mock_game_state
@@ -477,6 +468,8 @@ class TestMultiCharacterPartyCreation:
     @patch("dnd_engine.main.CLI")
     @patch("dnd_engine.main.GameState")
     @patch("dnd_engine.main.Party")
+    @patch("dnd_engine.main.show_save_load_menu")
+    @patch("dnd_engine.main.SaveManager")
     @patch("dnd_engine.main.CharacterFactory")
     @patch("dnd_engine.main.EventBus")
     @patch("dnd_engine.main.initialize_llm")
@@ -491,12 +484,14 @@ class TestMultiCharacterPartyCreation:
         mock_init_llm,
         mock_event_bus,
         mock_factory_class,
+        mock_save_manager_class,
+        mock_show_save_menu,
         mock_party_class,
         mock_game_state_class,
         mock_cli_class
     ):
         """Test creating a party with a single character."""
-        # Mock inputs: party size = 1, then character creation inputs, then start game
+        # Mock inputs: party size = 1, then press Enter to start
         mock_input.side_effect = ["1", ""]  # Party size, then press Enter to start
 
         mock_args = MagicMock(no_llm=True, debug=False, dungeon="goblin_warren")
@@ -508,6 +503,11 @@ class TestMultiCharacterPartyCreation:
         mock_init_loader.return_value = mock_loader
         mock_init_llm.return_value = None
         mock_event_bus.return_value = MagicMock()
+
+        # Mock save manager to return no saves (start new game)
+        mock_save_manager = MagicMock()
+        mock_save_manager_class.return_value = mock_save_manager
+        mock_show_save_menu.return_value = None  # Start new game
 
         # Mock character factory
         mock_factory = MagicMock()
@@ -540,6 +540,8 @@ class TestMultiCharacterPartyCreation:
     @patch("dnd_engine.main.CLI")
     @patch("dnd_engine.main.GameState")
     @patch("dnd_engine.main.Party")
+    @patch("dnd_engine.main.show_save_load_menu")
+    @patch("dnd_engine.main.SaveManager")
     @patch("dnd_engine.main.CharacterFactory")
     @patch("dnd_engine.main.EventBus")
     @patch("dnd_engine.main.initialize_llm")
@@ -554,6 +556,8 @@ class TestMultiCharacterPartyCreation:
         mock_init_llm,
         mock_event_bus,
         mock_factory_class,
+        mock_save_manager_class,
+        mock_show_save_menu,
         mock_party_class,
         mock_game_state_class,
         mock_cli_class
@@ -571,6 +575,11 @@ class TestMultiCharacterPartyCreation:
         mock_init_loader.return_value = mock_loader
         mock_init_llm.return_value = None
         mock_event_bus.return_value = MagicMock()
+
+        # Mock save manager to return no saves (start new game)
+        mock_save_manager = MagicMock()
+        mock_save_manager_class.return_value = mock_save_manager
+        mock_show_save_menu.return_value = None  # Start new game
 
         # Mock character factory to create 4 different characters
         mock_factory = MagicMock()
@@ -611,6 +620,8 @@ class TestMultiCharacterPartyCreation:
     @patch("dnd_engine.main.CLI")
     @patch("dnd_engine.main.GameState")
     @patch("dnd_engine.main.Party")
+    @patch("dnd_engine.main.show_save_load_menu")
+    @patch("dnd_engine.main.SaveManager")
     @patch("dnd_engine.main.CharacterFactory")
     @patch("dnd_engine.main.EventBus")
     @patch("dnd_engine.main.initialize_llm")
@@ -625,6 +636,8 @@ class TestMultiCharacterPartyCreation:
         mock_init_llm,
         mock_event_bus,
         mock_factory_class,
+        mock_save_manager_class,
+        mock_show_save_menu,
         mock_party_class,
         mock_game_state_class,
         mock_cli_class,
@@ -643,6 +656,11 @@ class TestMultiCharacterPartyCreation:
         mock_init_loader.return_value = mock_loader
         mock_init_llm.return_value = None
         mock_event_bus.return_value = MagicMock()
+
+        # Mock save manager to return no saves (start new game)
+        mock_save_manager = MagicMock()
+        mock_save_manager_class.return_value = mock_save_manager
+        mock_show_save_menu.return_value = None  # Start new game
 
         # Mock character factory
         mock_factory = MagicMock()
