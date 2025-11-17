@@ -74,14 +74,26 @@ class CLI:
         print_title("D&D 5E Terminal Game", "Welcome to your adventure!")
 
     def display_room(self) -> None:
-        """Display the current room description."""
-        desc = self.game_state.get_room_description()
+        """Display the current room description with LLM enhancement."""
         room = self.game_state.get_current_room()
 
-        # Extract room name and description
+        # Extract room name and basic description
         room_name = room.get("name", "Unknown Room")
-        room_text = room.get("description", desc)
+        basic_desc = room.get("description", self.game_state.get_room_description())
         exits = room.get("exits", [])
+
+        # Try to get enhanced description from LLM
+        enhanced_desc = None
+        if self.llm_enhancer:
+            room_data = {
+                "id": room.get("id", room_name.lower().replace(" ", "_")),
+                "name": room_name,
+                "description": basic_desc
+            }
+            enhanced_desc = self.llm_enhancer.get_room_description_sync(room_data, timeout=3.0)
+
+        # Use enhanced description if available, otherwise use basic
+        room_text = enhanced_desc if enhanced_desc else basic_desc
 
         print_room_description(room_name, room_text, exits)
 

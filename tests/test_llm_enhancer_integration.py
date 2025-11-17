@@ -90,6 +90,31 @@ class TestLLMEnhancer:
         assert "dark and foreboding" in enhanced_descriptions[0]["text"]
 
     @pytest.mark.asyncio
+    async def test_enhancer_room_description_sync(self) -> None:
+        """Test synchronous room description enhancement."""
+        from dnd_engine.llm.enhancer import LLMEnhancer
+
+        mock_provider = MockLLMProvider(response="A dark and foreboding chamber.")
+        event_bus = EventBus()
+        enhancer = LLMEnhancer(mock_provider, event_bus)
+
+        # Use synchronous API
+        room_data = {
+            "id": "room_1",
+            "name": "Torture Chamber",
+            "description": "A dark room"
+        }
+        description = enhancer.get_room_description_sync(room_data, timeout=3.0)
+
+        # Verify enhancement
+        assert description is not None
+        assert "dark and foreboding" in description
+
+        # Test caching - second call should return cached result
+        description2 = enhancer.get_room_description_sync(room_data, timeout=3.0)
+        assert description2 == description
+
+    @pytest.mark.asyncio
     async def test_enhancer_combat_action(self) -> None:
         """Test combat action enhancement using synchronous API."""
         from dnd_engine.llm.enhancer import LLMEnhancer

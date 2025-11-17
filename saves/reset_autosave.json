@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
   "metadata": {
-    "created": "2025-11-17T17:58:50.552475",
-    "last_played": "2025-11-17T17:58:50.552475",
+    "created": "2025-11-17T17:05:57.384666",
+    "last_played": "2025-11-17T18:13:08.866457",
     "auto_save": true
   },
   "party": [
@@ -11,7 +11,7 @@
       "character_class": "fighter",
       "level": 1,
       "race": "human",
-      "xp": 50,
+      "xp": 25,
       "max_hp": 13,
       "current_hp": 13,
       "ac": 16,
@@ -61,7 +61,7 @@
       "character_class": "fighter",
       "level": 1,
       "race": "high_elf",
-      "xp": 50,
+      "xp": 25,
       "max_hp": 12,
       "current_hp": 12,
       "ac": 16,
@@ -111,9 +111,9 @@
       "character_class": "fighter",
       "level": 1,
       "race": "halfling",
-      "xp": 50,
+      "xp": 25,
       "max_hp": 11,
-      "current_hp": 0,
+      "current_hp": 11,
       "ac": 16,
       "abilities": {
         "strength": 17,
@@ -161,7 +161,7 @@
       "character_class": "fighter",
       "level": 1,
       "race": "human",
-      "xp": 50,
+      "xp": 25,
       "max_hp": 12,
       "current_hp": 12,
       "ac": 16,
@@ -209,7 +209,7 @@
   ],
   "game_state": {
     "dungeon_name": "goblin_warren",
-    "current_room_id": "guard_post",
+    "current_room_id": "entrance",
     "dungeon_state": {
       "entrance": {
         "searched": false,
@@ -217,7 +217,10 @@
       },
       "guard_post": {
         "searched": false,
-        "enemies": []
+        "enemies": [
+          "goblin",
+          "goblin"
+        ]
       },
       "storage_room": {
         "searched": false,
@@ -243,6 +246,6 @@
     },
     "in_combat": false,
     "action_history": [],
-    "last_entry_direction": "north"
+    "last_entry_direction": null
   }
 }

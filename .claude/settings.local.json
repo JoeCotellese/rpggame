@@ -30,7 +30,10 @@
       "Bash(__NEW_LINE__ Returns: Amount actually recovered)",
       "Bash(gh pr view:*)",
       "Bash(git pull:*)",
-      "Bash(gh pr list:*)"
+      "Bash(gh pr list:*)",
+      "Bash(git branch:*)",
+      "Bash(gh pr create:*)",
+      "Bash(jq:*)"
     ],
     "deny": [],
     "ask": []

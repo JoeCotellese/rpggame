@@ -398,3 +398,48 @@ class LLMEnhancer:
             return result
 
         return self._run_sync(generate(), timeout=timeout)
+
+    def get_room_description_sync(self, room_data: Dict, timeout: float = 3.0) -> Optional[str]:
+        """
+        Generate room description enhancement synchronously with timeout.
+
+        Args:
+            room_data: Room data (name, description, id, etc.)
+            timeout: Timeout in seconds (default: 3.0)
+
+        Returns:
+            Enhanced description or None on timeout/error
+        """
+        if not self.provider:
+            return None
+
+        # Check cache first
+        cache_key = f"room_{room_data.get('id', 'unknown')}"
+        if self.cache and cache_key in self.cache:
+            return self.cache[cache_key]
+
+        prompt = build_room_description_prompt(room_data)
+
+        async def generate():
+            start_time = time.time()
+            result = await self.provider.generate(prompt, temperature=0.7)
+            latency_ms = (time.time() - start_time) * 1000
+
+            # Log LLM call
+            from ..utils.logging_config import get_logging_config
+            logging_config = get_logging_config()
+            if logging_config:
+                logging_config.log_llm_call(
+                    prompt_type="room_description",
+                    latency_ms=latency_ms,
+                    response_length=len(result) if result else 0,
+                    success=bool(result)
+                )
+
+            # Cache the result
+            if result and self.cache is not None:
+                self.cache[cache_key] = result
+
+            return result
+
+        return self._run_sync(generate(), timeout=timeout)
