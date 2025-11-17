@@ -49,7 +49,8 @@ This document tracks remaining implementation tasks to complete the MVP and futu
 #### 1.1 Character Creation System
 **Location:** `dnd_engine/core/character_factory.py` (NEW FILE)
 **Dependencies:** Dice roller, Character class, CLI
-**Estimated Effort:** Medium
+**Estimated Effort:** Medium (6.5 hours)
+**GitHub Issue:** #7
 
 **Tasks:**
 - [ ] Create `CharacterFactory` class
@@ -83,8 +84,9 @@ This document tracks remaining implementation tasks to complete the MVP and futu
 
 #### 1.2 LLM Integration Layer
 **Location:** `dnd_engine/llm/` directory
-**Dependencies:** Event bus, Anthropic API
-**Estimated Effort:** Large
+**Dependencies:** Event bus, OpenAI/Anthropic API
+**Estimated Effort:** Large (8 hours)
+**GitHub Issue:** #8
 
 **Tasks:**
 
@@ -145,7 +147,8 @@ This document tracks remaining implementation tasks to complete the MVP and futu
 #### 1.3 Main Entry Point & Game Loop
 **Location:** `dnd_engine/main.py`
 **Dependencies:** CharacterFactory, GameState, CLI, LLMEnhancer
-**Estimated Effort:** Small
+**Estimated Effort:** Small (6 hours)
+**GitHub Issue:** #9
 
 **Tasks:**
 - [ ] Update `main.py` with complete game flow
@@ -174,7 +177,8 @@ This document tracks remaining implementation tasks to complete the MVP and futu
 #### 1.4 Combat & Exploration Polish
 **Location:** `dnd_engine/core/game_state.py`, `dnd_engine/ui/cli.py`
 **Dependencies:** Existing systems
-**Estimated Effort:** Small
+**Estimated Effort:** Small (8.5 hours)
+**GitHub Issue:** #10
 
 **Tasks:**
 - [ ] Fix combat turn flow in CLI
