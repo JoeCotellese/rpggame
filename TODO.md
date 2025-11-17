@@ -144,33 +144,39 @@ This document tracks remaining implementation tasks to complete the MVP and futu
 
 ---
 
-#### 1.3 Main Entry Point & Game Loop
+#### 1.3 Main Entry Point & Game Loop ✅ COMPLETED
 **Location:** `dnd_engine/main.py`
 **Dependencies:** CharacterFactory, GameState, CLI, LLMEnhancer
 **Estimated Effort:** Small (6 hours)
 **GitHub Issue:** #9
+**Completed:** 2025-11-16
 
 **Tasks:**
-- [ ] Update `main.py` with complete game flow
-  - [ ] Parse command-line arguments (--no-llm, --dungeon-name)
-  - [ ] Check for ANTHROPIC_API_KEY (if LLM enabled)
-  - [ ] Run character creation via CharacterFactory
-  - [ ] Initialize GameState with created character
-  - [ ] Initialize LLMEnhancer and subscribe to events (if enabled)
-  - [ ] Initialize CLI with game state
-  - [ ] Start game loop via CLI.run()
-  - [ ] Handle exceptions and display user-friendly errors
-- [ ] Add entry point configuration
-  - [ ] Update pyproject.toml with console_scripts entry point
-  - [ ] Test running via `python -m dnd_engine.main`
-  - [ ] Test running via installed command `dnd-game`
+- [x] Update `main.py` with complete game flow
+  - [x] Parse command-line arguments (--no-llm, --dungeon-name)
+  - [x] Check for ANTHROPIC_API_KEY (if LLM enabled)
+  - [x] Run character creation via CharacterFactory
+  - [x] Initialize GameState with created character
+  - [x] Initialize LLMEnhancer and subscribe to events (if enabled)
+  - [x] Initialize CLI with game state
+  - [x] Start game loop via CLI.run()
+  - [x] Handle exceptions and display user-friendly errors
+- [x] Add entry point configuration
+  - [x] Update pyproject.toml with console_scripts entry point
+  - [x] Test running via `python -m dnd_engine.main`
+  - [x] Test running via installed command `dnd-game`
+- [x] Comprehensive test coverage
+  - [x] Unit tests (tests/test_main.py)
+  - [x] Integration tests (tests/test_main_integration.py)
+  - [x] End-to-end tests (tests/test_main_e2e.py)
 
 **Acceptance Criteria:**
-- Game can be started with `python -m dnd_engine.main`
-- Character creation runs before game starts
-- LLM integration works when API key is present
-- --no-llm flag disables LLM layer
-- Clear error messages for missing dependencies
+- ✅ Game can be started with `python -m dnd_engine.main`
+- ✅ Character creation runs before game starts
+- ✅ LLM integration works when API key is present
+- ✅ --no-llm flag disables LLM layer
+- ✅ Clear error messages for missing dependencies
+- ✅ 1,117 lines of tests added
 
 ---
 
@@ -207,50 +213,61 @@ This document tracks remaining implementation tasks to complete the MVP and futu
 
 ### Priority 2: Data & Content Completion
 
-#### 2.1 Complete Monster Definitions
+#### 2.1 Complete Monster Definitions ✅ COMPLETED
 **Location:** `dnd_engine/data/srd/monsters.json`
 **Dependencies:** None
 **Estimated Effort:** Small
+**Completed:** 2025-11-16
 
 **Tasks:**
-- [ ] Verify all monsters in Goblin Warren are defined:
-  - [ ] Goblin (basic enemy)
-  - [ ] Wolf (companion creature)
-  - [ ] Goblin Boss (final boss)
-- [ ] Ensure all monster data is complete:
-  - [ ] Name, AC, HP formula, speed
-  - [ ] Ability scores (STR, DEX, CON, INT, WIS, CHA)
-  - [ ] Attack actions (name, to_hit, damage)
-  - [ ] XP value for each monster
-  - [ ] Special traits if any
+- [x] Verify all monsters in Goblin Warren are defined:
+  - [x] Goblin (basic enemy)
+  - [x] Wolf (companion creature)
+  - [x] Goblin Boss (final boss)
+- [x] Ensure all monster data is complete:
+  - [x] Name, AC, HP formula, speed
+  - [x] Ability scores (STR, DEX, CON, INT, WIS, CHA)
+  - [x] Attack actions (name, to_hit, damage)
+  - [x] XP value for each monster
+  - [x] Special traits (Nimble Escape, Pack Tactics, etc.)
+  - [x] Skills, senses, languages from official SRD
+  - [x] CR ratings and source attribution
 
 **Acceptance Criteria:**
-- All monsters spawn correctly in dungeon
-- Combat resolves properly with correct attack bonuses
-- XP is awarded after defeating enemies
+- ✅ All monsters spawn correctly in dungeon
+- ✅ Combat resolves properly with correct attack bonuses
+- ✅ XP is awarded after defeating enemies
+- ✅ Using official D&D 5E SRD (CC BY 4.0) stats
 
 ---
 
-#### 2.2 Complete Item Definitions
+#### 2.2 Complete Item Definitions ✅ COMPLETED
 **Location:** `dnd_engine/data/srd/items.json`
 **Dependencies:** None
 **Estimated Effort:** Small
+**Completed:** 2025-11-16
 
 **Tasks:**
-- [ ] Verify all items in Goblin Warren are defined:
-  - [ ] Weapons: longsword, shortsword, dagger
-  - [ ] Armor: chain_mail, leather_armor
-  - [ ] Consumables: potion_of_healing, potion_of_greater_healing
-- [ ] Ensure item data is complete:
-  - [ ] Name, description, type
-  - [ ] Weapon: damage dice, damage type, properties
-  - [ ] Armor: AC value, armor type, stealth disadvantage
-  - [ ] Consumable: effect type, amount (healing dice)
+- [x] Verify all items in Goblin Warren are defined:
+  - [x] Weapons: longsword, shortsword, dagger, light_crossbow
+  - [x] Armor: chain_mail, leather_armor
+  - [x] Consumables: potion_of_healing, potion_of_greater_healing
+- [x] Ensure item data is complete:
+  - [x] Name, description, type
+  - [x] Weapon: damage dice, damage type, properties, range
+  - [x] Armor: AC value, armor type, stealth disadvantage, STR requirements
+  - [x] Consumable: effect type, amount (healing dice), rarity
+- [x] Add interesting variety from SRD:
+  - [x] 10 additional weapons (crossbows, bows, axes, hammers, etc.)
+  - [x] 9 additional armor types (padded through plate)
+  - [x] 2 additional healing potions (superior, supreme)
 
 **Acceptance Criteria:**
-- All items can be found in dungeon
-- Items can be equipped/used correctly
-- Equipment affects character stats properly (AC, damage)
+- ✅ All items can be found in dungeon
+- ✅ Items can be equipped/used correctly
+- ✅ Equipment affects character stats properly (AC, damage)
+- ✅ Using official D&D 5E SRD (CC BY 4.0) stats
+- ✅ light_crossbow added for weapon switching (Issue #10)
 
 ---
 
