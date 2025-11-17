@@ -1,0 +1,53 @@
+{
+  "human": {
+    "name": "Human",
+    "description": "Versatile and adaptable",
+    "ability_bonuses": {
+      "strength": 1,
+      "dexterity": 1,
+      "constitution": 1,
+      "intelligence": 1,
+      "wisdom": 1,
+      "charisma": 1
+    },
+    "speed": 30,
+    "size": "Medium",
+    "languages": ["Common", "one of choice"]
+  },
+  "mountain_dwarf": {
+    "name": "Mountain Dwarf",
+    "description": "Strong and hardy",
+    "ability_bonuses": {
+      "strength": 2,
+      "constitution": 2
+    },
+    "speed": 25,
+    "size": "Medium",
+    "languages": ["Common", "Dwarvish"],
+    "traits": ["Darkvision", "Dwarven Resilience"]
+  },
+  "high_elf": {
+    "name": "High Elf",
+    "description": "Graceful and intelligent",
+    "ability_bonuses": {
+      "dexterity": 2,
+      "intelligence": 1
+    },
+    "speed": 30,
+    "size": "Medium",
+    "languages": ["Common", "Elvish"],
+    "traits": ["Darkvision", "Fey Ancestry"]
+  },
+  "halfling": {
+    "name": "Halfling",
+    "description": "Small and lucky",
+    "ability_bonuses": {
+      "dexterity": 2,
+      "charisma": 1
+    },
+    "speed": 25,
+    "size": "Small",
+    "languages": ["Common", "Halfling"],
+    "traits": ["Lucky", "Brave"]
+  }
+}

@@ -4,14 +4,12 @@
     "description": "A master of martial combat, skilled with a variety of weapons and armor",
     "hit_die": "1d10",
     "primary_ability": "str",
+    "ability_priorities": ["strength", "constitution", "dexterity", "wisdom", "intelligence", "charisma"],
     "saving_throw_proficiencies": ["str", "con"],
     "armor_proficiencies": ["light", "medium", "heavy", "shields"],
     "weapon_proficiencies": ["simple", "martial"],
-    "starting_equipment": {
-      "weapon": "longsword",
-      "armor": "chain_mail",
-      "gold": 10
-    },
+    "starting_equipment": ["longsword", "chain_mail", "potion_of_healing", "potion_of_healing", "potion_of_healing", "potion_of_healing", "potion_of_healing"],
+    "starting_gold": 10,
     "features_by_level": {
       "1": [
         {
