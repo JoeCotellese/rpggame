@@ -62,10 +62,12 @@ This project delivers a command-line interface (CLI) D&D gaming experience built
 
 ## Requirements
 
-- Python 3.10+
-- Anthropic API key (for Claude integration)
+- Python 3.11+
+- OpenAI API key or Anthropic API key (optional - game works without LLM)
 
 ## Installation
+
+### From Source (Development)
 
 ```bash
 # Clone the repository
@@ -79,25 +81,120 @@ uv venv
 source .venv/bin/activate  # On Linux/Mac
 # .venv\Scripts\activate   # On Windows
 
-# Install dependencies
-uv pip install -r requirements.txt
-
-# Set up your Anthropic API key
-export ANTHROPIC_API_KEY=your_key_here
-# Or create a .env file with: ANTHROPIC_API_KEY=your_key_here
+# Install in editable mode with dev dependencies
+uv pip install -e ".[dev]"
 ```
 
-## Usage
+### User Installation
 
 ```bash
-# Run the game (coming soon)
-python -m dnd_engine.main
+# Install from source
+uv pip install .
 
-# Run tests
+# Or install in editable mode for development
+uv pip install -e .
+```
+
+### Configuration
+
+Create a `.env` file in the project root (optional):
+
+```bash
+# LLM Provider (optional - game works without LLM)
+LLM_PROVIDER=openai
+
+# OpenAI Configuration
+OPENAI_API_KEY=sk-your-key-here
+OPENAI_MODEL=gpt-4o-mini
+
+# OR Anthropic Configuration
+# LLM_PROVIDER=anthropic
+# ANTHROPIC_API_KEY=sk-ant-your-key-here
+# ANTHROPIC_MODEL=claude-3-5-haiku-20241022
+
+# LLM Settings
+LLM_TIMEOUT=10
+LLM_MAX_TOKENS=150
+```
+
+See `.env.example` for all configuration options.
+
+## Quick Start
+
+```bash
+# Start the game (default settings)
+dnd-game
+
+# Or run as Python module
+python -m dnd_engine.main
+```
+
+The game will:
+1. Display a banner
+2. Check configuration
+3. Guide you through character creation
+4. Start your adventure!
+
+## Command-Line Options
+
+```bash
+# Get help
+dnd-game --help
+
+# Show version
+dnd-game --version
+
+# Disable LLM narrative enhancement
+dnd-game --no-llm
+
+# Use specific LLM provider
+dnd-game --llm-provider openai      # Use OpenAI (default)
+dnd-game --llm-provider anthropic   # Use Anthropic Claude
+dnd-game --llm-provider none        # Disable LLM
+
+# Choose starting dungeon
+dnd-game --dungeon goblin_warren    # Default dungeon
+dnd-game --dungeon crypt            # Alternative dungeon
+
+# Enable debug logging
+dnd-game --debug
+```
+
+## Usage Examples
+
+```bash
+# Standard game start with LLM
+dnd-game
+
+# Quick start without LLM
+dnd-game --no-llm
+
+# Use Claude for narrative
+dnd-game --llm-provider anthropic
+
+# Start in a specific dungeon
+dnd-game --dungeon dragon_lair
+
+# Debug mode for troubleshooting
+dnd-game --debug
+```
+
+## Testing
+
+```bash
+# Run all tests
 pytest
 
-# Run tests with coverage
+# Run with coverage
 pytest --cov=dnd_engine tests/
+
+# Run specific test categories
+pytest tests/test_main.py              # Unit tests
+pytest tests/test_main_integration.py  # Integration tests
+pytest tests/test_main_e2e.py          # End-to-end tests
+
+# Verbose output
+pytest -v
 ```
 
 ## Project Structure
