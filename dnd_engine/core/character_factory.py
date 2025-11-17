@@ -235,6 +235,69 @@ class CharacterFactory:
             return base_ac
 
     @staticmethod
+    def select_skill_proficiencies(
+        class_data: Dict[str, Any],
+        skills_data: Dict[str, Any]
+    ) -> List[str]:
+        """
+        Let player select skill proficiencies for their class.
+
+        Args:
+            class_data: Class definition with skill_proficiencies
+            skills_data: Skills data from skills.json
+
+        Returns:
+            List of selected skill names (e.g., ["athletics", "perception"])
+
+        Raises:
+            ValueError: If class has no skill proficiencies defined
+        """
+        skill_profs = class_data.get("skill_proficiencies")
+        if not skill_profs:
+            return []
+
+        # Get the number to choose and available skills
+        num_to_choose = skill_profs.get("choose", 0)
+        available_skills = skill_profs.get("from", [])
+
+        if num_to_choose == 0 or not available_skills:
+            return []
+
+        # Display available skills with their abilities
+        print_section(f"Choose {num_to_choose} Skill Proficiencies")
+
+        options = []
+        for i, skill_id in enumerate(available_skills, 1):
+            skill_info = skills_data.get(skill_id, {})
+            ability = skill_info.get("ability", "?").upper()
+            skill_name = skill_info.get("name", skill_id.title())
+            options.append({"number": str(i), "text": f"{skill_name} ({ability})"})
+
+        print_choice_menu(f"Available Skills (Choose {num_to_choose})", options)
+
+        selected = []
+        while len(selected) < num_to_choose:
+            remaining = num_to_choose - len(selected)
+            prompt = f"Enter skill number (select {remaining} more)" if remaining > 1 else "Enter skill number"
+            try:
+                choice = print_input_prompt(prompt).strip()
+                idx = int(choice) - 1
+                if 0 <= idx < len(available_skills):
+                    skill_id = available_skills[idx]
+                    if skill_id not in selected:
+                        selected.append(skill_id)
+                        skill_name = skills_data[skill_id].get("name", skill_id.title())
+                        print_status_message(f"Selected: {skill_name}", "success")
+                    else:
+                        print_status_message("You already selected that skill.", "warning")
+                else:
+                    print_status_message(f"Please enter a number between 1 and {len(available_skills)}.", "warning")
+            except ValueError:
+                print_status_message("Please enter a valid number.", "warning")
+
+        return selected
+
+    @staticmethod
     def apply_starting_equipment(
         character: Character,
         class_data: Dict[str, Any],
@@ -302,14 +365,16 @@ class CharacterFactory:
             6. Allow swaps
             7. Apply racial bonuses (show result)
             8. Calculate derived stats
-            9. Apply starting equipment
-            10. Display character sheet
-            11. Return Character
+            9. Select skill proficiencies
+            10. Create character and apply starting equipment
+            11. Display character sheet
+            12. Return Character
         """
         # Load data
         races_data = data_loader.load_races()
         classes_data = data_loader.load_classes()
         items_data = data_loader.load_items()
+        skills_data = data_loader.load_skills()
 
         # Step 1: Get character name
         print_section("CHARACTER CREATION", "Begin your adventure!")
@@ -507,7 +572,11 @@ class CharacterFactory:
         ]
         print_message("\n".join(stats_display))
 
-        # Step 9: Create character and apply starting equipment
+        # Step 9: Select skill proficiencies
+        print_section("Skill Proficiencies")
+        skill_proficiencies = self.select_skill_proficiencies(class_data, skills_data)
+
+        # Step 10: Create character and apply starting equipment
         character = Character(
             name=name,
             character_class=CharacterClass.FIGHTER,
@@ -515,7 +584,8 @@ class CharacterFactory:
             abilities=abilities_obj,
             max_hp=hp,
             ac=ac,
-            xp=0
+            xp=0,
+            skill_proficiencies=skill_proficiencies
         )
 
         # Store race (will add field to Character class)
@@ -555,7 +625,7 @@ class CharacterFactory:
         equipment_display.append(f"\nGold: {character.inventory.gold} gp")
         print_message("\n".join(equipment_display))
 
-        # Step 10: Display character sheet
+        # Step 11: Display character sheet
         sheet_display = [
             f"Name: {character.name}",
             f"Race: {race_data['name']}",
@@ -569,6 +639,15 @@ class CharacterFactory:
             modifier = self.calculate_ability_modifier(score)
             sign = "+" if modifier >= 0 else ""
             sheet_display.append(f"  {ability.upper()[:3]}: {score} ({sign}{modifier})")
+
+        # Add skill proficiencies to sheet
+        if skill_proficiencies:
+            sheet_display.append("")
+            sheet_display.append("SKILL PROFICIENCIES:")
+            for skill_id in skill_proficiencies:
+                skill_info = skills_data.get(skill_id, {})
+                skill_name = skill_info.get("name", skill_id.title())
+                sheet_display.append(f"  {skill_name}")
 
         sheet_display.extend([
             "",
