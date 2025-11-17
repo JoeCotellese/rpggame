@@ -425,7 +425,7 @@ class CLI:
         current = self.game_state.initiative_tracker.get_current_combatant()
         attacker = None
         for character in self.game_state.party.characters:
-            if current.creature == character:
+            if current.creature == character and character.is_alive:
                 attacker = character
                 break
 
@@ -1388,6 +1388,11 @@ class CLI:
                     self.combat_status_shown = True
 
                 current = self.game_state.initiative_tracker.get_current_combatant()
+
+                # Check if current combatant is alive - skip if dead
+                if not current.creature.is_alive:
+                    self.game_state.initiative_tracker.next_turn()
+                    continue
 
                 # Check if it's a party member's turn
                 is_party_turn = False
