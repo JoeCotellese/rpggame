@@ -1,7 +1,21 @@
 {
   "permissions": {
     "allow": [
-      "Bash(fd:*)"
+      "Bash(fd:*)",
+      "Bash(cat:*)",
+      "WebFetch(domain:www.dndbeyond.com)",
+      "WebSearch",
+      "WebFetch(domain:www.5esrd.com)",
+      "WebFetch(domain:www.aidedd.org)",
+      "Bash(git add:*)",
+      "Bash(gh issue list:*)",
+      "Bash(gh issue view:*)",
+      "Bash(gh issue close:*)",
+      "Bash(git checkout:*)",
+      "Bash(uv run pytest:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git fetch:*)"
     ],
     "deny": [],
     "ask": []

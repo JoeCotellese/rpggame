@@ -73,10 +73,17 @@ class CLI:
         print("~" * 60)
 
         # Show initiative order
+        current_combatant = self.game_state.initiative_tracker.get_current_combatant()
         for entry in self.game_state.initiative_tracker.get_all_combatants():
-            current = "→" if entry == self.game_state.initiative_tracker.get_current_combatant() else " "
+            is_current = entry == current_combatant
+            current_marker = "→" if is_current else " "
+
+            # Check if this is a party member
+            is_party_member = any(entry.creature == char for char in self.game_state.party.characters)
+            party_marker = "[PARTY]" if is_party_member else "[ENEMY]"
+
             status = "DEAD" if not entry.creature.is_alive else f"HP: {entry.creature.current_hp}/{entry.creature.max_hp}"
-            print(f"{current} {entry.creature.name} (Init: {entry.initiative_total}) - {status}")
+            print(f"{current_marker} {party_marker} {entry.creature.name} (Init: {entry.initiative_total}) - {status}")
 
         print("~" * 60)
 
@@ -213,7 +220,15 @@ class CLI:
                 break
 
         if not attacker:
-            print(f"It's {current.creature.name}'s turn, not a party member's!")
+            # Show which party member's turn it is or if it's an enemy turn
+            enemy_turn = False
+            for enemy in self.game_state.active_enemies:
+                if current.creature == enemy:
+                    print(f"It's {current.creature.name}'s turn, not a party member's!")
+                    enemy_turn = True
+                    break
+            if not enemy_turn:
+                print(f"It's not a valid combatant's turn!")
             return
 
         # Find target

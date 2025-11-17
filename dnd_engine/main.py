@@ -170,31 +170,68 @@ def main() -> None:
     if llm_provider:
         llm_enhancer = LLMEnhancer(llm_provider, event_bus)
 
-    print("\nLet's create your character!\n")
+    # Get party size
+    print("\nHow many characters in your party?")
+    party_size = None
+    while party_size is None:
+        try:
+            size_input = input("Enter number (1-4): ").strip()
+            size = int(size_input)
+            if 1 <= size <= 4:
+                party_size = size
+            else:
+                print("Please enter a number between 1 and 4.")
+        except ValueError:
+            print("Please enter a valid number.")
+        except KeyboardInterrupt:
+            raise
+
+    print(f"\nLet's create your party of {party_size}!\n")
 
     try:
         # Create character factory
         factory = CharacterFactory()
 
-        # Run character creation (CharacterFactory handles all UI)
-        character = factory.create_character_interactive(
-            ui=None,
-            data_loader=data_loader
-        )
-
         # Get race and class info for display
         races_data = data_loader.load_races()
         classes_data = data_loader.load_classes()
 
-        race_name = races_data.get(character.race, {}).get("name", character.race)
-        class_name = classes_data.get("fighter", {}).get("name", "Fighter")
+        # Create all characters
+        characters = []
+        for i in range(party_size):
+            if party_size > 1:
+                print(f"\n{'=' * 60}")
+                print(f"CHARACTER {i + 1} of {party_size}")
+                print(f"{'=' * 60}\n")
 
-        print(f"\nCharacter created: {character.name} ({race_name} {class_name})")
+            # Run character creation (CharacterFactory handles all UI)
+            character = factory.create_character_interactive(
+                ui=None,
+                data_loader=data_loader
+            )
+
+            race_name = races_data.get(character.race, {}).get("name", character.race)
+            class_name = classes_data.get("fighter", {}).get("name", "Fighter")
+
+            print(f"\n✓ Character created: {character.name} ({race_name} {class_name})")
+            characters.append(character)
+
+        # Display party roster
+        if party_size > 1:
+            print(f"\n{'=' * 60}")
+            print("PARTY ROSTER")
+            print(f"{'=' * 60}")
+            for char in characters:
+                race_name = races_data.get(char.race, {}).get("name", char.race)
+                class_name = classes_data.get("fighter", {}).get("name", "Fighter")
+                print(f"  • {char.name} ({race_name} {class_name}) - HP: {char.max_hp}, AC: {char.armor_class}")
+            print(f"{'=' * 60}")
+
         print("\nPress Enter to begin your adventure...")
         input()
 
-        # Create party with the character
-        party = Party(characters=[character])
+        # Create party with all characters
+        party = Party(characters=characters)
 
         # Initialize game state
         game_state = GameState(

@@ -417,3 +417,191 @@ class TestErrorRecovery:
             main()
 
         assert str(exc_info.value) == "Test error"
+
+
+class TestMultiCharacterPartyIntegration:
+    """Integration tests for multi-character party creation and gameplay."""
+
+    @patch("dnd_engine.main.CLI")
+    @patch("dnd_engine.main.GameState")
+    @patch("dnd_engine.main.Party")
+    @patch("dnd_engine.main.CharacterFactory")
+    @patch("dnd_engine.main.DataLoader")
+    @patch("builtins.input")
+    @patch("sys.argv", ["dnd-game", "--no-llm"])
+    def test_create_four_character_party(
+        self,
+        mock_input,
+        mock_loader_class,
+        mock_factory_class,
+        mock_party_class,
+        mock_game_state_class,
+        mock_cli_class,
+        capsys
+    ):
+        """Test creating a full 4-character party and starting the game."""
+        # Mock inputs: party size = 4, then press Enter to start
+        mock_input.side_effect = ["4", ""]
+
+        # Setup data loader
+        mock_loader = MagicMock()
+        mock_loader_class.return_value = mock_loader
+        mock_loader.load_races.return_value = {
+            "human": {"name": "Human"},
+            "elf": {"name": "Elf"},
+            "dwarf": {"name": "Dwarf"}
+        }
+        mock_loader.load_classes.return_value = {
+            "fighter": {"name": "Fighter"}
+        }
+
+        # Setup character creation for 4 characters
+        mock_factory = MagicMock()
+        characters = [
+            MagicMock(name="Thorin", race="dwarf", max_hp=15, armor_class=18),
+            MagicMock(name="Legolas", race="elf", max_hp=11, armor_class=16),
+            MagicMock(name="Aragorn", race="human", max_hp=13, armor_class=17),
+            MagicMock(name="Gimli", race="dwarf", max_hp=14, armor_class=18),
+        ]
+        mock_factory.create_character_interactive.side_effect = characters
+        mock_factory_class.return_value = mock_factory
+
+        # Setup game components
+        mock_party = MagicMock()
+        mock_party_class.return_value = mock_party
+
+        mock_game_state = MagicMock()
+        mock_game_state_class.return_value = mock_game_state
+
+        mock_cli = MagicMock()
+        mock_cli_class.return_value = mock_cli
+
+        # Run main
+        main()
+
+        # Verify output
+        captured = capsys.readouterr()
+        assert "How many characters in your party?" in captured.out
+        assert "Let's create your party of 4!" in captured.out
+        assert "CHARACTER 1 of 4" in captured.out
+        assert "CHARACTER 2 of 4" in captured.out
+        assert "CHARACTER 3 of 4" in captured.out
+        assert "CHARACTER 4 of 4" in captured.out
+        assert "PARTY ROSTER" in captured.out
+        assert "Thorin" in captured.out
+        assert "Legolas" in captured.out
+        assert "Aragorn" in captured.out
+        assert "Gimli" in captured.out
+
+        # Verify character creation called 4 times
+        assert mock_factory.create_character_interactive.call_count == 4
+
+        # Verify party created with all 4 characters
+        mock_party_class.assert_called_once()
+        call_args = mock_party_class.call_args
+        assert len(call_args.kwargs["characters"]) == 4
+
+        # Verify game started
+        mock_cli.run.assert_called_once()
+
+    @patch("dnd_engine.main.CLI")
+    @patch("dnd_engine.main.GameState")
+    @patch("dnd_engine.main.Party")
+    @patch("dnd_engine.main.CharacterFactory")
+    @patch("dnd_engine.main.DataLoader")
+    @patch("builtins.input")
+    @patch("sys.argv", ["dnd-game", "--no-llm"])
+    def test_single_character_party_no_roster(
+        self,
+        mock_input,
+        mock_loader_class,
+        mock_factory_class,
+        mock_party_class,
+        mock_game_state_class,
+        mock_cli_class,
+        capsys
+    ):
+        """Test that single character parties don't show roster (only multi-char)."""
+        # Mock inputs: party size = 1, then press Enter to start
+        mock_input.side_effect = ["1", ""]
+
+        # Setup data loader
+        mock_loader = MagicMock()
+        mock_loader_class.return_value = mock_loader
+        mock_loader.load_races.return_value = {"human": {"name": "Human"}}
+        mock_loader.load_classes.return_value = {"fighter": {"name": "Fighter"}}
+
+        # Setup character creation
+        mock_factory = MagicMock()
+        character = MagicMock(name="Solo", race="human", max_hp=12, armor_class=16)
+        mock_factory.create_character_interactive.return_value = character
+        mock_factory_class.return_value = mock_factory
+
+        # Setup game components
+        mock_party_class.return_value = MagicMock()
+        mock_game_state_class.return_value = MagicMock()
+        mock_cli_class.return_value = MagicMock()
+
+        # Run main
+        main()
+
+        # Verify output
+        captured = capsys.readouterr()
+        assert "Let's create your party of 1!" in captured.out
+        assert "CHARACTER 1 of" not in captured.out  # Should not show character counter
+        assert "PARTY ROSTER" not in captured.out  # Should not show roster for solo
+        assert "Solo" in captured.out
+
+    @patch("dnd_engine.main.CLI")
+    @patch("dnd_engine.main.GameState")
+    @patch("dnd_engine.main.Party")
+    @patch("dnd_engine.main.CharacterFactory")
+    @patch("dnd_engine.main.DataLoader")
+    @patch("builtins.input")
+    @patch("sys.argv", ["dnd-game", "--no-llm"])
+    def test_party_passed_to_game_state(
+        self,
+        mock_input,
+        mock_loader_class,
+        mock_factory_class,
+        mock_party_class,
+        mock_game_state_class,
+        mock_cli_class
+    ):
+        """Test that the created party is correctly passed to GameState."""
+        # Mock inputs: party size = 2
+        mock_input.side_effect = ["2", ""]
+
+        # Setup data loader
+        mock_loader = MagicMock()
+        mock_loader_class.return_value = mock_loader
+        mock_loader.load_races.return_value = {"human": {"name": "Human"}}
+        mock_loader.load_classes.return_value = {"fighter": {"name": "Fighter"}}
+
+        # Setup character creation
+        mock_factory = MagicMock()
+        char1 = MagicMock(name="Hero1", race="human")
+        char2 = MagicMock(name="Hero2", race="human")
+        mock_factory.create_character_interactive.side_effect = [char1, char2]
+        mock_factory_class.return_value = mock_factory
+
+        # Setup game components
+        mock_party = MagicMock()
+        mock_party_class.return_value = mock_party
+
+        mock_game_state = MagicMock()
+        mock_game_state_class.return_value = mock_game_state
+
+        mock_cli_class.return_value = MagicMock()
+
+        # Run main
+        main()
+
+        # Verify Party was created with both characters
+        mock_party_class.assert_called_once_with(characters=[char1, char2])
+
+        # Verify GameState was initialized with the party
+        mock_game_state_class.assert_called_once()
+        call_kwargs = mock_game_state_class.call_args.kwargs
+        assert call_kwargs["party"] == mock_party
+        assert call_kwargs["dungeon_name"] == "goblin_warren"
