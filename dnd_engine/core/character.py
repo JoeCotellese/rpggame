@@ -448,6 +448,133 @@ class Character(Creature):
         """
         self.xp += amount
 
+    def check_for_level_up(self, data_loader, event_bus=None) -> bool:
+        """
+        Check if character has enough XP to level up and execute level-up if so.
+
+        Args:
+            data_loader: DataLoader instance to access progression data
+            event_bus: Optional EventBus to emit level-up events
+
+        Returns:
+            True if character leveled up, False otherwise
+        """
+        progression = data_loader.load_progression()
+        next_level = self.level + 1
+
+        # Check if we can level up (max level 20)
+        if next_level > 20:
+            return False
+
+        next_level_xp = int(progression["xp_by_level"].get(str(next_level), 999999))
+
+        if self.xp >= next_level_xp:
+            self._level_up(data_loader, event_bus)
+            return True
+
+        return False
+
+    def _level_up(self, data_loader, event_bus=None) -> None:
+        """
+        Perform level-up: increase level, HP, and grant class features.
+
+        Args:
+            data_loader: DataLoader instance to access class data
+            event_bus: Optional EventBus to emit events
+        """
+        old_level = self.level
+        old_max_hp = self.max_hp
+
+        # Increase level
+        self.level += 1
+
+        # Increase HP
+        self._increase_hp(data_loader)
+
+        # Grant class features for new level
+        self._grant_class_features(data_loader, event_bus)
+
+        # Emit level-up event
+        if event_bus is not None:
+            from dnd_engine.utils.events import Event, EventType
+            event_bus.emit(Event(
+                type=EventType.LEVEL_UP,
+                data={
+                    "character": self.name,
+                    "old_level": old_level,
+                    "new_level": self.level,
+                    "hp_increase": self.max_hp - old_max_hp
+                }
+            ))
+
+    def _increase_hp(self, data_loader) -> None:
+        """
+        Increase max HP on level-up by rolling hit die + CON modifier.
+
+        Args:
+            data_loader: DataLoader instance to access class data
+        """
+        # Get hit die from class data
+        classes_data = data_loader.load_classes()
+        class_data = classes_data.get(self.character_class.value)
+
+        if not class_data:
+            # Fallback to d8 if class data not found
+            hit_die = "1d8"
+        else:
+            hit_die = class_data.get("hit_die", "1d8")
+
+        # Roll hit die and add CON modifier
+        con_mod = self.abilities.con_mod
+        hp_increase = self._dice_roller.roll(hit_die).total + con_mod
+
+        # Minimum 1 HP per level
+        hp_increase = max(1, hp_increase)
+
+        # Increase max HP and current HP
+        self.max_hp += hp_increase
+        self.current_hp += hp_increase
+
+    def _grant_class_features(self, data_loader, event_bus=None) -> None:
+        """
+        Grant new class features for current level.
+
+        Args:
+            data_loader: DataLoader instance to access class data
+            event_bus: Optional EventBus to emit feature granted events
+        """
+        classes_data = data_loader.load_classes()
+        class_data = classes_data.get(self.character_class.value)
+
+        if not class_data:
+            return
+
+        features = class_data.get("features_by_level", {}).get(str(self.level), [])
+
+        for feature in features:
+            # If feature has resource pool, add it
+            if "resource" in feature:
+                resource = feature["resource"]
+                pool = ResourcePool(
+                    name=resource["pool"],
+                    current=resource["max_uses"],
+                    maximum=resource["max_uses"],
+                    recovery_type=resource["recovery"]
+                )
+                self.add_resource_pool(pool)
+
+            # Emit feature granted event
+            if event_bus is not None:
+                from dnd_engine.utils.events import Event, EventType
+                event_bus.emit(Event(
+                    type=EventType.FEATURE_GRANTED,
+                    data={
+                        "character": self.name,
+                        "level": self.level,
+                        "feature": feature["name"]
+                    }
+                ))
+
     def get_skill_modifier(self, skill: str, skills_data: dict) -> int:
         """
         Calculate skill check modifier for a given skill.

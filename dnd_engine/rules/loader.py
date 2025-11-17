@@ -150,3 +150,14 @@ class DataLoader:
         skills_file = self.data_path / "srd" / "skills.json"
         with open(skills_file, 'r') as f:
             return json.load(f)
+
+    def load_progression(self) -> Dict[str, Any]:
+        """
+        Load character progression data (XP thresholds and proficiency bonuses).
+
+        Returns:
+            Dictionary containing xp_by_level and proficiency_by_level
+        """
+        progression_file = self.data_path / "srd" / "progression.json"
+        with open(progression_file, 'r') as f:
+            return json.load(f)

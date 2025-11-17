@@ -61,6 +61,8 @@ class CLI:
         self.game_state.event_bus.subscribe(EventType.ENHANCEMENT_STARTED, self._on_enhancement_started)
         self.game_state.event_bus.subscribe(EventType.DESCRIPTION_ENHANCED, self._on_description_enhanced)
         self.game_state.event_bus.subscribe(EventType.ROOM_ENTER, self._on_room_enter)
+        self.game_state.event_bus.subscribe(EventType.LEVEL_UP, self._on_level_up)
+        self.game_state.event_bus.subscribe(EventType.FEATURE_GRANTED, self._on_feature_granted)
 
     def display_banner(self) -> None:
         """Display the game banner."""
@@ -1233,6 +1235,23 @@ class CLI:
         """Handle gold acquired event."""
         # Events are already displayed during search, so we can pass
         pass
+
+    def _on_level_up(self, event: Event) -> None:
+        """Handle level-up event."""
+        char_name = event.data["character"]
+        new_level = event.data["new_level"]
+        hp_increase = event.data["hp_increase"]
+
+        print_section(f"🎉 LEVEL UP!")
+        print_status_message(f"{char_name} reached level {new_level}!", "success")
+        print_message(f"❤️  HP increased by {hp_increase}")
+
+    def _on_feature_granted(self, event: Event) -> None:
+        """Handle feature granted event."""
+        char_name = event.data["character"]
+        feature = event.data["feature"]
+
+        print_status_message(f"✨ {char_name} learned: {feature}", "info")
 
     def _on_enhancement_started(self, event: Event) -> None:
         """Handle LLM enhancement started event."""

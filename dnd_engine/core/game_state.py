@@ -344,6 +344,10 @@ class GameState:
             for character in self.party.characters:
                 character.gain_xp(xp_per_character)
 
+                # Check for level-up (can level up multiple times if enough XP)
+                while character.check_for_level_up(self.data_loader, self.event_bus):
+                    pass  # Level-up event already emitted by check_for_level_up
+
         # Clear combat state
         self.in_combat = False
         self.initiative_tracker = None
