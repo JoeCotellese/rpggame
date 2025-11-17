@@ -8,6 +8,7 @@ from dnd_engine.core.creature import Abilities
 from dnd_engine.core.game_state import GameState
 from dnd_engine.core.combat import AttackResult
 from dnd_engine.utils.events import EventBus, Event, EventType
+from dnd_engine.systems.inventory import EquipmentSlot
 from dnd_engine.ui.rich_ui import (
     console,
     create_party_status_table,
@@ -371,12 +372,32 @@ class CLI:
                 details=f"target={target.name}"
             )
 
+        # Get equipped weapon and its properties
+        equipped_weapon = attacker.inventory.get_equipped_item(EquipmentSlot.WEAPON)
+
+        # Load weapon data
+        items_data = self.game_state.data_loader.load_items()
+
+        # Get attack bonus and damage bonus based on weapon
+        if equipped_weapon:
+            attack_bonus = attacker.get_attack_bonus(equipped_weapon, items_data)
+            damage_bonus = attacker.get_damage_bonus(equipped_weapon, items_data)
+            # Get weapon damage dice from item data
+            weapon_data = items_data.get("weapons", {}).get(equipped_weapon, {})
+            damage_dice = weapon_data.get("damage", "1d8")
+            damage_dice = f"{damage_dice}+{damage_bonus}"
+        else:
+            # Fallback to melee attack if no weapon equipped
+            attack_bonus = attacker.melee_attack_bonus
+            damage_bonus = attacker.melee_damage_bonus
+            damage_dice = f"1d8+{damage_bonus}"
+
         # Perform attack
         result = self.game_state.combat_engine.resolve_attack(
             attacker=attacker,
             defender=target,
-            attack_bonus=attacker.melee_attack_bonus,
-            damage_dice=f"1d8+{attacker.melee_damage_bonus}",
+            attack_bonus=attack_bonus,
+            damage_dice=damage_dice,
             apply_damage=True
         )
 

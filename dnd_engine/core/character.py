@@ -106,6 +106,103 @@ class Character(Creature):
         """
         return self.abilities.str_mod
 
+    @property
+    def ranged_attack_bonus(self) -> int:
+        """
+        Calculate ranged attack bonus.
+
+        For ranged weapons: proficiency bonus + Dexterity modifier
+
+        Returns:
+            Total attack bonus for ranged attacks
+        """
+        return self.proficiency_bonus + self.abilities.dex_mod
+
+    @property
+    def finesse_attack_bonus(self) -> int:
+        """
+        Calculate finesse attack bonus.
+
+        For finesse weapons: proficiency bonus + higher of STR or DEX modifiers
+
+        Returns:
+            Total attack bonus for finesse attacks
+        """
+        ability_mod = max(self.abilities.str_mod, self.abilities.dex_mod)
+        return self.proficiency_bonus + ability_mod
+
+    def get_attack_bonus(self, weapon_id: str, items_data: dict) -> int:
+        """
+        Get appropriate attack bonus based on equipped weapon properties.
+
+        Determines the correct attack type (STR melee, DEX ranged, or finesse)
+        based on the weapon's properties and applies the appropriate modifier.
+
+        Args:
+            weapon_id: ID of the weapon (e.g., "longsword", "longbow")
+            items_data: Dictionary of all items data from items.json
+
+        Returns:
+            Attack bonus for the weapon (includes proficiency bonus)
+
+        Raises:
+            KeyError: If weapon_id doesn't exist in items_data
+        """
+        # Get weapon data from items.json
+        weapon_data = items_data.get("weapons", {}).get(weapon_id)
+        if not weapon_data:
+            raise KeyError(f"Weapon '{weapon_id}' not found in items data")
+
+        properties = weapon_data.get("properties", [])
+        category = weapon_data.get("category", "melee")
+
+        # Determine attack type based on weapon properties
+        if "finesse" in properties:
+            # Finesse weapon: use highest of STR or DEX
+            return self.finesse_attack_bonus
+        elif category == "ranged":
+            # Ranged weapon: use DEX
+            return self.ranged_attack_bonus
+        else:
+            # Standard melee (STR): use STR
+            return self.melee_attack_bonus
+
+    def get_damage_bonus(self, weapon_id: str, items_data: dict) -> int:
+        """
+        Get damage bonus based on weapon properties.
+
+        Determines the appropriate ability modifier (STR or DEX) based on the
+        weapon's type and properties.
+
+        Args:
+            weapon_id: ID of the weapon (e.g., "longsword", "longbow")
+            items_data: Dictionary of all items data from items.json
+
+        Returns:
+            Damage bonus modifier for the weapon
+
+        Raises:
+            KeyError: If weapon_id doesn't exist in items_data
+        """
+        # Get weapon data from items.json
+        weapon_data = items_data.get("weapons", {}).get(weapon_id)
+        if not weapon_data:
+            raise KeyError(f"Weapon '{weapon_id}' not found in items data")
+
+        properties = weapon_data.get("properties", [])
+        category = weapon_data.get("category", "melee")
+
+        # Determine damage bonus based on weapon type
+        if "finesse" in properties:
+            # Finesse weapon: use highest of STR or DEX
+            return max(self.abilities.str_mod, self.abilities.dex_mod)
+        elif category == "ranged":
+            # Ranged weapon: use DEX
+            return self.abilities.dex_mod
+        else:
+            # Standard melee: use STR
+            return self.abilities.str_mod
+
     def gain_xp(self, amount: int) -> None:
         """
         Add experience points.
