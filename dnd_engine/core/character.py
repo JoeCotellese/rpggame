@@ -389,8 +389,9 @@ class Character(Creature):
         """
         Check if character is proficient with a weapon.
 
-        A character is proficient with a weapon if the weapon's type (simple or martial)
-        is in the character's weapon_proficiencies list.
+        A character is proficient with a weapon if either:
+        1. The weapon's type (simple or martial) is in the weapon_proficiencies list, OR
+        2. The specific weapon name (e.g., "rapiers", "longswords") is in the list
 
         Args:
             weapon_id: ID of the weapon (e.g., "longsword", "dagger")
@@ -407,7 +408,10 @@ class Character(Creature):
             raise KeyError(f"Weapon '{weapon_id}' not found in items data")
 
         weapon_type = weapon_data.get("weapon_type", "")
-        return weapon_type in self.weapon_proficiencies
+        # Check both weapon type (e.g., "martial") and specific weapon name (e.g., "rapiers")
+        # Convert weapon_id to plural form for comparison (e.g., "rapier" -> "rapiers")
+        weapon_name_plural = f"{weapon_id}s" if not weapon_id.endswith('s') else weapon_id
+        return weapon_type in self.weapon_proficiencies or weapon_name_plural in self.weapon_proficiencies
 
     def is_proficient_with_armor(self, armor_id: str, items_data: dict) -> bool:
         """

@@ -12,6 +12,7 @@ authors = [
 dependencies = [
     "anthropic>=0.18.0",
     "openai>=1.0.0",
+    "prompt-toolkit>=3.0.52",
     "pydantic>=2.5.0",
     "python-dotenv>=1.0.0",
     "rich>=14.2.0",
