@@ -2,17 +2,22 @@
   "weapons": {
     "longsword": {
       "name": "Longsword",
+      "source": "D&D 5E SRD (CC BY 4.0)",
       "type": "weapon",
       "weapon_type": "martial",
+      "category": "melee",
       "damage": "1d8",
       "damage_type": "slashing",
       "properties": ["versatile"],
+      "versatile_damage": "1d10",
       "value": 15
     },
     "shortsword": {
       "name": "Shortsword",
+      "source": "D&D 5E SRD (CC BY 4.0)",
       "type": "weapon",
       "weapon_type": "martial",
+      "category": "melee",
       "damage": "1d6",
       "damage_type": "piercing",
       "properties": ["finesse", "light"],
@@ -20,63 +25,316 @@
     },
     "dagger": {
       "name": "Dagger",
+      "source": "D&D 5E SRD (CC BY 4.0)",
       "type": "weapon",
       "weapon_type": "simple",
+      "category": "melee",
       "damage": "1d4",
       "damage_type": "piercing",
       "properties": ["finesse", "light", "thrown"],
+      "range": "20/60",
       "value": 2
     },
     "greataxe": {
       "name": "Greataxe",
+      "source": "D&D 5E SRD (CC BY 4.0)",
       "type": "weapon",
       "weapon_type": "martial",
+      "category": "melee",
       "damage": "1d12",
       "damage_type": "slashing",
       "properties": ["heavy", "two-handed"],
       "value": 30
+    },
+    "light_crossbow": {
+      "name": "Light Crossbow",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "weapon",
+      "weapon_type": "simple",
+      "category": "ranged",
+      "damage": "1d8",
+      "damage_type": "piercing",
+      "properties": ["ammunition", "loading", "two-handed"],
+      "range": "80/320",
+      "value": 25
+    },
+    "heavy_crossbow": {
+      "name": "Heavy Crossbow",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "weapon",
+      "weapon_type": "martial",
+      "category": "ranged",
+      "damage": "1d10",
+      "damage_type": "piercing",
+      "properties": ["ammunition", "heavy", "loading", "two-handed"],
+      "range": "100/400",
+      "value": 50
+    },
+    "shortbow": {
+      "name": "Shortbow",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "weapon",
+      "weapon_type": "simple",
+      "category": "ranged",
+      "damage": "1d6",
+      "damage_type": "piercing",
+      "properties": ["ammunition", "two-handed"],
+      "range": "80/320",
+      "value": 25
+    },
+    "longbow": {
+      "name": "Longbow",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "weapon",
+      "weapon_type": "martial",
+      "category": "ranged",
+      "damage": "1d8",
+      "damage_type": "piercing",
+      "properties": ["ammunition", "heavy", "two-handed"],
+      "range": "150/600",
+      "value": 50
+    },
+    "battleaxe": {
+      "name": "Battleaxe",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "weapon",
+      "weapon_type": "martial",
+      "category": "melee",
+      "damage": "1d8",
+      "damage_type": "slashing",
+      "properties": ["versatile"],
+      "versatile_damage": "1d10",
+      "value": 10
+    },
+    "warhammer": {
+      "name": "Warhammer",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "weapon",
+      "weapon_type": "martial",
+      "category": "melee",
+      "damage": "1d8",
+      "damage_type": "bludgeoning",
+      "properties": ["versatile"],
+      "versatile_damage": "1d10",
+      "value": 15
+    },
+    "handaxe": {
+      "name": "Handaxe",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "weapon",
+      "weapon_type": "simple",
+      "category": "melee",
+      "damage": "1d6",
+      "damage_type": "slashing",
+      "properties": ["light", "thrown"],
+      "range": "20/60",
+      "value": 5
+    },
+    "mace": {
+      "name": "Mace",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "weapon",
+      "weapon_type": "simple",
+      "category": "melee",
+      "damage": "1d6",
+      "damage_type": "bludgeoning",
+      "properties": [],
+      "value": 5
+    },
+    "quarterstaff": {
+      "name": "Quarterstaff",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "weapon",
+      "weapon_type": "simple",
+      "category": "melee",
+      "damage": "1d6",
+      "damage_type": "bludgeoning",
+      "properties": ["versatile"],
+      "versatile_damage": "1d8",
+      "value": 0.2
+    },
+    "rapier": {
+      "name": "Rapier",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "weapon",
+      "weapon_type": "martial",
+      "category": "melee",
+      "damage": "1d8",
+      "damage_type": "piercing",
+      "properties": ["finesse"],
+      "value": 25
     }
   },
   "armor": {
-    "leather_armor": {
-      "name": "Leather Armor",
+    "padded": {
+      "name": "Padded Armor",
+      "source": "D&D 5E SRD (CC BY 4.0)",
       "type": "armor",
       "armor_type": "light",
       "ac": 11,
       "ac_bonus_dex": true,
-      "value": 10
+      "stealth_disadvantage": true,
+      "value": 5
     },
-    "chain_mail": {
-      "name": "Chain Mail",
+    "leather_armor": {
+      "name": "Leather Armor",
+      "source": "D&D 5E SRD (CC BY 4.0)",
       "type": "armor",
-      "armor_type": "heavy",
-      "ac": 16,
-      "ac_bonus_dex": false,
-      "value": 75
+      "armor_type": "light",
+      "ac": 11,
+      "ac_bonus_dex": true,
+      "stealth_disadvantage": false,
+      "value": 10
     },
     "studded_leather": {
       "name": "Studded Leather",
+      "source": "D&D 5E SRD (CC BY 4.0)",
       "type": "armor",
       "armor_type": "light",
       "ac": 12,
       "ac_bonus_dex": true,
+      "stealth_disadvantage": false,
       "value": 45
+    },
+    "hide": {
+      "name": "Hide Armor",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "armor",
+      "armor_type": "medium",
+      "ac": 12,
+      "ac_bonus_dex": true,
+      "dex_max": 2,
+      "stealth_disadvantage": false,
+      "value": 10
+    },
+    "chain_shirt": {
+      "name": "Chain Shirt",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "armor",
+      "armor_type": "medium",
+      "ac": 13,
+      "ac_bonus_dex": true,
+      "dex_max": 2,
+      "stealth_disadvantage": false,
+      "value": 50
+    },
+    "scale_mail": {
+      "name": "Scale Mail",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "armor",
+      "armor_type": "medium",
+      "ac": 14,
+      "ac_bonus_dex": true,
+      "dex_max": 2,
+      "stealth_disadvantage": true,
+      "value": 50
+    },
+    "breastplate": {
+      "name": "Breastplate",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "armor",
+      "armor_type": "medium",
+      "ac": 14,
+      "ac_bonus_dex": true,
+      "dex_max": 2,
+      "stealth_disadvantage": false,
+      "value": 400
+    },
+    "half_plate": {
+      "name": "Half Plate",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "armor",
+      "armor_type": "medium",
+      "ac": 15,
+      "ac_bonus_dex": true,
+      "dex_max": 2,
+      "stealth_disadvantage": true,
+      "value": 750
+    },
+    "ring_mail": {
+      "name": "Ring Mail",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "armor",
+      "armor_type": "heavy",
+      "ac": 14,
+      "ac_bonus_dex": false,
+      "stealth_disadvantage": true,
+      "value": 30
+    },
+    "chain_mail": {
+      "name": "Chain Mail",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "armor",
+      "armor_type": "heavy",
+      "ac": 16,
+      "ac_bonus_dex": false,
+      "stealth_disadvantage": true,
+      "strength_required": 13,
+      "value": 75
+    },
+    "splint": {
+      "name": "Splint Armor",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "armor",
+      "armor_type": "heavy",
+      "ac": 17,
+      "ac_bonus_dex": false,
+      "stealth_disadvantage": true,
+      "strength_required": 15,
+      "value": 200
+    },
+    "plate": {
+      "name": "Plate Armor",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "armor",
+      "armor_type": "heavy",
+      "ac": 18,
+      "ac_bonus_dex": false,
+      "stealth_disadvantage": true,
+      "strength_required": 15,
+      "value": 1500
     }
   },
   "consumables": {
     "potion_of_healing": {
       "name": "Potion of Healing",
+      "source": "D&D 5E SRD (CC BY 4.0)",
       "type": "consumable",
-      "effect": "heal",
-      "amount": "2d4+2",
+      "rarity": "common",
+      "effect_type": "healing",
+      "healing": "2d4+2",
+      "description": "A character who drinks the magical red fluid in this vial regains 2d4 + 2 hit points.",
       "value": 50
     },
     "potion_of_greater_healing": {
       "name": "Potion of Greater Healing",
+      "source": "D&D 5E SRD (CC BY 4.0)",
       "type": "consumable",
-      "effect": "heal",
-      "amount": "4d4+4",
+      "rarity": "uncommon",
+      "effect_type": "healing",
+      "healing": "4d4+4",
+      "description": "A character who drinks the magical red fluid in this vial regains 4d4 + 4 hit points.",
       "value": 150
+    },
+    "potion_of_superior_healing": {
+      "name": "Potion of Superior Healing",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "consumable",
+      "rarity": "rare",
+      "effect_type": "healing",
+      "healing": "8d4+8",
+      "description": "A character who drinks the magical red fluid in this vial regains 8d4 + 8 hit points.",
+      "value": 450
+    },
+    "potion_of_supreme_healing": {
+      "name": "Potion of Supreme Healing",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "consumable",
+      "rarity": "very rare",
+      "effect_type": "healing",
+      "healing": "10d4+20",
+      "description": "A character who drinks the magical red fluid in this vial regains 10d4 + 20 hit points.",
+      "value": 1350
     }
   }
 }
