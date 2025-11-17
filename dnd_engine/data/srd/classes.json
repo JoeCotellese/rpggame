@@ -22,13 +22,23 @@
         },
         {
           "name": "Second Wind",
-          "description": "You have a limited well of stamina. Once per short rest, you can use a bonus action to regain 1d10 + fighter level HP."
+          "description": "You have a limited well of stamina. Once per short rest, you can use a bonus action to regain 1d10 + fighter level HP.",
+          "resource": {
+            "pool": "second_wind",
+            "max_uses": 1,
+            "recovery": "short_rest"
+          }
         }
       ],
       "2": [
         {
           "name": "Action Surge",
-          "description": "You can push yourself beyond your normal limits. Once per short rest, you can take one additional action on your turn."
+          "description": "You can push yourself beyond your normal limits. Once per short rest, you can take one additional action on your turn.",
+          "resource": {
+            "pool": "action_surge",
+            "max_uses": 1,
+            "recovery": "short_rest"
+          }
         }
       ],
       "3": [
