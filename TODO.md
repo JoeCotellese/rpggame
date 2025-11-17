@@ -250,7 +250,51 @@ This document tracks remaining implementation tasks to complete the MVP and futu
 
 ---
 
-#### 2.3 Validate Class Definitions
+#### 2.3 Implement D&D 5E Currency System
+**Location:** `dnd_engine/systems/currency.py` (NEW FILE)
+**Dependencies:** Inventory system
+**Estimated Effort:** Medium (2-3 hours)
+**GitHub Issue:** #6
+
+**Tasks:**
+- [ ] Create `Currency` dataclass
+  - [ ] Track all five currency types: cp, sp, ep, gp, pp
+  - [ ] `to_copper()` method for total wealth calculation
+  - [ ] `add()` method with optional auto-consolidation
+  - [ ] `subtract()` method with automatic change-making
+  - [ ] `can_afford()` method for affordability checks
+  - [ ] `consolidate()` method to convert to larger denominations
+  - [ ] `__str__()` method for display (only non-zero denominations)
+- [ ] Update Inventory class
+  - [ ] Replace `self.gold: int` with `self.currency: Currency`
+  - [ ] Add `gold` property for backward compatibility
+  - [ ] Update `add_gold()`, `remove_gold()`, `has_gold()` methods
+  - [ ] Update `__str__()` to display full currency
+- [ ] Write unit tests (`tests/test_currency.py`)
+  - [ ] Test conversion rates (cp, sp, ep, gp, pp)
+  - [ ] Test adding currency with consolidation
+  - [ ] Test subtracting with change-making
+  - [ ] Test affordability checks
+  - [ ] Test edge cases (negative amounts, insufficient funds)
+  - [ ] Test display formatting
+- [ ] Write integration tests
+  - [ ] Test inventory with currency operations
+  - [ ] Test backward compatibility with existing code
+- [ ] Update data files
+  - [ ] Add currency to dungeon treasures
+  - [ ] Add currency to monster loot
+
+**Acceptance Criteria:**
+- Currency class tracks all five D&D 5E currency types
+- Automatic change-making works when paying
+- Currency displays in readable format (e.g., "5 gp, 7 sp, 3 cp")
+- All unit tests pass with >80% coverage
+- Backward compatible via `inventory.gold` property
+- No breaking changes to existing functionality
+
+---
+
+#### 2.4 Validate Class Definitions
 **Location:** `dnd_engine/data/srd/classes.json`
 **Dependencies:** None
 **Estimated Effort:** Small
