@@ -1,7 +1,8 @@
 # ABOUTME: LLM enhancer that subscribes to game events and generates narrative descriptions
-# ABOUTME: Coordinates async LLM calls with synchronous event bus using task creation
+# ABOUTME: Coordinates async LLM calls with synchronous event bus using background thread
 
 import asyncio
+import threading
 from typing import Dict, Optional
 
 from ..utils.events import Event, EventBus, EventType
@@ -40,8 +41,15 @@ class LLMEnhancer:
         self.event_bus = event_bus
         self.cache: Optional[Dict[str, str]] = {} if enable_cache else None
 
-        # Subscribe to events only if provider is available
+        # Create background event loop for async tasks
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._loop_thread: Optional[threading.Thread] = None
+
         if provider:
+            # Start background event loop
+            self._start_event_loop()
+
+            # Subscribe to events
             self.event_bus.subscribe(
                 EventType.ROOM_ENTER,
                 self._handle_room_enter
@@ -59,6 +67,32 @@ class LLMEnhancer:
                 self._handle_death
             )
 
+    def _start_event_loop(self) -> None:
+        """Start background thread with event loop for async tasks."""
+        def run_loop():
+            self._loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self._loop)
+            self._loop.run_forever()
+
+        self._loop_thread = threading.Thread(target=run_loop, daemon=True)
+        self._loop_thread.start()
+
+        # Wait for loop to be ready
+        while self._loop is None:
+            pass
+
+    def _schedule_async(self, coro):
+        """Schedule a coroutine to run in the background event loop."""
+        if self._loop and not self._loop.is_closed():
+            asyncio.run_coroutine_threadsafe(coro, self._loop)
+
+    def shutdown(self) -> None:
+        """Shutdown the background event loop."""
+        if self._loop:
+            self._loop.call_soon_threadsafe(self._loop.stop)
+            if self._loop_thread:
+                self._loop_thread.join(timeout=1.0)
+
     def _handle_room_enter(self, event: Event) -> None:
         """
         Handle room enter event (synchronous wrapper).
@@ -66,8 +100,8 @@ class LLMEnhancer:
         Args:
             event: ROOM_ENTER event with room data
         """
-        # Create async task for LLM generation
-        asyncio.create_task(self._enhance_room_description(event))
+        # Schedule async task in background event loop
+        self._schedule_async(self._enhance_room_description(event))
 
     def _handle_combat_action(self, event: Event) -> None:
         """
@@ -76,7 +110,7 @@ class LLMEnhancer:
         Args:
             event: DAMAGE_DEALT event with combat data
         """
-        asyncio.create_task(self._enhance_combat_action(event))
+        self._schedule_async(self._enhance_combat_action(event))
 
     def _handle_victory(self, event: Event) -> None:
         """
@@ -85,7 +119,7 @@ class LLMEnhancer:
         Args:
             event: COMBAT_END event with combat data
         """
-        asyncio.create_task(self._enhance_victory(event))
+        self._schedule_async(self._enhance_victory(event))
 
     def _handle_death(self, event: Event) -> None:
         """
@@ -94,7 +128,7 @@ class LLMEnhancer:
         Args:
             event: CHARACTER_DEATH event with character data
         """
-        asyncio.create_task(self._enhance_death(event))
+        self._schedule_async(self._enhance_death(event))
 
     async def _enhance_room_description(self, event: Event) -> None:
         """

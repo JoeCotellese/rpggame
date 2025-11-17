@@ -48,6 +48,7 @@ class CLI:
         self.game_state.event_bus.subscribe(EventType.DAMAGE_DEALT, self._on_damage_dealt)
         self.game_state.event_bus.subscribe(EventType.ITEM_ACQUIRED, self._on_item_acquired)
         self.game_state.event_bus.subscribe(EventType.GOLD_ACQUIRED, self._on_gold_acquired)
+        self.game_state.event_bus.subscribe(EventType.DESCRIPTION_ENHANCED, self._on_description_enhanced)
 
     def display_banner(self) -> None:
         """Display the game banner."""
@@ -658,3 +659,25 @@ class CLI:
         """Handle gold acquired event."""
         # Events are already displayed during search, so we can pass
         pass
+
+    def _on_description_enhanced(self, event: Event) -> None:
+        """Handle LLM-enhanced description event."""
+        description_type = event.data.get("type", "unknown")
+        text = event.data.get("text", "")
+
+        if text:
+            # Display enhanced descriptions with appropriate styling
+            from rich.markdown import Markdown
+            from dnd_engine.ui.rich_ui import console
+
+            # Display in a panel for visual separation
+            if description_type == "room":
+                console.print(Markdown(text), style="cyan")
+            elif description_type == "combat":
+                console.print(Markdown(text), style="yellow")
+            elif description_type == "victory":
+                console.print(Markdown(text), style="green bold")
+            elif description_type == "death":
+                console.print(Markdown(text), style="red bold")
+            else:
+                console.print(text)

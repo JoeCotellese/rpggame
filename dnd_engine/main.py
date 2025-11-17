@@ -5,6 +5,8 @@ import argparse
 import sys
 from typing import Optional
 
+from dotenv import load_dotenv
+
 from dnd_engine.core.character_factory import CharacterFactory
 from dnd_engine.core.game_state import GameState
 from dnd_engine.core.party import Party
@@ -135,17 +137,21 @@ def main() -> None:
     Main entry point for the game.
 
     Flow:
-        1. Parse command-line arguments
-        2. Display banner
-        3. Initialize data loader
-        4. Initialize LLM provider (if enabled)
-        5. Create event bus
-        6. Run character creation
-        7. Initialize game state
-        8. Initialize LLM enhancer (if LLM enabled)
-        9. Initialize UI
-        10. Start game loop
+        1. Load environment variables
+        2. Parse command-line arguments
+        3. Display banner
+        4. Initialize data loader
+        5. Initialize LLM provider (if enabled)
+        6. Create event bus
+        7. Run character creation
+        8. Initialize game state
+        9. Initialize LLM enhancer (if LLM enabled)
+        10. Initialize UI
+        11. Start game loop
     """
+    # Load environment variables from .env file
+    load_dotenv()
+
     # Parse arguments
     args = parse_arguments()
 
