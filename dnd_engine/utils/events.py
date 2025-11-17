@@ -27,6 +27,7 @@ class EventType(Enum):
     DAMAGE_DEALT = "damage_dealt"
     HEALING_DONE = "healing_done"
     CHARACTER_DEATH = "character_death"
+    SNEAK_ATTACK = "sneak_attack"
 
     # Exploration events
     ROOM_ENTER = "room_enter"

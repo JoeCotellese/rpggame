@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Dict, Any, Optional
 from dnd_engine.core.dice import DiceRoller, DiceRoll
 from dnd_engine.core.creature import Creature
+from dnd_engine.utils.events import Event, EventType
 
 
 @dataclass
@@ -13,7 +14,7 @@ class AttackResult:
     Result of an attack roll.
 
     Contains all information about an attack: the roll, bonuses, hit/miss status,
-    damage dealt, and special conditions (critical hit, advantage, etc.).
+    damage dealt, and special conditions (critical hit, advantage, sneak attack, etc.).
     """
     attacker_name: str
     defender_name: str
@@ -25,11 +26,18 @@ class AttackResult:
     critical_hit: bool
     advantage: bool
     disadvantage: bool
+    sneak_attack_damage: int = 0  # Additional damage from sneak attack
+    sneak_attack_dice: Optional[str] = None  # Sneak attack dice notation (e.g., "2d6")
 
     @property
     def total_attack(self) -> int:
         """Calculate total attack (roll + bonus)"""
         return self.attack_roll + self.attack_bonus
+
+    @property
+    def total_damage(self) -> int:
+        """Calculate total damage including sneak attack"""
+        return self.damage + self.sneak_attack_damage
 
     def __str__(self) -> str:
         """String representation of the attack result"""
@@ -46,7 +54,10 @@ class AttackResult:
         result += f"- {hit_status}{adv_status}"
 
         if self.hit:
-            result += f" for {self.damage} damage"
+            if self.sneak_attack_damage > 0:
+                result += f" for {self.damage} damage + {self.sneak_attack_damage} sneak attack = {self.total_damage} total"
+            else:
+                result += f" for {self.damage} damage"
 
         return result
 
@@ -81,7 +92,8 @@ class CombatEngine:
         damage_dice: str,
         advantage: bool = False,
         disadvantage: bool = False,
-        apply_damage: bool = False
+        apply_damage: bool = False,
+        event_bus = None
     ) -> AttackResult:
         """
         Resolve a complete attack.
@@ -93,7 +105,8 @@ class CombatEngine:
         4. Natural 1 is always a miss
         5. If hit: roll damage dice
         6. If critical hit: double the damage dice (not the modifier)
-        7. Apply damage if requested
+        7. Apply sneak attack damage if applicable (Rogue with advantage/ally nearby)
+        8. Apply damage if requested
 
         Args:
             attacker: The attacking creature
@@ -103,9 +116,10 @@ class CombatEngine:
             advantage: Roll with advantage (take higher of 2d20)
             disadvantage: Roll with disadvantage (take lower of 2d20)
             apply_damage: If True, apply damage to defender's HP
+            event_bus: Optional EventBus instance for event emission
 
         Returns:
-            AttackResult containing full attack details
+            AttackResult containing full attack details including sneak attack if applicable
         """
         # Roll attack (1d20 + bonus)
         attack_roll_result = self.dice_roller.roll(
@@ -131,11 +145,33 @@ class CombatEngine:
 
         # Calculate damage if hit
         damage = 0
+        sneak_attack_damage = 0
+        sneak_attack_dice = None
+
         if hit:
             damage = self._calculate_damage(damage_dice, critical_hit)
 
+            # Check for sneak attack (Character-specific)
+            if hasattr(attacker, 'can_sneak_attack'):
+                if attacker.can_sneak_attack(has_advantage=advantage, has_disadvantage=disadvantage):
+                    sneak_attack_dice = attacker.get_sneak_attack_dice()
+                    if sneak_attack_dice:
+                        sneak_attack_damage = self._calculate_damage(sneak_attack_dice, critical_hit=False)
+
+                        # Emit sneak attack event
+                        if event_bus is not None:
+                            event = Event(
+                                type=EventType.SNEAK_ATTACK,
+                                data={
+                                    "character": attacker.name,
+                                    "dice": sneak_attack_dice,
+                                    "damage": sneak_attack_damage
+                                }
+                            )
+                            event_bus.emit(event)
+
             if apply_damage:
-                defender.take_damage(damage)
+                defender.take_damage(damage + sneak_attack_damage)
 
         return AttackResult(
             attacker_name=attacker.name,
@@ -147,7 +183,9 @@ class CombatEngine:
             damage=damage,
             critical_hit=critical_hit,
             advantage=advantage,
-            disadvantage=disadvantage
+            disadvantage=disadvantage,
+            sneak_attack_damage=sneak_attack_damage,
+            sneak_attack_dice=sneak_attack_dice
         )
 
     def _calculate_damage(self, damage_dice: str, critical_hit: bool) -> int:
