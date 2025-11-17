@@ -250,3 +250,124 @@ def print_help_section(title: str, commands: List[tuple]) -> None:
         table.add_row(command, description)
 
     console.print(table)
+
+
+def print_section(title: str, content: str = "") -> None:
+    """Print a formatted section with title and optional content.
+
+    Args:
+        title: Section title
+        content: Optional section content
+    """
+    panel = Panel(
+        content,
+        title=f"[bold cyan]{title}[/bold cyan]",
+        style="cyan",
+        expand=False
+    )
+    console.print(panel)
+
+
+def print_list(items: List[str], title: Optional[str] = None, numbered: bool = False) -> None:
+    """Print a formatted list of items.
+
+    Args:
+        items: List of items to display
+        title: Optional title for the list
+        numbered: Whether to number the items
+    """
+    content = ""
+    for i, item in enumerate(items):
+        if numbered:
+            content += f"{i+1}. {item}\n"
+        else:
+            content += f"• {item}\n"
+
+    if title:
+        panel = Panel(
+            content.rstrip(),
+            title=f"[bold cyan]{title}[/bold cyan]",
+            style="cyan",
+            expand=False
+        )
+        console.print(panel)
+    else:
+        console.print(content.rstrip())
+
+
+def print_choice_menu(title: str, options: List[Dict[str, str]]) -> None:
+    """Print a formatted choice menu.
+
+    Args:
+        title: Menu title
+        options: List of dicts with 'number' and 'text' keys
+    """
+    content = ""
+    for opt in options:
+        num = opt.get("number", "")
+        text = opt.get("text", "")
+        content += f"[bold cyan]{num}.[/bold cyan] {text}\n"
+
+    panel = Panel(
+        content.rstrip(),
+        title=f"[bold yellow]{title}[/bold yellow]",
+        style="yellow",
+        expand=False
+    )
+    console.print(panel)
+
+
+def print_message(message: str) -> None:
+    """Print a plain message without status symbols.
+
+    Args:
+        message: Message text
+    """
+    console.print(message)
+
+
+def print_input_prompt(text: str) -> str:
+    """Print an input prompt and get user input.
+
+    Args:
+        text: Prompt text
+
+    Returns:
+        User input
+    """
+    return console.input(f"[bold cyan]{text}[/bold cyan] ")
+
+
+def create_character_sheet_table(character_data: Dict[str, Any]) -> Table:
+    """Create a styled table for character sheet display.
+
+    Args:
+        character_data: Character information dict
+
+    Returns:
+        Formatted Rich Table
+    """
+    table = Table(title="CHARACTER SHEET", style="magenta", show_header=False)
+    table.add_column("Attribute", style="bold cyan", width=20)
+    table.add_column("Value", style="white")
+
+    # Basic info
+    table.add_row("Name", character_data.get("name", "—"))
+    table.add_row("Race", character_data.get("race", "—"))
+    table.add_row("Class", character_data.get("class", "—"))
+    table.add_row("Level", str(character_data.get("level", 0)))
+
+    # Abilities
+    table.add_row("", "")  # Empty row for spacing
+    abilities = character_data.get("abilities", {})
+    for ability, score in abilities.items():
+        modifier = (score - 10) // 2
+        sign = "+" if modifier >= 0 else ""
+        table.add_row(f"{ability.upper()}", f"{score} ({sign}{modifier})")
+
+    # Combat stats
+    table.add_row("", "")  # Empty row for spacing
+    table.add_row("HP", f"{character_data.get('hp', 0)}/{character_data.get('max_hp', 0)}")
+    table.add_row("AC", str(character_data.get("ac", 0)))
+
+    return table

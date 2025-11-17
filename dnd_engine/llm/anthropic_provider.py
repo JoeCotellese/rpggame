@@ -7,6 +7,7 @@ from typing import Optional
 from anthropic import AsyncAnthropic
 
 from .base import LLMProvider
+from dnd_engine.ui.rich_ui import print_status_message, print_error
 
 
 class AnthropicProvider(LLMProvider):
@@ -73,10 +74,10 @@ class AnthropicProvider(LLMProvider):
             return response.content[0].text.strip()
 
         except asyncio.TimeoutError:
-            print(f"Anthropic request timed out after {self.timeout}s")
+            print_status_message(f"Anthropic request timed out after {self.timeout}s", "warning")
             return None
         except Exception as e:
-            print(f"Anthropic API error: {e}")
+            print_error(f"Anthropic API error: {e}")
             return None
 
     def get_provider_name(self) -> str:
