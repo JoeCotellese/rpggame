@@ -38,5 +38,50 @@
         }
       ]
     }
+  },
+  "rogue": {
+    "name": "Rogue",
+    "description": "A scoundrel who uses stealth and trickery to overcome obstacles and enemies. Rogues rely on skill, stealth, and their foes' vulnerabilities to get the upper hand in any situation.",
+    "hit_die": "1d8",
+    "primary_ability": "dex",
+    "ability_priorities": ["dexterity", "constitution", "intelligence", "charisma", "wisdom", "strength"],
+    "saving_throw_proficiencies": ["dex", "int"],
+    "armor_proficiencies": ["light"],
+    "weapon_proficiencies": ["simple", "hand_crossbows", "longswords", "rapiers", "shortswords"],
+    "skill_proficiencies": {
+      "choose": 4,
+      "from": ["acrobatics", "athletics", "deception", "insight", "intimidation", "investigation", "perception", "performance", "persuasion", "sleight_of_hand", "stealth"]
+    },
+    "starting_equipment": ["rapier", "shortbow", "leather_armor", "thieves_tools", "potion_of_healing", "potion_of_healing"],
+    "starting_gold": 15,
+    "features_by_level": {
+      "1": [
+        {
+          "name": "Sneak Attack",
+          "description": "Once per turn, deal an extra 1d6 damage when you have advantage on the attack roll or when an ally is within 5 feet of the target."
+        },
+        {
+          "name": "Expertise",
+          "description": "Choose two skills. Your proficiency bonus is doubled for those skills.",
+          "expertise_skills": 2
+        },
+        {
+          "name": "Thieves' Cant",
+          "description": "You know thieves' cant, a secret mix of dialect, jargon, and code."
+        }
+      ],
+      "2": [
+        {
+          "name": "Cunning Action",
+          "description": "You can take a bonus action to Dash, Disengage, or Hide."
+        }
+      ],
+      "3": [
+        {
+          "name": "Roguish Archetype",
+          "description": "Choose an archetype (Thief, Assassin, Arcane Trickster)."
+        }
+      ]
+    }
   }
 }
