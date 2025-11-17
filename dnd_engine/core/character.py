@@ -636,6 +636,101 @@ class Character(Creature):
         """
         return self.resource_pools.get(pool_name)
 
+    def recover_hp(self, amount: Optional[int] = None) -> int:
+        """
+        Recover hit points.
+
+        Args:
+            amount: Amount to heal (None = full heal)
+
+        Returns:
+            Amount actually healed
+        """
+        if amount is None:
+            amount = self.max_hp - self.current_hp
+
+        healed = min(amount, self.max_hp - self.current_hp)
+        self.current_hp += healed
+        return healed
+
+    def recover_resources(self, rest_type: str) -> List[str]:
+        """
+        Recover resource pools based on rest type.
+
+        Args:
+            rest_type: "short_rest" or "long_rest"
+
+        Returns:
+            List of recovered resource pool names
+        """
+        recovered = []
+
+        for pool_name, pool in self.resource_pools.items():
+            if rest_type == "long_rest":
+                # Long rest recovers both short_rest and long_rest resources
+                if pool.recovery_type in ["short_rest", "long_rest"]:
+                    pool.recover()
+                    recovered.append(pool_name)
+            elif rest_type == "short_rest":
+                # Short rest only recovers short_rest resources
+                if pool.recovery_type == "short_rest":
+                    pool.recover()
+                    recovered.append(pool_name)
+
+        return recovered
+
+    def take_short_rest(self) -> dict:
+        """
+        Take a short rest (1 hour).
+
+        Effects:
+        - Recover resources with recovery_type="short_rest"
+        - Can spend Hit Dice to heal (not implemented in MVP)
+
+        Returns:
+            Dictionary containing:
+            - "character": character name
+            - "rest_type": "short"
+            - "resources_recovered": list of recovered resource names
+            - "hp_recovered": 0 (Hit Dice healing for future)
+        """
+        resources_recovered = self.recover_resources("short_rest")
+
+        return {
+            "character": self.name,
+            "rest_type": "short",
+            "resources_recovered": resources_recovered,
+            "hp_recovered": 0  # Hit Dice healing for future
+        }
+
+    def take_long_rest(self) -> dict:
+        """
+        Take a long rest (8 hours).
+
+        Effects:
+        - Recover all HP
+        - Recover all resources with recovery_type="long_rest" or "short_rest"
+        - Recover half of spent Hit Dice (not implemented in MVP)
+
+        Returns:
+            Dictionary containing:
+            - "character": character name
+            - "rest_type": "long"
+            - "hp_recovered": amount of HP recovered
+            - "resources_recovered": list of recovered resource names
+            - "conditions_removed": empty list (for future implementation)
+        """
+        hp_recovered = self.recover_hp()
+        resources_recovered = self.recover_resources("long_rest")
+
+        return {
+            "character": self.name,
+            "rest_type": "long",
+            "hp_recovered": hp_recovered,
+            "resources_recovered": resources_recovered,
+            "conditions_removed": []  # Future
+        }
+
     def __str__(self) -> str:
         """String representation of the character"""
         status = "alive" if self.is_alive else "dead"

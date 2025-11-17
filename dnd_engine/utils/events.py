@@ -53,6 +53,10 @@ class EventType(Enum):
     RESET_STARTED = "reset_started"
     RESET_COMPLETE = "reset_complete"
 
+    # Rest system events
+    SHORT_REST = "short_rest"
+    LONG_REST = "long_rest"
+
 
 @dataclass
 class Event:

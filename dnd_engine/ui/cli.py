@@ -244,6 +244,10 @@ class CLI:
             self.handle_reset(command)
             return
 
+        if command in ["rest"]:
+            self.handle_rest()
+            return
+
         print_status_message("Unknown command. Type 'help' for available commands.", "warning")
 
     def process_combat_command(self, command: str) -> None:
@@ -943,6 +947,109 @@ class CLI:
         except Exception as e:
             print_error(f"Failed to save game: {e}")
 
+    def handle_rest(self) -> None:
+        """
+        Handle rest command to allow party to rest and recover.
+
+        Prompts player to choose between short rest or long rest.
+        """
+        from dnd_engine.ui.rich_ui import print_section, print_message, print_status_message
+        from dnd_engine.utils.events import Event, EventType
+
+        print_section("Rest")
+        print_message("The party takes a moment to rest and recover...")
+        print_message("")
+        print_message("How long would you like to rest?")
+        print_message("  1. Short rest (1 hour) - Recover some abilities")
+        print_message("  2. Long rest (8 hours) - Recover all HP and abilities")
+        print_message("  3. Cancel")
+        print_message("")
+
+        choice = input("Choose rest type (1-3): ").strip()
+
+        if choice == "3":
+            print_status_message("Rest cancelled", "warning")
+            return
+
+        if choice not in ["1", "2"]:
+            print_status_message("Invalid choice. Rest cancelled.", "warning")
+            return
+
+        # Determine rest type
+        if choice == "1":
+            rest_type = "short"
+            rest_duration = "1 hour"
+        else:
+            rest_type = "long"
+            rest_duration = "8 hours"
+
+        # Perform rest for all party members
+        results = []
+        hp_recovered_total = {}
+        resources_recovered_total = {}
+
+        for character in self.game_state.party.characters:
+            if rest_type == "short":
+                result = character.take_short_rest()
+            else:
+                result = character.take_long_rest()
+            results.append(result)
+            hp_recovered_total[character.name] = result["hp_recovered"]
+            resources_recovered_total[character.name] = result["resources_recovered"]
+
+        # Emit rest event
+        event_type = EventType.SHORT_REST if rest_type == "short" else EventType.LONG_REST
+        event = Event(
+            type=event_type,
+            data={
+                "party": [char.name for char in self.game_state.party.characters],
+                "rest_type": rest_type,
+                "hp_recovered": hp_recovered_total,
+                "resources_recovered": resources_recovered_total
+            }
+        )
+        self.game_state.event_bus.emit(event)
+
+        # Display rest results
+        self._display_rest_results(results, rest_type, rest_duration)
+
+    def _display_rest_results(self, results: list, rest_type: str, rest_duration: str) -> None:
+        """
+        Display the results of a rest to the player.
+
+        Args:
+            results: List of rest result dictionaries from each character
+            rest_type: "short" or "long"
+            rest_duration: Human-readable duration string (e.g., "1 hour", "8 hours")
+        """
+        from dnd_engine.ui.rich_ui import print_section, print_message, print_status_message
+
+        print_section(f"{'Short' if rest_type == 'short' else 'Long'} Rest Complete")
+        print_message(f"The party rests for {rest_duration}...")
+        print_message("")
+
+        for result in results:
+            char_name = result["character"]
+            hp_recovered = result["hp_recovered"]
+            resources = result["resources_recovered"]
+
+            print_message(f"{char_name}:")
+
+            if hp_recovered > 0:
+                print_message(f"  ❤️  HP recovered: {hp_recovered}")
+
+            if resources:
+                # Format resource names nicely
+                formatted_resources = [r.replace("_", " ").title() for r in resources]
+                print_message(f"  ⚡ Recovered: {', '.join(formatted_resources)}")
+
+            if hp_recovered == 0 and not resources:
+                print_message(f"  Already at full health and resources")
+
+            print_message("")
+
+        print_status_message("The party is refreshed and ready to continue!", "success")
+
     def handle_reset(self, command: str) -> None:
         """
         Handle reset command to restart the campaign.
@@ -1025,6 +1132,7 @@ class CLI:
             ("unequip <slot> [on <player>]", "Unequip weapon/armor (e.g., 'unequip weapon on gandalf')"),
             ("use <item> [on <player>]", "Use consumable (e.g., 'use potion on 2')"),
             ("status", "Show your character status"),
+            ("rest", "Take a short or long rest"),
             ("save", "Save your game"),
             ("reset", "Reset campaign with same party"),
             ("reset --dungeon <name>", "Switch to a different dungeon"),
