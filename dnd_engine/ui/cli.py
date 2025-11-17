@@ -39,30 +39,32 @@ class CLI:
     - Game loop
     """
 
-    def __init__(self, game_state: GameState, auto_save_enabled: bool = True):
+    def __init__(self, game_state: GameState, auto_save_enabled: bool = True, llm_enhancer=None):
         """
         Initialize the CLI.
 
         Args:
             game_state: The game state to interact with
             auto_save_enabled: Whether to enable auto-save feature
+            llm_enhancer: Optional LLM enhancer for narrative generation
         """
         self.game_state = game_state
         self.running = True
-        self.narrative_pending = False
         self.auto_save_enabled = auto_save_enabled
+        self.llm_enhancer = llm_enhancer
+
         # Enemy numbering map: maps Creature instances to their combat numbers
         self.enemy_numbers: Dict[Any, int] = {}
+
+        # Combat display management
+        self.combat_status_shown = False
 
         # Subscribe to game events for display
         self.game_state.event_bus.subscribe(EventType.COMBAT_START, self._on_combat_start)
         self.game_state.event_bus.subscribe(EventType.COMBAT_END, self._on_combat_end)
         self.game_state.event_bus.subscribe(EventType.COMBAT_FLED, self._on_combat_fled)
-        self.game_state.event_bus.subscribe(EventType.DAMAGE_DEALT, self._on_damage_dealt)
         self.game_state.event_bus.subscribe(EventType.ITEM_ACQUIRED, self._on_item_acquired)
         self.game_state.event_bus.subscribe(EventType.GOLD_ACQUIRED, self._on_gold_acquired)
-        self.game_state.event_bus.subscribe(EventType.ENHANCEMENT_STARTED, self._on_enhancement_started)
-        self.game_state.event_bus.subscribe(EventType.DESCRIPTION_ENHANCED, self._on_description_enhanced)
         self.game_state.event_bus.subscribe(EventType.ROOM_ENTER, self._on_room_enter)
         self.game_state.event_bus.subscribe(EventType.LEVEL_UP, self._on_level_up)
         self.game_state.event_bus.subscribe(EventType.FEATURE_GRANTED, self._on_feature_granted)
@@ -133,6 +135,62 @@ class CLI:
 
         table = create_combat_table(combatants)
         console.print(table)
+
+    def display_turn_status(self, is_player_turn: bool, current_creature) -> None:
+        """
+        Display compact turn status without full combat table.
+
+        Args:
+            is_player_turn: Whether it's a player's turn
+            current_creature: The current creature whose turn it is
+        """
+        from rich.panel import Panel
+
+        if is_player_turn:
+            # Show player turn with current HP and enemy status
+            char = current_creature
+            hp_pct = char.current_hp / char.max_hp if char.max_hp > 0 else 0
+            hp_color = "green" if hp_pct > 0.5 else "yellow" if hp_pct > 0.25 else "red"
+
+            # Build enemy summary
+            living_enemies = [e for e in self.game_state.active_enemies if e.is_alive]
+            enemy_summary = []
+            for enemy in living_enemies:
+                e_hp_pct = enemy.current_hp / enemy.max_hp if enemy.max_hp > 0 else 0
+                if e_hp_pct <= 0.25:
+                    e_color = "red"
+                elif e_hp_pct <= 0.5:
+                    e_color = "yellow"
+                else:
+                    e_color = "white"
+                enemy_summary.append(f"[{e_color}]{enemy.name} ({enemy.current_hp}/{enemy.max_hp})[/{e_color}]")
+
+            enemies_str = ", ".join(enemy_summary) if enemy_summary else "None"
+
+            console.print(Panel(
+                f"[bold]{char.name}'s turn![/bold] | HP: [{hp_color}]{char.current_hp}/{char.max_hp}[/{hp_color}] | Enemies: {enemies_str}",
+                border_style="yellow",
+                padding=(0, 1)
+            ))
+        # No display for enemy turns - the action will print itself
+
+    def display_narrative_panel(self, text: str) -> None:
+        """
+        Display narrative text in a styled panel.
+
+        Args:
+            text: The narrative text to display
+        """
+        from rich.markdown import Markdown
+        from rich.panel import Panel
+
+        console.print()
+        console.print(Panel(
+            Markdown(text),
+            title="✨",
+            border_style="gold1",
+            padding=(0, 1)
+        ))
 
     def get_player_command(self) -> str:
         """
@@ -431,7 +489,7 @@ class CLI:
             damage_bonus = attacker.melee_damage_bonus
             damage_dice = f"1d8+{damage_bonus}"
 
-        # Perform attack
+        # Perform attack (resolve mechanics)
         result = self.game_state.combat_engine.resolve_attack(
             attacker=attacker,
             defender=target,
@@ -440,28 +498,38 @@ class CLI:
             apply_damage=True
         )
 
-        # Display mechanics (simplified, without panel)
-        console.print(f"[dim blue]⚔️  {str(result)}[/dim blue]")
+        # NEW FLOW: Narrative → Mechanics → Death Narrative → Death Message
 
-        # Emit damage event
-        if result.hit:
-            self.game_state.event_bus.emit(Event(
-                type=EventType.DAMAGE_DEALT,
-                data={
+        # 1. Get and display attack narrative FIRST (if hit)
+        if self.llm_enhancer and result.hit:
+            narrative = self.llm_enhancer.get_combat_narrative_sync(
+                action_data={
                     "attacker": result.attacker_name,
                     "defender": result.defender_name,
                     "damage": result.damage,
-                    "critical": result.critical_hit
-                }
-            ))
+                    "critical": result.critical_hit,
+                    "hit": result.hit
+                },
+                timeout=3.0
+            )
+            if narrative:
+                self.display_narrative_panel(narrative)
 
-        # Check if target died
+        # 2. Display mechanics after narrative
+        console.print(f"[cyan]⚔️  {str(result)}[/cyan]")
+
+        # 3. If target died, show death narrative then confirmation
         if not target.is_alive:
+            if self.llm_enhancer:
+                death_narrative = self.llm_enhancer.get_death_narrative_sync(
+                    character_data={"name": target.name},
+                    timeout=3.0
+                )
+                if death_narrative:
+                    self.display_narrative_panel(death_narrative)
+
+            # 4. Display defeated message after death narrative
             print_status_message(f"{target.name} is defeated!", "success")
-            self.game_state.event_bus.emit(Event(
-                type=EventType.CHARACTER_DEATH,
-                data={"name": target.name}
-            ))
 
         # End player turn
         self.game_state.initiative_tracker.next_turn()
@@ -520,7 +588,6 @@ class CLI:
             for character in self.game_state.party.characters:
                 if current.creature == character:
                     is_party_turn = True
-                    print_section(f"{character.name}'s Turn")
                     break
 
             if is_party_turn:
@@ -559,25 +626,35 @@ class CLI:
                     apply_damage=True
                 )
 
-                console.print(f"[dim blue]⚔️  {str(result)}[/dim blue]")
+                # Get and display attack narrative FIRST (if hit)
+                if self.llm_enhancer and result.hit:
+                    narrative = self.llm_enhancer.get_combat_narrative_sync(
+                        action_data={
+                            "attacker": result.attacker_name,
+                            "defender": result.defender_name,
+                            "damage": result.damage,
+                            "critical": result.critical_hit,
+                            "hit": result.hit
+                        },
+                        timeout=3.0
+                    )
+                    if narrative:
+                        self.display_narrative_panel(narrative)
 
-                if result.hit:
-                    self.game_state.event_bus.emit(Event(
-                        type=EventType.DAMAGE_DEALT,
-                        data={
-                            "attacker": enemy.name,
-                            "defender": target.name,
-                            "damage": result.damage
-                        }
-                    ))
+                # Display mechanics after narrative
+                console.print(f"[cyan]⚔️  {str(result)}[/cyan]")
 
-                # Check if party member died
+                # Check if party member died - show death narrative then message
                 if not target.is_alive:
+                    if self.llm_enhancer:
+                        death_narrative = self.llm_enhancer.get_death_narrative_sync(
+                            character_data={"name": target.name},
+                            timeout=3.0
+                        )
+                        if death_narrative:
+                            self.display_narrative_panel(death_narrative)
+
                     print_status_message(f"{target.name} has fallen!", "warning")
-                    self.game_state.event_bus.emit(Event(
-                        type=EventType.CHARACTER_DEATH,
-                        data={"name": target.name}
-                    ))
 
             # Next turn
             self.game_state.initiative_tracker.next_turn()
@@ -1305,7 +1382,11 @@ class CLI:
 
         while self.running and not self.game_state.is_game_over():
             if self.game_state.in_combat:
-                self.display_combat_status()
+                # Only show full combat status at start of combat or when explicitly requested
+                if not self.combat_status_shown:
+                    self.display_combat_status()
+                    self.combat_status_shown = True
+
                 current = self.game_state.initiative_tracker.get_current_combatant()
 
                 # Check if it's a party member's turn
@@ -1316,6 +1397,8 @@ class CLI:
                         break
 
                 if is_party_turn:
+                    # Show compact turn status instead of full table
+                    self.display_turn_status(is_party_turn, current.creature)
                     command = self.get_player_command()
                     self.process_combat_command(command)
                 else:
@@ -1341,6 +1424,9 @@ class CLI:
             numbered_enemies.append(display_name)
 
         print_status_message(f"Combat begins! Enemies: {', '.join(numbered_enemies)}", "warning")
+
+        # Reset combat status flag for new combat
+        self.combat_status_shown = False
 
         # Log combat start with initiative order
         from dnd_engine.utils.logging_config import get_logging_config
@@ -1374,6 +1460,9 @@ class CLI:
                 f"Combat ended - Total XP: {total_xp}, XP per character: {xp_per_char}"
             )
 
+        # Reset combat status flag
+        self.combat_status_shown = False
+
         # Auto-save after combat
         self._auto_save("after_combat")
 
@@ -1394,12 +1483,11 @@ class CLI:
                 f"Casualties: {len(casualties)}, Survivors: {len(surviving)}"
             )
 
+        # Reset combat status flag
+        self.combat_status_shown = False
+
         # Auto-save after fleeing
         self._auto_save("after_flee")
-
-    def _on_damage_dealt(self, event: Event) -> None:
-        """Handle damage dealt event (currently just passes through)."""
-        pass
 
     def _on_item_acquired(self, event: Event) -> None:
         """Handle item acquired event."""
@@ -1427,34 +1515,6 @@ class CLI:
         feature = event.data["feature"]
 
         print_status_message(f"✨ {char_name} learned: {feature}", "info")
-
-    def _on_enhancement_started(self, event: Event) -> None:
-        """Handle LLM enhancement started event."""
-        description_type = event.data.get("type", "unknown")
-
-        # Track that narrative is pending but don't show loading state
-        # (per UX guidelines, avoid loading indicators for quick responses)
-        if description_type == "combat":
-            self.narrative_pending = True
-
-    def _on_description_enhanced(self, event: Event) -> None:
-        """Handle LLM-enhanced description event."""
-        description_type = event.data.get("type", "unknown")
-        text = event.data.get("text", "")
-
-        if text:
-            # Display enhanced descriptions sequentially (no panels)
-            from rich.markdown import Markdown
-
-            if description_type == "combat" or description_type == "death" or description_type == "victory":
-                # Display combat narrative sequentially after mechanics
-                self.narrative_pending = False
-                console.print(Markdown(text), style="gold1")
-            elif description_type == "room":
-                # Room descriptions
-                console.print(Markdown(text), style="cyan")
-            else:
-                console.print(text)
 
     def _on_room_enter(self, event: Event) -> None:
         """Handle room enter event."""

@@ -47,11 +47,14 @@ class TestLLMEnhancer:
         event_bus = EventBus()
         enhancer = LLMEnhancer(mock_provider, event_bus)
 
-        # Verify subscriptions
+        # Verify subscriptions (DAMAGE_DEALT and CHARACTER_DEATH are now handled synchronously)
         assert event_bus.subscriber_count(EventType.ROOM_ENTER) > 0
-        assert event_bus.subscriber_count(EventType.DAMAGE_DEALT) > 0
         assert event_bus.subscriber_count(EventType.COMBAT_END) > 0
-        assert event_bus.subscriber_count(EventType.CHARACTER_DEATH) > 0
+
+        # DAMAGE_DEALT and CHARACTER_DEATH are NOT subscribed to anymore
+        # They're handled via synchronous calls: get_combat_narrative_sync() and get_death_narrative_sync()
+        assert event_bus.subscriber_count(EventType.DAMAGE_DEALT) == 0
+        assert event_bus.subscriber_count(EventType.CHARACTER_DEATH) == 0
 
     @pytest.mark.asyncio
     async def test_enhancer_room_description(self) -> None:
@@ -88,7 +91,7 @@ class TestLLMEnhancer:
 
     @pytest.mark.asyncio
     async def test_enhancer_combat_action(self) -> None:
-        """Test combat action enhancement."""
+        """Test combat action enhancement using synchronous API."""
         from dnd_engine.llm.enhancer import LLMEnhancer
 
         mock_provider = MockLLMProvider(
@@ -97,30 +100,19 @@ class TestLLMEnhancer:
         event_bus = EventBus()
         enhancer = LLMEnhancer(mock_provider, event_bus)
 
-        enhanced_descriptions = []
-
-        def capture_enhancement(event: Event) -> None:
-            enhanced_descriptions.append(event.data)
-
-        event_bus.subscribe(EventType.DESCRIPTION_ENHANCED, capture_enhancement)
-
-        # Emit damage dealt event
+        # Use synchronous API (no longer event-driven)
         action_data = {
             "attacker": "Thorin",
-            "target": "Goblin",
+            "defender": "Goblin",
             "weapon": "longsword",
             "damage": 8,
             "hit": True
         }
-        event_bus.emit(Event(EventType.DAMAGE_DEALT, action_data))
-
-        # Wait for async processing
-        await asyncio.sleep(0.1)
+        narrative = enhancer.get_combat_narrative_sync(action_data, timeout=3.0)
 
         # Verify enhancement
-        assert len(enhanced_descriptions) > 0
-        assert enhanced_descriptions[0]["type"] == "combat"
-        assert "sword slashes" in enhanced_descriptions[0]["text"]
+        assert narrative is not None
+        assert "sword slashes" in narrative
 
     @pytest.mark.asyncio
     async def test_enhancer_caching(self) -> None:
@@ -250,7 +242,7 @@ class TestLLMEnhancer:
 
     @pytest.mark.asyncio
     async def test_enhancer_death(self) -> None:
-        """Test character death enhancement."""
+        """Test character death enhancement using synchronous API."""
         from dnd_engine.llm.enhancer import LLMEnhancer
 
         mock_provider = MockLLMProvider(
@@ -259,24 +251,13 @@ class TestLLMEnhancer:
         event_bus = EventBus()
         enhancer = LLMEnhancer(mock_provider, event_bus)
 
-        enhanced_descriptions = []
-
-        def capture_enhancement(event: Event) -> None:
-            enhanced_descriptions.append(event.data)
-
-        event_bus.subscribe(EventType.DESCRIPTION_ENHANCED, capture_enhancement)
-
-        # Emit character death event
+        # Use synchronous API (no longer event-driven)
         character_data = {
             "name": "Thorin",
             "cause": "fell to a goblin's blade"
         }
-        event_bus.emit(Event(EventType.CHARACTER_DEATH, character_data))
-
-        # Wait for async processing
-        await asyncio.sleep(0.1)
+        narrative = enhancer.get_death_narrative_sync(character_data, timeout=3.0)
 
         # Verify enhancement
-        assert len(enhanced_descriptions) > 0
-        assert enhanced_descriptions[0]["type"] == "death"
-        assert "falls" in enhanced_descriptions[0]["text"]
+        assert narrative is not None
+        assert "falls" in narrative

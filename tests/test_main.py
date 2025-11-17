@@ -285,7 +285,11 @@ class TestMainFunction:
             event_bus=mock_bus,
             data_loader=mock_loader
         )
-        mock_cli_class.assert_called_once_with(mock_game_state)
+        # CLI now receives llm_enhancer as well
+        mock_cli_class.assert_called_once()
+        args, kwargs = mock_cli_class.call_args
+        assert args[0] == mock_game_state
+        assert 'llm_enhancer' in kwargs
         mock_cli.run.assert_called_once()
 
         # Verify output

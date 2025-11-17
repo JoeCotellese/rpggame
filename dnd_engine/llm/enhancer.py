@@ -51,21 +51,15 @@ class LLMEnhancer:
             self._start_event_loop()
 
             # Subscribe to events
+            # NOTE: DAMAGE_DEALT and CHARACTER_DEATH are now handled synchronously
+            # in CLI via get_combat_narrative_sync() and get_death_narrative_sync()
             self.event_bus.subscribe(
                 EventType.ROOM_ENTER,
                 self._handle_room_enter
             )
             self.event_bus.subscribe(
-                EventType.DAMAGE_DEALT,
-                self._handle_combat_action
-            )
-            self.event_bus.subscribe(
                 EventType.COMBAT_END,
                 self._handle_victory
-            )
-            self.event_bus.subscribe(
-                EventType.CHARACTER_DEATH,
-                self._handle_death
             )
 
     def _start_event_loop(self) -> None:
@@ -86,6 +80,27 @@ class LLMEnhancer:
         """Schedule a coroutine to run in the background event loop."""
         if self._loop and not self._loop.is_closed():
             asyncio.run_coroutine_threadsafe(coro, self._loop)
+
+    def _run_sync(self, coro, timeout: float = 3.0) -> Optional[str]:
+        """
+        Run a coroutine synchronously with timeout.
+
+        Args:
+            coro: Coroutine to run
+            timeout: Timeout in seconds
+
+        Returns:
+            Result string or None on timeout/error
+        """
+        if not self._loop or self._loop.is_closed():
+            return None
+
+        try:
+            future = asyncio.run_coroutine_threadsafe(coro, self._loop)
+            return future.result(timeout=timeout)
+        except Exception:
+            # Timeout or other error - return None for graceful degradation
+            return None
 
     def shutdown(self) -> None:
         """Shutdown the background event loop."""
@@ -309,3 +324,77 @@ class LLMEnhancer:
             EventType.DESCRIPTION_ENHANCED,
             {"type": "death", "text": enhanced}
         ))
+
+    # Public synchronous API for blocking narrative generation
+
+    def get_combat_narrative_sync(self, action_data: Dict, timeout: float = 3.0) -> Optional[str]:
+        """
+        Generate combat narrative synchronously with timeout.
+
+        Args:
+            action_data: Combat action data (attacker, defender, hit, damage, etc.)
+            timeout: Timeout in seconds (default: 3.0)
+
+        Returns:
+            Enhanced narrative or None on timeout/error
+        """
+        if not self.provider:
+            return None
+
+        prompt = build_combat_action_prompt(action_data)
+
+        async def generate():
+            start_time = time.time()
+            result = await self.provider.generate(prompt, temperature=0.8)
+            latency_ms = (time.time() - start_time) * 1000
+
+            # Log LLM call
+            from ..utils.logging_config import get_logging_config
+            logging_config = get_logging_config()
+            if logging_config:
+                logging_config.log_llm_call(
+                    prompt_type="combat_action",
+                    latency_ms=latency_ms,
+                    response_length=len(result) if result else 0,
+                    success=bool(result)
+                )
+
+            return result
+
+        return self._run_sync(generate(), timeout=timeout)
+
+    def get_death_narrative_sync(self, character_data: Dict, timeout: float = 3.0) -> Optional[str]:
+        """
+        Generate death narrative synchronously with timeout.
+
+        Args:
+            character_data: Character data (name, etc.)
+            timeout: Timeout in seconds (default: 3.0)
+
+        Returns:
+            Enhanced narrative or None on timeout/error
+        """
+        if not self.provider:
+            return None
+
+        prompt = build_death_prompt(character_data)
+
+        async def generate():
+            start_time = time.time()
+            result = await self.provider.generate(prompt, temperature=0.6)
+            latency_ms = (time.time() - start_time) * 1000
+
+            # Log LLM call
+            from ..utils.logging_config import get_logging_config
+            logging_config = get_logging_config()
+            if logging_config:
+                logging_config.log_llm_call(
+                    prompt_type="death",
+                    latency_ms=latency_ms,
+                    response_length=len(result) if result else 0,
+                    success=bool(result)
+                )
+
+            return result
+
+        return self._run_sync(generate(), timeout=timeout)

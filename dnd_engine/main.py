@@ -370,8 +370,8 @@ def main() -> None:
         # Store save manager in game state for later use
         game_state.save_manager = save_manager
 
-        # Initialize UI
-        cli = CLI(game_state)
+        # Initialize UI with LLM enhancer
+        cli = CLI(game_state, llm_enhancer=llm_enhancer)
 
         # Start game loop
         cli.run()
