@@ -1,0 +1,460 @@
+# ABOUTME: Unit tests for main.py entry point
+# ABOUTME: Tests argument parsing, initialization, error handling, and configuration
+
+import argparse
+import os
+import sys
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
+
+from dnd_engine.main import (
+    initialize_data_loader,
+    initialize_llm,
+    main,
+    parse_arguments,
+    print_banner,
+)
+
+
+class TestArgumentParsing:
+    """Test command-line argument parsing."""
+
+    def test_parse_arguments_defaults(self):
+        """Test that default arguments are parsed correctly."""
+        with patch("sys.argv", ["dnd-game"]):
+            args = parse_arguments()
+            assert args.no_llm is False
+            assert args.llm_provider is None
+            assert args.dungeon == "goblin_warren"
+            assert args.debug is False
+
+    def test_parse_arguments_no_llm_flag(self):
+        """Test --no-llm flag sets correct value."""
+        with patch("sys.argv", ["dnd-game", "--no-llm"]):
+            args = parse_arguments()
+            assert args.no_llm is True
+
+    def test_parse_arguments_llm_provider_openai(self):
+        """Test --llm-provider openai sets correct value."""
+        with patch("sys.argv", ["dnd-game", "--llm-provider", "openai"]):
+            args = parse_arguments()
+            assert args.llm_provider == "openai"
+
+    def test_parse_arguments_llm_provider_anthropic(self):
+        """Test --llm-provider anthropic sets correct value."""
+        with patch("sys.argv", ["dnd-game", "--llm-provider", "anthropic"]):
+            args = parse_arguments()
+            assert args.llm_provider == "anthropic"
+
+    def test_parse_arguments_llm_provider_none(self):
+        """Test --llm-provider none sets correct value."""
+        with patch("sys.argv", ["dnd-game", "--llm-provider", "none"]):
+            args = parse_arguments()
+            assert args.llm_provider == "none"
+
+    def test_parse_arguments_dungeon(self):
+        """Test --dungeon flag sets correct value."""
+        with patch("sys.argv", ["dnd-game", "--dungeon", "crypt"]):
+            args = parse_arguments()
+            assert args.dungeon == "crypt"
+
+    def test_parse_arguments_debug(self):
+        """Test --debug flag sets correct value."""
+        with patch("sys.argv", ["dnd-game", "--debug"]):
+            args = parse_arguments()
+            assert args.debug is True
+
+    def test_parse_arguments_version(self):
+        """Test --version flag exits with version."""
+        with patch("sys.argv", ["dnd-game", "--version"]):
+            with pytest.raises(SystemExit) as exc_info:
+                parse_arguments()
+            assert exc_info.value.code == 0
+
+    def test_parse_arguments_help(self):
+        """Test --help flag shows help message."""
+        with patch("sys.argv", ["dnd-game", "--help"]):
+            with pytest.raises(SystemExit) as exc_info:
+                parse_arguments()
+            assert exc_info.value.code == 0
+
+    def test_parse_arguments_invalid_provider(self):
+        """Test invalid LLM provider shows error."""
+        with patch("sys.argv", ["dnd-game", "--llm-provider", "invalid"]):
+            with pytest.raises(SystemExit):
+                parse_arguments()
+
+    def test_parse_arguments_combined(self):
+        """Test multiple arguments combined."""
+        with patch("sys.argv", [
+            "dnd-game",
+            "--llm-provider", "anthropic",
+            "--dungeon", "dragon_lair",
+            "--debug"
+        ]):
+            args = parse_arguments()
+            assert args.llm_provider == "anthropic"
+            assert args.dungeon == "dragon_lair"
+            assert args.debug is True
+
+
+class TestPrintBanner:
+    """Test banner display."""
+
+    def test_print_banner_output(self, capsys):
+        """Test that banner prints correctly."""
+        print_banner()
+        captured = capsys.readouterr()
+        assert "D&D 5E Terminal Adventure" in captured.out
+        assert "Version 0.1.0" in captured.out
+        assert "╔" in captured.out
+        assert "╚" in captured.out
+
+
+class TestDataLoaderInitialization:
+    """Test data loader initialization."""
+
+    @patch("dnd_engine.main.DataLoader")
+    def test_initialize_data_loader_success(self, mock_loader_class, capsys):
+        """Test successful data loader initialization."""
+        mock_loader = MagicMock()
+        mock_loader_class.return_value = mock_loader
+
+        loader = initialize_data_loader()
+
+        captured = capsys.readouterr()
+        assert "✓ Data files loaded" in captured.out
+        assert loader == mock_loader
+
+    @patch("dnd_engine.main.DataLoader")
+    def test_initialize_data_loader_file_not_found(self, mock_loader_class, capsys):
+        """Test data loader initialization with missing files."""
+        mock_loader_class.side_effect = FileNotFoundError("Data files not found")
+
+        with pytest.raises(SystemExit) as exc_info:
+            initialize_data_loader()
+
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "✗ Error: Data files not found" in captured.out
+        assert "Please ensure the game is installed correctly" in captured.out
+
+
+class TestLLMInitialization:
+    """Test LLM provider initialization."""
+
+    def test_initialize_llm_with_no_llm_flag(self, capsys):
+        """Test LLM initialization with --no-llm flag."""
+        args = argparse.Namespace(no_llm=True, llm_provider=None)
+        provider = initialize_llm(args)
+
+        assert provider is None
+        captured = capsys.readouterr()
+        assert "⚠ LLM disabled (--no-llm flag)" in captured.out
+
+    def test_initialize_llm_with_provider_none(self, capsys):
+        """Test LLM initialization with --llm-provider none."""
+        args = argparse.Namespace(no_llm=False, llm_provider="none")
+        provider = initialize_llm(args)
+
+        assert provider is None
+        captured = capsys.readouterr()
+        assert "⚠ LLM disabled (--llm-provider none)" in captured.out
+
+    @patch("dnd_engine.main.create_llm_provider")
+    def test_initialize_llm_with_valid_provider(self, mock_create, capsys):
+        """Test LLM initialization with valid provider."""
+        mock_provider = MagicMock()
+        mock_provider.get_provider_name.return_value = "OpenAI"
+        mock_create.return_value = mock_provider
+
+        args = argparse.Namespace(no_llm=False, llm_provider="openai")
+        provider = initialize_llm(args)
+
+        assert provider == mock_provider
+        captured = capsys.readouterr()
+        assert "✓ LLM provider: OpenAI" in captured.out
+
+    @patch("dnd_engine.main.create_llm_provider")
+    def test_initialize_llm_no_api_key(self, mock_create, capsys):
+        """Test LLM initialization with no API key configured."""
+        mock_create.return_value = None
+
+        args = argparse.Namespace(no_llm=False, llm_provider="openai")
+        provider = initialize_llm(args)
+
+        assert provider is None
+        captured = capsys.readouterr()
+        assert "⚠ LLM disabled (no API key configured)" in captured.out
+        assert "Set OPENAI_API_KEY or ANTHROPIC_API_KEY" in captured.out
+
+    @patch("dnd_engine.main.create_llm_provider")
+    def test_initialize_llm_exception(self, mock_create, capsys):
+        """Test LLM initialization with exception."""
+        mock_create.side_effect = Exception("Connection error")
+
+        args = argparse.Namespace(no_llm=False, llm_provider="openai")
+        provider = initialize_llm(args)
+
+        assert provider is None
+        captured = capsys.readouterr()
+        assert "⚠ LLM initialization failed" in captured.out
+        assert "Continuing with basic descriptions" in captured.out
+
+
+class TestMainFunction:
+    """Test main function integration."""
+
+    @patch("dnd_engine.main.CLI")
+    @patch("dnd_engine.main.GameState")
+    @patch("dnd_engine.main.Party")
+    @patch("dnd_engine.main.CharacterFactory")
+    @patch("dnd_engine.main.LLMEnhancer")
+    @patch("dnd_engine.main.EventBus")
+    @patch("dnd_engine.main.initialize_llm")
+    @patch("dnd_engine.main.initialize_data_loader")
+    @patch("dnd_engine.main.parse_arguments")
+    @patch("builtins.input", return_value="")
+    def test_main_successful_flow(
+        self,
+        mock_input,
+        mock_parse_args,
+        mock_init_loader,
+        mock_init_llm,
+        mock_event_bus,
+        mock_llm_enhancer,
+        mock_factory_class,
+        mock_party_class,
+        mock_game_state_class,
+        mock_cli_class,
+        capsys
+    ):
+        """Test successful main flow."""
+        # Setup mocks
+        mock_args = MagicMock(debug=False, dungeon="goblin_warren")
+        mock_parse_args.return_value = mock_args
+
+        mock_loader = MagicMock()
+        mock_init_loader.return_value = mock_loader
+
+        mock_provider = MagicMock()
+        mock_init_llm.return_value = mock_provider
+
+        mock_bus = MagicMock()
+        mock_event_bus.return_value = mock_bus
+
+        mock_character = MagicMock()
+        mock_character.name = "Thorin"
+        mock_character.race = "mountain_dwarf"
+
+        mock_factory = MagicMock()
+        mock_factory.create_character_interactive.return_value = mock_character
+        mock_factory_class.return_value = mock_factory
+
+        mock_loader.load_races.return_value = {
+            "mountain_dwarf": {"name": "Mountain Dwarf"}
+        }
+        mock_loader.load_classes.return_value = {
+            "fighter": {"name": "Fighter"}
+        }
+
+        mock_party = MagicMock()
+        mock_party_class.return_value = mock_party
+
+        mock_game_state = MagicMock()
+        mock_game_state_class.return_value = mock_game_state
+
+        mock_cli = MagicMock()
+        mock_cli_class.return_value = mock_cli
+
+        # Run main
+        main()
+
+        # Verify flow
+        mock_parse_args.assert_called_once()
+        mock_init_loader.assert_called_once()
+        mock_init_llm.assert_called_once_with(mock_args)
+        mock_event_bus.assert_called_once()
+        mock_llm_enhancer.assert_called_once_with(mock_provider, mock_bus)
+        mock_factory.create_character_interactive.assert_called_once()
+        mock_party_class.assert_called_once_with(characters=[mock_character])
+        mock_game_state_class.assert_called_once_with(
+            party=mock_party,
+            dungeon_name="goblin_warren",
+            event_bus=mock_bus,
+            data_loader=mock_loader
+        )
+        mock_cli_class.assert_called_once_with(mock_game_state)
+        mock_cli.run.assert_called_once()
+
+        # Verify output
+        captured = capsys.readouterr()
+        assert "Checking configuration..." in captured.out
+        assert "Let's create your character!" in captured.out
+        assert "Character created: Thorin (Mountain Dwarf Fighter)" in captured.out
+
+    @patch("dnd_engine.main.CharacterFactory")
+    @patch("dnd_engine.main.EventBus")
+    @patch("dnd_engine.main.initialize_llm")
+    @patch("dnd_engine.main.initialize_data_loader")
+    @patch("dnd_engine.main.parse_arguments")
+    @patch("builtins.input", side_effect=KeyboardInterrupt)
+    def test_main_keyboard_interrupt(
+        self,
+        mock_input,
+        mock_parse_args,
+        mock_init_loader,
+        mock_init_llm,
+        mock_event_bus,
+        mock_factory_class,
+        capsys
+    ):
+        """Test main handles keyboard interrupt gracefully."""
+        mock_args = MagicMock(debug=False)
+        mock_parse_args.return_value = mock_args
+        mock_init_loader.return_value = MagicMock()
+        mock_init_llm.return_value = None
+        mock_event_bus.return_value = MagicMock()
+
+        mock_factory = MagicMock()
+        mock_character = MagicMock()
+        mock_character.name = "Test"
+        mock_character.race = "human"
+        mock_factory.create_character_interactive.return_value = mock_character
+        mock_factory_class.return_value = mock_factory
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        assert "Game interrupted" in captured.out
+        assert "Thanks for playing!" in captured.out
+
+    @patch("dnd_engine.main.CharacterFactory")
+    @patch("dnd_engine.main.EventBus")
+    @patch("dnd_engine.main.initialize_llm")
+    @patch("dnd_engine.main.initialize_data_loader")
+    @patch("dnd_engine.main.parse_arguments")
+    def test_main_exception_without_debug(
+        self,
+        mock_parse_args,
+        mock_init_loader,
+        mock_init_llm,
+        mock_event_bus,
+        mock_factory_class,
+        capsys
+    ):
+        """Test main handles exceptions without debug mode."""
+        mock_args = MagicMock(debug=False)
+        mock_parse_args.return_value = mock_args
+        mock_init_loader.return_value = MagicMock()
+        mock_init_llm.return_value = None
+        mock_event_bus.return_value = MagicMock()
+
+        mock_factory = MagicMock()
+        mock_factory.create_character_interactive.side_effect = Exception("Test error")
+        mock_factory_class.return_value = mock_factory
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "✗ Error: Test error" in captured.out
+        assert "Use --debug flag for detailed error information" in captured.out
+
+    @patch("dnd_engine.main.CharacterFactory")
+    @patch("dnd_engine.main.EventBus")
+    @patch("dnd_engine.main.initialize_llm")
+    @patch("dnd_engine.main.initialize_data_loader")
+    @patch("dnd_engine.main.parse_arguments")
+    def test_main_exception_with_debug(
+        self,
+        mock_parse_args,
+        mock_init_loader,
+        mock_init_llm,
+        mock_event_bus,
+        mock_factory_class
+    ):
+        """Test main re-raises exceptions in debug mode."""
+        mock_args = MagicMock(debug=True)
+        mock_parse_args.return_value = mock_args
+        mock_init_loader.return_value = MagicMock()
+        mock_init_llm.return_value = None
+        mock_event_bus.return_value = MagicMock()
+
+        mock_factory = MagicMock()
+        mock_factory.create_character_interactive.side_effect = Exception("Test error")
+        mock_factory_class.return_value = mock_factory
+
+        with pytest.raises(Exception) as exc_info:
+            main()
+
+        assert str(exc_info.value) == "Test error"
+
+    @patch("dnd_engine.main.LLMEnhancer")
+    @patch("dnd_engine.main.CLI")
+    @patch("dnd_engine.main.GameState")
+    @patch("dnd_engine.main.Party")
+    @patch("dnd_engine.main.CharacterFactory")
+    @patch("dnd_engine.main.EventBus")
+    @patch("dnd_engine.main.initialize_llm")
+    @patch("dnd_engine.main.initialize_data_loader")
+    @patch("dnd_engine.main.parse_arguments")
+    @patch("builtins.input", return_value="")
+    def test_main_no_llm_provider(
+        self,
+        mock_input,
+        mock_parse_args,
+        mock_init_loader,
+        mock_init_llm,
+        mock_event_bus,
+        mock_factory_class,
+        mock_party_class,
+        mock_game_state_class,
+        mock_cli_class,
+        mock_llm_enhancer_class
+    ):
+        """Test main flow without LLM provider (no enhancer created)."""
+        mock_args = MagicMock(debug=False, dungeon="goblin_warren")
+        mock_parse_args.return_value = mock_args
+
+        mock_loader = MagicMock()
+        mock_init_loader.return_value = mock_loader
+
+        # No LLM provider
+        mock_init_llm.return_value = None
+
+        mock_bus = MagicMock()
+        mock_event_bus.return_value = mock_bus
+
+        mock_character = MagicMock()
+        mock_character.name = "Thorin"
+        mock_character.race = "human"
+
+        mock_factory = MagicMock()
+        mock_factory.create_character_interactive.return_value = mock_character
+        mock_factory_class.return_value = mock_factory
+
+        mock_loader.load_races.return_value = {"human": {"name": "Human"}}
+        mock_loader.load_classes.return_value = {"fighter": {"name": "Fighter"}}
+
+        mock_party = MagicMock()
+        mock_party_class.return_value = mock_party
+
+        mock_game_state = MagicMock()
+        mock_game_state_class.return_value = mock_game_state
+
+        mock_cli = MagicMock()
+        mock_cli_class.return_value = mock_cli
+
+        # Run main
+        main()
+
+        # Verify LLM enhancer was NOT created
+        mock_llm_enhancer_class.assert_not_called()
+
+        # Verify game still runs
+        mock_cli.run.assert_called_once()
