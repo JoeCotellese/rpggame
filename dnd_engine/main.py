@@ -1,10 +1,14 @@
 # ABOUTME: Main entry point for the D&D 5E terminal game
 # ABOUTME: Sets up the party, game state, and starts the CLI
 
+import argparse
+
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.party import Party
 from dnd_engine.core.creature import Abilities
 from dnd_engine.core.game_state import GameState
+from dnd_engine.llm.enhancer import LLMEnhancer
+from dnd_engine.llm.factory import create_llm_provider
 from dnd_engine.ui.cli import CLI
 from dnd_engine.utils.events import EventBus
 
@@ -94,13 +98,52 @@ def create_default_party() -> Party:
     return party
 
 
-def main():
+def main() -> None:
     """Main entry point for the game."""
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(
+        description="D&D 5E Terminal Game with LLM Enhancement"
+    )
+    parser.add_argument(
+        "--no-llm",
+        action="store_true",
+        help="Disable LLM narrative enhancement"
+    )
+    parser.add_argument(
+        "--llm-provider",
+        choices=["openai", "anthropic", "none"],
+        help="Override LLM provider (openai/anthropic/none)"
+    )
+    parser.add_argument(
+        "--llm-debug",
+        action="store_true",
+        help="Enable verbose LLM logging"
+    )
+    args = parser.parse_args()
+
     # Create the party
     party = create_default_party()
 
     # Create event bus
     event_bus = EventBus()
+
+    # Initialize LLM provider
+    llm_provider = None
+    if not args.no_llm:
+        llm_provider = create_llm_provider(args.llm_provider)
+        if llm_provider:
+            provider_name = llm_provider.get_provider_name()
+            print(f"LLM enabled: {provider_name}")
+            if args.llm_debug:
+                print(f"  Model: {llm_provider.model}")
+                print(f"  Timeout: {llm_provider.timeout}s")
+                print(f"  Max tokens: {llm_provider.max_tokens}")
+        else:
+            print("LLM disabled (no API key or --no-llm flag)")
+
+    # Initialize LLM enhancer
+    if llm_provider:
+        llm_enhancer = LLMEnhancer(llm_provider, event_bus)
 
     # Create game state
     game_state = GameState(

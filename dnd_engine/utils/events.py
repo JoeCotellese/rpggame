@@ -43,6 +43,9 @@ class EventType(Enum):
     # Skill check events
     SKILL_CHECK = "skill_check"
 
+    # LLM enhancement events
+    DESCRIPTION_ENHANCED = "description_enhanced"
+
 
 @dataclass
 class Event:
