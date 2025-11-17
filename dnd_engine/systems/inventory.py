@@ -1,9 +1,10 @@
 # ABOUTME: Inventory management system for player characters
-# ABOUTME: Handles item storage, equipping, usage, and gold tracking
+# ABOUTME: Handles item storage, equipping, usage, and currency tracking
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any
 from enum import Enum
+from dnd_engine.systems.currency import Currency
 
 
 class EquipmentSlot(Enum):
@@ -58,7 +59,7 @@ class Inventory:
             EquipmentSlot.WEAPON: None,
             EquipmentSlot.ARMOR: None
         }
-        self.gold: int = 0
+        self.currency: Currency = Currency()
 
     def add_item(
         self,
@@ -217,6 +218,26 @@ class Inventory:
         """
         return self.equipped[slot]
 
+    @property
+    def gold(self) -> int:
+        """
+        Backward compatibility property for gold pieces.
+
+        Returns:
+            Current gold piece amount
+        """
+        return self.currency.gold
+
+    @gold.setter
+    def gold(self, amount: int) -> None:
+        """
+        Backward compatibility property setter for gold pieces.
+
+        Args:
+            amount: Amount of gold to set
+        """
+        self.currency.gold = amount
+
     def add_gold(self, amount: int) -> None:
         """
         Add gold to the inventory.
@@ -230,11 +251,14 @@ class Inventory:
         if amount < 0:
             raise ValueError("Cannot add negative gold")
 
-        self.gold += amount
+        self.currency.add(Currency(gold=amount))
 
     def remove_gold(self, amount: int) -> bool:
         """
         Remove gold from the inventory.
+
+        For backward compatibility, this preserves the gold denomination
+        when possible instead of fully consolidating.
 
         Args:
             amount: Amount of gold to remove
@@ -248,11 +272,31 @@ class Inventory:
         if amount < 0:
             raise ValueError("Cannot remove negative gold")
 
-        if self.gold < amount:
-            return False
+        if self.currency.gold >= amount:
+            # Can remove directly from gold without consolidating
+            self.currency.gold -= amount
+            return True
 
-        self.gold -= amount
-        return True
+        # Need to make change - convert other denominations to gold value
+        if self.currency.to_copper() >= amount * Currency.CP_PER_GP:
+            # Have enough total value, do full subtraction and preserve gold if possible
+            total_cp = self.currency.to_copper()
+            remaining_cp = total_cp - (amount * Currency.CP_PER_GP)
+
+            # Try to keep result in gold denomination if possible
+            if remaining_cp % Currency.CP_PER_GP == 0:
+                # Can express entirely in gold
+                self.currency.gold = remaining_cp // Currency.CP_PER_GP
+                self.currency.silver = 0
+                self.currency.copper = 0
+                self.currency.electrum = 0
+                self.currency.platinum = 0
+                return True
+            else:
+                # Use normal subtraction which consolidates
+                return self.currency.subtract(Currency(gold=amount))
+
+        return False
 
     def has_gold(self, amount: int) -> bool:
         """
@@ -264,7 +308,7 @@ class Inventory:
         Returns:
             True if inventory has at least the specified amount
         """
-        return self.gold >= amount
+        return self.currency.can_afford(Currency(gold=amount))
 
     def get_all_items(self) -> List[InventoryItem]:
         """
@@ -326,7 +370,7 @@ class Inventory:
 
     def __str__(self) -> str:
         """String representation of the inventory"""
-        if self.is_empty() and self.gold == 0:
+        if self.is_empty() and self.currency.is_zero():
             return "Inventory: (empty)"
 
         lines = ["Inventory:"]
@@ -350,7 +394,8 @@ class Inventory:
                     equipped_marker = " [equipped]"
                 lines.append(f"    {item}{equipped_marker}")
 
-        # Show gold
-        lines.append(f"  Gold: {self.gold} gp")
+        # Show currency
+        if not self.currency.is_zero():
+            lines.append(f"  Currency: {self.currency}")
 
         return "\n".join(lines)

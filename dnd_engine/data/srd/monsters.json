@@ -25,6 +25,10 @@
     "languages": ["Common", "Goblin"],
     "cr": "1/4",
     "xp": 50,
+    "loot": {
+      "copper": 15,
+      "silver": 3
+    },
     "traits": [
       {
         "name": "Nimble Escape",
@@ -79,6 +83,11 @@
     "cr": "1",
     "xp": 200,
     "is_boss": true,
+    "loot": {
+      "gold": 2,
+      "silver": 10,
+      "copper": 50
+    },
     "traits": [
       {
         "name": "Nimble Escape",
@@ -144,6 +153,9 @@
     "languages": [],
     "cr": "1/4",
     "xp": 50,
+    "loot": {
+      "copper": 5
+    },
     "traits": [
       {
         "name": "Keen Hearing and Smell",
