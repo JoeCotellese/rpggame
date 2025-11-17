@@ -49,6 +49,10 @@ class EventType(Enum):
     ENHANCEMENT_STARTED = "enhancement_started"
     DESCRIPTION_ENHANCED = "description_enhanced"
 
+    # Reset system events
+    RESET_STARTED = "reset_started"
+    RESET_COMPLETE = "reset_complete"
+
 
 @dataclass
 class Event:
