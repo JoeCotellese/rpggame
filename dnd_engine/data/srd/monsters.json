@@ -178,5 +178,55 @@
         "special": "Target must succeed on a DC 11 Strength saving throw or be knocked prone."
       }
     ]
+  },
+  "bandit": {
+    "name": "Bandit",
+    "source": "D&D 5E SRD (CC BY 4.0)",
+    "size": "medium",
+    "type": "humanoid (any race)",
+    "alignment": "any non-lawful",
+    "ac": 12,
+    "ac_source": "leather armor",
+    "hp": "2d8+2",
+    "hp_average": 11,
+    "speed": 30,
+    "abilities": {
+      "str": 11,
+      "dex": 12,
+      "con": 12,
+      "int": 10,
+      "wis": 10,
+      "cha": 10
+    },
+    "skills": {},
+    "senses": "passive Perception 10",
+    "languages": ["Common"],
+    "cr": "1/8",
+    "xp": 25,
+    "loot": {
+      "copper": 10,
+      "silver": 5
+    },
+    "traits": [],
+    "actions": [
+      {
+        "name": "Scimitar",
+        "type": "melee-weapon-attack",
+        "attack_bonus": 3,
+        "reach": "5 ft.",
+        "damage": "1d6+1",
+        "damage_average": 4,
+        "damage_type": "slashing"
+      },
+      {
+        "name": "Light Crossbow",
+        "type": "ranged-weapon-attack",
+        "attack_bonus": 3,
+        "range": "80/320 ft.",
+        "damage": "1d8+1",
+        "damage_average": 5,
+        "damage_type": "piercing"
+      }
+    ]
   }
 }
