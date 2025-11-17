@@ -12,17 +12,15 @@ from dnd_engine.llm.enhancer import LLMEnhancer
 from dnd_engine.llm.factory import create_llm_provider
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.ui.cli import CLI
+from dnd_engine.ui.rich_ui import (
+    print_banner,
+    print_status_message,
+    print_error,
+    print_title
+)
 from dnd_engine.utils.events import EventBus
 
 
-def print_banner() -> None:
-    """Display game banner."""
-    print("""
-╔════════════════════════════════════╗
-║   D&D 5E Terminal Adventure        ║
-║   Version 0.1.0                    ║
-╚════════════════════════════════════╝
-    """)
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -91,12 +89,11 @@ def initialize_data_loader() -> DataLoader:
     """
     try:
         loader = DataLoader()
-        print("✓ Data files loaded")
+        print_status_message("Data files loaded", "success")
         return loader
     except FileNotFoundError as e:
-        print("✗ Error: Data files not found")
-        print(f"  {e}")
-        print("\nPlease ensure the game is installed correctly.")
+        print_error("Data files not found", e)
+        print("Please ensure the game is installed correctly.")
         sys.exit(1)
 
 
@@ -111,25 +108,25 @@ def initialize_llm(args: argparse.Namespace) -> Optional:
         LLMProvider instance or None if disabled
     """
     if args.no_llm:
-        print("⚠ LLM disabled (--no-llm flag)")
+        print_status_message("LLM disabled (--no-llm flag)", "warning")
         return None
 
     provider_name = args.llm_provider
     if provider_name == "none":
-        print("⚠ LLM disabled (--llm-provider none)")
+        print_status_message("LLM disabled (--llm-provider none)", "warning")
         return None
 
     try:
         provider = create_llm_provider(provider_name)
         if provider:
-            print(f"✓ LLM provider: {provider.get_provider_name()}")
+            print_status_message(f"LLM provider: {provider.get_provider_name()}", "success")
         else:
-            print("⚠ LLM disabled (no API key configured)")
-            print("  Set OPENAI_API_KEY or ANTHROPIC_API_KEY in environment")
+            print_status_message("LLM disabled (no API key configured)", "warning")
+            print("Set OPENAI_API_KEY or ANTHROPIC_API_KEY in environment")
         return provider
     except Exception as e:
-        print(f"⚠ LLM initialization failed: {e}")
-        print("  Continuing with basic descriptions...")
+        print_status_message(f"LLM initialization failed: {e}", "warning")
+        print("Continuing with basic descriptions...")
         return None
 
 
@@ -153,8 +150,8 @@ def main() -> None:
     args = parse_arguments()
 
     # Display banner
-    print_banner()
-    print("Checking configuration...")
+    print_banner("D&D 5E Terminal Adventure", version="0.1.0", color="cyan")
+    print_status_message("Checking configuration...", "info")
 
     # Initialize data loader
     data_loader = initialize_data_loader()
@@ -170,7 +167,7 @@ def main() -> None:
     if llm_provider:
         llm_enhancer = LLMEnhancer(llm_provider, event_bus)
 
-    print("\nLet's create your character!\n")
+    print_title("\nLet's create your character!\n")
 
     try:
         # Create character factory
@@ -211,12 +208,12 @@ def main() -> None:
         cli.run()
 
     except KeyboardInterrupt:
-        print("\n\nGame interrupted. Thanks for playing!")
+        print("\nGame interrupted. Thanks for playing!")
         sys.exit(0)
     except Exception as e:
         if args.debug:
             raise
-        print(f"\n✗ Error: {e}")
+        print_error(str(e))
         print("\nUse --debug flag for detailed error information.")
         sys.exit(1)
 
