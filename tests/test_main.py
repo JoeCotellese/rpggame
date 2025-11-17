@@ -215,7 +215,7 @@ class TestMainFunction:
     @patch("dnd_engine.main.initialize_llm")
     @patch("dnd_engine.main.initialize_data_loader")
     @patch("dnd_engine.main.parse_arguments")
-    @patch("builtins.input", return_value="")
+    @patch("builtins.input")
     def test_main_successful_flow(
         self,
         mock_input,
@@ -231,6 +231,9 @@ class TestMainFunction:
         capsys
     ):
         """Test successful main flow."""
+        # Mock inputs: party size = 1, then press Enter to start
+        mock_input.side_effect = ["1", ""]
+
         # Setup mocks
         mock_args = MagicMock(debug=False, dungeon="goblin_warren")
         mock_parse_args.return_value = mock_args
@@ -291,7 +294,7 @@ class TestMainFunction:
         # Verify output
         captured = capsys.readouterr()
         assert "Checking configuration..." in captured.out
-        assert "Let's create your character!" in captured.out
+        assert "Let's create your party of 1!" in captured.out
         assert "Character created: Thorin (Mountain Dwarf Fighter)" in captured.out
 
     @patch("dnd_engine.main.CharacterFactory")
@@ -299,10 +302,8 @@ class TestMainFunction:
     @patch("dnd_engine.main.initialize_llm")
     @patch("dnd_engine.main.initialize_data_loader")
     @patch("dnd_engine.main.parse_arguments")
-    @patch("builtins.input", side_effect=KeyboardInterrupt)
     def test_main_keyboard_interrupt(
         self,
-        mock_input,
         mock_parse_args,
         mock_init_loader,
         mock_init_llm,
@@ -321,11 +322,14 @@ class TestMainFunction:
         mock_character = MagicMock()
         mock_character.name = "Test"
         mock_character.race = "human"
-        mock_factory.create_character_interactive.return_value = mock_character
+        # Make character creation raise KeyboardInterrupt
+        mock_factory.create_character_interactive.side_effect = KeyboardInterrupt()
         mock_factory_class.return_value = mock_factory
 
-        with pytest.raises(SystemExit) as exc_info:
-            main()
+        # Mock input to provide party size before interruption during character creation
+        with patch("builtins.input", side_effect=["1"]):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
 
         assert exc_info.value.code == 0
         captured = capsys.readouterr()
@@ -357,8 +361,10 @@ class TestMainFunction:
         mock_factory.create_character_interactive.side_effect = Exception("Test error")
         mock_factory_class.return_value = mock_factory
 
-        with pytest.raises(SystemExit) as exc_info:
-            main()
+        # Mock input to provide party size before exception during character creation
+        with patch("builtins.input", side_effect=["1"]):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
 
         assert exc_info.value.code == 1
         captured = capsys.readouterr()
@@ -389,8 +395,10 @@ class TestMainFunction:
         mock_factory.create_character_interactive.side_effect = Exception("Test error")
         mock_factory_class.return_value = mock_factory
 
-        with pytest.raises(Exception) as exc_info:
-            main()
+        # Mock input to provide party size before exception during character creation
+        with patch("builtins.input", side_effect=["1"]):
+            with pytest.raises(Exception) as exc_info:
+                main()
 
         assert str(exc_info.value) == "Test error"
 
@@ -403,7 +411,7 @@ class TestMainFunction:
     @patch("dnd_engine.main.initialize_llm")
     @patch("dnd_engine.main.initialize_data_loader")
     @patch("dnd_engine.main.parse_arguments")
-    @patch("builtins.input", return_value="")
+    @patch("builtins.input")
     def test_main_no_llm_provider(
         self,
         mock_input,
@@ -418,6 +426,9 @@ class TestMainFunction:
         mock_llm_enhancer_class
     ):
         """Test main flow without LLM provider (no enhancer created)."""
+        # Mock inputs: party size = 1, then press Enter to start
+        mock_input.side_effect = ["1", ""]
+
         mock_args = MagicMock(debug=False, dungeon="goblin_warren")
         mock_parse_args.return_value = mock_args
 
@@ -458,3 +469,200 @@ class TestMainFunction:
 
         # Verify game still runs
         mock_cli.run.assert_called_once()
+
+
+class TestMultiCharacterPartyCreation:
+    """Test multi-character party creation flow."""
+
+    @patch("dnd_engine.main.CLI")
+    @patch("dnd_engine.main.GameState")
+    @patch("dnd_engine.main.Party")
+    @patch("dnd_engine.main.CharacterFactory")
+    @patch("dnd_engine.main.EventBus")
+    @patch("dnd_engine.main.initialize_llm")
+    @patch("dnd_engine.main.initialize_data_loader")
+    @patch("dnd_engine.main.parse_arguments")
+    @patch("builtins.input")
+    def test_single_character_party(
+        self,
+        mock_input,
+        mock_parse_args,
+        mock_init_loader,
+        mock_init_llm,
+        mock_event_bus,
+        mock_factory_class,
+        mock_party_class,
+        mock_game_state_class,
+        mock_cli_class
+    ):
+        """Test creating a party with a single character."""
+        # Mock inputs: party size = 1, then character creation inputs, then start game
+        mock_input.side_effect = ["1", ""]  # Party size, then press Enter to start
+
+        mock_args = MagicMock(no_llm=True, debug=False, dungeon="goblin_warren")
+        mock_parse_args.return_value = mock_args
+
+        mock_loader = MagicMock()
+        mock_loader.load_races.return_value = {"human": {"name": "Human"}}
+        mock_loader.load_classes.return_value = {"fighter": {"name": "Fighter"}}
+        mock_init_loader.return_value = mock_loader
+        mock_init_llm.return_value = None
+        mock_event_bus.return_value = MagicMock()
+
+        # Mock character factory
+        mock_factory = MagicMock()
+        mock_character = MagicMock()
+        mock_character.name = "Thorin"
+        mock_character.race = "human"
+        mock_character.max_hp = 12
+        mock_character.armor_class = 16
+        mock_factory.create_character_interactive.return_value = mock_character
+        mock_factory_class.return_value = mock_factory
+
+        mock_party = MagicMock()
+        mock_party_class.return_value = mock_party
+
+        mock_game_state = MagicMock()
+        mock_game_state_class.return_value = mock_game_state
+
+        mock_cli = MagicMock()
+        mock_cli_class.return_value = mock_cli
+
+        # Run main
+        main()
+
+        # Verify party created with one character
+        mock_party_class.assert_called_once()
+        call_args = mock_party_class.call_args
+        assert len(call_args.kwargs["characters"]) == 1
+        assert call_args.kwargs["characters"][0] == mock_character
+
+    @patch("dnd_engine.main.CLI")
+    @patch("dnd_engine.main.GameState")
+    @patch("dnd_engine.main.Party")
+    @patch("dnd_engine.main.CharacterFactory")
+    @patch("dnd_engine.main.EventBus")
+    @patch("dnd_engine.main.initialize_llm")
+    @patch("dnd_engine.main.initialize_data_loader")
+    @patch("dnd_engine.main.parse_arguments")
+    @patch("builtins.input")
+    def test_multi_character_party(
+        self,
+        mock_input,
+        mock_parse_args,
+        mock_init_loader,
+        mock_init_llm,
+        mock_event_bus,
+        mock_factory_class,
+        mock_party_class,
+        mock_game_state_class,
+        mock_cli_class
+    ):
+        """Test creating a party with multiple characters."""
+        # Mock inputs: party size = 4, then press Enter to start
+        mock_input.side_effect = ["4", ""]
+
+        mock_args = MagicMock(no_llm=True, debug=False, dungeon="goblin_warren")
+        mock_parse_args.return_value = mock_args
+
+        mock_loader = MagicMock()
+        mock_loader.load_races.return_value = {"human": {"name": "Human"}}
+        mock_loader.load_classes.return_value = {"fighter": {"name": "Fighter"}}
+        mock_init_loader.return_value = mock_loader
+        mock_init_llm.return_value = None
+        mock_event_bus.return_value = MagicMock()
+
+        # Mock character factory to create 4 different characters
+        mock_factory = MagicMock()
+        characters = []
+        for i in range(4):
+            char = MagicMock()
+            char.name = f"Character{i+1}"
+            char.race = "human"
+            char.max_hp = 12
+            char.armor_class = 16
+            characters.append(char)
+
+        mock_factory.create_character_interactive.side_effect = characters
+        mock_factory_class.return_value = mock_factory
+
+        mock_party = MagicMock()
+        mock_party_class.return_value = mock_party
+
+        mock_game_state = MagicMock()
+        mock_game_state_class.return_value = mock_game_state
+
+        mock_cli = MagicMock()
+        mock_cli_class.return_value = mock_cli
+
+        # Run main
+        main()
+
+        # Verify character creation called 4 times
+        assert mock_factory.create_character_interactive.call_count == 4
+
+        # Verify party created with 4 characters
+        mock_party_class.assert_called_once()
+        call_args = mock_party_class.call_args
+        assert len(call_args.kwargs["characters"]) == 4
+        for i, char in enumerate(characters):
+            assert call_args.kwargs["characters"][i] == char
+
+    @patch("dnd_engine.main.CLI")
+    @patch("dnd_engine.main.GameState")
+    @patch("dnd_engine.main.Party")
+    @patch("dnd_engine.main.CharacterFactory")
+    @patch("dnd_engine.main.EventBus")
+    @patch("dnd_engine.main.initialize_llm")
+    @patch("dnd_engine.main.initialize_data_loader")
+    @patch("dnd_engine.main.parse_arguments")
+    @patch("builtins.input")
+    def test_invalid_party_size_then_valid(
+        self,
+        mock_input,
+        mock_parse_args,
+        mock_init_loader,
+        mock_init_llm,
+        mock_event_bus,
+        mock_factory_class,
+        mock_party_class,
+        mock_game_state_class,
+        mock_cli_class,
+        capsys
+    ):
+        """Test that invalid party sizes are rejected."""
+        # Try invalid inputs first, then valid
+        mock_input.side_effect = ["0", "5", "abc", "2", ""]
+
+        mock_args = MagicMock(no_llm=True, debug=False, dungeon="goblin_warren")
+        mock_parse_args.return_value = mock_args
+
+        mock_loader = MagicMock()
+        mock_loader.load_races.return_value = {"human": {"name": "Human"}}
+        mock_loader.load_classes.return_value = {"fighter": {"name": "Fighter"}}
+        mock_init_loader.return_value = mock_loader
+        mock_init_llm.return_value = None
+        mock_event_bus.return_value = MagicMock()
+
+        # Mock character factory
+        mock_factory = MagicMock()
+        char1 = MagicMock(name="Hero1", race="human", max_hp=12, armor_class=16)
+        char2 = MagicMock(name="Hero2", race="human", max_hp=12, armor_class=16)
+        mock_factory.create_character_interactive.side_effect = [char1, char2]
+        mock_factory_class.return_value = mock_factory
+
+        mock_party_class.return_value = MagicMock()
+        mock_game_state_class.return_value = MagicMock()
+        mock_cli_class.return_value = MagicMock()
+
+        # Run main
+        main()
+
+        # Check output for error messages
+        captured = capsys.readouterr()
+        assert "Please enter a number between 1 and 4" in captured.out
+        assert "Please enter a valid number" in captured.out
+
+        # Verify party created with 2 characters
+        call_args = mock_party_class.call_args
+        assert len(call_args.kwargs["characters"]) == 2
