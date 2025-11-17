@@ -298,6 +298,64 @@ class CharacterFactory:
         return selected
 
     @staticmethod
+    def select_expertise_skills(
+        skill_proficiencies: List[str],
+        skills_data: Dict[str, Any]
+    ) -> List[str]:
+        """
+        Let Rogue player select expertise skills from their proficiencies.
+
+        Rogues can choose 2 skills they are proficient in to have expertise in.
+        With expertise, the proficiency bonus is doubled for those skills.
+
+        Args:
+            skill_proficiencies: List of skills the character is proficient in
+            skills_data: Skills data from skills.json
+
+        Returns:
+            List of selected expertise skill names (should be 2 or fewer)
+        """
+        if not skill_proficiencies:
+            return []
+
+        num_expertise = min(2, len(skill_proficiencies))
+
+        # Display available skills for expertise
+        print_section(f"Choose {num_expertise} Skills for Expertise")
+        print_message("With expertise, your proficiency bonus is doubled for these skills.\n")
+
+        options = []
+        for i, skill_id in enumerate(skill_proficiencies, 1):
+            skill_info = skills_data.get(skill_id, {})
+            ability = skill_info.get("ability", "?").upper()
+            skill_name = skill_info.get("name", skill_id.title())
+            options.append({"number": str(i), "text": f"{skill_name} ({ability})"})
+
+        print_choice_menu(f"Available Skills for Expertise (Choose {num_expertise})", options)
+
+        selected = []
+        while len(selected) < num_expertise:
+            remaining = num_expertise - len(selected)
+            prompt = f"Enter skill number (select {remaining} more)" if remaining > 1 else "Enter skill number"
+            try:
+                choice = print_input_prompt(prompt).strip()
+                idx = int(choice) - 1
+                if 0 <= idx < len(skill_proficiencies):
+                    skill_id = skill_proficiencies[idx]
+                    if skill_id not in selected:
+                        selected.append(skill_id)
+                        skill_name = skills_data[skill_id].get("name", skill_id.title())
+                        print_status_message(f"Selected expertise: {skill_name}", "success")
+                    else:
+                        print_status_message("You already selected that skill for expertise.", "warning")
+                else:
+                    print_status_message(f"Please enter a number between 1 and {len(skill_proficiencies)}.", "warning")
+            except ValueError:
+                print_status_message("Please enter a valid number.", "warning")
+
+        return selected
+
+    @staticmethod
     def apply_starting_equipment(
         character: Character,
         class_data: Dict[str, Any],
@@ -326,6 +384,8 @@ class CharacterFactory:
                 category = "armor"
             elif item_id in items_data.get("consumables", {}):
                 category = "consumables"
+            elif item_id in items_data.get("tools", {}):
+                category = "tools"
 
             if category:
                 character.inventory.add_item(item_id, category, quantity=1)
@@ -576,20 +636,29 @@ class CharacterFactory:
         print_section("Skill Proficiencies")
         skill_proficiencies = self.select_skill_proficiencies(class_data, skills_data)
 
+        # Step 9b: Select expertise skills for Rogue
+        expertise_skills = []
+        if class_choice == "rogue":
+            expertise_skills = self.select_expertise_skills(skill_proficiencies, skills_data)
+
         # Step 10: Create character and apply starting equipment
+        # Get the CharacterClass enum value from the selected class_choice
+        character_class_enum = CharacterClass[class_choice.upper()]
+
         # Get weapon and armor proficiencies from class data
         weapon_proficiencies = class_data.get("weapon_proficiencies", [])
         armor_proficiencies = class_data.get("armor_proficiencies", [])
 
         character = Character(
             name=name,
-            character_class=CharacterClass.FIGHTER,
+            character_class=character_class_enum,
             level=1,
             abilities=abilities_obj,
             max_hp=hp,
             ac=ac,
             xp=0,
             skill_proficiencies=skill_proficiencies,
+            expertise_skills=expertise_skills,
             weapon_proficiencies=weapon_proficiencies,
             armor_proficiencies=armor_proficiencies
         )

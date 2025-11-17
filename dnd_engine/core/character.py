@@ -9,8 +9,9 @@ from dnd_engine.systems.inventory import Inventory
 
 
 class CharacterClass(Enum):
-    """Available character classes (MVP: Fighter only)"""
+    """Available character classes"""
     FIGHTER = "fighter"
+    ROGUE = "rogue"
 
 
 class Character(Creature):
@@ -39,6 +40,7 @@ class Character(Creature):
         race: str = "human",
         saving_throw_proficiencies: Optional[List[str]] = None,
         skill_proficiencies: Optional[list[str]] = None,
+        expertise_skills: Optional[List[str]] = None,
         weapon_proficiencies: Optional[List[str]] = None,
         armor_proficiencies: Optional[List[str]] = None
     ):
@@ -47,7 +49,7 @@ class Character(Creature):
 
         Args:
             name: Character's name
-            character_class: Character class (Fighter for MVP)
+            character_class: Character class (Fighter, Rogue, etc.)
             level: Character level (1-3 for MVP)
             abilities: Ability scores
             max_hp: Maximum hit points
@@ -58,6 +60,7 @@ class Character(Creature):
             race: Character race (human, mountain_dwarf, high_elf, halfling)
             saving_throw_proficiencies: List of abilities the character is proficient in saving throws for (e.g., ["str", "con"])
             skill_proficiencies: List of skill names the character is proficient in
+            expertise_skills: List of skills with expertise (doubled proficiency bonus)
             weapon_proficiencies: List of weapon types the character is proficient in (e.g., ["simple", "martial"])
             armor_proficiencies: List of armor types the character is proficient in (e.g., ["light", "medium", "heavy", "shields"])
         """
@@ -76,6 +79,7 @@ class Character(Creature):
         self.inventory = inventory if inventory is not None else Inventory()
         self.saving_throw_proficiencies = saving_throw_proficiencies if saving_throw_proficiencies is not None else []
         self.skill_proficiencies = skill_proficiencies if skill_proficiencies is not None else []
+        self.expertise_skills = expertise_skills if expertise_skills is not None else []
         self.weapon_proficiencies = weapon_proficiencies if weapon_proficiencies is not None else []
         self.armor_proficiencies = armor_proficiencies if armor_proficiencies is not None else []
         self._dice_roller = DiceRoller()
@@ -443,13 +447,14 @@ class Character(Creature):
         Calculate skill check modifier for a given skill.
 
         The modifier is the ability modifier plus proficiency bonus if proficient.
+        If the character has expertise in this skill, the proficiency bonus is doubled.
 
         Args:
             skill: Skill name (e.g., "acrobatics", "stealth")
             skills_data: Skills data dictionary loaded from skills.json
 
         Returns:
-            Total skill modifier (ability mod + proficiency if proficient)
+            Total skill modifier (ability mod + proficiency if proficient, doubled if expertise)
 
         Raises:
             KeyError: If skill is not found in skills_data
@@ -466,7 +471,11 @@ class Character(Creature):
         # Add proficiency bonus if proficient
         modifier = ability_mod
         if skill in self.skill_proficiencies:
-            modifier += self.proficiency_bonus
+            # Check expertise (double proficiency bonus)
+            if skill in self.expertise_skills:
+                modifier += self.proficiency_bonus * 2
+            else:
+                modifier += self.proficiency_bonus
 
         return modifier
 
@@ -518,6 +527,69 @@ class Character(Creature):
             "success": total >= dc,
             "proficient": skill in self.skill_proficiencies
         }
+
+    def get_sneak_attack_dice(self) -> Optional[str]:
+        """
+        Get sneak attack dice for Rogue.
+
+        Returns the damage dice for sneak attack based on character level.
+        For non-Rogues, returns None.
+
+        Returns:
+            Sneak attack dice notation (e.g., "1d6", "2d6") or None if not a Rogue
+        """
+        if self.character_class != CharacterClass.ROGUE:
+            return None
+
+        # Sneak attack dice progression
+        sneak_dice_map = {
+            1: "1d6",
+            3: "2d6",
+            5: "3d6",
+            7: "4d6",
+            9: "5d6",
+            11: "6d6",
+            13: "7d6",
+            15: "8d6",
+            17: "9d6",
+            19: "10d6"
+        }
+
+        # Find the highest level threshold we've met
+        dice = "1d6"
+        for level_threshold in sorted(sneak_dice_map.keys()):
+            if self.level >= level_threshold:
+                dice = sneak_dice_map[level_threshold]
+
+        return dice
+
+    def can_sneak_attack(self, has_advantage: bool = False, has_disadvantage: bool = False, ally_nearby: bool = False) -> bool:
+        """
+        Check if Rogue can use Sneak Attack.
+
+        Sneak attack can be used if:
+        - Character is a Rogue
+        - Attack roll has advantage, OR
+        - An ally is within 5 feet of target (not yet implemented)
+        - AND the attack does not have disadvantage
+
+        Args:
+            has_advantage: Whether the attack roll has advantage
+            has_disadvantage: Whether the attack roll has disadvantage
+            ally_nearby: Whether an ally is within 5 feet of target (future implementation)
+
+        Returns:
+            True if sneak attack conditions are met, False otherwise
+        """
+        if self.character_class != CharacterClass.ROGUE:
+            return False
+
+        # Cannot use sneak attack with disadvantage
+        if has_disadvantage:
+            return False
+
+        # Can use sneak attack if attack has advantage or ally is nearby
+        return has_advantage or ally_nearby
 
     def __str__(self) -> str:
         """String representation of the character"""

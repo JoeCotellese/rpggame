@@ -295,6 +295,15 @@
       "value": 1500
     }
   },
+  "tools": {
+    "thieves_tools": {
+      "name": "Thieves' Tools",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "tool",
+      "description": "This set of tools includes a small file, a set of lock picks, a small mirror mounted on a metal handle, a set of narrow-bladed scissors, and a pair of pliers. Proficiency with these tools lets you add your proficiency bonus to any ability check you make to disarm traps or open locks.",
+      "value": 25
+    }
+  },
   "consumables": {
     "potion_of_healing": {
       "name": "Potion of Healing",
