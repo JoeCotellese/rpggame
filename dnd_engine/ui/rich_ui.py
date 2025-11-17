@@ -375,6 +375,23 @@ def print_mechanics_panel(content: str) -> None:
     console.print(panel)
 
 
+def print_combat_action(mechanics: str, narrative: Optional[str] = None) -> None:
+    """
+    Display combat action with mechanics and optional narrative in a unified sequential flow.
+
+    Args:
+        mechanics: Mechanics text (attack rolls, damage, etc.)
+        narrative: Optional narrative enhancement
+    """
+    # Print mechanics first
+    console.print(f"[dim blue]⚔️  {mechanics}[/dim blue]")
+
+    # Print narrative if available
+    if narrative:
+        from rich.markdown import Markdown
+        console.print(Markdown(narrative), style="gold1")
+
+
 def print_narrative_loading() -> None:
     """Display loading state while LLM generates narrative."""
     from rich.text import Text

@@ -122,12 +122,30 @@ class CLI:
 
     def get_player_command(self) -> str:
         """
-        Get a command from the player.
+        Get a command from the player with history support.
 
         Returns:
             Player's command as a string
         """
-        return input("\n> ").strip().lower()
+        try:
+            from prompt_toolkit import prompt
+            from prompt_toolkit.history import FileHistory
+            from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
+            from pathlib import Path
+
+            # Store history in user's home directory
+            history_file = Path.home() / ".dnd_game_history"
+
+            return prompt(
+                "\n> ",
+                history=FileHistory(str(history_file)),
+                auto_suggest=AutoSuggestFromHistory(),
+            ).strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            return "quit"
+        except ImportError:
+            # Fallback to basic input if prompt_toolkit is not available
+            return input("\n> ").strip().lower()
 
     def process_exploration_command(self, command: str) -> None:
         """
@@ -145,9 +163,24 @@ class CLI:
             self.display_help_exploration()
             return
 
-        if command.startswith("move ") or command.startswith("go "):
+        # Support multiple movement command styles
+        # 1. "move north" or "go north"
+        # 2. Bare directions: "north", "n", "south", "s", etc.
+        direction_aliases = {
+            "north": "north", "n": "north",
+            "south": "south", "s": "south",
+            "east": "east", "e": "east",
+            "west": "west", "w": "west"
+        }
+
+        if command.startswith("move ") or command.startswith("go ") or command.startswith("m ") or command.startswith("g "):
             direction = command.split()[1] if len(command.split()) > 1 else ""
             self.handle_move(direction)
+            return
+
+        # Check if command is a bare direction
+        if command in direction_aliases:
+            self.handle_move(direction_aliases[command])
             return
 
         if command in ["look", "l"]:
@@ -162,37 +195,43 @@ class CLI:
             self.handle_search()
             return
 
-        if command in ["inventory", "i", "inv"]:
-            self.display_inventory()
+        if command in ["inventory", "i", "inv"] or command.startswith("inventory ") or command.startswith("inv "):
+            # Parse inventory subcommand
+            parts = command.split()
+            if len(parts) > 1:
+                filter_arg = " ".join(parts[1:])
+                self.display_inventory(filter_arg)
+            else:
+                self.display_inventory()
             return
 
         if command == "equip" or command.startswith("equip "):
             parts = command.split()[1:]
             if not parts:
-                print_error("Specify an item to equip")
+                print_error("Specify an item to equip. Example: 'equip longsword' or 'equip longsword on 2'")
                 return
-            # Try to extract player identifier from the end
-            item_id, player_id = self._parse_item_and_player(parts)
+            # Parse with support for "on" keyword
+            item_id, player_id = self._parse_command_with_target(parts)
             self.handle_equip(item_id, player_id)
             return
 
         if command == "unequip" or command.startswith("unequip "):
             parts = command.split()[1:]
             if not parts:
-                print_error("Specify a slot to unequip (weapon or armor)")
+                print_error("Specify a slot to unequip. Example: 'unequip weapon' or 'unequip weapon on gandalf'")
                 return
-            # Try to extract player identifier from the end
-            slot_name, player_id = self._parse_item_and_player(parts)
+            # Parse with support for "on" keyword
+            slot_name, player_id = self._parse_command_with_target(parts)
             self.handle_unequip(slot_name, player_id)
             return
 
         if command == "use" or command.startswith("use "):
             parts = command.split()[1:]
             if not parts:
-                print_error("Specify an item to use")
+                print_error("Specify an item to use. Example: 'use potion' or 'use potion on 2'")
                 return
-            # Try to extract player identifier from the end
-            item_id, player_id = self._parse_item_and_player(parts)
+            # Parse with support for "on" keyword
+            item_id, player_id = self._parse_command_with_target(parts)
             self.handle_use_item(item_id, player_id)
             return
 
@@ -218,16 +257,35 @@ class CLI:
             self.handle_attack(target_name)
             return
 
+        if command == "attack":
+            # Show available targets
+            living_enemies = [e.name for e in self.game_state.active_enemies if e.is_alive]
+            if living_enemies:
+                print_error(f"Specify a target. Available enemies: {', '.join(living_enemies)}")
+            else:
+                print_error("No enemies to attack!")
+            return
+
         if command in ["status", "stats"]:
             self.display_combat_status()
             return
 
-        print_status_message("Unknown combat command. Type 'help' for available commands.", "warning")
+        # Provide helpful suggestions for unknown commands
+        print_status_message("Unknown combat command.", "warning")
+        living_enemies = [e.name for e in self.game_state.active_enemies if e.is_alive]
+        if living_enemies:
+            print_status_message(f"Try: 'attack {living_enemies[0].lower()}' or 'help' for more commands", "info")
 
     def handle_move(self, direction: str) -> None:
         """Handle movement command."""
         if not direction:
-            print_status_message("Specify a direction (e.g., 'move north')", "warning")
+            # Show available exits
+            room = self.game_state.get_current_room()
+            exits = room.get("exits", [])
+            if exits:
+                print_status_message(f"Specify a direction. Available exits: {', '.join(exits)}", "warning")
+            else:
+                print_status_message("No exits available from this room.", "warning")
             return
 
         success = self.game_state.move(direction)
@@ -238,7 +296,13 @@ class CLI:
             if self.game_state.in_combat:
                 print_error("You cannot move during combat!")
             else:
-                print_error(f"You cannot go {direction} from here")
+                # Show available exits when movement fails
+                room = self.game_state.get_current_room()
+                exits = room.get("exits", [])
+                if exits:
+                    print_error(f"You cannot go {direction} from here. Available exits: {', '.join(exits)}")
+                else:
+                    print_error("No exits available from this room.")
 
     def handle_search(self) -> None:
         """Handle search command."""
@@ -316,8 +380,8 @@ class CLI:
             apply_damage=True
         )
 
-        # Display mechanics in panel
-        print_mechanics_panel(str(result))
+        # Display mechanics (simplified, without panel)
+        console.print(f"[dim blue]⚔️  {str(result)}[/dim blue]")
 
         # Emit damage event
         if result.hit:
@@ -398,7 +462,7 @@ class CLI:
                     apply_damage=True
                 )
 
-                print_mechanics_panel(str(result))
+                console.print(f"[dim blue]⚔️  {str(result)}[/dim blue]")
 
                 if result.hit:
                     self.game_state.event_bus.emit(Event(
@@ -424,6 +488,38 @@ class CLI:
             # Check if entire party is dead
             if self.game_state.party.is_wiped():
                 break
+
+    def _parse_command_with_target(self, parts: List[str]) -> tuple[str, Optional[str]]:
+        """
+        Parse item/slot name and optional player identifier from command parts.
+        Supports both syntaxes:
+        - Old: "potion 2" or "potion gandalf"
+        - New: "potion on 2" or "potion on gandalf"
+
+        Args:
+            parts: Command parts (e.g., ["longsword", "2"] or ["potion", "on", "gandalf"])
+
+        Returns:
+            Tuple of (item_name, player_identifier)
+        """
+        if not parts:
+            return "", None
+
+        # Check for "on" keyword (new explicit syntax)
+        if "on" in parts:
+            on_index = parts.index("on")
+            if on_index == len(parts) - 1:
+                # "on" is the last word, no target specified
+                item_name = " ".join(parts[:on_index])
+                return item_name, None
+            else:
+                # Everything before "on" is the item, everything after is the target
+                item_name = " ".join(parts[:on_index])
+                player_id = " ".join(parts[on_index + 1:])
+                return item_name, player_id
+
+        # Fall back to old syntax (last word might be player identifier)
+        return self._parse_item_and_player(parts)
 
     def _parse_item_and_player(self, parts: List[str]) -> tuple[str, Optional[str]]:
         """
@@ -506,12 +602,59 @@ class CLI:
         print_error(f"No living player found with identifier: {player_identifier}")
         return None
 
-    def display_inventory(self) -> None:
-        """Display all party members' inventories with item details."""
+    def display_inventory(self, filter_arg: Optional[str] = None) -> None:
+        """
+        Display party members' inventories with optional filtering.
+
+        Args:
+            filter_arg: Optional filter - can be:
+                - "summary": Show cross-party consumables summary
+                - Player number (e.g., "2"): Show specific player's inventory
+                - Player name (e.g., "gandalf"): Show specific player's inventory
+                - Category (e.g., "potions", "weapons", "armor"): Filter by item type
+        """
         items_data = self.game_state.data_loader.load_items()
         from dnd_engine.systems.inventory import EquipmentSlot
 
-        for idx, character in enumerate(self.game_state.party.characters, 1):
+        # Handle summary view
+        if filter_arg == "summary":
+            self._display_inventory_summary()
+            return
+
+        # Handle player-specific filter
+        player_filter = None
+        if filter_arg:
+            # Try to parse as player number
+            try:
+                player_num = int(filter_arg)
+                if 1 <= player_num <= len(self.game_state.party.characters):
+                    player_filter = player_num - 1  # Convert to 0-based index
+            except ValueError:
+                # Try to match by name
+                for idx, character in enumerate(self.game_state.party.characters):
+                    if character.name.lower() == filter_arg.lower():
+                        player_filter = idx
+                        break
+
+        # Handle category filter
+        category_filter = None
+        category_map = {
+            "weapon": "weapons", "weapons": "weapons",
+            "armor": "armor", "armour": "armor",
+            "consumable": "consumables", "consumables": "consumables",
+            "potion": "consumables", "potions": "consumables"
+        }
+        if filter_arg and filter_arg.lower() in category_map:
+            category_filter = category_map[filter_arg.lower()]
+
+        # Display inventory
+        characters_to_show = []
+        if player_filter is not None:
+            characters_to_show = [(player_filter + 1, self.game_state.party.characters[player_filter])]
+        else:
+            characters_to_show = list(enumerate(self.game_state.party.characters, 1))
+
+        for idx, character in characters_to_show:
             inventory = character.inventory
 
             # Build inventory data for rich table
@@ -522,7 +665,8 @@ class CLI:
             armor_id = inventory.get_equipped_item(EquipmentSlot.ARMOR)
 
             # Add items by category
-            for category in ["weapons", "armor", "consumables"]:
+            categories_to_show = [category_filter] if category_filter else ["weapons", "armor", "consumables"]
+            for category in categories_to_show:
                 category_items = inventory.get_items_by_category(category)
                 if category_items:
                     if category not in inventory_items:
@@ -548,7 +692,43 @@ class CLI:
                 table = create_inventory_table(inventory_items)
                 console.print(table)
             else:
-                print_status_message("No items in inventory", "info")
+                if category_filter:
+                    print_status_message(f"No {category_filter} in inventory", "info")
+                else:
+                    print_status_message("No items in inventory", "info")
+
+    def _display_inventory_summary(self) -> None:
+        """Display a summary of consumables across all party members."""
+        items_data = self.game_state.data_loader.load_items()
+
+        # Aggregate consumables across party
+        consumable_totals = {}
+
+        for character in self.game_state.party.characters:
+            inventory = character.inventory
+            consumables = inventory.get_items_by_category("consumables")
+
+            for inv_item in consumables:
+                if inv_item.item_id not in consumable_totals:
+                    consumable_totals[inv_item.item_id] = 0
+                consumable_totals[inv_item.item_id] += inv_item.quantity
+
+        if consumable_totals:
+            print_title("Party Consumables Summary")
+
+            from rich.table import Table
+            table = Table(title="CROSS-PARTY CONSUMABLES", style="green", show_header=True, header_style="bold magenta")
+            table.add_column("Item", style="bold")
+            table.add_column("Total Qty", justify="center")
+
+            for item_id, total_qty in consumable_totals.items():
+                item_data = items_data["consumables"].get(item_id, {})
+                item_name = item_data.get("name", item_id)
+                table.add_row(item_name, str(total_qty))
+
+            console.print(table)
+        else:
+            print_status_message("No consumables in party inventory", "info")
 
     def handle_equip(self, item_id: str, player_identifier: Optional[str] = None) -> None:
         """
@@ -741,13 +921,14 @@ class CLI:
     def display_help_exploration(self) -> None:
         """Display help for exploration commands."""
         commands = [
-            ("move <direction>", "Move in a direction (north, south, east, west)"),
+            ("north/n, south/s, east/e, west/w", "Move in a direction (shorthand)"),
+            ("move/go <direction>", "Move in a direction (e.g., 'go north')"),
             ("look or l", "Look around the current room"),
             ("search", "Search the room for items"),
-            ("inventory / i", "Show your inventory with player numbers"),
-            ("equip <item> [player]", "Equip weapon/armor. Player: number or name (default: 1)"),
-            ("unequip <slot> [player]", "Unequip weapon/armor. Player: number or name (default: 1)"),
-            ("use <item> [player]", "Use consumable. Player: number or name (default: 1)"),
+            ("inventory / i [filter]", "Show inventory. Filter: summary, player name/number, or item type"),
+            ("equip <item> [on <player>]", "Equip weapon/armor (e.g., 'equip sword on 2')"),
+            ("unequip <slot> [on <player>]", "Unequip weapon/armor (e.g., 'unequip weapon on gandalf')"),
+            ("use <item> [on <player>]", "Use consumable (e.g., 'use potion on 2')"),
             ("status", "Show your character status"),
             ("save", "Save your game"),
             ("help or ?", "Show this help message"),
@@ -852,10 +1033,10 @@ class CLI:
         """Handle LLM enhancement started event."""
         description_type = event.data.get("type", "unknown")
 
-        # Only show loading for combat actions (not room descriptions)
+        # Track that narrative is pending but don't show loading state
+        # (per UX guidelines, avoid loading indicators for quick responses)
         if description_type == "combat":
             self.narrative_pending = True
-            print_narrative_loading()
 
     def _on_description_enhanced(self, event: Event) -> None:
         """Handle LLM-enhanced description event."""
@@ -863,14 +1044,15 @@ class CLI:
         text = event.data.get("text", "")
 
         if text:
-            # Display enhanced descriptions in appropriate panels
+            # Display enhanced descriptions sequentially (no panels)
+            from rich.markdown import Markdown
+
             if description_type == "combat" or description_type == "death" or description_type == "victory":
-                # Use narrative panel for combat-related narratives
+                # Display combat narrative sequentially after mechanics
                 self.narrative_pending = False
-                print_narrative_panel(text)
+                console.print(Markdown(text), style="gold1")
             elif description_type == "room":
-                # Room descriptions use the old style for now
-                from rich.markdown import Markdown
+                # Room descriptions
                 console.print(Markdown(text), style="cyan")
             else:
                 console.print(text)

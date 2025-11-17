@@ -20,7 +20,7 @@ class TestTwoPanelDisplay:
 
     @patch('dnd_engine.ui.cli.print_narrative_loading')
     def test_loading_panel_on_enhancement_started(self, mock_loading):
-        """Verify loading panel is displayed when LLM enhancement starts."""
+        """Verify loading panel is NOT displayed per UX improvements (remove loading state)."""
         # Create minimal CLI for testing event handlers
         game_state = MagicMock()
         game_state.event_bus = EventBus()
@@ -33,13 +33,14 @@ class TestTwoPanelDisplay:
         )
         cli._on_enhancement_started(event)
 
-        # Verify loading panel was shown
-        assert mock_loading.called
+        # Per UX improvements: loading panel should NOT be shown
+        # (avoid loading indicators for quick responses)
+        assert not mock_loading.called
         assert cli.narrative_pending is True
 
-    @patch('dnd_engine.ui.cli.print_narrative_panel')
-    def test_narrative_panel_on_combat_description(self, mock_narrative):
-        """Verify narrative panel is displayed for combat descriptions."""
+    @patch('dnd_engine.ui.cli.console')
+    def test_narrative_panel_on_combat_description(self, mock_console):
+        """Verify narrative is displayed sequentially for combat descriptions."""
         game_state = MagicMock()
         game_state.event_bus = EventBus()
         cli = CLI(game_state)
@@ -54,14 +55,13 @@ class TestTwoPanelDisplay:
         )
         cli._on_description_enhanced(event)
 
-        # Verify narrative panel was shown
-        assert mock_narrative.called
-        assert mock_narrative.call_args[0][0] == "The sword gleams in the torchlight as it strikes true!"
+        # Verify narrative was printed (sequentially, not in panel)
+        assert mock_console.print.called
         assert cli.narrative_pending is False
 
-    @patch('dnd_engine.ui.cli.print_narrative_panel')
-    def test_narrative_panel_on_death_description(self, mock_narrative):
-        """Verify narrative panel is displayed for death descriptions."""
+    @patch('dnd_engine.ui.cli.console')
+    def test_narrative_panel_on_death_description(self, mock_console):
+        """Verify narrative is displayed sequentially for death descriptions."""
         game_state = MagicMock()
         game_state.event_bus = EventBus()
         cli = CLI(game_state)
@@ -75,8 +75,7 @@ class TestTwoPanelDisplay:
         )
         cli._on_description_enhanced(event)
 
-        assert mock_narrative.called
-        assert "hero falls" in mock_narrative.call_args[0][0]
+        assert mock_console.print.called
 
     @patch('dnd_engine.ui.cli.print_narrative_loading')
     def test_loading_not_shown_for_non_combat(self, mock_loading):
