@@ -2,12 +2,23 @@
 # ABOUTME: Handles player input, displays game state, and manages the game loop
 
 import sys
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities
 from dnd_engine.core.game_state import GameState
 from dnd_engine.core.combat import AttackResult
 from dnd_engine.utils.events import EventBus, Event, EventType
+from dnd_engine.ui.rich_ui import (
+    console,
+    create_party_status_table,
+    create_inventory_table,
+    create_combat_table,
+    print_status_message,
+    print_error,
+    print_room_description,
+    print_help_section,
+    print_title
+)
 
 
 class CLI:
@@ -40,52 +51,62 @@ class CLI:
 
     def display_banner(self) -> None:
         """Display the game banner."""
-        print("\n" + "=" * 60)
-        print("D&D 5E TERMINAL GAME")
-        print("=" * 60 + "\n")
+        print_title("D&D 5E Terminal Game", "Welcome to your adventure!")
 
     def display_room(self) -> None:
         """Display the current room description."""
         desc = self.game_state.get_room_description()
-        print("\n" + "-" * 60)
-        print(desc)
-        print("-" * 60)
+        room = self.game_state.get_current_room()
+
+        # Extract room name and description
+        room_name = room.get("name", "Unknown Room")
+        room_text = room.get("description", desc)
+        exits = room.get("exits", [])
+
+        print_room_description(room_name, room_text, exits)
 
     def display_player_status(self) -> None:
         """Display status for all party members."""
         party_status = self.game_state.get_player_status()
-        print("\n" + "=" * 60)
-        print("PARTY STATUS")
-        print("=" * 60)
+
+        # Convert party status to table format
+        party_data = []
         for status in party_status:
-            alive_marker = "💀" if not status['alive'] else "✓"
-            print(f"{alive_marker} {status['name']} (Level {status['level']} Fighter)")
-            print(f"   HP: {status['hp']}/{status['max_hp']} | AC: {status['ac']} | XP: {status['xp']}")
-        print("=" * 60)
+            party_data.append({
+                "name": status['name'],
+                "class": "Fighter",  # TODO: Get actual class from character
+                "level": status['level'],
+                "hp": status['hp'],
+                "max_hp": status['max_hp'],
+                "ac": status['ac'],
+                "xp": status['xp']
+            })
+
+        table = create_party_status_table(party_data)
+        console.print(table)
 
     def display_combat_status(self) -> None:
         """Display combat status and initiative order."""
         if not self.game_state.in_combat or not self.game_state.initiative_tracker:
             return
 
-        print("\n" + "~" * 60)
-        print("COMBAT!")
-        print("~" * 60)
-
-        # Show initiative order
+        # Prepare combat data
+        combatants = []
         current_combatant = self.game_state.initiative_tracker.get_current_combatant()
+
         for entry in self.game_state.initiative_tracker.get_all_combatants():
-            is_current = entry == current_combatant
-            current_marker = "→" if is_current else " "
+            is_player = any(char == entry.creature for char in self.game_state.party.characters)
+            combatants.append({
+                "name": entry.creature.name,
+                "initiative": entry.initiative_total,
+                "hp": entry.creature.current_hp,
+                "max_hp": entry.creature.max_hp,
+                "is_player": is_player,
+                "current_turn": entry == current_combatant
+            })
 
-            # Check if this is a party member
-            is_party_member = any(entry.creature == char for char in self.game_state.party.characters)
-            party_marker = "[PARTY]" if is_party_member else "[ENEMY]"
-
-            status = "DEAD" if not entry.creature.is_alive else f"HP: {entry.creature.current_hp}/{entry.creature.max_hp}"
-            print(f"{current_marker} {party_marker} {entry.creature.name} (Init: {entry.initiative_total}) - {status}")
-
-        print("~" * 60)
+        table = create_combat_table(combatants)
+        console.print(table)
 
     def get_player_command(self) -> str:
         """
@@ -105,7 +126,7 @@ class CLI:
         """
         if command in ["quit", "exit", "q"]:
             self.running = False
-            print("\nThanks for playing!")
+            print_status_message("Thanks for playing!", "success")
             return
 
         if command in ["help", "h", "?"]:
@@ -148,7 +169,7 @@ class CLI:
             self.handle_use_item(item_id)
             return
 
-        print("Unknown command. Type 'help' for available commands.")
+        print_status_message("Unknown command. Type 'help' for available commands.", "warning")
 
     def process_combat_command(self, command: str) -> None:
         """
@@ -170,40 +191,40 @@ class CLI:
             self.display_combat_status()
             return
 
-        print("Unknown combat command. Type 'help' for available commands.")
+        print_status_message("Unknown combat command. Type 'help' for available commands.", "warning")
 
     def handle_move(self, direction: str) -> None:
         """Handle movement command."""
         if not direction:
-            print("Specify a direction (e.g., 'move north').")
+            print_status_message("Specify a direction (e.g., 'move north')", "warning")
             return
 
         success = self.game_state.move(direction)
         if success:
-            print(f"\nYou move {direction}.")
+            print_status_message(f"You move {direction}", "info")
             self.display_room()
         else:
             if self.game_state.in_combat:
-                print("You cannot move during combat!")
+                print_error("You cannot move during combat!")
             else:
-                print(f"You cannot go {direction} from here.")
+                print_error(f"You cannot go {direction} from here")
 
     def handle_search(self) -> None:
         """Handle search command."""
         items = self.game_state.search_room()
         if items:
-            print(f"\nYou search the room and find:")
+            print_status_message("You search the room and find:", "success")
             for item in items:
                 if item["type"] == "gold":
-                    print(f"  - {item['amount']} gold pieces")
+                    print_status_message(f"{item['amount']} gold pieces", "info")
                 else:
-                    print(f"  - {item.get('id', 'an item')}")
+                    print_status_message(f"{item.get('id', 'an item')}", "info")
         else:
             room = self.game_state.get_current_room()
             if room.get("searched"):
-                print("\nYou've already searched this room.")
+                print_status_message("You've already searched this room", "warning")
             else:
-                print("\nYou find nothing of interest.")
+                print_status_message("You find nothing of interest", "info")
 
     def handle_attack(self, target_name: str) -> None:
         """Handle attack command during combat."""
@@ -368,56 +389,44 @@ class CLI:
         items_data = self.game_state.data_loader.load_items()
         from dnd_engine.systems.inventory import EquipmentSlot
 
-        print("\n" + "=" * 60)
-        print("PARTY INVENTORY")
-        print("=" * 60)
-
         for character in self.game_state.party.characters:
             inventory = character.inventory
-            status = "💀" if not character.is_alive else ""
-            print(f"\n{status} {character.name}:")
 
-            # Display gold
-            print(f"  Gold: {inventory.gold} gp")
+            # Build inventory data for rich table
+            inventory_items = {}
 
-            # Display equipped items
+            # Add equipped items
             weapon_id = inventory.get_equipped_item(EquipmentSlot.WEAPON)
             armor_id = inventory.get_equipped_item(EquipmentSlot.ARMOR)
 
-            print("  Equipped:")
-            if weapon_id:
-                weapon_data = items_data["weapons"].get(weapon_id, {})
-                weapon_name = weapon_data.get("name", weapon_id)
-                print(f"    Weapon: {weapon_name}")
-            else:
-                print(f"    Weapon: (none)")
+            # Add items by category
+            for category in ["weapons", "armor", "consumables"]:
+                category_items = inventory.get_items_by_category(category)
+                if category_items:
+                    if category not in inventory_items:
+                        inventory_items[category] = []
 
-            if armor_id:
-                armor_data = items_data["armor"].get(armor_id, {})
-                armor_name = armor_data.get("name", armor_id)
-                print(f"    Armor: {armor_name}")
-            else:
-                print(f"    Armor: (none)")
+                    for inv_item in category_items:
+                        item_data = items_data[category].get(inv_item.item_id, {})
+                        item_name = item_data.get("name", inv_item.item_id)
+                        is_equipped = (inv_item.item_id == weapon_id or inv_item.item_id == armor_id)
 
-            # Display items by category
-            if inventory.is_empty():
-                print("  Items: (none)")
-            else:
-                print("  Items:")
-                for category in ["weapons", "armor", "consumables"]:
-                    category_items = inventory.get_items_by_category(category)
-                    if category_items:
-                        print(f"    {category.title()}:")
-                        for inv_item in category_items:
-                            item_data = items_data[category].get(inv_item.item_id, {})
-                            item_name = item_data.get("name", inv_item.item_id)
-                            qty_str = f" x{inv_item.quantity}" if inv_item.quantity > 1 else ""
-                            equipped = ""
-                            if inv_item.item_id == weapon_id or inv_item.item_id == armor_id:
-                                equipped = " [equipped]"
-                            print(f"      - {item_name}{qty_str}{equipped}")
+                        inventory_items[category].append({
+                            "name": item_name,
+                            "quantity": inv_item.quantity,
+                            "equipped": is_equipped
+                        })
 
-        print("=" * 60)
+            # Display character title
+            alive_marker = "✓" if character.is_alive else "💀"
+            print_title(f"{alive_marker} {character.name} - Gold: {inventory.gold} gp")
+
+            # Create and display inventory table
+            if inventory_items:
+                table = create_inventory_table(inventory_items)
+                console.print(table)
+            else:
+                print_status_message("No items in inventory", "info")
 
     def handle_equip(self, item_id: str) -> None:
         """Handle equipping an item for the first living party member."""
@@ -566,24 +575,28 @@ class CLI:
 
     def display_help_exploration(self) -> None:
         """Display help for exploration commands."""
-        print("\nExploration Commands:")
-        print("  move <direction>  - Move in a direction (north, south, east, west)")
-        print("  look              - Look around the current room")
-        print("  search            - Search the room for items")
-        print("  inventory         - Show your inventory (shortcut: i)")
-        print("  equip <item>      - Equip a weapon or armor")
-        print("  unequip <slot>    - Unequip weapon or armor")
-        print("  use <item>        - Use a consumable item")
-        print("  status            - Show your character status")
-        print("  help              - Show this help message")
-        print("  quit              - Exit the game")
+        commands = [
+            ("move <direction>", "Move in a direction (north, south, east, west)"),
+            ("look or l", "Look around the current room"),
+            ("search", "Search the room for items"),
+            ("inventory / i", "Show your inventory"),
+            ("equip <item>", "Equip a weapon or armor"),
+            ("unequip <slot>", "Unequip weapon or armor"),
+            ("use <item>", "Use a consumable item"),
+            ("status", "Show your character status"),
+            ("help or ?", "Show this help message"),
+            ("quit / exit", "Exit the game"),
+        ]
+        print_help_section("Exploration Commands", commands)
 
     def display_help_combat(self) -> None:
         """Display help for combat commands."""
-        print("\nCombat Commands:")
-        print("  attack <enemy>    - Attack an enemy (e.g., 'attack goblin')")
-        print("  status            - Show combat status")
-        print("  help              - Show this help message")
+        commands = [
+            ("attack <enemy>", "Attack an enemy (e.g., 'attack goblin')"),
+            ("status", "Show combat status"),
+            ("help or ?", "Show this help message"),
+        ]
+        print_help_section("Combat Commands", commands)
 
     def run(self) -> None:
         """Run the main game loop."""
@@ -591,7 +604,7 @@ class CLI:
         self.display_room()
         self.display_player_status()
 
-        print("\nType 'help' for available commands.")
+        print_status_message("Type 'help' for available commands", "info")
 
         while self.running and not self.game_state.is_game_over():
             if self.game_state.in_combat:
@@ -616,21 +629,21 @@ class CLI:
 
         # Game over
         if self.game_state.is_game_over():
-            print("\n" + "=" * 60)
-            print("GAME OVER")
-            print("Your party has been wiped out!")
-            print("=" * 60)
+            print_title("GAME OVER", "Your party has been wiped out!")
 
     def _on_combat_start(self, event: Event) -> None:
         """Handle combat start event."""
         enemies = event.data.get("enemies", [])
-        print(f"\n⚔️  Combat begins! Enemies: {', '.join(enemies)}")
+        print_status_message(f"Combat begins! Enemies: {', '.join(enemies)}", "warning")
 
     def _on_combat_end(self, event: Event) -> None:
         """Handle combat end event."""
         total_xp = event.data.get("xp_gained", 0)
         xp_per_char = event.data.get("xp_per_character", 0)
-        print(f"\n✓ Victory! Party gained {total_xp} XP ({xp_per_char} XP per character).")
+        print_status_message(
+            f"Victory! Party gained {total_xp} XP ({xp_per_char} XP per character)",
+            "success"
+        )
 
     def _on_damage_dealt(self, event: Event) -> None:
         """Handle damage dealt event (currently just passes through)."""
