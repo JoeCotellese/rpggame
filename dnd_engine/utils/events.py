@@ -41,6 +41,7 @@ class EventType(Enum):
 
     # Character progression events
     LEVEL_UP = "level_up"
+    FEATURE_GRANTED = "feature_granted"
 
     # Skill check events
     SKILL_CHECK = "skill_check"
