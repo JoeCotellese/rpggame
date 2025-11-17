@@ -4,11 +4,13 @@
 import argparse
 
 from dnd_engine.core.character import Character, CharacterClass
+from dnd_engine.core.character_factory import CharacterFactory
 from dnd_engine.core.party import Party
 from dnd_engine.core.creature import Abilities
 from dnd_engine.core.game_state import GameState
 from dnd_engine.llm.enhancer import LLMEnhancer
 from dnd_engine.llm.factory import create_llm_provider
+from dnd_engine.rules.loader import DataLoader
 from dnd_engine.ui.cli import CLI
 from dnd_engine.utils.events import EventBus
 
@@ -119,10 +121,33 @@ def main() -> None:
         action="store_true",
         help="Enable verbose LLM logging"
     )
+    parser.add_argument(
+        "--default-party",
+        action="store_true",
+        help="Use default pre-made party instead of character creation"
+    )
     args = parser.parse_args()
 
+    # Create data loader
+    data_loader = DataLoader()
+
     # Create the party
-    party = create_default_party()
+    if args.default_party:
+        # Use default pre-made party
+        party = create_default_party()
+    else:
+        # Interactive character creation
+        print("\nWelcome to D&D 5E Terminal Game!")
+
+        # Create character factory
+        factory = CharacterFactory()
+
+        # Create character using interactive flow
+        # Note: Using a simple mock UI for now since we're just passing None
+        character = factory.create_character_interactive(None, data_loader)
+
+        # Create party with the created character
+        party = Party(characters=[character])
 
     # Create event bus
     event_bus = EventBus()

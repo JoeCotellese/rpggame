@@ -34,7 +34,8 @@ class Character(Creature):
         ac: int,
         current_hp: int | None = None,
         xp: int = 0,
-        inventory: Optional[Inventory] = None
+        inventory: Optional[Inventory] = None,
+        race: str = "human"
     ):
         """
         Initialize a player character.
@@ -49,6 +50,7 @@ class Character(Creature):
             current_hp: Starting HP (defaults to max_hp)
             xp: Starting experience points
             inventory: Inventory instance (creates new one if not provided)
+            race: Character race (human, mountain_dwarf, high_elf, halfling)
         """
         super().__init__(
             name=name,
@@ -61,6 +63,7 @@ class Character(Creature):
         self.character_class = character_class
         self.level = level
         self.xp = xp
+        self.race = race
         self.inventory = inventory if inventory is not None else Inventory()
 
     @property

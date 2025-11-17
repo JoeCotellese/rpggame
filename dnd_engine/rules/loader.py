@@ -128,3 +128,14 @@ class DataLoader:
         classes_file = self.data_path / "srd" / "classes.json"
         with open(classes_file, 'r') as f:
             return json.load(f)
+
+    def load_races(self) -> Dict[str, Any]:
+        """
+        Load all race definitions from JSON.
+
+        Returns:
+            Dictionary mapping race IDs to race data
+        """
+        races_file = self.data_path / "srd" / "races.json"
+        with open(races_file, 'r') as f:
+            return json.load(f)
