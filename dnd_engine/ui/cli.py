@@ -38,16 +38,18 @@ class CLI:
     - Game loop
     """
 
-    def __init__(self, game_state: GameState):
+    def __init__(self, game_state: GameState, auto_save_enabled: bool = True):
         """
         Initialize the CLI.
 
         Args:
             game_state: The game state to interact with
+            auto_save_enabled: Whether to enable auto-save feature
         """
         self.game_state = game_state
         self.running = True
         self.narrative_pending = False
+        self.auto_save_enabled = auto_save_enabled
 
         # Subscribe to game events for display
         self.game_state.event_bus.subscribe(EventType.COMBAT_START, self._on_combat_start)
@@ -57,6 +59,7 @@ class CLI:
         self.game_state.event_bus.subscribe(EventType.GOLD_ACQUIRED, self._on_gold_acquired)
         self.game_state.event_bus.subscribe(EventType.ENHANCEMENT_STARTED, self._on_enhancement_started)
         self.game_state.event_bus.subscribe(EventType.DESCRIPTION_ENHANCED, self._on_description_enhanced)
+        self.game_state.event_bus.subscribe(EventType.ROOM_ENTER, self._on_room_enter)
 
     def display_banner(self) -> None:
         """Display the game banner."""
@@ -176,6 +179,10 @@ class CLI:
         if command.startswith("use "):
             item_id = " ".join(command.split()[1:])
             self.handle_use_item(item_id)
+            return
+
+        if command in ["save"]:
+            self.handle_save()
             return
 
         print_status_message("Unknown command. Type 'help' for available commands.", "warning")
@@ -592,6 +599,31 @@ class CLI:
             data={"item_id": target_item, "effect": effect}
         ))
 
+    def handle_save(self) -> None:
+        """Handle manual save command."""
+        # Check if save_manager is available
+        if not hasattr(self.game_state, 'save_manager'):
+            print_error("Save functionality not available")
+            return
+
+        print_section("Save Game", "Enter a name for your save")
+
+        save_name = input("Save name: ").strip()
+
+        if not save_name:
+            print_status_message("Save cancelled", "warning")
+            return
+
+        try:
+            save_path = self.game_state.save_manager.save_game(
+                self.game_state,
+                save_name,
+                auto_save=False
+            )
+            print_status_message(f"Game saved successfully: {save_path.stem}", "success")
+        except Exception as e:
+            print_error(f"Failed to save game: {e}")
+
     def display_help_exploration(self) -> None:
         """Display help for exploration commands."""
         commands = [
@@ -603,6 +635,7 @@ class CLI:
             ("unequip <slot>", "Unequip weapon or armor"),
             ("use <item>", "Use a consumable item"),
             ("status", "Show your character status"),
+            ("save", "Save your game"),
             ("help or ?", "Show this help message"),
             ("quit / exit", "Exit the game"),
         ]
@@ -684,6 +717,9 @@ class CLI:
                 f"Combat ended - Total XP: {total_xp}, XP per character: {xp_per_char}"
             )
 
+        # Auto-save after combat
+        self._auto_save("after_combat")
+
     def _on_damage_dealt(self, event: Event) -> None:
         """Handle damage dealt event (currently just passes through)."""
         pass
@@ -724,3 +760,32 @@ class CLI:
                 console.print(Markdown(text), style="cyan")
             else:
                 console.print(text)
+
+    def _on_room_enter(self, event: Event) -> None:
+        """Handle room enter event."""
+        # Auto-save when entering a new room
+        self._auto_save("room_change")
+
+    def _auto_save(self, trigger: str) -> None:
+        """
+        Perform an auto-save.
+
+        Args:
+            trigger: What triggered the auto-save (for logging)
+        """
+        if not self.auto_save_enabled:
+            return
+
+        if not hasattr(self.game_state, 'save_manager'):
+            return
+
+        try:
+            # Use "autosave" as the save name
+            self.game_state.save_manager.save_game(
+                self.game_state,
+                "autosave",
+                auto_save=True
+            )
+        except Exception:
+            # Silently fail auto-save to avoid disrupting gameplay
+            pass
