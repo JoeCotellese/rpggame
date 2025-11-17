@@ -42,7 +42,7 @@ from dnd_engine.core import dice
 from dnd_engine.utils import helpers
 ```
 
-### Testing
+### Testing Philosophy
 - Use pytest for testing framework
 - Place tests in a `tests/` directory
 - Name test files with `test_` prefix
@@ -52,7 +52,38 @@ from dnd_engine.utils import helpers
 - NEVER ignore the output of the system or the tests - Logs and messages often contain CRITICAL information
 - TEST OUTPUT MUST BE PRISTINE TO PASS
 - If the logs are supposed to contain errors, capture and test it
-- NO EXCEPTIONS POLICY: Under no circumstances should you mark any test type as "not applicable". Every project, regardless of size or complexity, MUST have unit tests, integration tests, AND end-to-end tests
+
+### Test Types and When to Use Each
+
+#### Unit Tests (test_*.py)
+- Test individual functions and classes in isolation
+- Mock external dependencies
+- Fast execution (milliseconds per test)
+- Use for: business logic, data transformations, utility functions
+- Example: test_dice.py, test_character.py
+
+#### Integration Tests (test_*_integration.py)
+- Test how multiple components work together
+- Mock only external I/O (network, filesystem, user input)
+- Medium execution time (seconds per test)
+- Use for: testing interactions between systems, event flows, state management
+- Example: test_inventory_integration.py, test_llm_enhancer_integration.py
+
+#### End-to-End Tests (test_*_e2e.py)
+- ONLY write true e2e tests - DO NOT mock the application behavior
+- If you find yourself mocking core application logic, write a unit or integration test instead
+- E2E tests should test actual user workflows with minimal mocking
+- Use tools like `pexpect` for interactive CLI testing, not mocked subprocesses
+- Slow execution (seconds to minutes per test)
+- Use for: complete user workflows, actual CLI interaction, real file I/O
+- **CRITICAL**: Do not write "fake" e2e tests that heavily mock everything - those are just slow unit tests
+- If an e2e test mocks CharacterFactory, CLI, input(), etc., delete it and write proper unit tests instead
+
+#### NO EXCEPTIONS POLICY
+- Every feature MUST have unit tests
+- Features that integrate multiple systems MUST have integration tests
+- Only write e2e tests for true end-to-end workflows worth the overhead
+- Never mark any required test type as "not applicable"
 
 ### TDD Practice
 - Write failing test → write minimal code to pass → refactor → repeat
