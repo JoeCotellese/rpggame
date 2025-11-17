@@ -2,6 +2,7 @@
 # ABOUTME: Handles attack rolls, critical hits, damage calculation, and applying damage to creatures
 
 from dataclasses import dataclass
+from typing import Dict, Any, Optional
 from dnd_engine.core.dice import DiceRoller, DiceRoll
 from dnd_engine.core.creature import Creature
 
@@ -202,3 +203,86 @@ class CombatEngine:
 
         # Reconstruct the notation
         return f"{doubled_count}d{sides}{modifier_part}"
+
+    def resolve_saving_throw_effect(
+        self,
+        target: Creature,
+        save_ability: str,
+        dc: int,
+        effect: Dict[str, Any],
+        apply_damage: bool = False,
+        event_bus=None
+    ) -> Dict[str, Any]:
+        """
+        Resolve an effect that requires a saving throw.
+
+        Handles saving throw mechanics for spells, traps, and environmental hazards.
+        If the target succeeds, damage can be reduced or negated based on the effect.
+
+        Args:
+            target: The creature making the saving throw
+            save_ability: Ability to save with (e.g., "str", "dex", "con", "int", "wis", "cha")
+            dc: Difficulty class for the save
+            effect: Dictionary containing effect details:
+                - "damage_dice": str (e.g., "8d6") - damage dice notation
+                - "damage_type": str (e.g., "fire", "poison") - optional, for description
+                - "half_on_success": bool (optional) - if True, success halves damage
+                - "negate_on_success": bool (optional) - if True, success negates all damage
+            apply_damage: If True, apply damage to target's HP
+            event_bus: Optional EventBus instance for event emission
+
+        Returns:
+            Dictionary with:
+            - "save_result": dict (result from make_saving_throw)
+            - "damage": int (damage dealt or would be dealt)
+            - "damage_taken": int (actual damage taken, considering success/failure)
+            - "effect": str (description of what happened)
+
+        Raises:
+            ValueError: If target doesn't have make_saving_throw method
+        """
+        # Check if target is a Character with make_saving_throw capability
+        if not hasattr(target, 'make_saving_throw'):
+            raise ValueError(f"{target.name} cannot make saving throws")
+
+        # Make the saving throw
+        save_result = target.make_saving_throw(
+            ability=save_ability,
+            dc=dc,
+            event_bus=event_bus
+        )
+
+        # Calculate damage
+        damage_dice = effect.get("damage_dice", "1d6")
+        damage = self._calculate_damage(damage_dice, critical_hit=False)
+
+        # Determine damage taken based on save result
+        damage_taken = damage
+        effect_description = ""
+
+        if save_result["success"]:
+            if effect.get("negate_on_success", False):
+                # Success completely negates the effect
+                damage_taken = 0
+                effect_description = f"Success! The effect is completely negated."
+            elif effect.get("half_on_success", False):
+                # Success halves the damage
+                damage_taken = damage // 2
+                effect_description = f"Success! Damage reduced to {damage_taken} (half of {damage})."
+            else:
+                # Success but still full damage (rare but possible)
+                effect_description = f"Success on the save, but the effect still deals {damage} damage."
+        else:
+            # Failure takes full damage
+            effect_description = f"Failed save. Takes {damage} damage."
+
+        # Apply damage if requested
+        if apply_damage:
+            target.take_damage(damage_taken)
+
+        return {
+            "save_result": save_result,
+            "damage": damage,
+            "damage_taken": damage_taken,
+            "effect": effect_description
+        }
