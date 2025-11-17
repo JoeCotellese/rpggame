@@ -12,6 +12,15 @@ from dnd_engine.rules.loader import DataLoader
 from dnd_engine.utils.events import EventBus, Event, EventType
 
 
+# Direction reversal mapping for fleeing combat
+REVERSE_DIRECTIONS = {
+    "north": "south",
+    "south": "north",
+    "east": "west",
+    "west": "east"
+}
+
+
 class GameState:
     """
     Central game state manager.
@@ -59,6 +68,9 @@ class GameState:
         self.active_enemies: List[Creature] = []
         self.combat_engine = CombatEngine(self.dice_roller)
 
+        # Navigation tracking for flee mechanic
+        self.last_entry_direction: Optional[str] = None
+
         # Action history for narrative context
         self.action_history: List[str] = []
 
@@ -105,6 +117,9 @@ class GameState:
 
         if direction not in exits:
             return False  # Invalid direction
+
+        # Track direction for flee mechanic (before moving)
+        self.last_entry_direction = direction
 
         # Move to new room
         new_room_id = exits[direction]
@@ -366,6 +381,149 @@ class GameState:
             }
         ))
 
+    def flee_combat(self) -> Dict[str, Any]:
+        """
+        Attempt to flee from combat.
+
+        Party flees together, but each living enemy gets one opportunity attack
+        against random living party members. No XP is awarded. Party automatically
+        retreats to the previous room (reverse of last_entry_direction).
+
+        Returns:
+            Dictionary with flee results including:
+            - success: True if fled successfully, False if failed
+            - reason: Failure reason (if failed)
+            - opportunity_attacks: List of attack results
+            - casualties: List of party members who died during flee
+            - retreat_direction: Direction party fled (if successful)
+            - retreat_room: Room name party fled to (if successful)
+        """
+        if not self.in_combat:
+            return {"success": False, "reason": "Not in combat"}
+
+        # Check if we can retreat (need previous direction)
+        if not self.last_entry_direction:
+            return {
+                "success": False,
+                "reason": "Nowhere to retreat! You're trapped in this room."
+            }
+
+        # Calculate retreat direction
+        retreat_direction = REVERSE_DIRECTIONS.get(self.last_entry_direction)
+        if not retreat_direction:
+            return {
+                "success": False,
+                "reason": f"Cannot determine retreat direction from '{self.last_entry_direction}'"
+            }
+
+        # Track flee results
+        opportunity_attacks = []
+        casualties = []
+
+        # Each living enemy gets one opportunity attack
+        living_enemies = [e for e in self.active_enemies if e.is_alive]
+        living_party = self.party.get_living_members()
+
+        if living_party and living_enemies:
+            # Load monster data for attack stats
+            monsters = self.data_loader.load_monsters()
+
+            for enemy in living_enemies:
+                # Pick a random living party member to attack
+                import random
+                target = random.choice(living_party)
+
+                # Find enemy's attack data
+                monster_data = None
+                for monster_id, mdata in monsters.items():
+                    if mdata["name"] == enemy.name:
+                        monster_data = mdata
+                        break
+
+                if monster_data and monster_data.get("actions"):
+                    # Find first action with attack_bonus (skip Multiattack, etc.)
+                    action = None
+                    for act in monster_data["actions"]:
+                        if "attack_bonus" in act:
+                            action = act
+                            break
+
+                    if action:
+                        result = self.combat_engine.resolve_attack(
+                            attacker=enemy,
+                            defender=target,
+                            attack_bonus=action["attack_bonus"],
+                            damage_dice=action["damage"],
+                            apply_damage=True
+                        )
+                        opportunity_attacks.append(result)
+
+                        # Emit damage event if hit
+                        if result.hit:
+                            self.event_bus.emit(Event(
+                                type=EventType.DAMAGE_DEALT,
+                                data={
+                                    "attacker": enemy.name,
+                                    "defender": target.name,
+                                    "damage": result.damage,
+                                    "opportunity_attack": True
+                                }
+                            ))
+
+                        # Track casualties
+                        if not target.is_alive:
+                            casualties.append(target.name)
+                            self.event_bus.emit(Event(
+                                type=EventType.CHARACTER_DEATH,
+                                data={"name": target.name}
+                            ))
+
+                # Update living party list if someone died
+                living_party = self.party.get_living_members()
+                if not living_party:
+                    break  # No one left to attack
+
+        # Clear combat state (no XP awarded for fleeing)
+        self.in_combat = False
+        self.initiative_tracker = None
+
+        # Enemies remain in room (can encounter them again)
+        # Do NOT clear enemies from room like in _end_combat
+
+        # Retreat to previous room
+        move_success = self.move(retreat_direction)
+
+        if not move_success:
+            # This shouldn't happen if direction tracking is correct, but handle gracefully
+            return {
+                "success": False,
+                "reason": f"Failed to retreat {retreat_direction} - exit may not exist"
+            }
+
+        # Get new room info for return data
+        new_room = self.get_current_room()
+        retreat_room_name = new_room.get("name", "Unknown")
+
+        # Emit flee event
+        self.event_bus.emit(Event(
+            type=EventType.COMBAT_FLED,
+            data={
+                "opportunity_attacks": len(opportunity_attacks),
+                "casualties": casualties,
+                "surviving_party": [c.name for c in self.party.get_living_members()],
+                "retreat_direction": retreat_direction,
+                "retreat_room": retreat_room_name
+            }
+        ))
+
+        return {
+            "success": True,
+            "opportunity_attacks": opportunity_attacks,
+            "casualties": casualties,
+            "retreat_direction": retreat_direction,
+            "retreat_room": retreat_room_name
+        }
+
     def reset_dungeon(self, new_dungeon_name: Optional[str] = None) -> None:
         """
         Reset the dungeon to its initial state.
@@ -403,6 +561,9 @@ class GameState:
         self.in_combat = False
         self.initiative_tracker = None
         self.active_enemies = []
+
+        # Reset navigation tracking
+        self.last_entry_direction = None
 
         # Clear action history
         self.action_history = []

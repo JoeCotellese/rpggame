@@ -231,7 +231,8 @@ class SaveManager:
                 "current_room_id": game_state.current_room_id,
                 "dungeon_state": self._serialize_dungeon_state(game_state.dungeon),
                 "in_combat": game_state.in_combat,
-                "action_history": game_state.action_history
+                "action_history": game_state.action_history,
+                "last_entry_direction": game_state.last_entry_direction
             }
         }
 
@@ -376,6 +377,9 @@ class SaveManager:
 
         # Restore action history
         game_state.action_history = gs_data.get("action_history", [])
+
+        # Restore navigation tracking
+        game_state.last_entry_direction = gs_data.get("last_entry_direction")
 
         # Note: We don't restore combat state - if saved during combat, it will
         # restart when entering the room

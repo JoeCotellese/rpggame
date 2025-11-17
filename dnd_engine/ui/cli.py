@@ -55,6 +55,7 @@ class CLI:
         # Subscribe to game events for display
         self.game_state.event_bus.subscribe(EventType.COMBAT_START, self._on_combat_start)
         self.game_state.event_bus.subscribe(EventType.COMBAT_END, self._on_combat_end)
+        self.game_state.event_bus.subscribe(EventType.COMBAT_FLED, self._on_combat_fled)
         self.game_state.event_bus.subscribe(EventType.DAMAGE_DEALT, self._on_damage_dealt)
         self.game_state.event_bus.subscribe(EventType.ITEM_ACQUIRED, self._on_item_acquired)
         self.game_state.event_bus.subscribe(EventType.GOLD_ACQUIRED, self._on_gold_acquired)
@@ -277,6 +278,10 @@ class CLI:
                 print_error("No enemies to attack!")
             return
 
+        if command in ["flee", "run", "escape", "retreat"]:
+            self.handle_flee()
+            return
+
         if command in ["status", "stats"]:
             self.display_combat_status()
             return
@@ -443,6 +448,43 @@ class CLI:
         if self.game_state.in_combat:
             # Process enemy turns
             self.process_enemy_turns()
+
+    def handle_flee(self) -> None:
+        """Handle flee command during combat."""
+        if not self.game_state.in_combat:
+            print_error("You're not in combat!")
+            return
+
+        print_section("Fleeing Combat")
+        print_status_message("The party attempts to flee...", "warning")
+
+        # Execute flee
+        result = self.game_state.flee_combat()
+
+        if not result["success"]:
+            print_error(f"Failed to flee: {result.get('reason', 'Unknown reason')}")
+            return
+
+        # Display opportunity attacks
+        if result["opportunity_attacks"]:
+            print_message("\nEnemies strike as you flee!")
+            for attack_result in result["opportunity_attacks"]:
+                console.print(f"[dim red]⚔️  {str(attack_result)}[/dim red]")
+
+        # Display casualties
+        if result["casualties"]:
+            print_status_message(f"Casualties during retreat: {', '.join(result['casualties'])}", "warning")
+
+        # Check if entire party died during flee
+        if self.game_state.party.is_wiped():
+            print_status_message("The entire party has fallen during the retreat!", "warning")
+        else:
+            retreat_dir = result.get("retreat_direction", "unknown")
+            retreat_room = result.get("retreat_room", "unknown")
+            print_status_message(f"The party flees {retreat_dir} to {retreat_room}!", "success")
+
+            # Display new room
+            self.display_room()
 
     def process_enemy_turns(self) -> None:
         """Process all enemy turns until it's a party member's turn again."""
@@ -1147,6 +1189,7 @@ class CLI:
         """Display help for combat commands."""
         commands = [
             ("attack <enemy>", "Attack an enemy (e.g., 'attack goblin')"),
+            ("flee / run / escape", "Flee from combat (enemies get opportunity attacks)"),
             ("status", "Show combat status"),
             ("help or ?", "Show this help message"),
         ]
@@ -1221,6 +1264,23 @@ class CLI:
 
         # Auto-save after combat
         self._auto_save("after_combat")
+
+    def _on_combat_fled(self, event: Event) -> None:
+        """Handle combat fled event."""
+        # Log flee event
+        from dnd_engine.utils.logging_config import get_logging_config
+        logging_config = get_logging_config()
+        if logging_config:
+            num_attacks = event.data.get("opportunity_attacks", 0)
+            casualties = event.data.get("casualties", [])
+            surviving = event.data.get("surviving_party", [])
+            logging_config.log_combat_event(
+                f"Party fled combat - Opportunity attacks: {num_attacks}, "
+                f"Casualties: {len(casualties)}, Survivors: {len(surviving)}"
+            )
+
+        # Auto-save after fleeing
+        self._auto_save("after_flee")
 
     def _on_damage_dealt(self, event: Event) -> None:
         """Handle damage dealt event (currently just passes through)."""
