@@ -167,18 +167,33 @@ class CLI:
             return
 
         if command.startswith("equip "):
-            item_id = " ".join(command.split()[1:])
-            self.handle_equip(item_id)
+            parts = command.split()[1:]
+            if not parts:
+                print_error("Specify an item to equip")
+                return
+            # Try to extract player identifier from the end
+            item_id, player_id = self._parse_item_and_player(parts)
+            self.handle_equip(item_id, player_id)
             return
 
         if command.startswith("unequip "):
-            slot_name = " ".join(command.split()[1:])
-            self.handle_unequip(slot_name)
+            parts = command.split()[1:]
+            if not parts:
+                print_error("Specify a slot to unequip (weapon or armor)")
+                return
+            # Try to extract player identifier from the end
+            slot_name, player_id = self._parse_item_and_player(parts)
+            self.handle_unequip(slot_name, player_id)
             return
 
         if command.startswith("use "):
-            item_id = " ".join(command.split()[1:])
-            self.handle_use_item(item_id)
+            parts = command.split()[1:]
+            if not parts:
+                print_error("Specify an item to use")
+                return
+            # Try to extract player identifier from the end
+            item_id, player_id = self._parse_item_and_player(parts)
+            self.handle_use_item(item_id, player_id)
             return
 
         if command in ["save"]:
@@ -410,12 +425,93 @@ class CLI:
             if self.game_state.party.is_wiped():
                 break
 
+    def _parse_item_and_player(self, parts: List[str]) -> tuple[str, Optional[str]]:
+        """
+        Parse item/slot name and optional player identifier from command parts.
+
+        Args:
+            parts: Command parts (e.g., ["longsword", "2"] or ["potion", "of", "healing", "gandalf"])
+
+        Returns:
+            Tuple of (item_name, player_identifier)
+        """
+        if not parts:
+            return "", None
+
+        # Try the last part as a player identifier
+        # Check if it's a number or matches a character name
+        last_part = parts[-1]
+
+        # Check if it's a number
+        try:
+            player_num = int(last_part)
+            if 1 <= player_num <= len(self.game_state.party.characters):
+                # Valid player number
+                item_name = " ".join(parts[:-1]) if len(parts) > 1 else ""
+                return item_name, last_part
+        except ValueError:
+            pass
+
+        # Check if it matches a character name
+        for character in self.game_state.party.characters:
+            if character.name.lower() == last_part.lower():
+                # Valid player name
+                item_name = " ".join(parts[:-1]) if len(parts) > 1 else ""
+                return item_name, last_part
+
+        # Last part is not a player identifier, treat entire string as item name
+        return " ".join(parts), None
+
+    def _get_target_player(self, player_identifier: Optional[str]) -> Optional[Character]:
+        """
+        Get a target player from an identifier (number or name).
+
+        Args:
+            player_identifier: Optional player identifier (1-based index or character name)
+
+        Returns:
+            The matching character, or None if not found or if identifier is invalid
+        """
+        living_members = self.game_state.party.get_living_members()
+        if not living_members:
+            return None
+
+        # If no identifier, return first living member (backward compatibility)
+        if not player_identifier:
+            return living_members[0]
+
+        # Try to parse as a number (1-based index)
+        try:
+            index = int(player_identifier) - 1  # Convert to 0-based index
+            if 0 <= index < len(self.game_state.party.characters):
+                character = self.game_state.party.characters[index]
+                if character.is_alive:
+                    return character
+                else:
+                    print_error(f"Player {player_identifier} is not alive!")
+                    return None
+            else:
+                print_error(f"Invalid player number: {player_identifier}. Valid range: 1-{len(self.game_state.party.characters)}")
+                return None
+        except ValueError:
+            # Not a number, try to match by name
+            pass
+
+        # Try to match by name (case-insensitive)
+        for character in living_members:
+            if character.name.lower() == player_identifier.lower():
+                return character
+
+        # No match found
+        print_error(f"No living player found with identifier: {player_identifier}")
+        return None
+
     def display_inventory(self) -> None:
         """Display all party members' inventories with item details."""
         items_data = self.game_state.data_loader.load_items()
         from dnd_engine.systems.inventory import EquipmentSlot
 
-        for character in self.game_state.party.characters:
+        for idx, character in enumerate(self.game_state.party.characters, 1):
             inventory = character.inventory
 
             # Build inventory data for rich table
@@ -443,9 +539,9 @@ class CLI:
                             "equipped": is_equipped
                         })
 
-            # Display character title
+            # Display character title with player number
             alive_marker = "✓" if character.is_alive else "💀"
-            print_title(f"{alive_marker} {character.name} - Gold: {inventory.gold} gp")
+            print_title(f"[{idx}] {alive_marker} {character.name} - Gold: {inventory.gold} gp")
 
             # Create and display inventory table
             if inventory_items:
@@ -454,14 +550,20 @@ class CLI:
             else:
                 print_status_message("No items in inventory", "info")
 
-    def handle_equip(self, item_id: str) -> None:
-        """Handle equipping an item for the first living party member."""
-        living_members = self.game_state.party.get_living_members()
-        if not living_members:
-            print_error("No living party members to equip items!")
+    def handle_equip(self, item_id: str, player_identifier: Optional[str] = None) -> None:
+        """
+        Handle equipping an item for a specific party member.
+
+        Args:
+            item_id: The item to equip (ID or name)
+            player_identifier: Optional player identifier (1-based index or character name)
+        """
+        character = self._get_target_player(player_identifier)
+        if not character:
+            if not self.game_state.party.get_living_members():
+                print_error("No living party members to equip items!")
             return
 
-        character = living_members[0]
         inventory = character.inventory
         items_data = self.game_state.data_loader.load_items()
 
@@ -481,7 +583,7 @@ class CLI:
                 break
 
         if not target_item:
-            print_error(f"You don't have '{item_id}' in your inventory.")
+            print_error(f"{character.name} doesn't have '{item_id}' in inventory.")
             return
 
         # Equip the item
@@ -507,14 +609,20 @@ class CLI:
             data={"item_id": target_item, "slot": slot.value}
         ))
 
-    def handle_unequip(self, slot_name: str) -> None:
-        """Handle unequipping an item for the first living party member."""
-        living_members = self.game_state.party.get_living_members()
-        if not living_members:
-            print_error("No living party members to unequip items!")
+    def handle_unequip(self, slot_name: str, player_identifier: Optional[str] = None) -> None:
+        """
+        Handle unequipping an item for a specific party member.
+
+        Args:
+            slot_name: The equipment slot to unequip (weapon or armor)
+            player_identifier: Optional player identifier (1-based index or character name)
+        """
+        character = self._get_target_player(player_identifier)
+        if not character:
+            if not self.game_state.party.get_living_members():
+                print_error("No living party members to unequip items!")
             return
 
-        character = living_members[0]
         from dnd_engine.systems.inventory import EquipmentSlot
 
         slot = None
@@ -542,16 +650,22 @@ class CLI:
                 data={"item_id": item_id, "slot": slot.value}
             ))
         else:
-            print_status_message(f"Nothing equipped in {slot_name} slot.", "warning")
+            print_status_message(f"{character.name} has nothing equipped in {slot_name} slot.", "warning")
 
-    def handle_use_item(self, item_id: str) -> None:
-        """Handle using a consumable item for the first living party member."""
-        living_members = self.game_state.party.get_living_members()
-        if not living_members:
-            print_error("No living party members to use items!")
+    def handle_use_item(self, item_id: str, player_identifier: Optional[str] = None) -> None:
+        """
+        Handle using a consumable item for a specific party member.
+
+        Args:
+            item_id: The item to use (ID or name)
+            player_identifier: Optional player identifier (1-based index or character name)
+        """
+        character = self._get_target_player(player_identifier)
+        if not character:
+            if not self.game_state.party.get_living_members():
+                print_error("No living party members to use items!")
             return
 
-        character = living_members[0]
         inventory = character.inventory
         items_data = self.game_state.data_loader.load_items()
 
@@ -631,9 +745,9 @@ class CLI:
             ("look or l", "Look around the current room"),
             ("search", "Search the room for items"),
             ("inventory / i", "Show your inventory"),
-            ("equip <item>", "Equip a weapon or armor"),
-            ("unequip <slot>", "Unequip weapon or armor"),
-            ("use <item>", "Use a consumable item"),
+            ("equip <item> [player]", "Equip a weapon or armor (e.g., 'equip longsword 2')"),
+            ("unequip <slot> [player]", "Unequip weapon or armor (e.g., 'unequip weapon 1')"),
+            ("use <item> [player]", "Use a consumable item (e.g., 'use potion 3')"),
             ("status", "Show your character status"),
             ("save", "Save your game"),
             ("help or ?", "Show this help message"),
