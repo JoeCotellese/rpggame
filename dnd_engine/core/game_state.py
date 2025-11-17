@@ -361,3 +361,71 @@ class GameState:
                 "xp_per_character": total_xp // len(self.party.characters) if len(self.party.characters) > 0 else 0
             }
         ))
+
+    def reset_dungeon(self, new_dungeon_name: Optional[str] = None) -> None:
+        """
+        Reset the dungeon to its initial state.
+
+        Keeps party data intact while resetting:
+        - Current room to dungeon entrance
+        - All room states (searched flags, enemies)
+        - Combat state
+        - Action history
+
+        Args:
+            new_dungeon_name: If provided, switch to a different dungeon
+        """
+        # Emit reset started event
+        self.event_bus.emit(Event(
+            type=EventType.RESET_STARTED,
+            data={
+                "old_dungeon": self.dungeon_name,
+                "new_dungeon": new_dungeon_name or self.dungeon_name
+            }
+        ))
+
+        # Load new dungeon if specified, otherwise reload current one
+        if new_dungeon_name:
+            self.dungeon_name = new_dungeon_name
+            self.dungeon = self.data_loader.load_dungeon(new_dungeon_name)
+        else:
+            # Reload current dungeon from disk to reset state
+            self.dungeon = self.data_loader.load_dungeon(self.dungeon_name)
+
+        # Reset to start room
+        self.current_room_id = self.dungeon["start_room"]
+
+        # Reset combat state
+        self.in_combat = False
+        self.initiative_tracker = None
+        self.active_enemies = []
+
+        # Clear action history
+        self.action_history = []
+
+        # Emit reset complete event
+        self.event_bus.emit(Event(
+            type=EventType.RESET_COMPLETE,
+            data={
+                "dungeon": self.dungeon_name,
+                "current_room": self.current_room_id
+            }
+        ))
+
+    def reset_party_hp(self) -> None:
+        """
+        Restore all party members to full health.
+
+        Heals all living and dead characters to their maximum HP.
+        """
+        for character in self.party.characters:
+            character.current_hp = character.max_hp
+
+    def reset_party_conditions(self) -> None:
+        """
+        Clear all conditions from all party members.
+
+        Removes conditions like poisoned, paralyzed, stunned, etc.
+        """
+        for character in self.party.characters:
+            character.conditions.clear()

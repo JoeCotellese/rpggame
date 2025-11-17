@@ -240,6 +240,10 @@ class CLI:
             self.handle_save()
             return
 
+        if command in ["reset"] or command.startswith("reset "):
+            self.handle_reset(command)
+            return
+
         print_status_message("Unknown command. Type 'help' for available commands.", "warning")
 
     def process_combat_command(self, command: str) -> None:
@@ -939,6 +943,76 @@ class CLI:
         except Exception as e:
             print_error(f"Failed to save game: {e}")
 
+    def handle_reset(self, command: str) -> None:
+        """
+        Handle reset command to restart the campaign.
+
+        Supports:
+        - 'reset': Reset current dungeon with same party
+        - 'reset --dungeon <name>': Switch to different dungeon
+        """
+        # Parse command for options
+        parts = command.split()
+        dungeon_name = None
+        reset_hp = True
+        reset_conditions = True
+
+        # Check for --dungeon option
+        if len(parts) > 1 and parts[1] == "--dungeon" and len(parts) > 2:
+            dungeon_name = parts[2]
+
+        print_section("Reset Campaign")
+        print_message("This will restart the campaign with your current party intact")
+        print_message("Your characters will retain their level, XP, and equipment")
+
+        # Show current state
+        print_section("Current Status")
+        print_message(f"Dungeon: {self.game_state.dungeon_name}")
+        print_message(f"Party size: {len(self.game_state.party.characters)}")
+
+        if dungeon_name:
+            print_message(f"\nWill reset to: {dungeon_name}")
+
+        # Ask for confirmation
+        print_message("")
+        confirm = input("Confirm reset? (y/n): ").strip().lower()
+
+        if confirm != "y":
+            print_status_message("Reset cancelled", "warning")
+            return
+
+        try:
+            # Reset dungeon (optionally to a new one)
+            self.game_state.reset_dungeon(dungeon_name)
+
+            # Reset party HP (to reflect fresh start)
+            self.game_state.reset_party_hp()
+
+            # Reset party conditions
+            self.game_state.reset_party_conditions()
+
+            # Save the reset game state if save_manager is available
+            if hasattr(self.game_state, 'save_manager'):
+                try:
+                    self.game_state.save_manager.save_game(
+                        self.game_state,
+                        "reset_autosave",
+                        auto_save=True
+                    )
+                except Exception as e:
+                    # Log but don't fail on autosave error
+                    print_status_message(f"Note: Autosave failed ({e})", "warning")
+
+            # Display success message
+            print_status_message("Campaign reset successfully!", "success")
+            print_message(f"Returned to dungeon entrance in {self.game_state.dungeon_name}")
+
+            # Display the new room
+            self.display_room()
+
+        except Exception as e:
+            print_error(f"Failed to reset campaign: {e}")
+
     def display_help_exploration(self) -> None:
         """Display help for exploration commands."""
         commands = [
@@ -952,6 +1026,8 @@ class CLI:
             ("use <item> [on <player>]", "Use consumable (e.g., 'use potion on 2')"),
             ("status", "Show your character status"),
             ("save", "Save your game"),
+            ("reset", "Reset campaign with same party"),
+            ("reset --dungeon <name>", "Switch to a different dungeon"),
             ("help or ?", "Show this help message"),
             ("quit / exit", "Exit the game"),
         ]
