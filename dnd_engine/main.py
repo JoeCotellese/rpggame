@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from dnd_engine.core.character_factory import CharacterFactory
 from dnd_engine.core.game_state import GameState
 from dnd_engine.core.party import Party
+from dnd_engine.core.save_manager import SaveManager
 from dnd_engine.llm.enhancer import LLMEnhancer
 from dnd_engine.llm.factory import create_llm_provider
 from dnd_engine.rules.loader import DataLoader
@@ -138,6 +139,137 @@ def initialize_llm(args: argparse.Namespace) -> Optional:
         return None
 
 
+def show_save_load_menu(save_manager: SaveManager) -> Optional[str]:
+    """
+    Show save/load menu and get user choice.
+
+    Args:
+        save_manager: SaveManager instance
+
+    Returns:
+        Save name to load, or None to create new party
+    """
+    print_section("Welcome Adventurer!", "What would you like to do?")
+
+    # List available saves
+    saves = save_manager.list_saves()
+
+    if saves:
+        print_title("\nAvailable Saved Games:")
+        for i, save in enumerate(saves, 1):
+            party_info = ", ".join(save["party_names"])
+            avg_level = int(save["average_level"])
+            last_played = save["last_played"][:10] if len(save["last_played"]) >= 10 else save["last_played"]
+            print_message(
+                f"{i}. {save['name']} - {party_info} "
+                f"(Lvl {avg_level}, {save['dungeon']}) - Last played: {last_played}"
+            )
+        print_message(f"{len(saves) + 1}. Start a new adventure")
+    else:
+        print_status_message("No saved games found. Starting a new adventure!", "info")
+        return None
+
+    # Get user choice
+    while True:
+        try:
+            choice_input = print_input_prompt(
+                f"Enter your choice (1-{len(saves) + 1})"
+            ).strip()
+            choice = int(choice_input)
+
+            if 1 <= choice <= len(saves):
+                return saves[choice - 1]["name"]
+            elif choice == len(saves) + 1:
+                return None
+            else:
+                print_status_message(
+                    f"Please enter a number between 1 and {len(saves) + 1}.",
+                    "warning"
+                )
+        except ValueError:
+            print_status_message("Please enter a valid number.", "warning")
+        except KeyboardInterrupt:
+            raise
+
+
+def create_new_party(
+    args: argparse.Namespace,
+    data_loader: DataLoader
+) -> Party:
+    """
+    Create a new party through character creation.
+
+    Args:
+        args: Command-line arguments
+        data_loader: Data loader instance
+
+    Returns:
+        Created Party
+    """
+    # Get party size
+    print_section("Party Creation", "How many characters in your party?")
+    party_size = None
+    while party_size is None:
+        try:
+            size_input = print_input_prompt("Enter number (1-4)").strip()
+            size = int(size_input)
+            if 1 <= size <= 4:
+                party_size = size
+            else:
+                print_status_message("Please enter a number between 1 and 4.", "warning")
+        except ValueError:
+            print_status_message("Please enter a valid number.", "warning")
+        except KeyboardInterrupt:
+            raise
+
+    if party_size == 1:
+        print_title("\nLet's create your character!\n")
+    else:
+        print_title(f"\nLet's create your party of {party_size}!\n")
+
+    # Create character factory
+    factory = CharacterFactory()
+
+    # Get race and class info for display
+    races_data = data_loader.load_races()
+    classes_data = data_loader.load_classes()
+
+    # Create all characters
+    characters = []
+    for i in range(party_size):
+        if party_size > 1:
+            print_section(f"Character {i + 1} of {party_size}")
+
+        # Run character creation
+        character = factory.create_character_interactive(
+            ui=None,
+            data_loader=data_loader
+        )
+
+        race_name = races_data.get(character.race, {}).get("name", character.race)
+        class_name = classes_data.get("fighter", {}).get("name", "Fighter")
+
+        print_status_message(
+            f"Character created: {character.name} ({race_name} {class_name})",
+            "success"
+        )
+        characters.append(character)
+
+    # Display party roster
+    if party_size > 1:
+        roster_lines = []
+        for char in characters:
+            race_name = races_data.get(char.race, {}).get("name", char.race)
+            class_name = classes_data.get("fighter", {}).get("name", "Fighter")
+            roster_lines.append(
+                f"  • {char.name} ({race_name} {class_name}) - "
+                f"HP: {char.max_hp}, AC: {char.ac}"
+            )
+        print_section("PARTY ROSTER", "\n".join(roster_lines))
+
+    return Party(characters=characters)
+
+
 def main() -> None:
     """
     Main entry point for the game.
@@ -150,11 +282,12 @@ def main() -> None:
         5. Initialize data loader
         6. Initialize LLM provider (if enabled)
         7. Create event bus
-        8. Run character creation
-        9. Initialize game state
-        10. Initialize LLM enhancer (if LLM enabled)
-        11. Initialize UI
-        12. Start game loop
+        8. Show save/load menu
+        9. Load existing game OR create new party
+        10. Initialize game state
+        11. Initialize LLM enhancer (if LLM enabled)
+        12. Initialize UI
+        13. Start game loop
     """
     # Load environment variables from .env file
     load_dotenv()
@@ -193,74 +326,49 @@ def main() -> None:
     if llm_provider:
         llm_enhancer = LLMEnhancer(llm_provider, event_bus)
 
-    # Get party size
-    print_section("Party Creation", "How many characters in your party?")
-    party_size = None
-    while party_size is None:
-        try:
-            size_input = print_input_prompt("Enter number (1-4)").strip()
-            size = int(size_input)
-            if 1 <= size <= 4:
-                party_size = size
-            else:
-                print_status_message("Please enter a number between 1 and 4.", "warning")
-        except ValueError:
-            print_status_message("Please enter a valid number.", "warning")
-        except KeyboardInterrupt:
-            raise
-
-    if party_size == 1:
-        print_title("\nLet's create your character!\n")
-    else:
-        print_title(f"\nLet's create your party of {party_size}!\n")
+    # Initialize save manager
+    save_manager = SaveManager()
 
     try:
-        # Create character factory
-        factory = CharacterFactory()
+        # Show save/load menu
+        save_to_load = show_save_load_menu(save_manager)
 
-        # Get race and class info for display
-        races_data = data_loader.load_races()
-        classes_data = data_loader.load_classes()
+        if save_to_load:
+            # Load existing game
+            print_status_message(f"Loading saved game: {save_to_load}", "info")
+            try:
+                game_state = save_manager.load_game(
+                    save_to_load,
+                    event_bus=event_bus,
+                    data_loader=data_loader
+                )
+                print_status_message("Game loaded successfully!", "success")
+            except Exception as e:
+                print_error(f"Failed to load save: {e}")
+                print_status_message("Starting new game instead...", "info")
+                party = create_new_party(args, data_loader)
+                print_input_prompt("Press Enter to begin your adventure")
+                game_state = GameState(
+                    party=party,
+                    dungeon_name=args.dungeon,
+                    event_bus=event_bus,
+                    data_loader=data_loader
+                )
+        else:
+            # Create new party
+            party = create_new_party(args, data_loader)
+            print_input_prompt("Press Enter to begin your adventure")
 
-        # Create all characters
-        characters = []
-        for i in range(party_size):
-            if party_size > 1:
-                print_section(f"Character {i + 1} of {party_size}")
-
-            # Run character creation (CharacterFactory handles all UI)
-            character = factory.create_character_interactive(
-                ui=None,
+            # Initialize game state
+            game_state = GameState(
+                party=party,
+                dungeon_name=args.dungeon,
+                event_bus=event_bus,
                 data_loader=data_loader
             )
 
-            race_name = races_data.get(character.race, {}).get("name", character.race)
-            class_name = classes_data.get("fighter", {}).get("name", "Fighter")
-
-            print_status_message(f"Character created: {character.name} ({race_name} {class_name})", "success")
-            characters.append(character)
-
-        # Display party roster
-        if party_size > 1:
-            roster_lines = []
-            for char in characters:
-                race_name = races_data.get(char.race, {}).get("name", char.race)
-                class_name = classes_data.get("fighter", {}).get("name", "Fighter")
-                roster_lines.append(f"  • {char.name} ({race_name} {class_name}) - HP: {char.max_hp}, AC: {char.ac}")
-            print_section("PARTY ROSTER", "\n".join(roster_lines))
-
-        print_input_prompt("Press Enter to begin your adventure")
-
-        # Create party with all characters
-        party = Party(characters=characters)
-
-        # Initialize game state
-        game_state = GameState(
-            party=party,
-            dungeon_name=args.dungeon,
-            event_bus=event_bus,
-            data_loader=data_loader
-        )
+        # Store save manager in game state for later use
+        game_state.save_manager = save_manager
 
         # Initialize UI
         cli = CLI(game_state)

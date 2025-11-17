@@ -49,6 +49,7 @@ class GameState:
         self.dice_roller = dice_roller or DiceRoller()
 
         # Load dungeon
+        self.dungeon_name = dungeon_name  # Store filename for saving
         self.dungeon = self.data_loader.load_dungeon(dungeon_name)
         self.current_room_id = self.dungeon["start_room"]
 
