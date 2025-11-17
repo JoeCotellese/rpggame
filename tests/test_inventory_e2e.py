@@ -81,7 +81,8 @@ class TestInventoryEndToEnd:
         assert self.player.inventory.get_equipped_item(EquipmentSlot.WEAPON) == "shortsword"
 
         # Verify inventory state
-        assert self.player.inventory.gold == 25
+        # Storage room has 2 gold, 5 silver, 30 copper = 280 cp = 2 gold + 8 silver
+        assert self.player.inventory.gold == 2
         assert self.player.inventory.item_count() == 2
 
     def test_collect_items_from_multiple_rooms(self):
@@ -95,7 +96,10 @@ class TestInventoryEndToEnd:
         items = self.game_state.search_room()
         if items:
             for item in items:
-                if item["type"] == "gold":
+                if item["type"] == "currency":
+                    # Currency is consolidated, so count the gold pieces
+                    total_gold_collected += item.get("gold", 0)
+                elif item["type"] == "gold":
                     total_gold_collected += item["amount"]
                 elif item["type"] == "item":
                     items_collected.add(item["id"])
@@ -108,7 +112,10 @@ class TestInventoryEndToEnd:
         items = self.game_state.search_room()
         if items:
             for item in items:
-                if item["type"] == "gold":
+                if item["type"] == "currency":
+                    # Currency is consolidated, so count the gold pieces
+                    total_gold_collected += item.get("gold", 0)
+                elif item["type"] == "gold":
                     total_gold_collected += item["amount"]
                 elif item["type"] == "item":
                     items_collected.add(item["id"])
@@ -135,7 +142,7 @@ class TestInventoryEndToEnd:
         potion_data = items_data["consumables"]["potion_of_healing"]
 
         # Simulate using potion (roll healing)
-        healing_roll = self.dice_roller.roll(potion_data["amount"])
+        healing_roll = self.dice_roller.roll(potion_data["healing"])
         self.player.heal(healing_roll.total)
 
         # Remove potion from inventory
@@ -381,7 +388,7 @@ class TestInventoryEdgeCases:
 
         items_data = self.game_state.data_loader.load_items()
         potion_data = items_data["consumables"]["potion_of_healing"]
-        healing_roll = self.game_state.dice_roller.roll(potion_data["amount"])
+        healing_roll = self.game_state.dice_roller.roll(potion_data["healing"])
 
         old_hp = self.player.current_hp
         self.player.heal(healing_roll.total)

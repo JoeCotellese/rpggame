@@ -154,7 +154,29 @@ class GameState:
             return items  # No one alive to pick up items
 
         for item in items:
-            if item["type"] == "gold":
+            if item["type"] == "currency":
+                # Handle currency with gold, silver, and copper
+                from dnd_engine.systems.currency import Currency
+                gold = item.get("gold", 0)
+                silver = item.get("silver", 0)
+                copper = item.get("copper", 0)
+
+                currency = Currency(gold=gold, silver=silver, copper=copper)
+                # Split total value evenly among all party members
+                total_cp = currency.to_copper()
+                split_cp = total_cp // len(self.party.characters)
+
+                for character in self.party.characters:
+                    split_currency = Currency()
+                    split_currency._from_copper(split_cp)
+                    character.inventory.currency.add(split_currency)
+
+                # Emit gold acquired event
+                self.event_bus.emit(Event(
+                    type=EventType.GOLD_ACQUIRED,
+                    data={"amount": gold, "silver": silver, "copper": copper}
+                ))
+            elif item["type"] == "gold":
                 amount = item["amount"]
                 # Split gold evenly among all party members (living and dead)
                 split_amount = amount // len(self.party.characters)
