@@ -22,9 +22,11 @@ from dnd_engine.ui.rich_ui import (
     print_message,
     print_section,
     print_input_prompt,
-    console
+    console,
+    init_console
 )
 from dnd_engine.utils.events import EventBus
+from dnd_engine.utils.logging_config import get_logging_config
 
 
 
@@ -71,7 +73,7 @@ Examples:
     parser.add_argument(
         "--debug",
         action="store_true",
-        help="Enable debug logging"
+        help="Enable debug mode with file logging and detailed error traces"
     )
 
     parser.add_argument(
@@ -143,21 +145,35 @@ def main() -> None:
     Flow:
         1. Load environment variables
         2. Parse command-line arguments
-        3. Display banner
-        4. Initialize data loader
-        5. Initialize LLM provider (if enabled)
-        6. Create event bus
-        7. Run character creation
-        8. Initialize game state
-        9. Initialize LLM enhancer (if LLM enabled)
-        10. Initialize UI
-        11. Start game loop
+        3. Initialize debug logging (if enabled)
+        4. Display banner
+        5. Initialize data loader
+        6. Initialize LLM provider (if enabled)
+        7. Create event bus
+        8. Run character creation
+        9. Initialize game state
+        10. Initialize LLM enhancer (if LLM enabled)
+        11. Initialize UI
+        12. Start game loop
     """
     # Load environment variables from .env file
     load_dotenv()
 
     # Parse arguments
     args = parse_arguments()
+
+    # Initialize console with debug logging
+    init_console(debug_mode=args.debug)
+
+    # Display debug mode message if enabled
+    if args.debug:
+        logging_config = get_logging_config()
+        if logging_config and logging_config.get_log_file_path():
+            log_path = logging_config.get_log_file_path()
+            print_status_message(
+                f"Debug mode enabled. Logging to: {log_path}",
+                "info"
+            )
 
     # Display banner
     print_banner("D&D 5E Terminal Adventure", version="0.1.0", color="cyan")

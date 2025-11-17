@@ -125,6 +125,12 @@ class EventBus:
         Args:
             event: The event to emit
         """
+        # Log the event if debug mode is enabled
+        from dnd_engine.utils.logging_config import get_logging_config
+        logging_config = get_logging_config()
+        if logging_config and logging_config.debug_enabled:
+            logging_config.log_event(event.type.name, event.data)
+
         if event.type not in self._subscribers:
             return
 

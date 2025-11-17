@@ -10,9 +10,30 @@ from rich.align import Align
 from rich.progress import Progress, BarColumn, TextColumn
 from rich.style import Style
 from rich import box
+from dnd_engine.utils.logging_config import init_logging, get_logging_config
 
 
+# Global console instance - initialized via init_console()
 console = Console()
+
+
+def init_console(debug_mode: bool = False) -> None:
+    """
+    Initialize the global console with optional debug logging.
+
+    This must be called early in the application startup, before
+    any console output is generated.
+
+    Args:
+        debug_mode: Whether to enable debug mode with file logging
+    """
+    global console
+
+    # Initialize logging config
+    logging_config = init_logging(debug_mode)
+
+    # Create console (will be dual-output if debug enabled)
+    console = logging_config.create_console()
 
 
 def print_title(title: str, subtitle: Optional[str] = None) -> None:

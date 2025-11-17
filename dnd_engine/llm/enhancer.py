@@ -3,6 +3,7 @@
 
 import asyncio
 import threading
+import time
 from typing import Dict, Optional
 
 from ..utils.events import Event, EventBus, EventType
@@ -147,9 +148,22 @@ class LLMEnhancer:
         if self.cache is not None and cache_key in self.cache:
             enhanced = self.cache[cache_key]
         else:
-            # Generate enhancement
+            # Generate enhancement with timing
             prompt = build_room_description_prompt(room_data)
+            start_time = time.time()
             enhanced = await self.provider.generate(prompt)
+            latency_ms = (time.time() - start_time) * 1000
+
+            # Log LLM call
+            from ..utils.logging_config import get_logging_config
+            logging_config = get_logging_config()
+            if logging_config:
+                logging_config.log_llm_call(
+                    prompt_type="room_description",
+                    latency_ms=latency_ms,
+                    response_length=len(enhanced) if enhanced else 0,
+                    success=bool(enhanced)
+                )
 
             # Fallback if generation failed
             if not enhanced:
@@ -177,7 +191,22 @@ class LLMEnhancer:
 
         action_data = event.data
         prompt = build_combat_action_prompt(action_data)
+
+        # Time the LLM call
+        start_time = time.time()
         enhanced = await self.provider.generate(prompt, temperature=0.8)
+        latency_ms = (time.time() - start_time) * 1000
+
+        # Log LLM call
+        from ..utils.logging_config import get_logging_config
+        logging_config = get_logging_config()
+        if logging_config:
+            logging_config.log_llm_call(
+                prompt_type="combat_action",
+                latency_ms=latency_ms,
+                response_length=len(enhanced) if enhanced else 0,
+                success=bool(enhanced)
+            )
 
         # Fallback
         if not enhanced:
@@ -204,7 +233,22 @@ class LLMEnhancer:
 
         combat_data = event.data
         prompt = build_victory_prompt(combat_data)
+
+        # Time the LLM call
+        start_time = time.time()
         enhanced = await self.provider.generate(prompt)
+        latency_ms = (time.time() - start_time) * 1000
+
+        # Log LLM call
+        from ..utils.logging_config import get_logging_config
+        logging_config = get_logging_config()
+        if logging_config:
+            logging_config.log_llm_call(
+                prompt_type="victory",
+                latency_ms=latency_ms,
+                response_length=len(enhanced) if enhanced else 0,
+                success=bool(enhanced)
+            )
 
         # Fallback
         if not enhanced:
@@ -227,7 +271,22 @@ class LLMEnhancer:
 
         character_data = event.data
         prompt = build_death_prompt(character_data)
+
+        # Time the LLM call
+        start_time = time.time()
         enhanced = await self.provider.generate(prompt, temperature=0.6)
+        latency_ms = (time.time() - start_time) * 1000
+
+        # Log LLM call
+        from ..utils.logging_config import get_logging_config
+        logging_config = get_logging_config()
+        if logging_config:
+            logging_config.log_llm_call(
+                prompt_type="death",
+                latency_ms=latency_ms,
+                response_length=len(enhanced) if enhanced else 0,
+                success=bool(enhanced)
+            )
 
         # Fallback
         if not enhanced:

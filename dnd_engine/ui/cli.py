@@ -270,6 +270,16 @@ class CLI:
                 print_status_message(f"Available targets: {', '.join(living_enemies)}", "info")
             return
 
+        # Log player action
+        from dnd_engine.utils.logging_config import get_logging_config
+        logging_config = get_logging_config()
+        if logging_config:
+            logging_config.log_player_action(
+                character=attacker.name,
+                action="attack",
+                details=f"target={target.name}"
+            )
+
         # Perform attack
         result = self.game_state.combat_engine.resolve_attack(
             attacker=attacker,
@@ -640,6 +650,18 @@ class CLI:
         enemies = event.data.get("enemies", [])
         print_status_message(f"Combat begins! Enemies: {', '.join(enemies)}", "warning")
 
+        # Log combat start with initiative order
+        from dnd_engine.utils.logging_config import get_logging_config
+        logging_config = get_logging_config()
+        if logging_config and self.game_state.initiative_tracker:
+            # Build initiative order string
+            combatants = self.game_state.initiative_tracker.get_all_combatants()
+            init_order = ", ".join(
+                f"{entry.creature.name}({entry.initiative_total})"
+                for entry in combatants
+            )
+            logging_config.log_combat_event(f"Combat started - Initiative order: {init_order}")
+
     def _on_combat_end(self, event: Event) -> None:
         """Handle combat end event."""
         total_xp = event.data.get("xp_gained", 0)
@@ -648,6 +670,14 @@ class CLI:
             f"Victory! Party gained {total_xp} XP ({xp_per_char} XP per character)",
             "success"
         )
+
+        # Log combat end
+        from dnd_engine.utils.logging_config import get_logging_config
+        logging_config = get_logging_config()
+        if logging_config:
+            logging_config.log_combat_event(
+                f"Combat ended - Total XP: {total_xp}, XP per character: {xp_per_char}"
+            )
 
     def _on_damage_dealt(self, event: Event) -> None:
         """Handle damage dealt event (currently just passes through)."""

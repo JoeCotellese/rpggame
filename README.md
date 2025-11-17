@@ -156,9 +156,65 @@ dnd-game --llm-provider none        # Disable LLM
 dnd-game --dungeon goblin_warren    # Default dungeon
 dnd-game --dungeon crypt            # Alternative dungeon
 
-# Enable debug logging
+# Enable debug mode with file logging
 dnd-game --debug
 ```
+
+## Debug Mode
+
+The `--debug` flag enables comprehensive file logging for troubleshooting and analysis:
+
+### Features
+
+- **Dual Output**: All console output is written to both the terminal and a log file
+- **Structured Logging**: Events, dice rolls, LLM calls, combat actions, and player inputs are logged with timestamps
+- **Log Rotation**: Automatically keeps the last 10 log files, deleting older ones
+- **Plain Text Format**: Log files are human-readable plain text (ANSI codes stripped)
+- **UTF-8 Encoding**: Full support for unicode characters and special symbols
+
+### Log File Location
+
+When debug mode is enabled, log files are created in the `logs/` directory with the pattern:
+```
+logs/dnd_game_YYYYMMDD_HHMMSS.log
+```
+
+Example: `logs/dnd_game_20250117_143052.log`
+
+### What Gets Logged
+
+Debug mode captures:
+
+- **[EVENT]** All game events (combat start/end, damage dealt, items acquired, etc.) with event counter and metadata
+- **[DICE]** Every dice roll with notation, individual rolls, modifiers, and totals (e.g., `1d20+5 → [15] + 5 = 20`)
+- **[LLM]** LLM API calls with prompt type, latency, response length, and success/failure status
+- **[COMBAT]** Combat events including initiative order, round transitions, and victory/defeat
+- **[PLAYER]** Player actions and inputs (movement, attacks, item usage)
+
+### Example Log Output
+
+```
+[2025-01-17 14:30:45] [INFO] dnd_engine.events: [EVENT #001] COMBAT_START: {enemies=['Goblin', 'Orc']}
+[2025-01-17 14:30:45] [INFO] dnd_engine.combat: [COMBAT] Combat started - Initiative order: Aragorn(18), Goblin(12), Orc(8)
+[2025-01-17 14:30:52] [INFO] dnd_engine.player: [PLAYER] Aragorn: attack (target=Goblin)
+[2025-01-17 14:30:52] [INFO] dnd_engine.dice: [DICE] 1d20+5 → [15] + 5 = 20
+[2025-01-17 14:30:52] [INFO] dnd_engine.dice: [DICE] 1d8+3 → [6] + 3 = 9
+[2025-01-17 14:30:52] [INFO] dnd_engine.events: [EVENT #002] DAMAGE_DEALT: {attacker=Aragorn, defender=Goblin, damage=9}
+[2025-01-17 14:30:53] [INFO] dnd_engine.llm: [LLM] combat_action - SUCCESS - 245ms - 87 chars
+```
+
+### Troubleshooting with Debug Logs
+
+When reporting issues:
+
+1. Run the game with `--debug` flag
+2. Reproduce the issue
+3. Locate the log file in the `logs/` directory
+4. Attach the log file to your bug report
+
+### Performance
+
+Debug mode uses buffered file I/O and should not noticeably impact game performance. If file writes fail, the game continues without crashing.
 
 ## Usage Examples
 
