@@ -1,10 +1,14 @@
 {
   "goblin": {
     "name": "Goblin",
+    "source": "D&D 5E SRD (CC BY 4.0)",
     "size": "small",
-    "type": "humanoid",
+    "type": "humanoid (goblinoid)",
+    "alignment": "neutral evil",
     "ac": 15,
+    "ac_source": "leather armor, shield",
     "hp": "2d6",
+    "hp_average": 7,
     "speed": 30,
     "abilities": {
       "str": 8,
@@ -14,82 +18,115 @@
       "wis": 8,
       "cha": 8
     },
+    "skills": {
+      "stealth": 6
+    },
+    "senses": "darkvision 60 ft., passive Perception 9",
+    "languages": ["Common", "Goblin"],
+    "cr": "1/4",
+    "xp": 50,
+    "traits": [
+      {
+        "name": "Nimble Escape",
+        "description": "The goblin can take the Disengage or Hide action as a bonus action on each of its turns."
+      }
+    ],
     "actions": [
       {
         "name": "Scimitar",
         "type": "melee-weapon-attack",
         "attack_bonus": 4,
+        "reach": "5 ft.",
         "damage": "1d6+2",
+        "damage_average": 5,
         "damage_type": "slashing"
-      }
-    ],
-    "xp": 50
-  },
-  "bandit": {
-    "name": "Bandit",
-    "size": "medium",
-    "type": "humanoid",
-    "ac": 12,
-    "hp": "2d8+2",
-    "speed": 30,
-    "abilities": {
-      "str": 11,
-      "dex": 12,
-      "con": 12,
-      "int": 10,
-      "wis": 10,
-      "cha": 10
-    },
-    "actions": [
+      },
       {
-        "name": "Scimitar",
-        "type": "melee-weapon-attack",
-        "attack_bonus": 3,
-        "damage": "1d6+1",
-        "damage_type": "slashing"
+        "name": "Shortbow",
+        "type": "ranged-weapon-attack",
+        "attack_bonus": 4,
+        "range": "80/320 ft.",
+        "damage": "1d6+2",
+        "damage_average": 5,
+        "damage_type": "piercing"
       }
-    ],
-    "xp": 25
+    ]
   },
   "goblin_boss": {
     "name": "Goblin Boss",
+    "source": "D&D 5E SRD (CC BY 4.0)",
     "size": "small",
-    "type": "humanoid",
+    "type": "humanoid (goblinoid)",
+    "alignment": "neutral evil",
     "ac": 17,
-    "hp": "6d6+12",
+    "ac_source": "chain shirt, shield",
+    "hp": "6d6",
+    "hp_average": 21,
     "speed": 30,
     "abilities": {
       "str": 10,
       "dex": 14,
-      "con": 14,
+      "con": 10,
       "int": 10,
       "wis": 8,
       "cha": 10
     },
+    "skills": {
+      "stealth": 6
+    },
+    "senses": "darkvision 60 ft., passive Perception 9",
+    "languages": ["Common", "Goblin"],
+    "cr": "1",
+    "xp": 200,
+    "is_boss": true,
+    "traits": [
+      {
+        "name": "Nimble Escape",
+        "description": "The goblin can take the Disengage or Hide action as a bonus action on each of its turns."
+      }
+    ],
     "actions": [
+      {
+        "name": "Multiattack",
+        "description": "The goblin makes two scimitar attacks. The second attack has disadvantage."
+      },
       {
         "name": "Scimitar",
         "type": "melee-weapon-attack",
         "attack_bonus": 4,
+        "reach": "5 ft.",
         "damage": "1d6+2",
+        "damage_average": 5,
         "damage_type": "slashing"
       },
       {
         "name": "Javelin",
-        "type": "melee-weapon-attack",
-        "attack_bonus": 4,
-        "damage": "1d6+2",
+        "type": "melee-or-ranged-weapon-attack",
+        "attack_bonus": 2,
+        "reach": "5 ft.",
+        "range": "30/120 ft.",
+        "damage": "1d6",
+        "damage_average": 3,
         "damage_type": "piercing"
       }
     ],
-    "xp": 200
+    "reactions": [
+      {
+        "name": "Redirect Attack",
+        "description": "When a creature the goblin boss can see targets it with an attack, the goblin chooses another goblin within 5 feet of it. The two goblins swap places, and the chosen goblin becomes the target instead."
+      }
+    ]
   },
   "wolf": {
     "name": "Wolf",
+    "source": "D&D 5E SRD (CC BY 4.0)",
     "size": "medium",
     "type": "beast",
+    "alignment": "unaligned",
     "ac": 13,
+    "ac_source": "natural armor",
     "hp": "2d8+2",
+    "hp_average": 11,
     "speed": 40,
     "abilities": {
       "str": 12,
@@ -99,15 +136,35 @@
       "wis": 12,
       "cha": 6
     },
+    "skills": {
+      "perception": 3,
+      "stealth": 4
+    },
+    "senses": "passive Perception 13",
+    "languages": [],
+    "cr": "1/4",
+    "xp": 50,
+    "traits": [
+      {
+        "name": "Keen Hearing and Smell",
+        "description": "The wolf has advantage on Wisdom (Perception) checks that rely on hearing or smell."
+      },
+      {
+        "name": "Pack Tactics",
+        "description": "The wolf has advantage on attack rolls against a creature if at least one of the wolf's allies is within 5 feet of the creature and the ally isn't incapacitated."
+      }
+    ],
     "actions": [
       {
         "name": "Bite",
         "type": "melee-weapon-attack",
         "attack_bonus": 4,
+        "reach": "5 ft.",
         "damage": "2d4+2",
-        "damage_type": "piercing"
+        "damage_average": 7,
+        "damage_type": "piercing",
+        "special": "Target must succeed on a DC 11 Strength saving throw or be knocked prone."
       }
-    ],
-    "xp": 50
+    ]
   }
 }
