@@ -15,7 +15,22 @@
       "Bash(uv run pytest:*)",
       "Bash(git commit:*)",
       "Bash(git push:*)",
-      "Bash(git fetch:*)"
+      "Bash(git fetch:*)",
+      "Bash(uv run python:*)",
+      "Bash(find:*)",
+      "Bash(Returns penalty for wearing non-proficient armor.)",
+      "Bash(__NEW_LINE__ Returns: \"none\", \"disadvantage_on_ability_checks\", or \"cannot_cast_spells\")",
+      "Bash(Generic resource pool for tracking limited-use abilities.)",
+      "Bash(__NEW_LINE__ Examples:)",
+      "Bash(\"\"\"\n    name: str\n    current: int\n    maximum: int\n    recovery_type: str  # \"short_rest\", \"long_rest\", \"daily\", \"permanent\"\n    \n    def use(self, amount: int = 1) -> bool:\n        \"\"\")",
+      "Bash(Use resources from the pool.)",
+      "Bash(__NEW_LINE__ Returns: True if successful, False if insufficient resources)",
+      "Bash(\"\"\"\n        if self.current >= amount:\n            self.current -= amount\n            return True\n        return False\n    \n    def recover(self, amount: Optional[int] = None) -> int:\n        \"\"\")",
+      "Bash(Recover resources. If amount is None, recover all.)",
+      "Bash(__NEW_LINE__ Returns: Amount actually recovered)",
+      "Bash(gh pr view:*)",
+      "Bash(git pull:*)",
+      "Bash(gh pr list:*)"
     ],
     "deny": [],
     "ask": []

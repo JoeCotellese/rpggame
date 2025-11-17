@@ -40,14 +40,16 @@ class Character(Creature):
         race: str = "human",
         saving_throw_proficiencies: Optional[List[str]] = None,
         skill_proficiencies: Optional[list[str]] = None,
-        expertise_skills: Optional[List[str]] = None
+        expertise_skills: Optional[List[str]] = None,
+        weapon_proficiencies: Optional[List[str]] = None,
+        armor_proficiencies: Optional[List[str]] = None
     ):
         """
         Initialize a player character.
 
         Args:
             name: Character's name
-            character_class: Character class (Fighter for MVP)
+            character_class: Character class (Fighter, Rogue, etc.)
             level: Character level (1-3 for MVP)
             abilities: Ability scores
             max_hp: Maximum hit points
@@ -58,6 +60,9 @@ class Character(Creature):
             race: Character race (human, mountain_dwarf, high_elf, halfling)
             saving_throw_proficiencies: List of abilities the character is proficient in saving throws for (e.g., ["str", "con"])
             skill_proficiencies: List of skill names the character is proficient in
+            expertise_skills: List of skills with expertise (doubled proficiency bonus)
+            weapon_proficiencies: List of weapon types the character is proficient in (e.g., ["simple", "martial"])
+            armor_proficiencies: List of armor types the character is proficient in (e.g., ["light", "medium", "heavy", "shields"])
         """
         super().__init__(
             name=name,
@@ -75,6 +80,8 @@ class Character(Creature):
         self.saving_throw_proficiencies = saving_throw_proficiencies if saving_throw_proficiencies is not None else []
         self.skill_proficiencies = skill_proficiencies if skill_proficiencies is not None else []
         self.expertise_skills = expertise_skills if expertise_skills is not None else []
+        self.weapon_proficiencies = weapon_proficiencies if weapon_proficiencies is not None else []
+        self.armor_proficiencies = armor_proficiencies if armor_proficiencies is not None else []
         self._dice_roller = DiceRoller()
 
     @property
@@ -301,12 +308,15 @@ class Character(Creature):
         Determines the correct attack type (STR melee, DEX ranged, or finesse)
         based on the weapon's properties and applies the appropriate modifier.
 
+        Includes proficiency bonus only if character is proficient with the weapon.
+        If not proficient, returns just the ability modifier without proficiency bonus.
+
         Args:
             weapon_id: ID of the weapon (e.g., "longsword", "longbow")
             items_data: Dictionary of all items data from items.json
 
         Returns:
-            Attack bonus for the weapon (includes proficiency bonus)
+            Attack bonus for the weapon (includes proficiency bonus only if proficient)
 
         Raises:
             KeyError: If weapon_id doesn't exist in items_data
@@ -319,16 +329,25 @@ class Character(Creature):
         properties = weapon_data.get("properties", [])
         category = weapon_data.get("category", "melee")
 
-        # Determine attack type based on weapon properties
+        # Check if character is proficient with this weapon
+        is_proficient = self.is_proficient_with_weapon(weapon_id, items_data)
+
+        # Determine attack type and base ability modifier
         if "finesse" in properties:
             # Finesse weapon: use highest of STR or DEX
-            return self.finesse_attack_bonus
+            ability_mod = max(self.abilities.str_mod, self.abilities.dex_mod)
         elif category == "ranged":
             # Ranged weapon: use DEX
-            return self.ranged_attack_bonus
+            ability_mod = self.abilities.dex_mod
         else:
             # Standard melee (STR): use STR
-            return self.melee_attack_bonus
+            ability_mod = self.abilities.str_mod
+
+        # Add proficiency bonus only if proficient
+        if is_proficient:
+            return ability_mod + self.proficiency_bonus
+        else:
+            return ability_mod
 
     def get_damage_bonus(self, weapon_id: str, items_data: dict) -> int:
         """
@@ -365,6 +384,58 @@ class Character(Creature):
         else:
             # Standard melee: use STR
             return self.abilities.str_mod
+
+    def is_proficient_with_weapon(self, weapon_id: str, items_data: dict) -> bool:
+        """
+        Check if character is proficient with a weapon.
+
+        A character is proficient with a weapon if either:
+        1. The weapon's type (simple or martial) is in the weapon_proficiencies list, OR
+        2. The specific weapon name (e.g., "rapiers", "longswords") is in the list
+
+        Args:
+            weapon_id: ID of the weapon (e.g., "longsword", "dagger")
+            items_data: Dictionary of all items data from items.json
+
+        Returns:
+            True if character is proficient with the weapon, False otherwise
+
+        Raises:
+            KeyError: If weapon_id doesn't exist in items_data
+        """
+        weapon_data = items_data.get("weapons", {}).get(weapon_id)
+        if not weapon_data:
+            raise KeyError(f"Weapon '{weapon_id}' not found in items data")
+
+        weapon_type = weapon_data.get("weapon_type", "")
+        # Check both weapon type (e.g., "martial") and specific weapon name (e.g., "rapiers")
+        # Convert weapon_id to plural form for comparison (e.g., "rapier" -> "rapiers")
+        weapon_name_plural = f"{weapon_id}s" if not weapon_id.endswith('s') else weapon_id
+        return weapon_type in self.weapon_proficiencies or weapon_name_plural in self.weapon_proficiencies
+
+    def is_proficient_with_armor(self, armor_id: str, items_data: dict) -> bool:
+        """
+        Check if character is proficient with armor.
+
+        A character is proficient with armor if the armor's type (light, medium, heavy)
+        or "shields" is in the character's armor_proficiencies list.
+
+        Args:
+            armor_id: ID of the armor (e.g., "chain_mail", "leather")
+            items_data: Dictionary of all items data from items.json
+
+        Returns:
+            True if character is proficient with the armor, False otherwise
+
+        Raises:
+            KeyError: If armor_id doesn't exist in items_data
+        """
+        armor_data = items_data.get("armor", {}).get(armor_id)
+        if not armor_data:
+            raise KeyError(f"Armor '{armor_id}' not found in items data")
+
+        armor_type = armor_data.get("armor_type", "")
+        return armor_type in self.armor_proficiencies
 
     def gain_xp(self, amount: int) -> None:
         """

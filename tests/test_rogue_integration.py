@@ -260,7 +260,9 @@ class TestRogueInCombat:
             level=1,
             abilities=abilities,
             max_hp=8,
-            ac=14
+            ac=14,
+            weapon_proficiencies=["simple", "hand_crossbows", "longswords", "rapiers", "shortswords"],
+            armor_proficiencies=["light"]
         )
 
         # Get rapier attack bonus (finesse weapon)

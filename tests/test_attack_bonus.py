@@ -31,7 +31,9 @@ def fighter_str_high():
         level=1,
         abilities=abilities,
         max_hp=12,
-        ac=10
+        ac=10,
+        weapon_proficiencies=["simple", "martial"],
+        armor_proficiencies=["light", "medium", "heavy", "shields"]
     )
 
 
@@ -52,7 +54,9 @@ def fighter_dex_high():
         level=1,
         abilities=abilities,
         max_hp=12,
-        ac=10
+        ac=10,
+        weapon_proficiencies=["simple", "martial"],
+        armor_proficiencies=["light", "medium", "heavy", "shields"]
     )
 
 
@@ -73,7 +77,9 @@ def fighter_both_high():
         level=1,
         abilities=abilities,
         max_hp=12,
-        ac=10
+        ac=10,
+        weapon_proficiencies=["simple", "martial"],
+        armor_proficiencies=["light", "medium", "heavy", "shields"]
     )
 
 

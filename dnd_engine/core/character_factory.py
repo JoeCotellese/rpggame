@@ -645,6 +645,10 @@ class CharacterFactory:
         # Get the CharacterClass enum value from the selected class_choice
         character_class_enum = CharacterClass[class_choice.upper()]
 
+        # Get weapon and armor proficiencies from class data
+        weapon_proficiencies = class_data.get("weapon_proficiencies", [])
+        armor_proficiencies = class_data.get("armor_proficiencies", [])
+
         character = Character(
             name=name,
             character_class=character_class_enum,
@@ -654,7 +658,9 @@ class CharacterFactory:
             ac=ac,
             xp=0,
             skill_proficiencies=skill_proficiencies,
-            expertise_skills=expertise_skills
+            expertise_skills=expertise_skills,
+            weapon_proficiencies=weapon_proficiencies,
+            armor_proficiencies=armor_proficiencies
         )
 
         # Store race (will add field to Character class)
@@ -708,6 +714,17 @@ class CharacterFactory:
             modifier = self.calculate_ability_modifier(score)
             sign = "+" if modifier >= 0 else ""
             sheet_display.append(f"  {ability.upper()[:3]}: {score} ({sign}{modifier})")
+
+        # Add weapon and armor proficiencies to sheet
+        if weapon_proficiencies or armor_proficiencies:
+            sheet_display.append("")
+            sheet_display.append("PROFICIENCIES:")
+            if weapon_proficiencies:
+                weapon_types = ", ".join([t.title() for t in weapon_proficiencies])
+                sheet_display.append(f"  Weapons: {weapon_types}")
+            if armor_proficiencies:
+                armor_types = ", ".join([t.title() for t in armor_proficiencies])
+                sheet_display.append(f"  Armor: {armor_types}")
 
         # Add skill proficiencies to sheet
         if skill_proficiencies:

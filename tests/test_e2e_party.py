@@ -28,7 +28,9 @@ def default_party():
         ),
         max_hp=12,
         ac=16,
-        xp=0
+        xp=0,
+        weapon_proficiencies=["simple", "martial"],
+        armor_proficiencies=["light", "medium", "heavy", "shields"]
     )
 
     bjorn = Character(
@@ -45,7 +47,9 @@ def default_party():
         ),
         max_hp=12,
         ac=16,
-        xp=0
+        xp=0,
+        weapon_proficiencies=["simple", "martial"],
+        armor_proficiencies=["light", "medium", "heavy", "shields"]
     )
 
     eldric = Character(
@@ -62,7 +66,9 @@ def default_party():
         ),
         max_hp=11,
         ac=16,
-        xp=0
+        xp=0,
+        weapon_proficiencies=["simple", "martial"],
+        armor_proficiencies=["light", "medium", "heavy", "shields"]
     )
 
     gareth = Character(
@@ -79,7 +85,9 @@ def default_party():
         ),
         max_hp=13,
         ac=16,
-        xp=0
+        xp=0,
+        weapon_proficiencies=["simple", "martial"],
+        armor_proficiencies=["light", "medium", "heavy", "shields"]
     )
 
     return Party(characters=[thorin, bjorn, eldric, gareth])

@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
   "metadata": {
-    "created": "2025-11-17T08:30:25.148692",
-    "last_played": "2025-11-17T08:55:21.158516",
+    "created": "2025-11-17T11:37:26.094523",
+    "last_played": "2025-11-17T11:39:04.136041",
     "auto_save": true
   },
   "party": [
@@ -205,7 +205,7 @@
   ],
   "game_state": {
     "dungeon_name": "goblin_warren",
-    "current_room_id": "throne_room",
+    "current_room_id": "entrance",
     "dungeon_state": {
       "entrance": {
         "searched": false,

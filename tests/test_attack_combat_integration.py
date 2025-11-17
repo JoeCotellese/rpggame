@@ -43,7 +43,9 @@ def dex_fighter():
         level=1,
         abilities=abilities,
         max_hp=12,
-        ac=10
+        ac=10,
+        weapon_proficiencies=["simple", "martial"],
+        armor_proficiencies=["light", "medium", "heavy", "shields"]
     )
     # Equip longbow
     fighter.inventory.add_item("longbow", "weapons", 1)
@@ -68,7 +70,9 @@ def str_fighter():
         level=1,
         abilities=abilities,
         max_hp=12,
-        ac=10
+        ac=10,
+        weapon_proficiencies=["simple", "martial"],
+        armor_proficiencies=["light", "medium", "heavy", "shields"]
     )
     # Equip longsword
     fighter.inventory.add_item("longsword", "weapons", 1)
@@ -93,7 +97,9 @@ def finesse_fighter():
         level=1,
         abilities=abilities,
         max_hp=12,
-        ac=10
+        ac=10,
+        weapon_proficiencies=["simple", "martial"],
+        armor_proficiencies=["light", "medium", "heavy", "shields"]
     )
     # Equip rapier (doesn't exist in items.json but shortsword is finesse)
     fighter.inventory.add_item("shortsword", "weapons", 1)
