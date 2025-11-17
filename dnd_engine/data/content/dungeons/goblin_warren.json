@@ -58,7 +58,7 @@
     },
     "main_hall": {
       "name": "Main Hall",
-      "description": "A large cavern lit by a central fire pit. Crude beds and cooking implements suggest this is where the goblins live.",
+      "description": "A large cavern lit by a central fire pit. Crude beds and cooking implements suggest this is where the goblins live. From the north passage, you hear a harsh voice barking orders and the sound of something heavy being dragged across stone.",
       "exits": {
         "south": "guard_post",
         "west": "prison",
@@ -77,7 +77,7 @@
     },
     "prison": {
       "name": "Prison Cell",
-      "description": "Iron bars separate a small cell from the main passage. The cell appears empty now, but old bloodstains tell grim stories.",
+      "description": "Iron bars separate a small cell from the main passage. The cell appears empty now, but old bloodstains tell grim stories. The iron bars and single narrow entrance make this room easily defensible - a good place to catch your breath.",
       "exits": {
         "east": "main_hall"
       },
@@ -89,15 +89,16 @@
         }
       ],
       "searched": false,
-      "searchable": true
+      "searchable": true,
+      "safe_rest": true
     },
     "throne_room": {
       "name": "Throne Room",
-      "description": "A grotesque throne made from bones and scrap metal dominates this chamber. The goblin boss sits here, surrounded by his most loyal guards.",
+      "description": "A grotesque throne made from bones and scrap metal dominates this chamber. The goblin boss lounges here, idly sharpening his scimitar. It seems his guards are elsewhere at the moment.",
       "exits": {
         "south": "main_hall"
       },
-      "enemies": ["goblin_boss", "goblin"],
+      "enemies": ["goblin_boss"],
       "items": [
         {
           "type": "currency",

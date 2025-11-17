@@ -175,6 +175,12 @@ class LLMEnhancer:
         if not self.provider:
             return
 
+        # Emit started event immediately
+        self.event_bus.emit(Event(
+            EventType.ENHANCEMENT_STARTED,
+            {"type": "combat"}
+        ))
+
         action_data = event.data
         prompt = build_combat_action_prompt(action_data)
         enhanced = await self.provider.generate(prompt, temperature=0.8)
@@ -224,6 +230,12 @@ class LLMEnhancer:
         """
         if not self.provider:
             return
+
+        # Emit started event immediately
+        self.event_bus.emit(Event(
+            EventType.ENHANCEMENT_STARTED,
+            {"type": "death"}
+        ))
 
         character_data = event.data
         prompt = build_death_prompt(character_data)

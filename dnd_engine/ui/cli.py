@@ -20,7 +20,10 @@ from dnd_engine.ui.rich_ui import (
     print_title,
     print_message,
     print_section,
-    print_list
+    print_list,
+    print_mechanics_panel,
+    print_narrative_loading,
+    print_narrative_panel
 )
 
 
@@ -44,6 +47,7 @@ class CLI:
         """
         self.game_state = game_state
         self.running = True
+        self.narrative_pending = False
 
         # Subscribe to game events for display
         self.game_state.event_bus.subscribe(EventType.COMBAT_START, self._on_combat_start)
@@ -51,6 +55,7 @@ class CLI:
         self.game_state.event_bus.subscribe(EventType.DAMAGE_DEALT, self._on_damage_dealt)
         self.game_state.event_bus.subscribe(EventType.ITEM_ACQUIRED, self._on_item_acquired)
         self.game_state.event_bus.subscribe(EventType.GOLD_ACQUIRED, self._on_gold_acquired)
+        self.game_state.event_bus.subscribe(EventType.ENHANCEMENT_STARTED, self._on_enhancement_started)
         self.game_state.event_bus.subscribe(EventType.DESCRIPTION_ENHANCED, self._on_description_enhanced)
 
     def display_banner(self) -> None:
@@ -279,8 +284,8 @@ class CLI:
             apply_damage=True
         )
 
-        # Display result
-        print_message(f"\n{result}")
+        # Display mechanics in panel
+        print_mechanics_panel(str(result))
 
         # Emit damage event
         if result.hit:
@@ -361,7 +366,7 @@ class CLI:
                     apply_damage=True
                 )
 
-                print_message(str(result))
+                print_mechanics_panel(str(result))
 
                 if result.hit:
                     self.game_state.event_bus.emit(Event(
@@ -663,24 +668,29 @@ class CLI:
         # Events are already displayed during search, so we can pass
         pass
 
+    def _on_enhancement_started(self, event: Event) -> None:
+        """Handle LLM enhancement started event."""
+        description_type = event.data.get("type", "unknown")
+
+        # Only show loading for combat actions (not room descriptions)
+        if description_type == "combat":
+            self.narrative_pending = True
+            print_narrative_loading()
+
     def _on_description_enhanced(self, event: Event) -> None:
         """Handle LLM-enhanced description event."""
         description_type = event.data.get("type", "unknown")
         text = event.data.get("text", "")
 
         if text:
-            # Display enhanced descriptions with appropriate styling
-            from rich.markdown import Markdown
-            from dnd_engine.ui.rich_ui import console
-
-            # Display in a panel for visual separation
-            if description_type == "room":
+            # Display enhanced descriptions in appropriate panels
+            if description_type == "combat" or description_type == "death" or description_type == "victory":
+                # Use narrative panel for combat-related narratives
+                self.narrative_pending = False
+                print_narrative_panel(text)
+            elif description_type == "room":
+                # Room descriptions use the old style for now
+                from rich.markdown import Markdown
                 console.print(Markdown(text), style="cyan")
-            elif description_type == "combat":
-                console.print(Markdown(text), style="yellow")
-            elif description_type == "victory":
-                console.print(Markdown(text), style="green bold")
-            elif description_type == "death":
-                console.print(Markdown(text), style="red bold")
             else:
                 console.print(text)
