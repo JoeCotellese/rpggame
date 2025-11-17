@@ -7,6 +7,7 @@ from typing import Any, Optional
 from .anthropic_provider import AnthropicProvider
 from .base import LLMProvider
 from .openai_provider import OpenAIProvider
+from dnd_engine.ui.rich_ui import print_status_message
 
 
 def create_llm_provider(
@@ -44,7 +45,7 @@ def create_llm_provider(
     if provider_name == "openai":
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
-            print("Warning: OPENAI_API_KEY not set, LLM disabled")
+            print_status_message("OPENAI_API_KEY not set, LLM disabled", "warning")
             return None
 
         model = kwargs.get("model") or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
@@ -62,7 +63,7 @@ def create_llm_provider(
     elif provider_name == "anthropic":
         api_key = os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
-            print("Warning: ANTHROPIC_API_KEY not set, LLM disabled")
+            print_status_message("ANTHROPIC_API_KEY not set, LLM disabled", "warning")
             return None
 
         model = kwargs.get("model") or os.getenv(
@@ -81,5 +82,5 @@ def create_llm_provider(
 
     # Unknown provider
     else:
-        print(f"Warning: Unknown LLM provider '{provider_name}', LLM disabled")
+        print_status_message(f"Unknown LLM provider '{provider_name}', LLM disabled", "warning")
         return None

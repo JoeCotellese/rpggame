@@ -7,6 +7,7 @@ from typing import Optional
 from openai import AsyncOpenAI
 
 from .base import LLMProvider
+from dnd_engine.ui.rich_ui import print_status_message, print_error
 
 
 class OpenAIProvider(LLMProvider):
@@ -76,10 +77,10 @@ class OpenAIProvider(LLMProvider):
             return response.choices[0].message.content.strip()
 
         except asyncio.TimeoutError:
-            print(f"OpenAI request timed out after {self.timeout}s")
+            print_status_message(f"OpenAI request timed out after {self.timeout}s", "warning")
             return None
         except Exception as e:
-            print(f"OpenAI API error: {e}")
+            print_error(f"OpenAI API error: {e}")
             return None
 
     def get_provider_name(self) -> str:

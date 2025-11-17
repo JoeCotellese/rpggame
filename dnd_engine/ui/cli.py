@@ -17,7 +17,10 @@ from dnd_engine.ui.rich_ui import (
     print_error,
     print_room_description,
     print_help_section,
-    print_title
+    print_title,
+    print_message,
+    print_section,
+    print_list
 )
 
 
@@ -230,7 +233,7 @@ class CLI:
     def handle_attack(self, target_name: str) -> None:
         """Handle attack command during combat."""
         if not self.game_state.in_combat:
-            print("You're not in combat!")
+            print_error("You're not in combat!")
             return
 
         # Check if it's a party member's turn
@@ -246,11 +249,11 @@ class CLI:
             enemy_turn = False
             for enemy in self.game_state.active_enemies:
                 if current.creature == enemy:
-                    print(f"It's {current.creature.name}'s turn, not a party member's!")
+                    print_status_message(f"It's {current.creature.name}'s turn, not a party member's!", "warning")
                     enemy_turn = True
                     break
             if not enemy_turn:
-                print(f"It's not a valid combatant's turn!")
+                print_status_message(f"It's not a valid combatant's turn!", "warning")
             return
 
         # Find target
@@ -261,10 +264,10 @@ class CLI:
                 break
 
         if not target:
-            print(f"No such enemy: {target_name}")
+            print_error(f"No such enemy: {target_name}")
             living_enemies = [e.name for e in self.game_state.active_enemies if e.is_alive]
             if living_enemies:
-                print(f"Available targets: {', '.join(living_enemies)}")
+                print_status_message(f"Available targets: {', '.join(living_enemies)}", "info")
             return
 
         # Perform attack
@@ -277,7 +280,7 @@ class CLI:
         )
 
         # Display result
-        print(f"\n{result}")
+        print_message(f"\n{result}")
 
         # Emit damage event
         if result.hit:
@@ -293,7 +296,7 @@ class CLI:
 
         # Check if target died
         if not target.is_alive:
-            print(f"\n{target.name} is defeated!")
+            print_status_message(f"{target.name} is defeated!", "success")
             self.game_state.event_bus.emit(Event(
                 type=EventType.CHARACTER_DEATH,
                 data={"name": target.name}
@@ -319,7 +322,7 @@ class CLI:
             for character in self.game_state.party.characters:
                 if current.creature == character:
                     is_party_turn = True
-                    print(f"\n--- {character.name}'s turn ---")
+                    print_section(f"{character.name}'s Turn")
                     break
 
             if is_party_turn:
@@ -331,7 +334,7 @@ class CLI:
                 self.game_state.initiative_tracker.next_turn()
                 continue
 
-            print(f"\n{enemy.name}'s turn...")
+            print_status_message(f"{enemy.name}'s turn...", "info")
 
             # Choose target from living party members (lowest HP)
             living_party = self.game_state.party.get_living_members()
@@ -358,7 +361,7 @@ class CLI:
                     apply_damage=True
                 )
 
-                print(result)
+                print_message(str(result))
 
                 if result.hit:
                     self.game_state.event_bus.emit(Event(
@@ -372,7 +375,7 @@ class CLI:
 
                 # Check if party member died
                 if not target.is_alive:
-                    print(f"\n{target.name} has fallen!")
+                    print_status_message(f"{target.name} has fallen!", "warning")
                     self.game_state.event_bus.emit(Event(
                         type=EventType.CHARACTER_DEATH,
                         data={"name": target.name}
@@ -433,7 +436,7 @@ class CLI:
         """Handle equipping an item for the first living party member."""
         living_members = self.game_state.party.get_living_members()
         if not living_members:
-            print("No living party members to equip items!")
+            print_error("No living party members to equip items!")
             return
 
         character = living_members[0]
@@ -456,7 +459,7 @@ class CLI:
                 break
 
         if not target_item:
-            print(f"You don't have '{item_id}' in your inventory.")
+            print_error(f"You don't have '{item_id}' in your inventory.")
             return
 
         # Equip the item
@@ -467,14 +470,14 @@ class CLI:
         elif target_category == "armor":
             slot = EquipmentSlot.ARMOR
         else:
-            print(f"Cannot equip {item_id}")
+            print_error(f"Cannot equip {item_id}")
             return
 
         inventory.equip_item(target_item, slot)
 
         item_data = items_data[target_category][target_item]
         item_name = item_data.get("name", target_item)
-        print(f"\n{character.name} equipped {item_name}")
+        print_status_message(f"{character.name} equipped {item_name}", "success")
 
         # Emit event
         self.game_state.event_bus.emit(Event(
@@ -486,7 +489,7 @@ class CLI:
         """Handle unequipping an item for the first living party member."""
         living_members = self.game_state.party.get_living_members()
         if not living_members:
-            print("No living party members to unequip items!")
+            print_error("No living party members to unequip items!")
             return
 
         character = living_members[0]
@@ -498,7 +501,7 @@ class CLI:
         elif slot_name.lower() in ["armor", "a"]:
             slot = EquipmentSlot.ARMOR
         else:
-            print(f"Unknown equipment slot: {slot_name}. Use 'weapon' or 'armor'.")
+            print_error(f"Unknown equipment slot: {slot_name}. Use 'weapon' or 'armor'.")
             return
 
         inventory = character.inventory
@@ -509,7 +512,7 @@ class CLI:
             category = "weapons" if slot == EquipmentSlot.WEAPON else "armor"
             item_data = items_data[category].get(item_id, {})
             item_name = item_data.get("name", item_id)
-            print(f"\n{character.name} unequipped {item_name}")
+            print_status_message(f"{character.name} unequipped {item_name}", "success")
 
             # Emit event
             self.game_state.event_bus.emit(Event(
@@ -517,13 +520,13 @@ class CLI:
                 data={"item_id": item_id, "slot": slot.value}
             ))
         else:
-            print(f"\nNothing equipped in {slot_name} slot.")
+            print_status_message(f"Nothing equipped in {slot_name} slot.", "warning")
 
     def handle_use_item(self, item_id: str) -> None:
         """Handle using a consumable item for the first living party member."""
         living_members = self.game_state.party.get_living_members()
         if not living_members:
-            print("No living party members to use items!")
+            print_error("No living party members to use items!")
             return
 
         character = living_members[0]
@@ -541,7 +544,7 @@ class CLI:
                 break
 
         if not target_item:
-            print(f"{character.name} doesn't have a consumable '{item_id}' in inventory.")
+            print_error(f"{character.name} doesn't have a consumable '{item_id}' in inventory.")
             return
 
         # Get item data
@@ -559,11 +562,11 @@ class CLI:
             character.heal(healing)
             actual_healing = character.current_hp - old_hp
 
-            print(f"\n{character.name} uses {item_name}")
-            print(f"Healing: {roll} = {healing} HP")
-            print(f"{character.name} recovers {actual_healing} HP (now at {character.current_hp}/{character.max_hp})")
+            print_status_message(f"{character.name} uses {item_name}", "info")
+            print_message(f"Healing: {roll} = {healing} HP")
+            print_status_message(f"{character.name} recovers {actual_healing} HP (now at {character.current_hp}/{character.max_hp})", "success")
         else:
-            print(f"\n{character.name} uses {item_name}")
+            print_status_message(f"{character.name} uses {item_name}", "info")
 
         # Remove the item from inventory
         inventory.remove_item(target_item, 1)

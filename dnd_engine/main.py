@@ -18,7 +18,11 @@ from dnd_engine.ui.rich_ui import (
     print_banner,
     print_status_message,
     print_error,
-    print_title
+    print_title,
+    print_message,
+    print_section,
+    print_input_prompt,
+    console
 )
 from dnd_engine.utils.events import EventBus
 
@@ -95,7 +99,7 @@ def initialize_data_loader() -> DataLoader:
         return loader
     except FileNotFoundError as e:
         print_error("Data files not found", e)
-        print("Please ensure the game is installed correctly.")
+        print_error("Please ensure the game is installed correctly.")
         sys.exit(1)
 
 
@@ -124,11 +128,11 @@ def initialize_llm(args: argparse.Namespace) -> Optional:
             print_status_message(f"LLM provider: {provider.get_provider_name()}", "success")
         else:
             print_status_message("LLM disabled (no API key configured)", "warning")
-            print("Set OPENAI_API_KEY or ANTHROPIC_API_KEY in environment")
+            print_status_message("Set OPENAI_API_KEY or ANTHROPIC_API_KEY in environment", "info")
         return provider
     except Exception as e:
         print_status_message(f"LLM initialization failed: {e}", "warning")
-        print("Continuing with basic descriptions...")
+        print_status_message("Continuing with basic descriptions...", "info")
         return None
 
 
@@ -174,18 +178,18 @@ def main() -> None:
         llm_enhancer = LLMEnhancer(llm_provider, event_bus)
 
     # Get party size
-    print("\nHow many characters in your party?")
+    print_section("Party Creation", "How many characters in your party?")
     party_size = None
     while party_size is None:
         try:
-            size_input = input("Enter number (1-4): ").strip()
+            size_input = print_input_prompt("Enter number (1-4)").strip()
             size = int(size_input)
             if 1 <= size <= 4:
                 party_size = size
             else:
-                print("Please enter a number between 1 and 4.")
+                print_status_message("Please enter a number between 1 and 4.", "warning")
         except ValueError:
-            print("Please enter a valid number.")
+            print_status_message("Please enter a valid number.", "warning")
         except KeyboardInterrupt:
             raise
 
@@ -206,9 +210,7 @@ def main() -> None:
         characters = []
         for i in range(party_size):
             if party_size > 1:
-                print(f"\n{'=' * 60}")
-                print(f"CHARACTER {i + 1} of {party_size}")
-                print(f"{'=' * 60}\n")
+                print_section(f"Character {i + 1} of {party_size}")
 
             # Run character creation (CharacterFactory handles all UI)
             character = factory.create_character_interactive(
@@ -219,22 +221,19 @@ def main() -> None:
             race_name = races_data.get(character.race, {}).get("name", character.race)
             class_name = classes_data.get("fighter", {}).get("name", "Fighter")
 
-            print(f"\n✓ Character created: {character.name} ({race_name} {class_name})")
+            print_status_message(f"Character created: {character.name} ({race_name} {class_name})", "success")
             characters.append(character)
 
         # Display party roster
         if party_size > 1:
-            print(f"\n{'=' * 60}")
-            print("PARTY ROSTER")
-            print(f"{'=' * 60}")
+            roster_lines = []
             for char in characters:
                 race_name = races_data.get(char.race, {}).get("name", char.race)
                 class_name = classes_data.get("fighter", {}).get("name", "Fighter")
-                print(f"  • {char.name} ({race_name} {class_name}) - HP: {char.max_hp}, AC: {char.ac}")
-            print(f"{'=' * 60}")
+                roster_lines.append(f"  • {char.name} ({race_name} {class_name}) - HP: {char.max_hp}, AC: {char.ac}")
+            print_section("PARTY ROSTER", "\n".join(roster_lines))
 
-        print("\nPress Enter to begin your adventure...")
-        input()
+        print_input_prompt("Press Enter to begin your adventure")
 
         # Create party with all characters
         party = Party(characters=characters)
@@ -254,13 +253,13 @@ def main() -> None:
         cli.run()
 
     except KeyboardInterrupt:
-        print("\nGame interrupted. Thanks for playing!")
+        print_status_message("Game interrupted. Thanks for playing!", "info")
         sys.exit(0)
     except Exception as e:
         if args.debug:
             raise
         print_error(str(e))
-        print("\nUse --debug flag for detailed error information.")
+        print_status_message("Use --debug flag for detailed error information.", "info")
         sys.exit(1)
 
 
