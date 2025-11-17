@@ -338,6 +338,55 @@ def print_input_prompt(text: str) -> str:
     return console.input(f"[bold cyan]{text}[/bold cyan] ")
 
 
+def print_mechanics_panel(content: str) -> None:
+    """Display game mechanics in a distinct panel.
+
+    Args:
+        content: Mechanics text to display (attack rolls, damage, etc.)
+    """
+    panel = Panel(
+        content,
+        title="⚔️  Mechanics",
+        border_style="dim blue",
+        padding=(0, 1),
+        expand=False
+    )
+    console.print(panel)
+
+
+def print_narrative_loading() -> None:
+    """Display loading state while LLM generates narrative."""
+    from rich.text import Text
+
+    loading_text = Text("⏳ Enhancing narrative...", style="dim italic")
+    panel = Panel(
+        loading_text,
+        title="✨ Narrative",
+        border_style="yellow",
+        padding=(1, 2),
+        expand=False
+    )
+    console.print(panel)
+
+
+def print_narrative_panel(content: str) -> None:
+    """Display LLM-enhanced narrative in a distinct panel.
+
+    Args:
+        content: Narrative text to display
+    """
+    from rich.markdown import Markdown
+
+    panel = Panel(
+        Markdown(content),
+        title="✨ Narrative",
+        border_style="gold1",
+        padding=(1, 2),
+        expand=False
+    )
+    console.print(panel)
+
+
 def create_character_sheet_table(character_data: Dict[str, Any]) -> Table:
     """Create a styled table for character sheet display.
 

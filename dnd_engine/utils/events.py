@@ -44,6 +44,7 @@ class EventType(Enum):
     SKILL_CHECK = "skill_check"
 
     # LLM enhancement events
+    ENHANCEMENT_STARTED = "enhancement_started"
     DESCRIPTION_ENHANCED = "description_enhanced"
 
 
