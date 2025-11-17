@@ -46,52 +46,54 @@ This document tracks remaining implementation tasks to complete the MVP and futu
 
 ### Priority 1: Critical for Playable Game
 
-#### 1.1 Character Creation System
-**Location:** `dnd_engine/core/character_factory.py` (NEW FILE)
+#### 1.1 Character Creation System ✅ COMPLETED
+**Location:** `dnd_engine/core/character_factory.py`
 **Dependencies:** Dice roller, Character class, CLI
 **Estimated Effort:** Medium (6.5 hours)
 **GitHub Issue:** #7
+**Completed:** 2025-11-16
 
 **Tasks:**
-- [ ] Create `CharacterFactory` class
-  - [ ] `roll_abilities()` - Roll 4d6 drop lowest, six times
-  - [ ] `auto_assign_abilities(scores, class_name)` - Assign scores based on class priorities from JSON
-  - [ ] `swap_abilities(abilities, ability1, ability2)` - Allow player swaps
-  - [ ] `calculate_derived_stats(class, abilities)` - Calculate HP, AC, attack bonus
-  - [ ] `apply_starting_equipment(character, class)` - Add starting gear from class JSON
-  - [ ] `create_character_interactive(ui)` - Full creation flow
-- [ ] Add unit tests for `CharacterFactory`
-  - [ ] Test ability rolling (4d6 drop lowest)
-  - [ ] Test auto-assignment follows class priorities correctly
-  - [ ] Test ability swapping
-  - [ ] Test derived stat calculation (HP from d10+CON, AC from armor, etc.)
-  - [ ] Test starting equipment application
-- [ ] Integrate into main.py entry point
-  - [ ] Prompt player to create character before starting game
-  - [ ] Display rolled abilities with drop-lowest detail
-  - [ ] Show optimized character sheet
-  - [ ] Allow swaps before accepting
-  - [ ] Prompt for character name
+- [x] Create `CharacterFactory` class
+  - [x] `roll_abilities()` - Roll 4d6 drop lowest, six times
+  - [x] `auto_assign_abilities(scores, class_name)` - Assign scores based on class priorities from JSON
+  - [x] `swap_abilities(abilities, ability1, ability2)` - Allow player swaps
+  - [x] `calculate_derived_stats(class, abilities)` - Calculate HP, AC, attack bonus
+  - [x] `apply_starting_equipment(character, class)` - Add starting gear from class JSON
+  - [x] `create_character_interactive(ui)` - Full creation flow
+- [x] Add unit tests for `CharacterFactory`
+  - [x] Test ability rolling (4d6 drop lowest)
+  - [x] Test auto-assignment follows class priorities correctly
+  - [x] Test ability swapping
+  - [x] Test derived stat calculation (HP from d10+CON, AC from armor, etc.)
+  - [x] Test starting equipment application
+- [x] Integrate into main.py entry point
+  - [x] Prompt player to create character before starting game
+  - [x] Display rolled abilities with drop-lowest detail
+  - [x] Show optimized character sheet
+  - [x] Allow swaps before accepting
+  - [x] Prompt for character name
 
 **Acceptance Criteria:**
-- Player can roll abilities and see each 4d6 result with dropped die
-- System auto-assigns scores optimally for Fighter class
-- Player can swap any two abilities
-- Character sheet displays with accurate HP, AC, attack/damage bonuses
-- Starting equipment (chain mail, longsword, etc.) is equipped correctly
+- ✅ Player can roll abilities and see each 4d6 result with dropped die
+- ✅ System auto-assigns scores optimally for Fighter class
+- ✅ Player can swap any two abilities
+- ✅ Character sheet displays with accurate HP, AC, attack/damage bonuses
+- ✅ Starting equipment (chain mail, longsword, etc.) is equipped correctly
 
 ---
 
-#### 1.2 LLM Integration Layer
+#### 1.2 LLM Integration Layer ✅ COMPLETED
 **Location:** `dnd_engine/llm/` directory
 **Dependencies:** Event bus, OpenAI/Anthropic API
 **Estimated Effort:** Large (8 hours)
 **GitHub Issue:** #8
+**Completed:** 2025-11-16
 
 **Tasks:**
 
 **1.2.1 LLM Provider Interface**
-- [ ] Create `dnd_engine/llm/base.py`
+- [x] Create `dnd_engine/llm/base.py`
   - [ ] Define `LLMProvider` abstract base class
   - [ ] Method: `enhance_description(context: Dict) -> str`
   - [ ] Method: `generate_dialogue(npc: Dict, player_input: str) -> str`
