@@ -166,7 +166,7 @@ class CLI:
             self.display_inventory()
             return
 
-        if command.startswith("equip "):
+        if command == "equip" or command.startswith("equip "):
             parts = command.split()[1:]
             if not parts:
                 print_error("Specify an item to equip")
@@ -176,7 +176,7 @@ class CLI:
             self.handle_equip(item_id, player_id)
             return
 
-        if command.startswith("unequip "):
+        if command == "unequip" or command.startswith("unequip "):
             parts = command.split()[1:]
             if not parts:
                 print_error("Specify a slot to unequip (weapon or armor)")
@@ -186,7 +186,7 @@ class CLI:
             self.handle_unequip(slot_name, player_id)
             return
 
-        if command.startswith("use "):
+        if command == "use" or command.startswith("use "):
             parts = command.split()[1:]
             if not parts:
                 print_error("Specify an item to use")
@@ -744,10 +744,10 @@ class CLI:
             ("move <direction>", "Move in a direction (north, south, east, west)"),
             ("look or l", "Look around the current room"),
             ("search", "Search the room for items"),
-            ("inventory / i", "Show your inventory"),
-            ("equip <item> [player]", "Equip a weapon or armor (e.g., 'equip longsword 2')"),
-            ("unequip <slot> [player]", "Unequip weapon or armor (e.g., 'unequip weapon 1')"),
-            ("use <item> [player]", "Use a consumable item (e.g., 'use potion 3')"),
+            ("inventory / i", "Show your inventory with player numbers"),
+            ("equip <item> [player]", "Equip weapon/armor. Player: number or name (default: 1)"),
+            ("unequip <slot> [player]", "Unequip weapon/armor. Player: number or name (default: 1)"),
+            ("use <item> [player]", "Use consumable. Player: number or name (default: 1)"),
             ("status", "Show your character status"),
             ("save", "Save your game"),
             ("help or ?", "Show this help message"),
