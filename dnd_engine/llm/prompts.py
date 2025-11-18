@@ -1,10 +1,10 @@
 # ABOUTME: Prompt template functions for generating LLM requests
 # ABOUTME: Builds structured prompts for room descriptions, combat, victories, and deaths
 
-from typing import Any, Dict
+from typing import Any
 
 
-def build_room_description_prompt(room_data: Dict[str, Any]) -> str:
+def build_room_description_prompt(room_data: dict[str, Any]) -> str:
     """
     Build prompt for room description enhancement.
 
@@ -27,7 +27,7 @@ Add vivid sensory details (sights, sounds, smells) in 2-3 sentences. Make it imm
     return prompt
 
 
-def build_combat_action_prompt(action_data: Dict[str, Any]) -> str:
+def build_combat_action_prompt(action_data: dict[str, Any]) -> str:
     """
     Build prompt for combat action narration.
 
@@ -86,7 +86,9 @@ def build_combat_action_prompt(action_data: Dict[str, Any]) -> str:
         if party_hp or enemy_hp:
             party_status = ", ".join([f"{name} {hp}/{max_hp}" for name, hp, max_hp in party_hp])
             enemy_status = ", ".join([f"{name} {hp}/{max_hp}" for name, hp, max_hp in enemy_hp])
-            battlefield_context = f"Battlefield: Party [{party_status}] | Enemies [{enemy_status}]\n\n"
+            battlefield_context = (
+                f"Battlefield: Party [{party_status}] | Enemies [{enemy_status}]\n\n"
+            )
 
     # Build combatant descriptions
     attacker_desc = attacker
@@ -105,20 +107,27 @@ def build_combat_action_prompt(action_data: Dict[str, Any]) -> str:
     if hit:
         prompt = f"""Narrate this D&D combat action vividly:
 
-{location_context}{round_context}{battlefield_context}{history_context}Current Action: {attacker_desc} attacks {defender_desc} with a {weapon_desc} for {damage} damage.
+{location_context}{round_context}{battlefield_context}{history_context}
+Current Action: {attacker_desc} attacks {defender_desc} with a {weapon_desc}
+for {damage} damage.
 
-Describe the hit in 2-3 dramatic sentences. Consider the battlefield state and recent action flow. Focus on the impact and visual details."""
+Describe the hit in 1-2 dramatic sentences. Focus on rich detail but maintain
+brevity so the player isn't bogged down reading. Consider the battlefield state
+and recent action flow. Focus on the impact and visual details."""
     else:
         prompt = f"""Narrate this D&D combat miss:
 
-{location_context}{round_context}{battlefield_context}{history_context}Current Action: {attacker_desc} attacks {defender_desc} with a {weapon_desc} but misses.
+{location_context}{round_context}{battlefield_context}{history_context}Current 
+Action: {attacker_desc} attacks {defender_desc} with a {weapon_desc} but misses.
 
-Describe the miss in 1-2 sentences. Consider the battlefield state and recent action flow. Make it cinematic."""
+Describe the miss in 1-2 sentences. Focus on rich detail but maintain
+brevity so the player isn't bogged down reading.
+Consider the battlefield state and recent action flow. Make it cinematic."""
 
     return prompt
 
 
-def build_death_prompt(character_data: Dict[str, Any]) -> str:
+def build_death_prompt(character_data: dict[str, Any]) -> str:
     """
     Build prompt for death narration (player or enemy).
 
@@ -148,7 +157,7 @@ Write 2-3 sentences about their final moments. Be dramatic and satisfying for th
     return prompt
 
 
-def build_victory_prompt(combat_data: Dict[str, Any]) -> str:
+def build_victory_prompt(combat_data: dict[str, Any]) -> str:
     """
     Build prompt for combat victory narration.
 
@@ -163,14 +172,14 @@ def build_victory_prompt(combat_data: Dict[str, Any]) -> str:
 
     prompt = f"""Narrate a D&D combat victory:
 
-The party defeats {', '.join(enemies)}. The final blow: {final_blow}.
+The party defeats {", ".join(enemies)}. The final blow: {final_blow}.
 
 Describe the aftermath in 2-3 sentences. Capture the sense of triumph and relief."""
 
     return prompt
 
 
-def build_combat_start_prompt(combat_data: Dict[str, Any]) -> str:
+def build_combat_start_prompt(combat_data: dict[str, Any]) -> str:
     """
     Build prompt for combat initiation narration.
 
