@@ -449,6 +449,16 @@ class CLI:
                 self.handle_stabilize(target_name)
             return
 
+        if command == "use" or command.startswith("use "):
+            parts = command.split()[1:]
+            if not parts:
+                print_error("Specify an item to use. Example: 'use potion'")
+                return
+            # Use item during combat (self-target only for Phase 3)
+            item_id = parts[0]
+            self.handle_use_item_combat(item_id)
+            return
+
         # Provide helpful suggestions for unknown commands
         print_status_message("Unknown combat command.", "warning")
         living_enemies = []
@@ -1439,6 +1449,122 @@ class CLI:
             }
         ))
 
+    def handle_use_item_combat(self, item_id: str) -> None:
+        """
+        Handle using a consumable item during combat.
+
+        Validates action economy, consumes action, and applies item effect.
+
+        Args:
+            item_id: The item to use (ID or name)
+        """
+        from dnd_engine.systems.item_effects import apply_item_effect
+        from dnd_engine.systems.action_economy import ActionType
+
+        # Verify it's the player's turn
+        if not self.game_state.in_combat or not self.game_state.initiative_tracker:
+            print_error("Not in combat!")
+            return
+
+        current = self.game_state.initiative_tracker.get_current_combatant()
+        if not current:
+            print_error("No current combatant!")
+            return
+
+        # Check if current combatant is a party member
+        if current.creature not in self.game_state.party.characters:
+            print_error("It's not a party member's turn!")
+            return
+
+        character = current.creature
+        inventory = character.inventory
+        items_data = self.game_state.data_loader.load_items()
+
+        # Find the item in consumables
+        target_item = None
+        consumables = inventory.get_items_by_category("consumables")
+
+        for inv_item in consumables:
+            item_data = items_data["consumables"].get(inv_item.item_id, {})
+            if inv_item.item_id == item_id or item_data.get("name", "").lower() == item_id.lower():
+                target_item = inv_item.item_id
+                break
+
+        if not target_item:
+            print_error(f"{character.name} doesn't have a consumable '{item_id}' in inventory.")
+            return
+
+        # Get item data to check action cost
+        item_info = items_data["consumables"][target_item]
+        item_name = item_info.get("name", target_item)
+        action_required_str = item_info.get("action_required", "action")
+
+        # Map string to ActionType
+        action_type_map = {
+            "action": ActionType.ACTION,
+            "bonus_action": ActionType.BONUS_ACTION,
+            "free_object": ActionType.FREE_OBJECT,
+            "no_action": ActionType.NO_ACTION
+        }
+        action_required = action_type_map.get(action_required_str, ActionType.ACTION)
+
+        # Check if action is available
+        turn_state = self.game_state.initiative_tracker.get_current_turn_state()
+        if not turn_state:
+            print_error("Unable to get current turn state!")
+            return
+
+        if not turn_state.is_action_available(action_required):
+            action_name = action_required_str.replace("_", " ").title()
+            print_error(f"You don't have a {action_name} available this turn!")
+            print_status_message(f"Available: {turn_state}", "info")
+            return
+
+        # Consume the action
+        if not turn_state.consume_action(action_required):
+            print_error(f"Failed to consume {action_required_str}!")
+            return
+
+        # Use the item from inventory (removes it)
+        success, item_data = inventory.use_item(target_item, items_data)
+
+        if not success:
+            print_error(f"Failed to use {item_id}")
+            # Restore the action since item use failed
+            turn_state.reset()
+            turn_state.consume_action(action_required)  # Put back what we consumed
+            return
+
+        # Apply the item's effect
+        result = apply_item_effect(
+            item_info=item_data,
+            target=character,
+            dice_roller=self.game_state.dice_roller,
+            event_bus=self.game_state.event_bus
+        )
+
+        # Display the result
+        action_cost_msg = f"({action_required_str.replace('_', ' ')})"
+        print_status_message(f"{character.name} uses {item_name} {action_cost_msg}", "info")
+        print_message(result.message)
+
+        # Show remaining actions
+        remaining_actions = str(turn_state)
+        print_status_message(f"Remaining this turn: {remaining_actions}", "info")
+
+        # Emit item used event
+        self.game_state.event_bus.emit(Event(
+            type=EventType.ITEM_USED,
+            data={
+                "character": character.name,
+                "item_id": target_item,
+                "item_name": item_name,
+                "effect_type": result.effect_type,
+                "action_cost": action_required_str,
+                "success": result.success
+            }
+        ))
+
     def handle_save(self) -> None:
         """Handle manual save command."""
         # Check if save_manager is available
@@ -1662,6 +1788,7 @@ class CLI:
         """Display help for combat commands."""
         commands = [
             ("attack <enemy>", "Attack an enemy (e.g., 'attack goblin 1' or 'attack 1')"),
+            ("use <item>", "Use a consumable item (e.g., 'use potion') - costs an action"),
             ("stabilize <ally>", "Stabilize an unconscious ally (Medicine DC 10)"),
             ("flee / run / escape", "Flee from combat (enemies get opportunity attacks)"),
             ("status", "Show combat status"),
