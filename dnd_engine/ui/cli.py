@@ -136,14 +136,24 @@ class CLI:
                 if enemy_number is not None:
                     display_name = f"{entry.creature.name} {enemy_number}"
 
-            combatants.append({
+            combatant_data = {
                 "name": display_name,
                 "initiative": entry.initiative_total,
                 "hp": entry.creature.current_hp,
                 "max_hp": entry.creature.max_hp,
                 "is_player": is_player,
                 "current_turn": entry == current_combatant
-            })
+            }
+
+            # Add death save data for characters
+            if hasattr(entry.creature, 'death_save_successes'):
+                combatant_data["death_saves"] = {
+                    "successes": entry.creature.death_save_successes,
+                    "failures": entry.creature.death_save_failures,
+                    "stabilized": entry.creature.stabilized
+                }
+
+            combatants.append(combatant_data)
 
         table = create_combat_table(combatants)
         console.print(table)
@@ -376,6 +386,21 @@ class CLI:
             self.display_combat_status()
             return
 
+        if command.startswith("stabilize ") or command == "stabilize":
+            parts = command.split()[1:] if " " in command else []
+            if not parts:
+                # Show list of unconscious allies
+                unconscious = [c for c in self.game_state.party.characters if c.is_unconscious]
+                if unconscious:
+                    names = ", ".join([c.name for c in unconscious])
+                    print_error(f"Specify an ally to stabilize. Unconscious: {names}")
+                else:
+                    print_error("No unconscious allies to stabilize.")
+            else:
+                target_name = " ".join(parts)
+                self.handle_stabilize(target_name)
+            return
+
         # Provide helpful suggestions for unknown commands
         print_status_message("Unknown combat command.", "warning")
         living_enemies = []
@@ -602,6 +627,78 @@ class CLI:
             # Process enemy turns
             self.process_enemy_turns()
 
+    def handle_stabilize(self, target_name: str) -> None:
+        """Handle stabilize command to help unconscious ally."""
+        if not self.game_state.in_combat:
+            print_error("You're not in combat!")
+            return
+
+        # Check if it's a party member's turn
+        current = self.game_state.initiative_tracker.get_current_combatant()
+        helper = None
+        for character in self.game_state.party.characters:
+            if current.creature == character and character.is_alive and not character.is_unconscious:
+                helper = character
+                break
+
+        if not helper:
+            print_status_message("It's not your turn, or your character is unconscious!", "warning")
+            return
+
+        # Find target ally
+        target = None
+        for character in self.game_state.party.characters:
+            if character.name.lower() == target_name.lower() and character.is_unconscious:
+                target = character
+                break
+
+        if not target:
+            print_error(f"No unconscious ally named '{target_name}' found.")
+            return
+
+        print_section(f"{helper.name} attempts to stabilize {target.name}")
+
+        # Load skills data
+        skills_data = self.game_state.data_loader.load_skills()
+
+        # Make Medicine skill check (DC 10)
+        check_result = helper.make_skill_check("medicine", 10, skills_data)
+
+        # Display check result
+        modifier_str = f"+{check_result['modifier']}" if check_result['modifier'] >= 0 else str(check_result['modifier'])
+        print_status_message(
+            f"Medicine check: {check_result['roll']}{modifier_str} = {check_result['total']} vs DC {check_result['dc']}",
+            "info"
+        )
+
+        if check_result['success']:
+            # Stabilize the target
+            target.stabilize_character()
+            print_status_message(f"Success! {target.name} is stabilized.", "success")
+
+            # Emit stabilization event
+            from dnd_engine.utils.events import Event, EventType
+            self.game_state.event_bus.emit(Event(
+                type=EventType.CHARACTER_STABILIZED,
+                data={
+                    "helper": helper.name,
+                    "target": target.name,
+                    "check_total": check_result['total']
+                }
+            ))
+        else:
+            print_error(f"Failed! {target.name} remains unstabilized.")
+
+        # Advance turn
+        self.game_state.initiative_tracker.next_turn()
+
+        # Check if combat is over
+        self.game_state._check_combat_end()
+
+        if self.game_state.in_combat:
+            # Process enemy turns
+            self.process_enemy_turns()
+
     def handle_flee(self) -> None:
         """Handle flee command during combat."""
         if not self.game_state.in_combat:
@@ -638,6 +735,39 @@ class CLI:
 
             # Display new room
             self.display_room()
+
+    def process_death_save_turn(self, character: Character) -> None:
+        """
+        Process a death saving throw turn for an unconscious character.
+
+        Args:
+            character: The unconscious character making the death save
+        """
+        print_section(f"{character.name}'s Turn - Death Save")
+        print_status_message(f"{character.name} is unconscious and must make a death saving throw!", "warning")
+
+        # Roll death save
+        result = character.make_death_save(event_bus=self.game_state.event_bus)
+
+        # Display results
+        if result["natural_20"]:
+            print_status_message(f"Natural 20! {character.name} regains 1 HP and consciousness!", "success")
+        elif result["natural_1"]:
+            print_error(f"Natural 1! Two failures recorded. Failures: {result['failures']}/3")
+        elif result["success"]:
+            print_status_message(f"Success! (rolled {result['roll']}) Successes: {result['successes']}/3", "info")
+        else:
+            print_error(f"Failure (rolled {result['roll']}) Failures: {result['failures']}/3")
+
+        # Check outcomes
+        if result["conscious"]:
+            print_status_message(f"{character.name} is conscious again with 1 HP!", "success")
+        elif result["stabilized"]:
+            print_status_message(f"{character.name} is stabilized! They no longer need to make death saves.", "success")
+        elif result["dead"]:
+            print_error(f"{character.name} has died...")
+            # Remove from initiative
+            self.game_state.initiative_tracker.remove_combatant(character)
 
     def process_enemy_turns(self) -> None:
         """Process all enemy turns until it's a party member's turn again."""
@@ -1467,6 +1597,7 @@ class CLI:
         """Display help for combat commands."""
         commands = [
             ("attack <enemy>", "Attack an enemy (e.g., 'attack goblin 1' or 'attack 1')"),
+            ("stabilize <ally>", "Stabilize an unconscious ally (Medicine DC 10)"),
             ("flee / run / escape", "Flee from combat (enemies get opportunity attacks)"),
             ("status", "Show combat status"),
             ("help or ?", "Show this help message"),
@@ -1491,23 +1622,44 @@ class CLI:
 
                 current = self.game_state.initiative_tracker.get_current_combatant()
 
-                # Check if current combatant is alive - skip if dead
-                if not current.creature.is_alive:
+                # Check if current combatant is dead - skip if truly dead
+                # For Characters, check is_dead (3 death save failures)
+                # For other creatures, check is_alive
+                should_skip = False
+                if hasattr(current.creature, 'is_dead'):
+                    # Character: skip only if dead (3 failures), not if unconscious
+                    should_skip = current.creature.is_dead
+                else:
+                    # Regular creature: skip if not alive
+                    should_skip = not current.creature.is_alive
+
+                if should_skip:
                     self.game_state.initiative_tracker.next_turn()
                     continue
 
                 # Check if it's a party member's turn
                 is_party_turn = False
+                party_character = None
                 for character in self.game_state.party.characters:
                     if current.creature == character:
                         is_party_turn = True
+                        party_character = character
                         break
 
                 if is_party_turn:
-                    # Show compact turn status instead of full table
-                    self.display_turn_status(is_party_turn, current.creature)
-                    command = self.get_player_command()
-                    self.process_combat_command(command)
+                    # Check if character is unconscious and needs death save
+                    if party_character.is_unconscious:
+                        self.process_death_save_turn(party_character)
+                        # Advance turn after death save
+                        self.game_state.initiative_tracker.next_turn()
+                        # Check if combat is over
+                        self.game_state._check_combat_end()
+                    else:
+                        # Normal turn for conscious character
+                        # Show compact turn status instead of full table
+                        self.display_turn_status(is_party_turn, current.creature)
+                        command = self.get_player_command()
+                        self.process_combat_command(command)
                 else:
                     self.process_enemy_turns()
             else:

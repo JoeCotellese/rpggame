@@ -171,7 +171,17 @@ class CombatEngine:
                             event_bus.emit(event)
 
             if apply_damage:
-                defender.take_damage(damage + sneak_attack_damage)
+                # Pass event_bus to take_damage for Character instances (death save handling)
+                if hasattr(defender, 'take_damage') and hasattr(defender.__class__, 'take_damage'):
+                    # Check if defender.take_damage accepts event_bus parameter
+                    import inspect
+                    sig = inspect.signature(defender.take_damage)
+                    if 'event_bus' in sig.parameters:
+                        defender.take_damage(damage + sneak_attack_damage, event_bus=event_bus)
+                    else:
+                        defender.take_damage(damage + sneak_attack_damage)
+                else:
+                    defender.take_damage(damage + sneak_attack_damage)
 
         return AttackResult(
             attacker_name=attacker.name,
@@ -316,7 +326,16 @@ class CombatEngine:
 
         # Apply damage if requested
         if apply_damage:
-            target.take_damage(damage_taken)
+            # Pass event_bus to take_damage for Character instances (death save handling)
+            if hasattr(target, 'take_damage'):
+                import inspect
+                sig = inspect.signature(target.take_damage)
+                if 'event_bus' in sig.parameters:
+                    target.take_damage(damage_taken, event_bus=event_bus)
+                else:
+                    target.take_damage(damage_taken)
+            else:
+                target.take_damage(damage_taken)
 
         return {
             "save_result": save_result,

@@ -179,9 +179,29 @@ def create_combat_table(combatants: List[Dict[str, Any]]) -> Table:
         max_hp = combatant.get("max_hp", 1)
         hp_text = f"{hp}/{max_hp}"
 
+        # Determine status with death save information
         if hp <= 0:
-            status = "[red]DEFEATED[/red]"
-            color = "red"
+            # Check for death save data (player characters)
+            death_saves = combatant.get("death_saves")
+            if death_saves:
+                successes = death_saves.get("successes", 0)
+                failures = death_saves.get("failures", 0)
+                stabilized = death_saves.get("stabilized", False)
+
+                if failures >= 3:
+                    status = "[red bold]DEAD[/red bold]"
+                    color = "red dim"
+                elif stabilized:
+                    status = "[yellow]STABILIZED[/yellow]"
+                    color = "yellow"
+                else:
+                    # Unconscious with death saves
+                    status = f"[yellow]UNCONSCIOUS[/yellow]\n[dim]Success: {successes}/3, Fail: {failures}/3[/dim]"
+                    color = "yellow"
+            else:
+                # Non-player without death saves
+                status = "[red]DEFEATED[/red]"
+                color = "red"
         else:
             status = "[green]ACTIVE[/green]"
             color = "white"
