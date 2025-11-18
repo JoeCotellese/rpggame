@@ -2,7 +2,7 @@
 # ABOUTME: Handles item storage, equipping, usage, and currency tracking
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 from enum import Enum
 from dnd_engine.systems.currency import Currency
 
@@ -367,6 +367,50 @@ class Inventory:
             total += value * item.quantity
 
         return total
+
+    def use_item(self, item_id: str, item_data: Dict[str, Dict[str, Any]]) -> Tuple[bool, Optional[Dict[str, Any]]]:
+        """
+        Use a consumable item from inventory.
+
+        Returns item data for the caller to execute the effect, then removes
+        the item from inventory. This method handles inventory management only;
+        the caller is responsible for applying effects (healing, buffs, etc.).
+
+        Args:
+            item_id: ID of the item to use
+            item_data: Full items data loaded from items.json
+
+        Returns:
+            Tuple of (success: bool, item_info: Optional[Dict])
+            - success: True if item was found and removed from inventory
+            - item_info: Item data dict if successful, None if item not found
+
+        Example:
+            >>> success, item_info = inventory.use_item("potion_of_healing", items_data)
+            >>> if success:
+            ...     healing_dice = item_info.get("healing")
+            ...     # Caller rolls dice and applies healing
+        """
+        # Check if item exists in inventory
+        if not self.has_item(item_id):
+            return False, None
+
+        # Get the item from inventory to determine category
+        inv_item = self.items[item_id]
+        category = inv_item.category
+
+        # Look up full item data
+        category_data = item_data.get(category, {})
+        item_info = category_data.get(item_id)
+
+        if item_info is None:
+            # Item exists in inventory but not in data file (data integrity issue)
+            return False, None
+
+        # Remove one from inventory
+        self.remove_item(item_id, quantity=1)
+
+        return True, item_info
 
     def __str__(self) -> str:
         """String representation of the inventory"""

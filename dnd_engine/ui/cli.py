@@ -1381,6 +1381,8 @@ class CLI:
             item_id: The item to use (ID or name)
             player_identifier: Optional player identifier (1-based index or character name)
         """
+        from dnd_engine.systems.item_effects import apply_item_effect
+
         character = self._get_target_player(player_identifier)
         if not character:
             if not self.game_state.party.get_living_members():
@@ -1404,34 +1406,37 @@ class CLI:
             print_error(f"{character.name} doesn't have a consumable '{item_id}' in inventory.")
             return
 
-        # Get item data
-        item_data = items_data["consumables"][target_item]
-        item_name = item_data.get("name", target_item)
+        # Use the item from inventory (removes it)
+        success, item_info = inventory.use_item(target_item, items_data)
 
-        # Process the effect
-        effect = item_data.get("effect")
-        if effect == "heal":
-            amount_dice = item_data.get("amount", "1d4")
-            roll = self.game_state.dice_roller.roll(amount_dice)
-            healing = roll.total
+        if not success:
+            print_error(f"Failed to use {item_id}")
+            return
 
-            old_hp = character.current_hp
-            character.heal(healing)
-            actual_healing = character.current_hp - old_hp
+        item_name = item_info.get("name", target_item)
 
-            print_status_message(f"{character.name} uses {item_name}", "info")
-            print_message(f"Healing: {roll} = {healing} HP")
-            print_status_message(f"{character.name} recovers {actual_healing} HP (now at {character.current_hp}/{character.max_hp})", "success")
-        else:
-            print_status_message(f"{character.name} uses {item_name}", "info")
+        # Apply the item's effect
+        result = apply_item_effect(
+            item_info=item_info,
+            target=character,
+            dice_roller=self.game_state.dice_roller,
+            event_bus=self.game_state.event_bus
+        )
 
-        # Remove the item from inventory
-        inventory.remove_item(target_item, 1)
+        # Display the result
+        print_status_message(f"{character.name} uses {item_name}", "info")
+        print_message(result.message)
 
-        # Emit event
+        # Emit item used event
         self.game_state.event_bus.emit(Event(
             type=EventType.ITEM_USED,
-            data={"item_id": target_item, "effect": effect}
+            data={
+                "character": character.name,
+                "item_id": target_item,
+                "item_name": item_name,
+                "effect_type": result.effect_type,
+                "success": result.success
+            }
         ))
 
     def handle_save(self) -> None:

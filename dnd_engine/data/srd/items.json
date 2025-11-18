@@ -312,6 +312,9 @@
       "rarity": "common",
       "effect_type": "healing",
       "healing": "2d4+2",
+      "action_required": "action",
+      "target_type": "any",
+      "range": 5,
       "description": "A character who drinks the magical red fluid in this vial regains 2d4 + 2 hit points.",
       "value": 50
     },
@@ -322,6 +325,9 @@
       "rarity": "uncommon",
       "effect_type": "healing",
       "healing": "4d4+4",
+      "action_required": "action",
+      "target_type": "any",
+      "range": 5,
       "description": "A character who drinks the magical red fluid in this vial regains 4d4 + 4 hit points.",
       "value": 150
     },
@@ -332,6 +338,9 @@
       "rarity": "rare",
       "effect_type": "healing",
       "healing": "8d4+8",
+      "action_required": "action",
+      "target_type": "any",
+      "range": 5,
       "description": "A character who drinks the magical red fluid in this vial regains 8d4 + 8 hit points.",
       "value": 450
     },
@@ -342,6 +351,9 @@
       "rarity": "very rare",
       "effect_type": "healing",
       "healing": "10d4+20",
+      "action_required": "action",
+      "target_type": "any",
+      "range": 5,
       "description": "A character who drinks the magical red fluid in this vial regains 10d4 + 20 hit points.",
       "value": 1350
     }
