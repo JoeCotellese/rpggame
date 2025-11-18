@@ -1,7 +1,7 @@
 # ABOUTME: Item effect system for applying consumable effects to creatures
-# ABOUTME: Handles healing potions, buffs, and other consumable item effects
+# ABOUTME: Handles healing potions, damage items, buffs, condition removal, and spell scrolls
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.creature import Creature
 from dnd_engine.utils.events import Event, EventType, EventBus
@@ -33,13 +33,12 @@ def apply_item_effect(
     """
     Apply an item's effect to a target creature.
 
-    Currently supports:
-    - Healing effects (restores HP)
-
-    Future support:
-    - Buffs/debuffs
-    - Temporary HP
-    - Condition removal
+    Supported effect types:
+    - healing: Restores HP (e.g., healing potions)
+    - damage: Deals damage (e.g., alchemist's fire, acid vial)
+    - condition_removal: Removes status conditions (e.g., elixir of health)
+    - buff: Adds temporary conditions/effects (e.g., antitoxin, potion of heroism)
+    - spell: Placeholder for spell scrolls (not yet implemented)
 
     Args:
         item_info: Item data from items.json
@@ -63,6 +62,14 @@ def apply_item_effect(
 
     if effect_type == "healing":
         return _apply_healing_effect(item_info, target, dice_roller, event_bus)
+    elif effect_type == "damage":
+        return _apply_damage_effect(item_info, target, dice_roller, event_bus)
+    elif effect_type == "condition_removal":
+        return _apply_condition_removal_effect(item_info, target, event_bus)
+    elif effect_type == "buff":
+        return _apply_buff_effect(item_info, target, event_bus)
+    elif effect_type == "spell":
+        return _apply_spell_effect(item_info, target, dice_roller, event_bus)
     else:
         # Unknown or unimplemented effect type
         return ItemEffectResult(
@@ -141,4 +148,263 @@ def _apply_healing_effect(
         amount=actual_healing,
         dice_notation=healing_dice,
         message=message
+    )
+
+
+def _apply_damage_effect(
+    item_info: Dict[str, Any],
+    target: Creature,
+    dice_roller: DiceRoller,
+    event_bus: Optional[EventBus]
+) -> ItemEffectResult:
+    """
+    Apply a damage effect to a target.
+
+    Used for thrown items like alchemist's fire, acid vials, holy water.
+
+    Args:
+        item_info: Item data containing "damage" dice notation and "damage_type"
+        target: Creature to damage
+        dice_roller: DiceRoller for rolling damage dice
+        event_bus: Optional event bus for emitting DAMAGE_DEALT event
+
+    Returns:
+        ItemEffectResult with damage details
+    """
+    damage_dice = item_info.get("damage", "1d4")
+    damage_type = item_info.get("damage_type", "fire")
+    item_name = item_info.get("name", "Unknown Damage Item")
+
+    # Roll damage dice
+    damage_roll = dice_roller.roll(damage_dice)
+    damage_amount = damage_roll.total
+
+    # Apply damage
+    hp_before = target.current_hp
+    target.take_damage(damage_amount)
+    actual_damage = hp_before - target.current_hp
+
+    # Emit damage event if event bus provided
+    if event_bus is not None:
+        event = Event(
+            type=EventType.DAMAGE_DEALT,
+            data={
+                "target": target.name,
+                "item": item_name,
+                "damage_dice": damage_dice,
+                "damage_type": damage_type,
+                "damage_rolled": damage_amount,
+                "damage_actual": actual_damage,
+                "hp_before": hp_before,
+                "hp_after": target.current_hp
+            }
+        )
+        event_bus.emit(event)
+
+    # Build result message
+    if actual_damage == 0:
+        message = f"{target.name} takes no damage"
+    else:
+        message = f"{target.name} takes {actual_damage} {damage_type} damage (rolled {damage_dice}: {damage_amount})"
+        if not target.is_alive:
+            message += " - KILLED!"
+
+    return ItemEffectResult(
+        success=actual_damage > 0,
+        effect_type="damage",
+        amount=actual_damage,
+        dice_notation=damage_dice,
+        message=message
+    )
+
+
+def _apply_condition_removal_effect(
+    item_info: Dict[str, Any],
+    target: Creature,
+    event_bus: Optional[EventBus]
+) -> ItemEffectResult:
+    """
+    Apply a condition removal effect to a target.
+
+    Removes specific status conditions like poisoned, diseased, etc.
+
+    Args:
+        item_info: Item data containing "removes_conditions" list
+        target: Creature to remove conditions from
+        event_bus: Optional event bus for emitting CONDITION_REMOVED event
+
+    Returns:
+        ItemEffectResult with condition removal details
+    """
+    item_name = item_info.get("name", "Unknown Curative Item")
+    conditions_to_remove = item_info.get("removes_conditions", [])
+
+    if not conditions_to_remove:
+        return ItemEffectResult(
+            success=False,
+            effect_type="condition_removal",
+            message=f"{item_name} has no conditions specified to remove"
+        )
+
+    # Track which conditions were actually removed
+    removed_conditions = []
+    for condition in conditions_to_remove:
+        if target.has_condition(condition):
+            target.remove_condition(condition)
+            removed_conditions.append(condition)
+
+    # Emit event if any conditions were removed
+    if event_bus is not None and removed_conditions:
+        event = Event(
+            type=EventType.CONDITION_REMOVED,
+            data={
+                "target": target.name,
+                "item": item_name,
+                "conditions_removed": removed_conditions
+            }
+        )
+        event_bus.emit(event)
+
+    # Build result message
+    if not removed_conditions:
+        message = f"{target.name} has none of the conditions that {item_name} can cure"
+    else:
+        conditions_str = ", ".join(removed_conditions)
+        message = f"{target.name} is cured of: {conditions_str}"
+
+    return ItemEffectResult(
+        success=len(removed_conditions) > 0,
+        effect_type="condition_removal",
+        amount=len(removed_conditions),
+        message=message
+    )
+
+
+def _apply_buff_effect(
+    item_info: Dict[str, Any],
+    target: Creature,
+    event_bus: Optional[EventBus]
+) -> ItemEffectResult:
+    """
+    Apply a buff effect to a target.
+
+    # TODO: This is a simplified implementation that uses conditions to track buffs.
+    # In the future, this should be replaced with a proper BuffManager system that:
+    # - Tracks buff name, duration (rounds/minutes), and specific modifiers
+    # - Handles buff expiration automatically
+    # - Supports stacking rules and buff conflicts
+    # - Provides query methods for "does this creature have advantage on X?"
+    # See Option B in Phase 5 design discussion.
+
+    Current implementation adds conditions with buff-specific names like:
+    - "has_antitoxin" for advantage on poison saves
+    - "has_resistance_fire" for fire resistance
+    - "has_heroism" for temp HP and fear immunity
+
+    Args:
+        item_info: Item data containing buff configuration
+        target: Creature to buff
+        event_bus: Optional event bus for emitting BUFF_APPLIED event
+
+    Returns:
+        ItemEffectResult with buff details
+    """
+    item_name = item_info.get("name", "Unknown Buff Item")
+    buff_type = item_info.get("buff_type")
+    duration_minutes = item_info.get("duration_minutes", 60)
+
+    if not buff_type:
+        return ItemEffectResult(
+            success=False,
+            effect_type="buff",
+            message=f"{item_name} has no buff_type specified"
+        )
+
+    # Simple condition-based buff tracking
+    # Map buff_type to condition name
+    buff_conditions = []
+
+    if buff_type == "advantage_on_saves":
+        save_type = item_info.get("save_type", "poison")
+        condition_name = f"has_advantage_{save_type}_saves"
+        target.add_condition(condition_name)
+        buff_conditions.append(condition_name)
+
+    elif buff_type == "resistance":
+        damage_type = item_info.get("damage_type", "poison")
+        condition_name = f"has_resistance_{damage_type}"
+        target.add_condition(condition_name)
+        buff_conditions.append(condition_name)
+
+    elif buff_type == "temporary_hp":
+        # TODO: Implement proper temporary HP system
+        # For now, just add a condition indicating they have the buff
+        target.add_condition("has_temporary_hp_buff")
+        buff_conditions.append("has_temporary_hp_buff")
+
+    # Add any extra conditions specified
+    extra_conditions = item_info.get("adds_conditions", [])
+    for condition in extra_conditions:
+        target.add_condition(condition)
+        buff_conditions.append(condition)
+
+    # Emit event
+    if event_bus is not None:
+        event = Event(
+            type=EventType.BUFF_APPLIED,
+            data={
+                "target": target.name,
+                "item": item_name,
+                "buff_type": buff_type,
+                "duration_minutes": duration_minutes,
+                "conditions_added": buff_conditions
+            }
+        )
+        event_bus.emit(event)
+
+    # Build result message
+    duration_text = f"{duration_minutes} minutes" if duration_minutes < 60 else f"{duration_minutes // 60} hours"
+    message = f"{target.name} gains {item_name} buff for {duration_text}"
+
+    return ItemEffectResult(
+        success=True,
+        effect_type="buff",
+        amount=duration_minutes,
+        message=message
+    )
+
+
+def _apply_spell_effect(
+    item_info: Dict[str, Any],
+    target: Creature,
+    dice_roller: DiceRoller,
+    event_bus: Optional[EventBus]
+) -> ItemEffectResult:
+    """
+    Apply a spell effect from a scroll or spell-effect potion.
+
+    # TODO: This is a placeholder implementation.
+    # When the spell system is implemented, this should:
+    # - Look up the spell by spell_id
+    # - Check if spell is on caster's class list
+    # - Roll Intelligence check if not (DC = 10 + spell_level)
+    # - Cast the spell with appropriate parameters
+    # - Handle spell targeting, saving throws, etc.
+
+    Args:
+        item_info: Item data containing spell configuration
+        target: Creature to apply spell effect to
+        dice_roller: DiceRoller for ability checks
+        event_bus: Optional event bus
+
+    Returns:
+        ItemEffectResult indicating spell system not implemented
+    """
+    item_name = item_info.get("name", "Unknown Spell Item")
+    spell_id = item_info.get("spell_id", "unknown")
+
+    return ItemEffectResult(
+        success=False,
+        effect_type="spell",
+        message=f"{item_name} cannot be used - spell system not yet implemented (spell: {spell_id})"
     )

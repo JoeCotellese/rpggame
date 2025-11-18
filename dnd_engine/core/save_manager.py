@@ -251,6 +251,7 @@ class SaveManager:
             "character_class": character.character_class.value,
             "level": character.level,
             "race": character.race,
+            "subclass": character.subclass,
             "xp": character.xp,
             "max_hp": character.max_hp,
             "current_hp": character.current_hp,
@@ -410,7 +411,8 @@ class SaveManager:
             current_hp=char_data["current_hp"],
             xp=char_data["xp"],
             inventory=inventory,
-            race=char_data["race"]
+            race=char_data["race"],
+            subclass=char_data.get("subclass")  # Optional, defaults to None for old saves
         )
 
         # Restore conditions

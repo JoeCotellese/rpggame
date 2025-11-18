@@ -39,6 +39,7 @@ class Character(Creature):
         xp: int = 0,
         inventory: Optional[Inventory] = None,
         race: str = "human",
+        subclass: Optional[str] = None,
         saving_throw_proficiencies: Optional[List[str]] = None,
         skill_proficiencies: Optional[list[str]] = None,
         expertise_skills: Optional[List[str]] = None,
@@ -59,6 +60,7 @@ class Character(Creature):
             xp: Starting experience points
             inventory: Inventory instance (creates new one if not provided)
             race: Character race (human, mountain_dwarf, high_elf, halfling)
+            subclass: Character subclass/archetype (e.g., "thief" for Rogue at level 3+)
             saving_throw_proficiencies: List of abilities the character is proficient in saving throws for (e.g., ["str", "con"])
             skill_proficiencies: List of skill names the character is proficient in
             expertise_skills: List of skills with expertise (doubled proficiency bonus)
@@ -77,6 +79,7 @@ class Character(Creature):
         self.level = level
         self.xp = xp
         self.race = race
+        self.subclass = subclass
         self.inventory = inventory if inventory is not None else Inventory()
         self.saving_throw_proficiencies = saving_throw_proficiencies if saving_throw_proficiencies is not None else []
         self.skill_proficiencies = skill_proficiencies if skill_proficiencies is not None else []
@@ -728,6 +731,27 @@ class Character(Creature):
 
         # Can use sneak attack if attack has advantage or ally is nearby
         return has_advantage or ally_nearby
+
+    def has_fast_hands(self) -> bool:
+        """
+        Check if character has the Thief Fast Hands feature.
+
+        Fast Hands is a Rogue (Thief) feature gained at level 3 that allows:
+        - Using bonus action to make Dexterity (Sleight of Hand) check
+        - Using bonus action to use thieves' tools
+        - Using bonus action to take the Use an Object action
+
+        The third ability allows Thieves to use consumable items (like potions)
+        as a bonus action instead of an action.
+
+        Returns:
+            True if character is a level 3+ Rogue with Thief subclass
+        """
+        return (
+            self.character_class == CharacterClass.ROGUE
+            and self.level >= 3
+            and self.subclass == "thief"
+        )
 
     def add_resource_pool(self, pool: ResourcePool) -> None:
         """
