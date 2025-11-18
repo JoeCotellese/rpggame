@@ -59,8 +59,12 @@ class OpenAIProvider(LLMProvider):
                         {
                             "role": "system",
                             "content": (
-                                "You are a Dungeon Master narrating a D&D game. "
-                                "Be vivid but concise (2-3 sentences max)."
+                                "You are a narrator for a classic radio drama adventure serial. "
+                                "Your audience cannot see - they can only hear your words. "
+                                "Paint vivid pictures using rich sensory details: sights, sounds, smells, textures, atmosphere. "
+                                "Write in present tense, second person (\"you step into...\", \"the air hangs heavy...\"). "
+                                "Be dramatic and atmospheric, but keep it concise (2-3 sentences). "
+                                "Make every word count to transport listeners into the scene."
                             )
                         },
                         {
