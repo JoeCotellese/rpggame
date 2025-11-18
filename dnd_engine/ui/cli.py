@@ -540,12 +540,20 @@ class CLI:
                     target = self._prompt_combat_ally_selection(item_name, item_data, character)
                     if not isinstance(target, Character):
                         return  # User cancelled or invalid selection
+                    # Execute the use with selected target
+                    self.handle_use_item_combat_with_target(item_id, item_data, character, target)
+                elif target_type == "enemy":
+                    # Prompt for enemy target selection
+                    target = self._prompt_enemy_selection()
+                    if target is None:
+                        return  # User cancelled
+                    # Execute attack with item on enemy
+                    self.handle_use_item_combat_attack(item_id, item_data, character, target)
                 else:
                     # Self-target only
                     target = character
-
-                # Execute the use with selected target
-                self.handle_use_item_combat_with_target(item_id, item_data, character, target)
+                    # Execute the use with selected target
+                    self.handle_use_item_combat_with_target(item_id, item_data, character, target)
                 return
 
             # Use item during combat (old syntax still works)
@@ -1063,6 +1071,33 @@ class CLI:
             # Remove from initiative
             self.game_state.initiative_tracker.remove_combatant(character)
 
+    def _process_turn_start_effects(self, creature) -> None:
+        """
+        Process effects that trigger at the start of a creature's turn.
+
+        Currently handles:
+        - Ongoing fire damage from Alchemist's Fire
+
+        Args:
+            creature: The creature whose turn is starting
+        """
+        # Check for ongoing fire damage
+        if creature.has_condition("on_fire"):
+            # Roll 1d4 fire damage
+            fire_roll = self.game_state.dice_roller.roll("1d4")
+            fire_damage = fire_roll.total
+
+            # Apply fire damage
+            hp_before = creature.current_hp
+            creature.take_damage(fire_damage)
+
+            # Display fire damage message
+            print_status_message(f"🔥 {creature.name} takes {fire_damage} fire damage from being on fire (rolled 1d4: {fire_damage})", "warning")
+
+            # Check if creature died from fire
+            if not creature.is_alive:
+                print_status_message(f"💀 {creature.name} is killed by the flames!", "warning")
+
     def process_enemy_turns(self) -> None:
         """Process all enemy turns until it's a party member's turn again."""
         while self.game_state.in_combat:
@@ -1085,6 +1120,14 @@ class CLI:
                 continue
 
             print_status_message(f"{enemy.name}'s turn...", "info")
+
+            # Process turn-start effects (e.g., ongoing fire damage)
+            self._process_turn_start_effects(enemy)
+
+            # Check if enemy died from turn-start effects
+            if not enemy.is_alive:
+                self.game_state.initiative_tracker.next_turn()
+                continue
 
             # Choose target from living party members (lowest HP)
             living_party = self.game_state.party.get_living_members()
@@ -2221,6 +2264,124 @@ class CLI:
             }
         ))
 
+    def handle_use_item_combat_attack(self, item_id: str, item_data: Dict[str, Any], user: Character, target) -> None:
+        """
+        Handle using an attack-type consumable item during combat on an enemy target.
+
+        Makes a ranged attack roll and applies damage/effects on hit.
+        Suitable for throwable items like Alchemist's Fire, Acid Vials, etc.
+
+        Args:
+            item_id: The item ID to use
+            item_data: The item data dictionary
+            user: The character using the item
+            target: The enemy creature being targeted
+        """
+        from dnd_engine.systems.item_effects import apply_item_effect
+        from dnd_engine.systems.action_economy import ActionType
+
+        inventory = user.inventory
+        items_data = self.game_state.data_loader.load_items()
+
+        item_name = item_data.get("name", item_id)
+        action_required_str = item_data.get("action_required", "action")
+
+        # Map string to ActionType
+        action_type_map = {
+            "action": ActionType.ACTION,
+            "bonus_action": ActionType.BONUS_ACTION,
+            "free_object": ActionType.FREE_OBJECT,
+            "no_action": ActionType.NO_ACTION
+        }
+        action_required = action_type_map.get(action_required_str, ActionType.ACTION)
+
+        # Check if action is available
+        turn_state = self.game_state.initiative_tracker.get_current_turn_state()
+        if not turn_state:
+            print_error("Unable to get current turn state!")
+            return
+
+        if not turn_state.is_action_available(action_required):
+            action_name = action_required_str.replace("_", " ").title()
+            print_error(f"You don't have a {action_name} available this turn!")
+            print_status_message(f"Available: {turn_state}", "info")
+            return
+
+        # Consume the action
+        if not turn_state.consume_action(action_required):
+            print_error(f"Failed to consume {action_required_str}!")
+            return
+
+        # Use the item from inventory (removes it)
+        success, used_item_data = inventory.use_item(item_id, items_data)
+
+        if not success:
+            print_error(f"Failed to use {item_name}")
+            # Restore the action since item use failed
+            turn_state.reset()
+            turn_state.consume_action(action_required)
+            return
+
+        # Make a ranged attack roll
+        # Alchemist's Fire and similar items use DEX for attack rolls (improvised weapon)
+        attack_bonus = user.dexterity_modifier + (user.proficiency_bonus if hasattr(user, 'proficiency_bonus') else 0)
+
+        # Get damage from item
+        damage_dice = used_item_data.get("damage", "1d4")
+        damage_type = used_item_data.get("damage_type", "damage")
+
+        # Resolve the attack using combat engine
+        result = self.game_state.combat_engine.resolve_attack(
+            attacker=user,
+            defender=target,
+            attack_bonus=attack_bonus,
+            damage_dice=damage_dice,
+            apply_damage=True,
+            event_bus=self.game_state.event_bus
+        )
+
+        # Display the attack result
+        action_cost_msg = f"({action_required_str.replace('_', ' ')})"
+        print_status_message(f"{user.name} throws {item_name} {action_cost_msg}", "info")
+
+        # Show attack roll result
+        from dnd_engine.ui.output import console
+        console.print(f"[cyan]⚔️  {str(result)}[/cyan]")
+
+        # Apply special effects on hit
+        if result.hit:
+            # Check for special ongoing effects (like Alchemist's Fire)
+            if "alchemist" in item_id.lower() or "alchemist" in item_name.lower():
+                # Apply ongoing fire damage condition
+                target.add_condition("on_fire")
+                print_status_message(f"🔥 {target.name} catches fire and will take 1d4 fire damage at the start of each turn!", "warning")
+                print_status_message(f"{target.name} can use an action to make a DC 10 DEX check to extinguish the flames", "info")
+
+        # Show remaining actions
+        remaining_actions = str(turn_state)
+        print_status_message(f"Remaining this turn: {remaining_actions}", "info")
+
+        # Emit item used event
+        self.game_state.event_bus.emit(Event(
+            type=EventType.ITEM_USED,
+            data={
+                "character": user.name,
+                "target": target.name,
+                "item_id": item_id,
+                "item_name": item_name,
+                "effect_type": "attack",
+                "action_cost": action_required_str,
+                "success": result.hit,
+                "damage": result.damage if result.hit else 0
+            }
+        ))
+
+        # Check if target died
+        if not target.is_alive:
+            enemy_num = self._get_enemy_number(target)
+            display_name = f"{target.name} {enemy_num}" if enemy_num else target.name
+            print_status_message(f"💀 {display_name} is defeated!", "success")
+
     def handle_use_item_combat(self, item_id: str) -> None:
         """
         Handle using a consumable item during combat (legacy method).
@@ -2621,6 +2782,15 @@ class CLI:
                         self.game_state._check_combat_end()
                     else:
                         # Normal turn for conscious character
+                        # Process turn-start effects (e.g., ongoing fire damage)
+                        self._process_turn_start_effects(party_character)
+
+                        # Check if character died from turn-start effects
+                        if not party_character.is_alive:
+                            print_error(f"{party_character.name} has died from turn-start effects!")
+                            self.game_state.initiative_tracker.next_turn()
+                            continue
+
                         # Show compact turn status instead of full table
                         self.display_turn_status(is_party_turn, current.creature)
                         command = self.get_player_command()
