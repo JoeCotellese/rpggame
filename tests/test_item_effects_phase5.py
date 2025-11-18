@@ -95,6 +95,120 @@ class TestDamageEffect:
         assert event.data["item"] == "Alchemist's Fire"
         assert event.data["damage_type"] == "fire"
 
+    def test_damage_effect_with_resistance_halves_damage(self, target_creature):
+        """Test that resistance halves damage (regression test for resistance bug)"""
+        # Give target fire resistance
+        target_creature.add_condition("has_resistance_fire")
+
+        item_info = {
+            "name": "Alchemist's Fire",
+            "effect_type": "damage",
+            "damage": "4d1",  # Always rolls 4 damage for predictable test
+            "damage_type": "fire"
+        }
+
+        dice_roller = DiceRoller()
+        result = apply_item_effect(item_info, target_creature, dice_roller)
+
+        # Should deal 2 damage (4 halved)
+        assert result.success is True
+        assert result.amount == 2
+        assert target_creature.current_hp == 18  # 20 - 2
+        assert "halved by resistance" in result.message
+
+    def test_damage_effect_with_resistance_rounds_down(self, target_creature):
+        """Test that resistance uses integer division (rounds down)"""
+        # Give target fire resistance
+        target_creature.add_condition("has_resistance_fire")
+
+        item_info = {
+            "name": "Alchemist's Fire",
+            "effect_type": "damage",
+            "damage": "3d1",  # Always rolls 3 damage
+            "damage_type": "fire"
+        }
+
+        dice_roller = DiceRoller()
+        result = apply_item_effect(item_info, target_creature, dice_roller)
+
+        # Should deal 1 damage (3 // 2 = 1, integer division)
+        assert result.success is True
+        assert result.amount == 1
+        assert target_creature.current_hp == 19  # 20 - 1
+
+    def test_damage_effect_with_resistance_can_reduce_to_zero(self, target_creature):
+        """Test that resistance can reduce damage to 0"""
+        # Give target fire resistance
+        target_creature.add_condition("has_resistance_fire")
+
+        item_info = {
+            "name": "Alchemist's Fire",
+            "effect_type": "damage",
+            "damage": "1d1",  # Always rolls 1 damage
+            "damage_type": "fire"
+        }
+
+        dice_roller = DiceRoller()
+        result = apply_item_effect(item_info, target_creature, dice_roller)
+
+        # Should deal 0 damage (1 // 2 = 0)
+        assert result.success is False  # 0 damage means not successful
+        assert result.amount == 0
+        assert target_creature.current_hp == 20  # No damage taken
+        assert "takes no damage" in result.message
+        assert "halved by resistance" in result.message  # Should still show resistance was applied
+
+    def test_damage_effect_without_resistance_unaffected(self, target_creature):
+        """Test that damage without resistance works normally"""
+        # Give target cold resistance (not fire)
+        target_creature.add_condition("has_resistance_cold")
+
+        item_info = {
+            "name": "Alchemist's Fire",
+            "effect_type": "damage",
+            "damage": "4d1",  # Always rolls 4 damage
+            "damage_type": "fire"
+        }
+
+        dice_roller = DiceRoller()
+        result = apply_item_effect(item_info, target_creature, dice_roller)
+
+        # Should deal full 4 damage (no fire resistance)
+        assert result.success is True
+        assert result.amount == 4
+        assert target_creature.current_hp == 16  # 20 - 4
+        assert "halved by resistance" not in result.message
+
+    def test_damage_effect_emits_resistance_in_event(self, target_creature):
+        """Test that DAMAGE_DEALT event includes resistance information"""
+        event_bus = EventBus()
+        events_received = []
+
+        def capture_event(event):
+            events_received.append(event)
+
+        event_bus.subscribe(EventType.DAMAGE_DEALT, capture_event)
+
+        # Give target fire resistance
+        target_creature.add_condition("has_resistance_fire")
+
+        item_info = {
+            "name": "Alchemist's Fire",
+            "effect_type": "damage",
+            "damage": "4d1",  # Always rolls 4
+            "damage_type": "fire"
+        }
+
+        dice_roller = DiceRoller()
+        apply_item_effect(item_info, target_creature, dice_roller, event_bus=event_bus)
+
+        assert len(events_received) == 1
+        event = events_received[0]
+        assert event.data["has_resistance"] is True
+        assert event.data["damage_rolled"] == 4  # Original roll
+        assert event.data["damage_after_resistance"] == 2  # After halving
+        assert event.data["damage_actual"] == 2  # Final damage
+
 
 class TestConditionRemovalEffect:
     """Test condition removal effect type"""

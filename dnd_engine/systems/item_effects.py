@@ -179,6 +179,14 @@ def _apply_damage_effect(
     damage_roll = dice_roller.roll(damage_dice)
     damage_amount = damage_roll.total
 
+    # Check for resistance to this damage type
+    resistance_condition = f"has_resistance_{damage_type}"
+    has_resistance = target.has_condition(resistance_condition)
+
+    # Halve damage if resistant
+    if has_resistance:
+        damage_amount = damage_amount // 2  # Integer division for D&D rules
+
     # Apply damage
     hp_before = target.current_hp
     target.take_damage(damage_amount)
@@ -193,8 +201,10 @@ def _apply_damage_effect(
                 "item": item_name,
                 "damage_dice": damage_dice,
                 "damage_type": damage_type,
-                "damage_rolled": damage_amount,
-                "damage_actual": actual_damage,
+                "damage_rolled": damage_roll.total,  # Original rolled damage
+                "damage_after_resistance": damage_amount,  # After resistance applied
+                "damage_actual": actual_damage,  # After all reductions
+                "has_resistance": has_resistance,
                 "hp_before": hp_before,
                 "hp_after": target.current_hp
             }
@@ -202,10 +212,21 @@ def _apply_damage_effect(
         event_bus.emit(event)
 
     # Build result message
+    damage_roll_str = f"rolled {damage_dice}: {damage_roll.total}"
+
     if actual_damage == 0:
-        message = f"{target.name} takes no damage"
+        # Show resistance if it caused the damage to be 0
+        if has_resistance and damage_roll.total > 0:
+            message = f"{target.name} takes no damage ({damage_roll_str}, halved by resistance)"
+        else:
+            message = f"{target.name} takes no damage"
     else:
-        message = f"{target.name} takes {actual_damage} {damage_type} damage (rolled {damage_dice}: {damage_amount})"
+        # If resistance was applied, show the halving
+        if has_resistance:
+            message = f"{target.name} takes {actual_damage} {damage_type} damage ({damage_roll_str}, halved by resistance)"
+        else:
+            message = f"{target.name} takes {actual_damage} {damage_type} damage ({damage_roll_str})"
+
         if not target.is_alive:
             message += " - KILLED!"
 

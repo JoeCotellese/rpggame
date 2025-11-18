@@ -420,6 +420,21 @@ class CLI:
             self.handle_rest()
             return
 
+        if command in ["take", "get", "pickup"]:
+            # Prompt for item selection with arrow keys
+            item_to_take = self._prompt_item_to_take()
+            if item_to_take is None or item_to_take == "Cancel":
+                return  # User cancelled
+
+            # Determine item name based on type
+            if item_to_take["type"] in ["gold", "currency"]:
+                item_name = "currency"
+            else:
+                item_name = item_to_take.get("id", "")
+
+            self.handle_take(item_name)
+            return
+
         if command.startswith("take ") or command.startswith("get ") or command.startswith("pickup "):
             # Extract item name from command
             parts = command.split(maxsplit=1)
@@ -456,7 +471,7 @@ class CLI:
         if command == "attack":
             # Prompt for enemy selection with arrow keys
             target = self._prompt_enemy_selection()
-            if target is None:
+            if target is None or target == "Cancel":
                 return  # User cancelled
 
             # Find the target name with number
@@ -705,7 +720,7 @@ class CLI:
             item_id = item_to_take.get("id", item_name)
 
             for character in living_members:
-                choice_text = f"{character.name} ({character.character_class})"
+                choice_text = f"{character.name} ({character.character_class.value.title()})"
                 choices.append(questionary.Choice(title=choice_text, value=character))
 
             # Add cancel option
@@ -719,7 +734,7 @@ class CLI:
                     use_arrow_keys=True
                 ).ask()
 
-                if result is None:
+                if result is None or result == "Cancel":
                     print_status_message("Cancelled.", "warning")
                     return
                 selected_character = result
@@ -1370,8 +1385,8 @@ class CLI:
             ).ask()
 
             # Check if user cancelled or selected Cancel option
-            # questionary returns None when cancelled, but also check for dict to be safe
-            if result is None or not isinstance(result, dict):
+            # questionary returns "Cancel" string when user selects Cancel option
+            if result is None or result == "Cancel" or not isinstance(result, dict):
                 return None
 
             return (result["item_id"], result["item_data"])
@@ -1529,6 +1544,65 @@ class CLI:
         try:
             result = questionary.select(
                 f"Use {item_name} on:",
+                choices=choices,
+                use_arrow_keys=True
+            ).ask()
+
+            return result
+        except (EOFError, KeyboardInterrupt):
+            return None
+
+    def _prompt_item_to_take(self) -> Optional[Dict[str, Any]]:
+        """
+        Prompt user to select an item to take from the current room.
+
+        Returns:
+            Selected item dict or None if cancelled
+        """
+        import questionary
+
+        # Get available items in the room
+        available_items = self.game_state.get_available_items_in_room()
+
+        if not available_items:
+            room = self.game_state.get_current_room()
+            if room.get("searchable") and not room.get("searched"):
+                print_error("You haven't searched this room yet. Use 'search' first.")
+            else:
+                print_error("There are no items to take here.")
+            return None
+
+        # Build choices for questionary
+        choices = []
+        for item in available_items:
+            if item["type"] == "gold":
+                choice_text = f"Gold ({item['amount']} pieces)"
+                choices.append(questionary.Choice(title=choice_text, value=item))
+            elif item["type"] == "currency":
+                currency_parts = []
+                if item.get("gold", 0) > 0:
+                    currency_parts.append(f"{item['gold']} gold")
+                if item.get("silver", 0) > 0:
+                    currency_parts.append(f"{item['silver']} silver")
+                if item.get("copper", 0) > 0:
+                    currency_parts.append(f"{item['copper']} copper")
+                if item.get("platinum", 0) > 0:
+                    currency_parts.append(f"{item['platinum']} platinum")
+                choice_text = f"Currency ({', '.join(currency_parts)})"
+                choices.append(questionary.Choice(title=choice_text, value=item))
+            elif item["type"] == "item":
+                item_id = item.get("id", "unknown")
+                # Format item name nicely
+                display_name = item_id.replace("_", " ").title()
+                choices.append(questionary.Choice(title=display_name, value=item))
+
+        # Add cancel option
+        choices.append(questionary.Choice(title="Cancel", value=None))
+
+        # Get user selection with arrow keys
+        try:
+            result = questionary.select(
+                "Select item to take:",
                 choices=choices,
                 use_arrow_keys=True
             ).ask()
