@@ -149,20 +149,19 @@ class GameState:
         Use take_item() to actually pick up items.
 
         Returns:
-            List of items found
+            List of items found (returns current items on subsequent searches)
         """
         room = self.get_current_room()
 
-        if room.get("searched"):
-            return []  # Already searched
-
+        # Not searchable rooms return empty
         if not room.get("searchable"):
-            return []  # Not searchable
+            return []
 
-        # Mark as searched to reveal items
-        room["searched"] = True
+        # Mark as searched on first search to reveal items
+        if not room.get("searched"):
+            room["searched"] = True
 
-        # Return items found without adding to inventory
+        # Return current items in the room (allows re-searching to see what remains)
         return room.get("items", [])
 
     def get_available_items_in_room(self) -> List[Dict[str, Any]]:
