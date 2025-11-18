@@ -254,3 +254,140 @@ class TestGameStateActions:
         self.character.take_damage(999)
         self.character.death_save_failures = 3
         assert self.game_state.is_game_over()
+
+    def test_take_item_regular_item(self):
+        """Test taking a regular item from a room"""
+        room = self.game_state.get_current_room()
+
+        # Add a test item to the room
+        room["items"] = [{"type": "item", "id": "longsword"}]
+        room["searched"] = True
+
+        # Take the item
+        success = self.game_state.take_item("longsword", self.character)
+
+        assert success is True
+        # Item should be in character's inventory
+        weapons = self.character.inventory.get_items_by_category("weapons")
+        assert any(item.item_id == "longsword" for item in weapons)
+        # Item should be removed from room
+        assert len(room["items"]) == 0
+
+    def test_take_item_gold(self):
+        """Test taking gold from a room"""
+        room = self.game_state.get_current_room()
+
+        # Add gold to the room
+        room["items"] = [{"type": "gold", "amount": 100}]
+        room["searched"] = True
+
+        initial_gold = self.character.inventory.currency.gold
+
+        # Take the gold
+        success = self.game_state.take_item("gold", self.character)
+
+        assert success is True
+        # Gold should be added to character (split among party)
+        assert self.character.inventory.currency.gold == initial_gold + 100
+        # Gold should be removed from room
+        assert len(room["items"]) == 0
+
+    def test_take_item_currency(self):
+        """Test taking mixed currency from a room"""
+        from dnd_engine.systems.currency import Currency
+        room = self.game_state.get_current_room()
+
+        # Add currency to the room
+        room["items"] = [{"type": "currency", "gold": 10, "silver": 20, "copper": 30}]
+        room["searched"] = True
+
+        initial_total_copper = self.character.inventory.currency.to_copper()
+
+        # Take the currency
+        success = self.game_state.take_item("gold", self.character)
+
+        assert success is True
+        # Currency should be added (and converted appropriately)
+        # 10 gold = 1000 copper, 20 silver = 200 copper, 30 copper = 30 copper
+        # Total = 1230 copper added (split among party of 1)
+        expected_total_copper = initial_total_copper + 1230
+        assert self.character.inventory.currency.to_copper() == expected_total_copper
+        # Currency should be removed from room
+        assert len(room["items"]) == 0
+
+    def test_take_item_not_found(self):
+        """Test attempting to take an item that doesn't exist in the room"""
+        room = self.game_state.get_current_room()
+
+        # Add a different item to the room
+        room["items"] = [{"type": "item", "id": "dagger"}]
+        room["searched"] = True
+
+        # Try to take a non-existent item
+        success = self.game_state.take_item("longsword", self.character)
+
+        assert success is False
+        # Room items should be unchanged
+        assert len(room["items"]) == 1
+
+    def test_take_item_removes_from_room(self):
+        """Test that taking an item removes it from the room"""
+        room = self.game_state.get_current_room()
+
+        # Add multiple items to the room
+        room["items"] = [
+            {"type": "item", "id": "dagger"},
+            {"type": "item", "id": "longsword"},
+            {"type": "gold", "amount": 50}
+        ]
+        room["searched"] = True
+
+        # Take one item
+        success = self.game_state.take_item("dagger", self.character)
+
+        assert success is True
+        assert len(room["items"]) == 2
+        # Dagger should be gone, others should remain
+        assert not any(item.get("id") == "dagger" for item in room["items"])
+        assert any(item.get("id") == "longsword" for item in room["items"])
+
+    def test_get_available_items_in_room_searched(self):
+        """Test getting available items from a searched room"""
+        room = self.game_state.get_current_room()
+
+        # Add items and mark as searched
+        room["items"] = [{"type": "item", "id": "dagger"}]
+        room["searchable"] = True
+        room["searched"] = True
+
+        items = self.game_state.get_available_items_in_room()
+
+        assert len(items) == 1
+        assert items[0]["id"] == "dagger"
+
+    def test_get_available_items_in_room_not_searched(self):
+        """Test that items are not available from unsearched searchable room"""
+        room = self.game_state.get_current_room()
+
+        # Add items but don't mark as searched
+        room["items"] = [{"type": "item", "id": "dagger"}]
+        room["searchable"] = True
+        room["searched"] = False
+
+        items = self.game_state.get_available_items_in_room()
+
+        assert len(items) == 0
+
+    def test_get_available_items_in_room_not_searchable(self):
+        """Test that items are available from non-searchable rooms (visible items)"""
+        room = self.game_state.get_current_room()
+
+        # Add items to non-searchable room (visible items)
+        room["items"] = [{"type": "item", "id": "dagger"}]
+        room["searchable"] = False
+        room["searched"] = False
+
+        items = self.game_state.get_available_items_in_room()
+
+        assert len(items) == 1
+        assert items[0]["id"] == "dagger"

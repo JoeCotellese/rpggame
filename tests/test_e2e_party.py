@@ -271,7 +271,7 @@ class TestPartyPlaythrough:
         assert all(xp >= 0 for xp in xp_values)
 
     def test_party_gold_distribution(self, game_with_default_party, default_party):
-        """Test that gold is distributed among party members."""
+        """Test that gold is distributed among party members when taken."""
         room = game_with_default_party.get_current_room()
 
         # Mock a room with 100 gold
@@ -279,15 +279,22 @@ class TestPartyPlaythrough:
         room["searched"] = False
         room["items"] = [{"type": "gold", "amount": 100}]
 
-        # Search room
+        # Search room (reveals items)
         game_with_default_party.search_room()
+
+        # Gold should NOT be distributed yet
+        for character in default_party.characters:
+            assert character.inventory.currency.gold == 0
+
+        # Take the gold
+        game_with_default_party.take_item("gold", default_party.characters[0])
 
         # Each party member should get 25 gold
         for character in default_party.characters:
-            assert character.inventory.gold == 25
+            assert character.inventory.currency.gold == 25
 
     def test_party_item_pickup(self, game_with_default_party, default_party):
-        """Test that items go to first living party member."""
+        """Test that items can be taken and given to a party member."""
         room = game_with_default_party.get_current_room()
 
         # Mock a room with an item
@@ -295,15 +302,22 @@ class TestPartyPlaythrough:
         room["searched"] = False
         room["items"] = [{"type": "item", "id": "longsword"}]
 
-        # Search room
+        # Search room (reveals items)
         game_with_default_party.search_room()
 
-        # First living member should have the item
+        # First living member should NOT have the item yet
         first_living = default_party.get_living_members()[0]
+        assert not first_living.inventory.has_item("longsword")
+
+        # Take the item
+        game_with_default_party.take_item("longsword", first_living)
+
+        # First living member should now have the item
         weapons = first_living.inventory.get_items_by_category("weapons")
 
         # Should have at least the longsword
         assert len(weapons) > 0
+        assert first_living.inventory.has_item("longsword")
 
     def test_party_exploration(self, game_with_default_party):
         """Test that party can explore the dungeon."""

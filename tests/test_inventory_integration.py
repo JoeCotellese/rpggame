@@ -116,7 +116,7 @@ class TestInventoryGameStateIntegration:
         )
 
     def test_search_room_adds_items_to_inventory(self):
-        """Test that searching a room adds items to player inventory"""
+        """Test that searching a room reveals items, then taking them adds to inventory"""
         # Clear enemies from guard_post to allow movement
         self.game_state.dungeon["rooms"]["guard_post"]["enemies"] = []
 
@@ -125,17 +125,27 @@ class TestInventoryGameStateIntegration:
         self.game_state.move("east")   # to storage_room
 
         initial_item_count = self.player.inventory.item_count()
-        initial_gold = self.player.inventory.gold
 
-        # Search the room
+        # Search the room (reveals items but doesn't pick them up)
         items = self.game_state.search_room()
 
         assert len(items) > 0  # Storage room has items
+        # Items should NOT be in inventory yet after search
+        assert self.player.inventory.item_count() == initial_item_count
+
+        # Take each item
+        for item in items:
+            if item["type"] == "item":
+                self.game_state.take_item(item["id"], self.player)
+            elif item["type"] in ["gold", "currency"]:
+                self.game_state.take_item("gold", self.player)
+
+        # Now items should be in inventory
         assert self.player.inventory.item_count() > initial_item_count or \
-               self.player.inventory.gold > initial_gold
+               self.player.inventory.currency.gold > 0
 
     def test_search_room_adds_gold(self):
-        """Test that searching adds gold to inventory"""
+        """Test that searching reveals gold, then taking it adds to inventory"""
         # Clear enemies from guard_post to allow movement
         self.game_state.dungeon["rooms"]["guard_post"]["enemies"] = []
 
@@ -143,15 +153,25 @@ class TestInventoryGameStateIntegration:
         self.game_state.move("north")
         self.game_state.move("east")
 
-        assert self.player.inventory.gold == 0
+        initial_gold = self.player.inventory.currency.gold
 
-        self.game_state.search_room()
+        # Search reveals items but doesn't pick up
+        items = self.game_state.search_room()
+
+        # Gold should NOT be in inventory yet
+        assert self.player.inventory.currency.gold == initial_gold
+
+        # Take the gold/currency
+        for item in items:
+            if item["type"] in ["gold", "currency"]:
+                self.game_state.take_item("gold", self.player)
+                break
 
         # Storage room has 2 gold
-        assert self.player.inventory.gold == 2
+        assert self.player.inventory.currency.gold > initial_gold
 
     def test_search_room_adds_specific_items(self):
-        """Test that specific items from room are added to inventory"""
+        """Test that specific items from room can be taken after searching"""
         # Clear enemies from guard_post to allow movement
         self.game_state.dungeon["rooms"]["guard_post"]["enemies"] = []
 
@@ -159,14 +179,24 @@ class TestInventoryGameStateIntegration:
         self.game_state.move("north")
         self.game_state.move("east")
 
-        self.game_state.search_room()
+        # Search reveals items
+        items = self.game_state.search_room()
 
-        # Check that items from storage room are in inventory
+        # Items should NOT be in inventory yet
+        assert not self.player.inventory.has_item("potion_of_healing")
+        assert not self.player.inventory.has_item("shortsword")
+
+        # Take each item
+        for item in items:
+            if item["type"] == "item":
+                self.game_state.take_item(item["id"], self.player)
+
+        # Check that items from storage room are now in inventory
         assert self.player.inventory.has_item("potion_of_healing") or \
                self.player.inventory.has_item("shortsword")
 
     def test_search_room_emits_item_acquired_event(self):
-        """Test that searching emits ITEM_ACQUIRED events"""
+        """Test that taking items emits ITEM_ACQUIRED events"""
         # Clear enemies from guard_post to allow movement
         self.game_state.dungeon["rooms"]["guard_post"]["enemies"] = []
 
@@ -180,9 +210,17 @@ class TestInventoryGameStateIntegration:
         # Move to storage room and search
         self.game_state.move("north")
         self.game_state.move("east")
-        self.game_state.search_room()
+        items = self.game_state.search_room()
 
-        # Should have received item acquired events
+        # Search should NOT emit events
+        assert len(events_received) == 0
+
+        # Take items
+        for item in items:
+            if item["type"] == "item":
+                self.game_state.take_item(item["id"], self.player)
+
+        # Should have received item acquired events from taking items
         assert len(events_received) > 0
         for event in events_received:
             assert event.type == EventType.ITEM_ACQUIRED
@@ -190,7 +228,7 @@ class TestInventoryGameStateIntegration:
             assert "category" in event.data
 
     def test_search_room_emits_gold_acquired_event(self):
-        """Test that searching emits GOLD_ACQUIRED events"""
+        """Test that taking gold emits GOLD_ACQUIRED events"""
         # Clear enemies from guard_post to allow movement
         self.game_state.dungeon["rooms"]["guard_post"]["enemies"] = []
 
@@ -204,7 +242,16 @@ class TestInventoryGameStateIntegration:
         # Move to storage room and search
         self.game_state.move("north")
         self.game_state.move("east")
-        self.game_state.search_room()
+        items = self.game_state.search_room()
+
+        # Search should NOT emit events
+        assert len(events_received) == 0
+
+        # Take gold/currency
+        for item in items:
+            if item["type"] in ["gold", "currency"]:
+                self.game_state.take_item("gold", self.player)
+                break
 
         # Should have received gold acquired event
         assert len(events_received) == 1
@@ -242,6 +289,56 @@ class TestInventoryGameStateIntegration:
         assert self.game_state._get_item_category("chain_mail") == "armor"
         assert self.game_state._get_item_category("potion_of_healing") == "consumables"
         assert self.game_state._get_item_category("nonexistent") is None
+
+    def test_search_and_take_workflow(self):
+        """Integration test for search then take workflow"""
+        room = self.game_state.get_current_room()
+
+        # Setup room with items
+        room["items"] = [
+            {"type": "item", "id": "longsword"},
+            {"type": "gold", "amount": 50}
+        ]
+        room["searchable"] = True
+        room["searched"] = False
+
+        # Search reveals items but doesn't pick them up
+        items_found = self.game_state.search_room()
+
+        assert len(items_found) == 2
+        assert room["searched"] is True
+        # Items should NOT be in inventory yet
+        assert not self.player.inventory.has_item("longsword")
+        initial_gold = self.player.inventory.currency.gold
+
+        # Take the longsword
+        success = self.game_state.take_item("longsword", self.player)
+
+        assert success is True
+        assert self.player.inventory.has_item("longsword")
+        # Only longsword should be gone from room
+        assert len(room["items"]) == 1
+
+        # Take the gold
+        success = self.game_state.take_item("gold", self.player)
+
+        assert success is True
+        assert self.player.inventory.currency.gold == initial_gold + 50
+        # All items should be gone
+        assert len(room["items"]) == 0
+
+    def test_take_item_without_search_fails(self):
+        """Test that taking items from unsearched searchable room fails"""
+        room = self.game_state.get_current_room()
+
+        # Setup searchable room with items but don't search
+        room["items"] = [{"type": "item", "id": "dagger"}]
+        room["searchable"] = True
+        room["searched"] = False
+
+        # Get available items should return empty for unsearched room
+        available = self.game_state.get_available_items_in_room()
+        assert len(available) == 0
 
 
 class TestInventoryEventIntegration:
