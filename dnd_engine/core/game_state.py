@@ -6,8 +6,9 @@ from dnd_engine.core.character import Character
 from dnd_engine.core.party import Party
 from dnd_engine.core.creature import Creature
 from dnd_engine.core.dice import DiceRoller
-from dnd_engine.core.combat import CombatEngine
+from dnd_engine.core.combat import CombatEngine, AttackResult
 from dnd_engine.systems.initiative import InitiativeTracker
+from dnd_engine.systems.action_economy import ActionType
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.utils.events import EventBus, Event, EventType
 
@@ -19,6 +20,25 @@ REVERSE_DIRECTIONS = {
     "east": "west",
     "west": "east"
 }
+
+
+class CombatItemResult:
+    """Result of using a combat attack item (thrown weapon)."""
+    def __init__(
+        self,
+        success: bool,
+        attack_result: Optional[AttackResult],
+        item_name: str,
+        action_type: ActionType,
+        special_effects: Optional[List[str]] = None,
+        error_message: Optional[str] = None
+    ):
+        self.success = success
+        self.attack_result = attack_result
+        self.item_name = item_name
+        self.action_type = action_type
+        self.special_effects = special_effects or []
+        self.error_message = error_message
 
 
 class GameState:
@@ -647,3 +667,156 @@ class GameState:
         """
         for character in self.party.characters:
             character.conditions.clear()
+
+    def use_combat_attack_item(
+        self,
+        user: Character,
+        item_id: str,
+        target: Creature
+    ) -> CombatItemResult:
+        """
+        Use a combat attack item (thrown weapon) on a target during combat.
+
+        Handles the complete flow of using attack items like Alchemist's Fire, Acid Vials:
+        1. Validates action economy
+        2. Consumes item from inventory
+        3. Makes ranged attack roll (DEX-based)
+        4. Applies damage on hit
+        5. Applies special effects (e.g., ongoing fire damage)
+        6. Emits appropriate events
+
+        Args:
+            user: Character using the item
+            item_id: ID of the item to use
+            target: Target creature for the attack
+
+        Returns:
+            CombatItemResult with attack outcome and display information
+        """
+        # Load item data (structure: {"weapons": {...}, "armor": {...}, "consumables": {...}})
+        items_data = self.data_loader.load_items()
+
+        # Find item in categories
+        item_data = None
+        for category, category_items in items_data.items():
+            if item_id in category_items:
+                item_data = category_items[item_id]
+                break
+
+        if item_data is None:
+            return CombatItemResult(
+                success=False,
+                attack_result=None,
+                item_name=item_id,
+                action_type=ActionType.ACTION,
+                error_message=f"Item '{item_id}' not found"
+            )
+
+        item_name = item_data.get("name", item_id)
+
+        # Parse action required
+        action_required_str = item_data.get("action_required", "action")
+        action_type_map = {
+            "action": ActionType.ACTION,
+            "bonus_action": ActionType.BONUS_ACTION,
+            "free_object": ActionType.FREE_OBJECT,
+            "no_action": ActionType.NO_ACTION
+        }
+        action_required = action_type_map.get(action_required_str, ActionType.ACTION)
+
+        # Validate action economy
+        turn_state = self.initiative_tracker.get_current_turn_state() if self.initiative_tracker else None
+        if not turn_state:
+            return CombatItemResult(
+                success=False,
+                attack_result=None,
+                item_name=item_name,
+                action_type=action_required,
+                error_message="Unable to get current turn state"
+            )
+
+        if not turn_state.is_action_available(action_required):
+            action_name = action_required_str.replace("_", " ").title()
+            return CombatItemResult(
+                success=False,
+                attack_result=None,
+                item_name=item_name,
+                action_type=action_required,
+                error_message=f"No {action_name} available this turn"
+            )
+
+        # Consume the action
+        if not turn_state.consume_action(action_required):
+            return CombatItemResult(
+                success=False,
+                attack_result=None,
+                item_name=item_name,
+                action_type=action_required,
+                error_message=f"Failed to consume {action_required_str}"
+            )
+
+        # Use the item from inventory (removes it)
+        inventory = user.inventory
+        success, used_item_data = inventory.use_item(item_id, items_data)
+
+        if not success:
+            # Restore the action since item use failed
+            turn_state.reset()
+            turn_state.consume_action(action_required)
+            return CombatItemResult(
+                success=False,
+                attack_result=None,
+                item_name=item_name,
+                action_type=action_required,
+                error_message=f"Failed to use {item_name} from inventory"
+            )
+
+        # Calculate attack bonus (DEX-based improvised ranged weapon)
+        attack_bonus = user.abilities.dex_mod
+        if hasattr(user, 'proficiency_bonus'):
+            attack_bonus += user.proficiency_bonus
+
+        # Get damage from item
+        damage_dice = used_item_data.get("damage", "1d4")
+        damage_type = used_item_data.get("damage_type", "damage")
+
+        # Resolve the attack
+        attack_result = self.combat_engine.resolve_attack(
+            attacker=user,
+            defender=target,
+            attack_bonus=attack_bonus,
+            damage_dice=damage_dice,
+            apply_damage=True,
+            event_bus=self.event_bus
+        )
+
+        # Apply special effects on hit
+        special_effects = []
+        if attack_result.hit:
+            # Alchemist's Fire: ongoing fire damage
+            if "alchemist" in item_id.lower() or "alchemist" in item_name.lower():
+                target.add_condition("on_fire")
+                special_effects.append("on_fire")
+
+        # Emit item used event
+        self.event_bus.emit(Event(
+            type=EventType.ITEM_USED,
+            data={
+                "character": user.name,
+                "target": target.name,
+                "item_id": item_id,
+                "item_name": item_name,
+                "effect_type": "attack",
+                "action_cost": action_required_str,
+                "success": attack_result.hit,
+                "damage": attack_result.damage if attack_result.hit else 0
+            }
+        ))
+
+        return CombatItemResult(
+            success=True,
+            attack_result=attack_result,
+            item_name=item_name,
+            action_type=action_required,
+            special_effects=special_effects
+        )
