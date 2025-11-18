@@ -2386,6 +2386,16 @@ class CLI:
             }
         ))
 
+        # End player turn
+        self.game_state.initiative_tracker.next_turn()
+
+        # Check if combat is over
+        self.game_state._check_combat_end()
+
+        if self.game_state.in_combat:
+            # Process enemy turns
+            self.process_enemy_turns()
+
     def handle_use_item_combat_attack(self, item_id: str, item_data: Dict[str, Any], user: Character, target) -> None:
         """
         Handle using an attack-type consumable item during combat on an enemy target.
