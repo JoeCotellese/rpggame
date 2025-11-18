@@ -6,6 +6,7 @@ from typing import Any, Optional
 
 from .anthropic_provider import AnthropicProvider
 from .base import LLMProvider
+from .debug_provider import DebugProvider
 from .openai_provider import OpenAIProvider
 from dnd_engine.ui.rich_ui import print_status_message
 
@@ -40,6 +41,10 @@ def create_llm_provider(
     # Disabled or not configured
     if not provider_name or provider_name == "none":
         return None
+
+    # Debug provider (no API calls)
+    if provider_name == "debug":
+        return DebugProvider()
 
     # OpenAI provider
     if provider_name == "openai":

@@ -6,6 +6,7 @@ from unittest.mock import patch
 import pytest
 
 from dnd_engine.llm.anthropic_provider import AnthropicProvider
+from dnd_engine.llm.debug_provider import DebugProvider
 from dnd_engine.llm.factory import create_llm_provider
 from dnd_engine.llm.openai_provider import OpenAIProvider
 
@@ -146,3 +147,19 @@ class TestProviderFactory:
 
                 assert provider is not None
                 assert isinstance(provider, OpenAIProvider)
+
+    def test_create_debug_provider(self) -> None:
+        """Test creating debug provider."""
+        with patch.dict(os.environ, {"LLM_PROVIDER": "debug"}, clear=True):
+            provider = create_llm_provider()
+
+            assert provider is not None
+            assert isinstance(provider, DebugProvider)
+            assert provider.get_provider_name() == "Debug (no API calls)"
+
+    def test_create_debug_provider_explicit(self) -> None:
+        """Test creating debug provider with explicit name."""
+        provider = create_llm_provider(provider_name="debug")
+
+        assert provider is not None
+        assert isinstance(provider, DebugProvider)

@@ -514,13 +514,54 @@ class CLI:
 
         # 1. Get and display attack narrative FIRST (if hit)
         if self.llm_enhancer and result.hit:
+            room = self.game_state.get_current_room()
+            location = room.get("name", "")
+
+            # Get weapon name and damage type
+            weapon_name = "weapon"
+            damage_type = ""
+            if equipped_weapon and weapon_data:
+                weapon_name = weapon_data.get("name", equipped_weapon)
+                damage_type = weapon_data.get("damage_type", "")
+
+            # Get attacker race
+            races_data = self.game_state.data_loader.load_races()
+            attacker_race_data = races_data.get(attacker.race, {})
+            attacker_race = attacker_race_data.get("name", "")
+
+            # Get defender armor type (for enemies, check monster data)
+            defender_armor = ""
+            if isinstance(target, Character):
+                # Target is player - get equipped armor
+                equipped_armor_id = target.inventory.get_equipped_item(EquipmentSlot.ARMOR)
+                if equipped_armor_id:
+                    armor_data = items_data.get("armor", {}).get(equipped_armor_id, {})
+                    armor_type = armor_data.get("armor_type", "")
+                    if armor_type:
+                        defender_armor = f"{armor_type} armor"
+            else:
+                # Target is enemy - try to get from monster data or AC source
+                monsters = self.game_state.data_loader.load_monsters()
+                for mid, mdata in monsters.items():
+                    if mdata["name"] == target.name:
+                        ac_source = mdata.get("ac_source", "")
+                        if ac_source:
+                            defender_armor = ac_source
+                        break
+
             narrative = self.llm_enhancer.get_combat_narrative_sync(
                 action_data={
                     "attacker": result.attacker_name,
                     "defender": result.defender_name,
                     "damage": result.damage,
                     "critical": result.critical_hit,
-                    "hit": result.hit
+                    "hit": result.hit,
+                    "location": location,
+                    "weapon": weapon_name,
+                    "damage_type": damage_type,
+                    "attacker_race": attacker_race,
+                    "defender_armor": defender_armor,
+                    "round_number": self.game_state.initiative_tracker.round_number
                 },
                 timeout=3.0
             )
@@ -534,7 +575,10 @@ class CLI:
         if not target.is_alive:
             if self.llm_enhancer:
                 death_narrative = self.llm_enhancer.get_death_narrative_sync(
-                    character_data={"name": target.name},
+                    character_data={
+                        "name": target.name,
+                        "is_player": isinstance(target, Character)
+                    },
                     timeout=3.0
                 )
                 if death_narrative:
@@ -629,7 +673,18 @@ class CLI:
                     break
 
             if monster_data and monster_data.get("actions"):
-                action = monster_data["actions"][0]
+                # Find first weapon attack action (skip Multiattack, etc.)
+                action = None
+                for act in monster_data["actions"]:
+                    if "attack_bonus" in act and "damage" in act:
+                        action = act
+                        break
+
+                if not action:
+                    print_error(f"{enemy.name} has no valid attack actions!")
+                    self.game_state.initiative_tracker.next_turn()
+                    continue
+
                 result = self.game_state.combat_engine.resolve_attack(
                     attacker=enemy,
                     defender=target,
@@ -640,13 +695,39 @@ class CLI:
 
                 # Get and display attack narrative FIRST (if hit)
                 if self.llm_enhancer and result.hit:
+                    room = self.game_state.get_current_room()
+                    location = room.get("name", "")
+
+                    # Get weapon name and damage type from action
+                    weapon_name = action.get("name", "weapon")
+                    damage_type = action.get("damage_type", "")
+
+                    # Get attacker type/race from monster data
+                    attacker_race = monster_data.get("type", "")
+
+                    # Get defender armor (target is always a player character here)
+                    defender_armor = ""
+                    items_data = self.game_state.data_loader.load_items()
+                    equipped_armor_id = target.inventory.get_equipped_item(EquipmentSlot.ARMOR)
+                    if equipped_armor_id:
+                        armor_data = items_data.get("armor", {}).get(equipped_armor_id, {})
+                        armor_type = armor_data.get("armor_type", "")
+                        if armor_type:
+                            defender_armor = f"{armor_type} armor"
+
                     narrative = self.llm_enhancer.get_combat_narrative_sync(
                         action_data={
                             "attacker": result.attacker_name,
                             "defender": result.defender_name,
                             "damage": result.damage,
                             "critical": result.critical_hit,
-                            "hit": result.hit
+                            "hit": result.hit,
+                            "location": location,
+                            "weapon": weapon_name,
+                            "damage_type": damage_type,
+                            "attacker_race": attacker_race,
+                            "defender_armor": defender_armor,
+                            "round_number": self.game_state.initiative_tracker.round_number
                         },
                         timeout=3.0
                     )
@@ -660,7 +741,10 @@ class CLI:
                 if not target.is_alive:
                     if self.llm_enhancer:
                         death_narrative = self.llm_enhancer.get_death_narrative_sync(
-                            character_data={"name": target.name},
+                            character_data={
+                                "name": target.name,
+                                "is_player": isinstance(target, Character)
+                            },
                             timeout=3.0
                         )
                         if death_narrative:

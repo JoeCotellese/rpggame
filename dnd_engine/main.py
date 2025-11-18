@@ -48,6 +48,7 @@ Examples:
   dnd-game --no-llm                 # Disable LLM enhancement
   dnd-game --llm-provider openai    # Use OpenAI (default)
   dnd-game --llm-provider anthropic # Use Anthropic Claude
+  dnd-game --llm-provider debug     # Debug mode - shows prompts instead of API calls
   dnd-game --dungeon crypt          # Start in specific dungeon
   dnd-game --debug                  # Enable debug logging
         """
@@ -61,7 +62,7 @@ Examples:
 
     parser.add_argument(
         "--llm-provider",
-        choices=["openai", "anthropic", "none"],
+        choices=["openai", "anthropic", "debug", "none"],
         help="Override LLM provider (default: from LLM_PROVIDER env var)"
     )
 
