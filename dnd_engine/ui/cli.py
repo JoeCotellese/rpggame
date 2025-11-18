@@ -444,17 +444,16 @@ class CLI:
             return
 
         if command == "attack":
-            # Show available targets with numbers
-            living_enemies = []
-            for enemy in self.game_state.active_enemies:
-                if enemy.is_alive:
-                    enemy_num = self._get_enemy_number(enemy)
-                    display_name = f"{enemy.name} {enemy_num}" if enemy_num else enemy.name
-                    living_enemies.append(display_name)
-            if living_enemies:
-                print_error(f"Specify a target. Available enemies: {', '.join(living_enemies)}")
-            else:
-                print_error("No enemies to attack!")
+            # Prompt for enemy selection with arrow keys
+            target = self._prompt_enemy_selection()
+            if target is None:
+                return  # User cancelled
+
+            # Find the target name with number
+            enemy_num = self._get_enemy_number(target)
+            target_name = f"{target.name} {enemy_num}" if enemy_num else target.name
+
+            self.handle_attack(target_name)
             return
 
         if command in ["flee", "run", "escape", "retreat"]:
@@ -1259,6 +1258,53 @@ class CLI:
         try:
             result = questionary.select(
                 f"Use {item_name} on:",
+                choices=choices,
+                use_arrow_keys=True
+            ).ask()
+
+            return result
+        except (EOFError, KeyboardInterrupt):
+            return None
+
+    def _prompt_enemy_selection(self) -> Optional[Any]:
+        """
+        Prompt user to select an enemy to attack.
+
+        Returns:
+            Selected enemy creature or None if cancelled
+        """
+        import questionary
+
+        living_enemies = [e for e in self.game_state.active_enemies if e.is_alive]
+        if not living_enemies:
+            print_error("No enemies to attack!")
+            return None
+
+        # Build choices for questionary
+        choices = []
+        for enemy in living_enemies:
+            enemy_num = self._get_enemy_number(enemy)
+            hp_pct = enemy.current_hp / enemy.max_hp if enemy.max_hp > 0 else 0
+
+            # Use text-based indicators
+            if hp_pct > 0.5:
+                hp_indicator = "●●●"
+            elif hp_pct > 0.25:
+                hp_indicator = "●●○"
+            else:
+                hp_indicator = "●○○"
+
+            display_name = f"{enemy.name} {enemy_num}" if enemy_num else enemy.name
+            choice_text = f"{display_name} (HP: {enemy.current_hp}/{enemy.max_hp} {hp_indicator})"
+            choices.append(questionary.Choice(title=choice_text, value=enemy))
+
+        # Add cancel option
+        choices.append(questionary.Choice(title="Cancel", value=None))
+
+        # Get user selection with arrow keys
+        try:
+            result = questionary.select(
+                "Select target to attack:",
                 choices=choices,
                 use_arrow_keys=True
             ).ask()
