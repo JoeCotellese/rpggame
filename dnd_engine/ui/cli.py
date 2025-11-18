@@ -10,6 +10,7 @@ from dnd_engine.core.combat import AttackResult
 from dnd_engine.utils.events import EventBus, Event, EventType
 from dnd_engine.systems.inventory import EquipmentSlot
 from dnd_engine.systems.condition_manager import ConditionManager
+from rich.status import Status
 from dnd_engine.ui.rich_ui import (
     console,
     create_party_status_table,
@@ -111,7 +112,8 @@ class CLI:
                 "description": basic_desc,
                 "monsters": monster_names  # Include monster info for LLM
             }
-            enhanced_desc = self.llm_enhancer.get_room_description_sync(room_data, timeout=3.0)
+            with console.status("", spinner="dots"):
+                enhanced_desc = self.llm_enhancer.get_room_description_sync(room_data, timeout=3.0)
 
         # Use enhanced description if available, otherwise use basic
         room_text = enhanced_desc if enhanced_desc else basic_desc
@@ -895,23 +897,24 @@ class CLI:
                             defender_armor = ac_source
                         break
 
-            narrative = self.llm_enhancer.get_combat_narrative_sync(
-                action_data={
-                    "attacker": result.attacker_name,
-                    "defender": result.defender_name,
-                    "damage": result.damage,
-                    "critical": result.critical_hit,
-                    "hit": result.hit,
-                    "location": location,
-                    "weapon": weapon_name,
-                    "damage_type": damage_type,
-                    "attacker_race": attacker_race,
-                    "defender_armor": defender_armor,
-                    "combat_history": self.combat_history,
-                    "battlefield_state": self._build_battlefield_state()
-                },
-                timeout=3.0
-            )
+            with console.status("", spinner="dots"):
+                narrative = self.llm_enhancer.get_combat_narrative_sync(
+                    action_data={
+                        "attacker": result.attacker_name,
+                        "defender": result.defender_name,
+                        "damage": result.damage,
+                        "critical": result.critical_hit,
+                        "hit": result.hit,
+                        "location": location,
+                        "weapon": weapon_name,
+                        "damage_type": damage_type,
+                        "attacker_race": attacker_race,
+                        "defender_armor": defender_armor,
+                        "combat_history": self.combat_history,
+                        "battlefield_state": self._build_battlefield_state()
+                    },
+                    timeout=3.0
+                )
             if narrative:
                 self.display_narrative_panel(narrative)
 
@@ -924,13 +927,14 @@ class CLI:
         # 3. If target died, show death narrative then confirmation
         if not target.is_alive:
             if self.llm_enhancer:
-                death_narrative = self.llm_enhancer.get_death_narrative_sync(
-                    character_data={
-                        "name": target.name,
-                        "is_player": isinstance(target, Character)
-                    },
-                    timeout=3.0
-                )
+                with console.status("", spinner="dots"):
+                    death_narrative = self.llm_enhancer.get_death_narrative_sync(
+                        character_data={
+                            "name": target.name,
+                            "is_player": isinstance(target, Character)
+                        },
+                        timeout=3.0
+                    )
                 if death_narrative:
                     self.display_narrative_panel(death_narrative)
 
@@ -1303,23 +1307,24 @@ class CLI:
                         if armor_type:
                             defender_armor = f"{armor_type} armor"
 
-                    narrative = self.llm_enhancer.get_combat_narrative_sync(
-                        action_data={
-                            "attacker": result.attacker_name,
-                            "defender": result.defender_name,
-                            "damage": result.damage,
-                            "critical": result.critical_hit,
-                            "hit": result.hit,
-                            "location": location,
-                            "weapon": weapon_name,
-                            "damage_type": damage_type,
-                            "attacker_race": attacker_race,
-                            "defender_armor": defender_armor,
-                            "combat_history": self.combat_history,
-                            "battlefield_state": self._build_battlefield_state()
-                        },
-                        timeout=3.0
-                    )
+                    with console.status("", spinner="dots"):
+                        narrative = self.llm_enhancer.get_combat_narrative_sync(
+                            action_data={
+                                "attacker": result.attacker_name,
+                                "defender": result.defender_name,
+                                "damage": result.damage,
+                                "critical": result.critical_hit,
+                                "hit": result.hit,
+                                "location": location,
+                                "weapon": weapon_name,
+                                "damage_type": damage_type,
+                                "attacker_race": attacker_race,
+                                "defender_armor": defender_armor,
+                                "combat_history": self.combat_history,
+                                "battlefield_state": self._build_battlefield_state()
+                            },
+                            timeout=3.0
+                        )
                     if narrative:
                         self.display_narrative_panel(narrative)
 
@@ -1332,13 +1337,14 @@ class CLI:
                 # Check if party member died - show death narrative then message
                 if not target.is_alive:
                     if self.llm_enhancer:
-                        death_narrative = self.llm_enhancer.get_death_narrative_sync(
-                            character_data={
-                                "name": target.name,
-                                "is_player": isinstance(target, Character)
-                            },
-                            timeout=3.0
-                        )
+                        with console.status("", spinner="dots"):
+                            death_narrative = self.llm_enhancer.get_death_narrative_sync(
+                                character_data={
+                                    "name": target.name,
+                                    "is_player": isinstance(target, Character)
+                                },
+                                timeout=3.0
+                            )
                         if death_narrative:
                             self.display_narrative_panel(death_narrative)
 
@@ -2944,14 +2950,15 @@ class CLI:
             room = self.game_state.get_current_room()
             enemy_names = [e.name for e in self.game_state.active_enemies]
 
-            narrative = self.llm_enhancer.get_combat_start_narrative_sync(
-                combat_data={
-                    "enemies": enemy_names,
-                    "location": room.get("name", ""),
-                    "party_size": len(self.game_state.party.characters)
-                },
-                timeout=3.0
-            )
+            with console.status("", spinner="dots"):
+                narrative = self.llm_enhancer.get_combat_start_narrative_sync(
+                    combat_data={
+                        "enemies": enemy_names,
+                        "location": room.get("name", ""),
+                        "party_size": len(self.game_state.party.characters)
+                    },
+                    timeout=3.0
+                )
             if narrative:
                 self.display_narrative_panel(narrative)
 
