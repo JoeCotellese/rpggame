@@ -49,7 +49,8 @@ class DebugProvider(LLMProvider):
             The prompt text wrapped in debug formatting
         """
         # Return the prompt with clear markers
-        return f"[DEBUG PROMPT]\n{prompt}\n[/DEBUG PROMPT]"
+        # Use === instead of [] to avoid Rich markup conflicts
+        return f"=== DEBUG PROMPT ===\n{prompt}\n=== /DEBUG PROMPT ==="
 
     def get_provider_name(self) -> str:
         """

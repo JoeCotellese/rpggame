@@ -17,8 +17,8 @@ class TestDebugProvider:
         result = await provider.generate(prompt)
 
         assert result is not None
-        assert "[DEBUG PROMPT]" in result
-        assert "[/DEBUG PROMPT]" in result
+        assert "=== DEBUG PROMPT ===" in result
+        assert "=== /DEBUG PROMPT ===" in result
         assert "This is a test prompt about a dragon" in result
 
     @pytest.mark.asyncio

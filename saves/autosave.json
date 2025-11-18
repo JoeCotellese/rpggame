@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
   "metadata": {
-    "created": "2025-11-17T17:58:50.552475",
-    "last_played": "2025-11-17T17:58:50.552475",
+    "created": "2025-11-17T20:18:13.566233",
+    "last_played": "2025-11-17T20:19:12.547199",
     "auto_save": true
   },
   "party": [
@@ -113,7 +113,7 @@
       "race": "halfling",
       "xp": 50,
       "max_hp": 11,
-      "current_hp": 0,
+      "current_hp": 5,
       "ac": 16,
       "abilities": {
         "strength": 17,

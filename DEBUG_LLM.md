@@ -20,14 +20,14 @@ dnd-game
 Instead of calling OpenAI or Anthropic APIs, the debug provider returns the prompt text wrapped in debug markers:
 
 ```
-[DEBUG PROMPT]
+=== DEBUG PROMPT ===
 Enhance this D&D dungeon room description with atmospheric details:
 
 Room: Guard Post
 Basic description: A fortified checkpoint with arrow slits in the walls.
 
 Add vivid sensory details (sights, sounds, smells) in 2-3 sentences. Make it immersive but concise.
-[/DEBUG PROMPT]
+=== /DEBUG PROMPT ===
 ```
 
 ### When to Use It
@@ -43,21 +43,21 @@ When you enter a room:
 ```
 You step into the Guard Post...
 
-[DEBUG PROMPT]
+=== DEBUG PROMPT ===
 Enhance this D&D dungeon room description with atmospheric details:
 
 Room: Guard Post
 Basic description: A fortified checkpoint with arrow slits in the walls.
 
 Add vivid sensory details (sights, sounds, smells) in 2-3 sentences. Make it immersive but concise.
-[/DEBUG PROMPT]
+=== /DEBUG PROMPT ===
 ```
 
 During combat:
 ```
 ⚔️ Larry attacks Goblin: 15+3=18 vs AC 15 - HIT for 8 damage
 
-[DEBUG PROMPT]
+=== DEBUG PROMPT ===
 Narrate this D&D combat action vividly:
 
 Larry (a Human) attacks Goblin (wearing leather armor) with a Longsword (slashing damage) for 8 damage.
@@ -65,7 +65,7 @@ Location: Guard Post
 This is the opening exchange of combat.
 
 Describe the hit in 2-3 dramatic sentences. Focus on the impact and visual details. Use environmental details appropriate to the location.
-[/DEBUG PROMPT]
+=== /DEBUG PROMPT ===
 ```
 
 ## Implementation
