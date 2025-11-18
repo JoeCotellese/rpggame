@@ -150,18 +150,19 @@ class GameState:
         Can be called multiple times to see current room state.
 
         Returns:
-            List of items currently in the room
+            List of items found (returns current items on subsequent searches)
         """
         room = self.get_current_room()
 
+        # Not searchable rooms return empty
         if not room.get("searchable"):
-            return []  # Not searchable
+            return []
 
-        # Mark as searched to reveal items (first time only)
+        # Mark as searched on first search to reveal items
         if not room.get("searched"):
             room["searched"] = True
 
-        # Always return current items in the room
+        # Return current items in the room (allows re-searching to see what remains)
         return room.get("items", [])
 
     def get_available_items_in_room(self) -> List[Dict[str, Any]]:
