@@ -56,9 +56,18 @@ def build_combat_action_prompt(action_data: Dict[str, Any]) -> str:
     attacker_race = action_data.get("attacker_race", "")
     defender_armor = action_data.get("defender_armor", "")
     damage_type = action_data.get("damage_type", "")
+    round_number = action_data.get("round_number")
 
     # Build context strings
     location_context = f"Location: {location}\n" if location else ""
+
+    # Build round context
+    round_context = ""
+    if round_number is not None:
+        if round_number <= 1:
+            round_context = "Combat Stage: Opening exchange\n"
+        else:
+            round_context = f"Combat Stage: Ongoing battle (Round {round_number})\n"
 
     # Build combat history context
     history_context = ""
@@ -96,13 +105,13 @@ def build_combat_action_prompt(action_data: Dict[str, Any]) -> str:
     if hit:
         prompt = f"""Narrate this D&D combat action vividly:
 
-{location_context}{battlefield_context}{history_context}Current Action: {attacker_desc} attacks {defender_desc} with a {weapon_desc} for {damage} damage.
+{location_context}{round_context}{battlefield_context}{history_context}Current Action: {attacker_desc} attacks {defender_desc} with a {weapon_desc} for {damage} damage.
 
 Describe the hit in 2-3 dramatic sentences. Consider the battlefield state and recent action flow. Focus on the impact and visual details."""
     else:
         prompt = f"""Narrate this D&D combat miss:
 
-{location_context}{battlefield_context}{history_context}Current Action: {attacker_desc} attacks {defender_desc} with a {weapon_desc} but misses.
+{location_context}{round_context}{battlefield_context}{history_context}Current Action: {attacker_desc} attacks {defender_desc} with a {weapon_desc} but misses.
 
 Describe the miss in 1-2 sentences. Consider the battlefield state and recent action flow. Make it cinematic."""
 

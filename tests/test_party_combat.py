@@ -255,9 +255,10 @@ class TestPartyVictoryDefeat:
 
     def test_party_wiped_all_dead(self, party_of_four):
         """Test that party is wiped when all members are dead."""
-        # Kill all party members
+        # Kill all party members (reduce to 0 HP and set 3 death save failures)
         for character in party_of_four.characters:
             character.take_damage(character.max_hp)
+            character.death_save_failures = 3
 
         assert party_of_four.is_wiped()
         assert len(party_of_four.get_living_members()) == 0

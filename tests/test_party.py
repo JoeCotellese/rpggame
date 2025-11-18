@@ -188,9 +188,13 @@ class TestIsWiped:
 
     def test_party_wiped_all_dead(self, party_with_characters, fighter1, fighter2, fighter3):
         """Test is_wiped when all members are dead."""
+        # Reduce to 0 HP and set 3 death save failures to truly kill them
         fighter1.take_damage(fighter1.max_hp)
+        fighter1.death_save_failures = 3
         fighter2.take_damage(fighter2.max_hp)
+        fighter2.death_save_failures = 3
         fighter3.take_damage(fighter3.max_hp)
+        fighter3.death_save_failures = 3
         assert party_with_characters.is_wiped()
 
     def test_empty_party_is_wiped(self, empty_party):

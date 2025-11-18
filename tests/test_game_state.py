@@ -252,4 +252,5 @@ class TestGameStateActions:
     def test_is_game_over_player_dead(self):
         """Test game over check when entire party is dead"""
         self.character.take_damage(999)
+        self.character.death_save_failures = 3
         assert self.game_state.is_game_over()

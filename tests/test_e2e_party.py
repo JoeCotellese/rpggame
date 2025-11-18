@@ -229,9 +229,10 @@ class TestPartyPlaythrough:
 
     def test_party_wipe_ends_game(self, game_with_default_party, default_party):
         """Test that party wipe ends the game."""
-        # Kill all party members
+        # Kill all party members (reduce to 0 HP and set 3 death save failures)
         for character in default_party.characters:
             character.take_damage(character.max_hp)
+            character.death_save_failures = 3
 
         # Game should be over
         assert game_with_default_party.is_game_over()

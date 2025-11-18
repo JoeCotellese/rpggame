@@ -162,9 +162,10 @@ class TestPartyGameOver:
         self, game_state_with_party, party_of_four
     ):
         """Test that game is over when entire party is dead."""
-        # Kill all party members
+        # Kill all party members (reduce to 0 HP and set 3 death save failures)
         for character in party_of_four.characters:
             character.take_damage(character.max_hp)
+            character.death_save_failures = 3
 
         assert game_state_with_party.is_game_over()
 
