@@ -49,6 +49,83 @@ class TestRoomDescriptionPrompt:
 
         assert "mysterious chamber" in prompt or "chamber" in prompt
 
+    def test_build_room_description_with_single_monster(self) -> None:
+        """Test building room description with a single monster."""
+        room_data = {
+            "name": "Guard Post",
+            "description": "A narrow corridor with weapon racks on the walls.",
+            "monsters": ["Goblin"]
+        }
+
+        prompt = build_room_description_prompt(room_data)
+
+        assert "Guard Post" in prompt
+        assert "narrow corridor" in prompt
+        assert "Goblin" in prompt
+        assert "hostile" in prompt
+        assert "threatening" in prompt or "stance" in prompt or "readiness" in prompt
+
+    def test_build_room_description_with_two_monsters(self) -> None:
+        """Test building room description with two monsters."""
+        room_data = {
+            "name": "Barracks",
+            "description": "A messy chamber with scattered bedrolls.",
+            "monsters": ["Goblin", "Wolf"]
+        }
+
+        prompt = build_room_description_prompt(room_data)
+
+        assert "Barracks" in prompt
+        assert "Goblin" in prompt
+        assert "Wolf" in prompt
+        assert "hostile" in prompt
+        assert " and " in prompt  # Natural language conjunction
+
+    def test_build_room_description_with_multiple_same_monsters(self) -> None:
+        """Test building room description with multiple monsters of the same type."""
+        room_data = {
+            "name": "Throne Room",
+            "description": "A grand chamber with a bone throne.",
+            "monsters": ["Goblin", "Goblin", "Goblin"]
+        }
+
+        prompt = build_room_description_prompt(room_data)
+
+        assert "Throne Room" in prompt
+        assert "3 Goblins" in prompt or "3 goblins" in prompt
+        assert "hostile" in prompt
+
+    def test_build_room_description_with_mixed_monsters(self) -> None:
+        """Test building room description with mixed monster types."""
+        room_data = {
+            "name": "Kennel",
+            "description": "A dirty room filled with cages.",
+            "monsters": ["Goblin", "Goblin", "Wolf", "Wolf", "Wolf"]
+        }
+
+        prompt = build_room_description_prompt(room_data)
+
+        assert "Kennel" in prompt
+        assert "2 Goblins" in prompt or "2 goblins" in prompt
+        # Note: Simple pluralization adds 's', so "Wolf" becomes "Wolfs"
+        assert "3 Wolf" in prompt  # Matches "3 Wolfs" or "3 wolves"
+        assert "hostile" in prompt
+
+    def test_build_room_description_without_monsters(self) -> None:
+        """Test building room description explicitly with no monsters."""
+        room_data = {
+            "name": "Safe Room",
+            "description": "A quiet chamber with no threats.",
+            "monsters": []
+        }
+
+        prompt = build_room_description_prompt(room_data)
+
+        assert "Safe Room" in prompt
+        assert "quiet chamber" in prompt
+        assert "hostile" not in prompt
+        assert "threatening" not in prompt
+
 
 class TestCombatActionPrompt:
     """Test combat action prompt building."""

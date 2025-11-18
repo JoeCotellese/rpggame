@@ -286,3 +286,32 @@ class TestLLMEnhancer:
         # Verify enhancement
         assert narrative is not None
         assert "falls" in narrative
+
+    @pytest.mark.asyncio
+    async def test_enhancer_room_description_with_monsters(self) -> None:
+        """Test room description enhancement includes monster information."""
+        from dnd_engine.llm.enhancer import LLMEnhancer
+
+        mock_provider = MockLLMProvider(
+            response="Two goblins snarl as you enter the chamber."
+        )
+        event_bus = EventBus()
+        enhancer = LLMEnhancer(mock_provider, event_bus)
+
+        # Test synchronous room description with monsters
+        room_data = {
+            "id": "guard_post",
+            "name": "Guard Post",
+            "description": "A narrow corridor with weapon racks.",
+            "monsters": ["Goblin", "Goblin"]
+        }
+        description = enhancer.get_room_description_sync(room_data, timeout=3.0)
+
+        # Verify enhancement includes monster presence
+        assert description is not None
+        assert "goblins" in description.lower() or "goblin" in description.lower()
+
+        # Verify the prompt was constructed with monster info
+        assert mock_provider.last_prompt is not None
+        assert "Goblin" in mock_provider.last_prompt
+        assert "hostile" in mock_provider.last_prompt
