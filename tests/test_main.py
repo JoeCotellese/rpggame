@@ -65,6 +65,12 @@ class TestArgumentParsing:
             args = parse_arguments()
             assert args.debug is True
 
+    def test_parse_arguments_generate_dungeon(self):
+        """Test --generate-dungeon flag sets correct value."""
+        with patch("sys.argv", ["dnd-game", "--generate-dungeon"]):
+            args = parse_arguments()
+            assert args.generate_dungeon is True
+
     def test_parse_arguments_version(self):
         """Test --version flag exits with version."""
         with patch("sys.argv", ["dnd-game", "--version"]):

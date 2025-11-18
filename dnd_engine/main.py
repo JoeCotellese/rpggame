@@ -14,6 +14,7 @@ from dnd_engine.core.save_manager import SaveManager
 from dnd_engine.llm.enhancer import LLMEnhancer
 from dnd_engine.llm.factory import create_llm_provider
 from dnd_engine.rules.loader import DataLoader
+from dnd_engine.rules.dungeon_generator import DungeonGenerator
 from dnd_engine.ui.cli import CLI
 from dnd_engine.ui.rich_ui import (
     print_banner,
@@ -50,6 +51,7 @@ Examples:
   dnd-game --llm-provider anthropic # Use Anthropic Claude
   dnd-game --llm-provider debug     # Debug mode - shows prompts instead of API calls
   dnd-game --dungeon crypt          # Start in specific dungeon
+  dnd-game --generate-dungeon       # Generate and play a random dungeon
   dnd-game --debug                  # Enable debug logging
         """
     )
@@ -70,6 +72,12 @@ Examples:
         "--dungeon",
         default="goblin_warren",
         help="Dungeon to explore (default: goblin_warren)"
+    )
+
+    parser.add_argument(
+        "--generate-dungeon",
+        action="store_true",
+        help="Generate a random dungeon for level 1 characters and start playing it"
     )
 
     parser.add_argument(
@@ -191,6 +199,38 @@ def show_save_load_menu(save_manager: SaveManager) -> Optional[str]:
             print_status_message("Please enter a valid number.", "warning")
         except KeyboardInterrupt:
             raise
+
+
+def generate_random_dungeon(data_loader: DataLoader) -> str:
+    """
+    Generate a random dungeon and save it to a file.
+
+    Args:
+        data_loader: Data loader instance
+
+    Returns:
+        Name of the generated dungeon (without .json extension)
+    """
+    from datetime import datetime
+    from pathlib import Path
+
+    print_status_message("Generating random dungeon...", "info")
+
+    # Create dungeon generator
+    generator = DungeonGenerator(data_loader)
+
+    # Generate dungeon for level 1
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    dungeon_filename = f"generated_{timestamp}"
+    output_path = Path(__file__).parent / "data" / "content" / "dungeons" / f"{dungeon_filename}.json"
+
+    # Generate and save
+    dungeon_data = generator.generate(level=1, output_path=output_path)
+
+    print_status_message(f"Generated dungeon: {dungeon_data['name']}", "success")
+    print_status_message(f"Saved to: {output_path.name}", "success")
+
+    return dungeon_filename
 
 
 def create_new_party(
@@ -316,6 +356,11 @@ def main() -> None:
     # Initialize data loader
     data_loader = initialize_data_loader()
 
+    # Generate random dungeon if requested
+    dungeon_name = args.dungeon
+    if args.generate_dungeon:
+        dungeon_name = generate_random_dungeon(data_loader)
+
     # Initialize LLM provider
     llm_provider = initialize_llm(args)
 
@@ -351,7 +396,7 @@ def main() -> None:
                 print_input_prompt("Press Enter to begin your adventure")
                 game_state = GameState(
                     party=party,
-                    dungeon_name=args.dungeon,
+                    dungeon_name=dungeon_name,
                     event_bus=event_bus,
                     data_loader=data_loader
                 )
@@ -363,7 +408,7 @@ def main() -> None:
             # Initialize game state
             game_state = GameState(
                 party=party,
-                dungeon_name=args.dungeon,
+                dungeon_name=dungeon_name,
                 event_bus=event_bus,
                 data_loader=data_loader
             )
