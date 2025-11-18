@@ -2,9 +2,10 @@
 # ABOUTME: Manages turn order, round counting, and combatant lifecycle
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Dict
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.creature import Creature
+from dnd_engine.systems.action_economy import TurnState
 
 
 @dataclass
@@ -56,6 +57,7 @@ class InitiativeTracker:
         self.current_turn_index: int = 0
         self.round_number: int = 0
         self.total_turns_taken: int = 0  # Track total number of turns for narrative context
+        self.turn_states: Dict[str, TurnState] = {}  # Maps creature name to their turn state
 
     def add_combatant(self, creature: Creature) -> InitiativeEntry:
         """
@@ -75,6 +77,9 @@ class InitiativeTracker:
 
         entry = InitiativeEntry(creature=creature, initiative_roll=initiative_roll)
         self.combatants.append(entry)
+
+        # Initialize turn state for this combatant
+        self.turn_states[creature.name] = TurnState()
 
         # Sort by initiative (highest first), ties broken by DEX modifier
         self._sort_initiative()
@@ -109,7 +114,11 @@ class InitiativeTracker:
             self.current_turn_index = 0
 
         # Remove the combatant
-        self.combatants.pop(remove_index)
+        removed_entry = self.combatants.pop(remove_index)
+
+        # Remove their turn state
+        if removed_entry.creature.name in self.turn_states:
+            del self.turn_states[removed_entry.creature.name]
 
         # Ensure index is valid
         if self.combatants and self.current_turn_index >= len(self.combatants):
@@ -127,12 +136,26 @@ class InitiativeTracker:
 
         return self.combatants[self.current_turn_index]
 
+    def get_current_turn_state(self) -> Optional[TurnState]:
+        """
+        Get the turn state for the current combatant.
+
+        Returns:
+            TurnState for the current combatant, or None if no combatants
+        """
+        current = self.get_current_combatant()
+        if current is None:
+            return None
+
+        return self.turn_states.get(current.creature.name)
+
     def next_turn(self) -> None:
         """
         Advance to the next turn.
 
         Cycles through all combatants. When reaching the end,
         wraps back to the first combatant and increments the round.
+        Resets actions for the new turn.
         """
         if not self.combatants:
             return
@@ -144,6 +167,11 @@ class InitiativeTracker:
         if self.current_turn_index >= len(self.combatants):
             self.current_turn_index = 0
             self.round_number += 1
+
+        # Reset actions for the new turn
+        current = self.get_current_combatant()
+        if current and current.creature.name in self.turn_states:
+            self.turn_states[current.creature.name].reset()
 
     def get_all_combatants(self) -> List[InitiativeEntry]:
         """
