@@ -365,6 +365,7 @@
       "effect_type": "damage",
       "damage": "1d4",
       "damage_type": "fire",
+      "applies_condition": "on_fire",
       "action_required": "action",
       "target_type": "enemy",
       "range": 20,
