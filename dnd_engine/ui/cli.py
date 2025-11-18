@@ -344,6 +344,11 @@ class CLI:
             self.display_help_combat()
             return
 
+        if command in ["quit", "exit"]:
+            print_status_message("Exiting game...", "info")
+            self.running = False
+            return
+
         if command.startswith("attack "):
             target_name = " ".join(command.split()[1:])
             self.handle_attack(target_name)
@@ -1465,6 +1470,7 @@ class CLI:
             ("flee / run / escape", "Flee from combat (enemies get opportunity attacks)"),
             ("status", "Show combat status"),
             ("help or ?", "Show this help message"),
+            ("quit / exit", "Exit the game"),
         ]
         print_help_section("Combat Commands", commands)
 
