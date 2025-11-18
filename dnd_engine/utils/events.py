@@ -26,6 +26,7 @@ class EventType(Enum):
     ATTACK_ROLL = "attack_roll"
     SAVING_THROW = "saving_throw"
     DAMAGE_DEALT = "damage_dealt"
+    DAMAGE_TAKEN = "damage_taken"
     HEALING_DONE = "healing_done"
     CHARACTER_DEATH = "character_death"
     SNEAK_ATTACK = "sneak_attack"
@@ -52,6 +53,7 @@ class EventType(Enum):
 
     # Skill check events
     SKILL_CHECK = "skill_check"
+    ABILITY_CHECK = "ability_check"
 
     # LLM enhancement events
     ENHANCEMENT_STARTED = "enhancement_started"

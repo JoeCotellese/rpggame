@@ -778,7 +778,7 @@ class CLI:
     def handle_attack(self, target_name: str) -> None:
         """Handle attack command during combat."""
         if not self.game_state.in_combat:
-            print_error("You're not in combat!")
+            print_error("You're not in_combat!")
             return
 
         # Check if it's a party member's turn
@@ -803,6 +803,18 @@ class CLI:
                 print_status_message(f"It's not a valid combatant's turn!", "warning")
             return
 
+        # Check action economy
+        from dnd_engine.systems.action_economy import ActionType
+        turn_state = self.game_state.initiative_tracker.get_current_turn_state()
+        if not turn_state:
+            print_error("Unable to get current turn state!")
+            return
+
+        if not turn_state.is_action_available(ActionType.ACTION):
+            print_error("You don't have an Action available this turn!")
+            print_status_message(f"Available: {turn_state}", "info")
+            return
+
         # Find target using new numbering system
         target = self._find_enemy_by_target(target_name)
 
@@ -817,6 +829,11 @@ class CLI:
                     living_enemies.append(display_name)
             if living_enemies:
                 print_status_message(f"Available targets: {', '.join(living_enemies)}", "info")
+            return
+
+        # Consume the action
+        if not turn_state.consume_action(ActionType.ACTION):
+            print_error("Failed to consume action!")
             return
 
         # Log player action
@@ -1209,6 +1226,12 @@ class CLI:
                             print_status_message(result.message, "warning")
 
                     return True  # Turn was used
+                else:
+                    # Enemy chooses to ignore the flames and attack instead
+                    print_status_message(
+                        f"🔥 {enemy.name} is on fire ({enemy.current_hp}/{enemy.max_hp} HP) but chooses to press the attack rather than extinguish the flames!",
+                        "info"
+                    )
 
         return False  # No condition removal attempted
 
