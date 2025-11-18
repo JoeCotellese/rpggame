@@ -1,0 +1,27 @@
+{
+  "$schema": "conditions_schema",
+  "version": "1.0",
+  "source": "D&D 5E SRD (CC BY 4.0)",
+  "conditions": {
+    "on_fire": {
+      "name": "On Fire",
+      "description": "Taking ongoing fire damage from burning. A creature can end this damage by using its action to make a DC 10 Dexterity check to extinguish the flames.",
+      "turn_start_effect": {
+        "type": "damage",
+        "damage": "1d4",
+        "damage_type": "fire",
+        "message": "🔥 {creature_name} takes {damage} fire damage from being on fire"
+      },
+      "can_end_early": {
+        "method": "ability_check",
+        "ability": "dexterity",
+        "dc": 10,
+        "action_cost": "action",
+        "on_success": "remove_condition",
+        "on_failure": "continue",
+        "success_message": "✅ {creature_name} successfully extinguishes the flames!",
+        "failure_message": "❌ {creature_name} fails to extinguish the flames (rolled {roll} vs DC {dc})"
+      }
+    }
+  }
+}

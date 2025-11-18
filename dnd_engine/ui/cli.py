@@ -9,6 +9,7 @@ from dnd_engine.core.game_state import GameState
 from dnd_engine.core.combat import AttackResult
 from dnd_engine.utils.events import EventBus, Event, EventType
 from dnd_engine.systems.inventory import EquipmentSlot
+from dnd_engine.systems.condition_manager import ConditionManager
 from dnd_engine.ui.rich_ui import (
     console,
     create_party_status_table,
@@ -52,6 +53,12 @@ class CLI:
         self.running = True
         self.auto_save_enabled = auto_save_enabled
         self.llm_enhancer = llm_enhancer
+
+        # Condition manager for handling status effects
+        self.condition_manager = ConditionManager(
+            dice_roller=game_state.dice_roller,
+            event_bus=game_state.event_bus
+        )
 
         # Enemy numbering map: maps Creature instances to their combat numbers
         self.enemy_numbers: Dict[Any, int] = {}
@@ -1086,28 +1093,120 @@ class CLI:
         """
         Process effects that trigger at the start of a creature's turn.
 
-        Currently handles:
-        - Ongoing fire damage from Alchemist's Fire
+        Uses the ConditionManager to handle all condition-based turn-start effects.
 
         Args:
             creature: The creature whose turn is starting
         """
-        # Check for ongoing fire damage
-        if creature.has_condition("on_fire"):
-            # Roll 1d4 fire damage
-            fire_roll = self.game_state.dice_roller.roll("1d4")
-            fire_damage = fire_roll.total
+        # Process all turn-start effects using ConditionManager
+        results = self.condition_manager.process_turn_start_effects(creature)
 
-            # Apply fire damage
-            hp_before = creature.current_hp
-            creature.take_damage(fire_damage)
+        # Display results
+        for result in results:
+            print_status_message(result.message, "warning")
 
-            # Display fire damage message
-            print_status_message(f"🔥 {creature.name} takes {fire_damage} fire damage from being on fire (rolled 1d4: {fire_damage})", "warning")
-
-            # Check if creature died from fire
+            # Check if creature died from the effect
             if not creature.is_alive:
-                print_status_message(f"💀 {creature.name} is killed by the flames!", "warning")
+                print_status_message(f"💀 {creature.name} is killed by {result.condition_id.replace('_', ' ')}!", "warning")
+
+    def _prompt_condition_removal(self, creature) -> bool:
+        """
+        Prompt the player to attempt removing a condition via ability check.
+
+        Args:
+            creature: The creature with conditions
+
+        Returns:
+            True if an action was consumed attempting to remove a condition
+        """
+        # Check each condition for removal options
+        for condition_id in list(creature.conditions):
+            if not self.condition_manager.can_attempt_early_removal(condition_id):
+                continue
+
+            # Get removal prompt info
+            prompt_info = self.condition_manager.get_removal_prompt_info(condition_id)
+            if not prompt_info:
+                continue
+
+            # Check if action is required and available
+            turn_state = self.game_state.initiative_tracker.get_current_turn_state()
+            if not turn_state or not turn_state.action_available:
+                continue  # No action available
+
+            # Prompt player
+            condition_name = prompt_info["condition_name"]
+            ability = prompt_info["ability"].upper()
+            dc = prompt_info["dc"]
+            description = prompt_info["description"]
+
+            print_status_message(
+                f"🔥 {creature.name} has condition: {condition_name}!",
+                "warning"
+            )
+            print_message(f"   {description}")
+            print_message(f"   Use your action to attempt a DC {dc} {ability} check to remove it? [Y/N]")
+
+            response = input("   > ").strip().lower()
+
+            if response in ['y', 'yes']:
+                # Consume action
+                from dnd_engine.systems.action_economy import ActionType
+                turn_state.consume_action(ActionType.ACTION)
+
+                # Attempt removal
+                result = self.condition_manager.attempt_condition_removal(creature, condition_id)
+
+                if result:
+                    if result.success:
+                        print_status_message(result.message, "success")
+                    else:
+                        print_status_message(result.message, "warning")
+
+                return True  # Action was consumed
+
+        return False  # No action consumed
+
+    def _should_enemy_attempt_condition_removal(self, enemy) -> bool:
+        """
+        Simple AI to determine if an enemy should attempt to remove a condition.
+
+        Logic:
+        - If on fire and current_hp <= 4 (one more 1d4 could kill), attempt to extinguish
+        - Otherwise, attack normally
+
+        Args:
+            enemy: The enemy creature
+
+        Returns:
+            True if enemy should attempt to remove condition (consumes turn)
+        """
+        # Check each condition for removal options
+        for condition_id in list(enemy.conditions):
+            if not self.condition_manager.can_attempt_early_removal(condition_id):
+                continue
+
+            # Simple AI for on_fire: attempt if low HP
+            if condition_id == "on_fire":
+                # If one more 1d4 damage could kill (HP <= 4), try to extinguish
+                if enemy.current_hp <= 4:
+                    print_status_message(
+                        f"🔥 {enemy.name} is on fire with low HP! Attempting to extinguish...",
+                        "info"
+                    )
+
+                    # Attempt removal
+                    result = self.condition_manager.attempt_condition_removal(enemy, condition_id)
+
+                    if result:
+                        if result.success:
+                            print_status_message(result.message, "success")
+                        else:
+                            print_status_message(result.message, "warning")
+
+                    return True  # Turn was used
+
+        return False  # No condition removal attempted
 
     def process_enemy_turns(self) -> None:
         """Process all enemy turns until it's a party member's turn again."""
@@ -1137,6 +1236,12 @@ class CLI:
 
             # Check if enemy died from turn-start effects
             if not enemy.is_alive:
+                self.game_state.initiative_tracker.next_turn()
+                continue
+
+            # Enemy AI: Check if should attempt to remove conditions
+            if self._should_enemy_attempt_condition_removal(enemy):
+                # Enemy attempts to remove condition instead of attacking
                 self.game_state.initiative_tracker.next_turn()
                 continue
 
@@ -2801,6 +2906,9 @@ class CLI:
                             print_error(f"{party_character.name} has died from turn-start effects!")
                             self.game_state.initiative_tracker.next_turn()
                             continue
+
+                        # Prompt for condition removal (may consume action)
+                        self._prompt_condition_removal(party_character)
 
                         # Show compact turn status instead of full table
                         self.display_turn_status(is_party_turn, current.creature)
