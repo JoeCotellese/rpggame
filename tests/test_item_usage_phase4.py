@@ -157,7 +157,7 @@ class TestItemUsagePhase4:
     def test_handle_use_item_combat_with_target_on_other_ally(self, cli, fighter1, fighter2):
         """Test using item on another ally during combat."""
         # Add potion to fighter1's inventory
-        fighter1.inventory.add_item("potion_of_healing", 1)
+        fighter1.inventory.add_item("potion_of_healing", "consumables", 1)
 
         item_data = {
             "name": "Potion of Healing",
@@ -190,7 +190,7 @@ class TestItemUsagePhase4:
     def test_handle_use_item_combat_with_target_on_unconscious_ally(self, cli, fighter1, unconscious_fighter):
         """Test using healing potion on unconscious ally."""
         # Add potion to fighter1's inventory
-        fighter1.inventory.add_item("potion_of_healing", 1)
+        fighter1.inventory.add_item("potion_of_healing", "consumables", 1)
 
         item_data = {
             "name": "Potion of Healing",
@@ -221,7 +221,7 @@ class TestItemUsagePhase4:
         fighter2.current_hp = 10
 
         # Add potion to fighter1's inventory
-        fighter1.inventory.add_item("potion_of_healing", 1)
+        fighter1.inventory.add_item("potion_of_healing", "consumables", 1)
 
         item_data = {
             "name": "Potion of Healing",
@@ -248,7 +248,7 @@ class TestItemUsagePhase4:
     def test_handle_use_item_combat_with_target_consumes_action(self, cli, fighter1, fighter2):
         """Test that using item on ally consumes appropriate action."""
         # Add potion to fighter1's inventory
-        fighter1.inventory.add_item("potion_of_healing", 1)
+        fighter1.inventory.add_item("potion_of_healing", "consumables", 1)
 
         item_data = {
             "name": "Potion of Healing",
@@ -279,7 +279,7 @@ class TestItemUsagePhase4:
         fighter1.current_hp = 10
 
         # Add potion to fighter1's inventory
-        fighter1.inventory.add_item("potion_of_healing", 1)
+        fighter1.inventory.add_item("potion_of_healing", "consumables", 1)
 
         item_data = {
             "name": "Potion of Healing",
@@ -334,7 +334,7 @@ class TestItemUsagePhase4Integration:
             current_hp=20
         )
         # Add healing potions
-        char.inventory.add_item("potion_of_healing", 3)
+        char.inventory.add_item("potion_of_healing", "consumables", 3)
         return char
 
     @pytest.fixture
@@ -369,18 +369,38 @@ class TestItemUsagePhase4Integration:
         """Test complete workflow of healing ally in combat."""
         cli = CLI(game_state_healer, auto_save_enabled=False)
 
-        # Start combat
-        from dnd_engine.core.creature import Creature
-        goblin = Creature(name="Goblin", max_hp=7, armor_class=13)
-        game_state_healer.start_combat([goblin])
+        # Set up combat manually
+        from dnd_engine.core.creature import Creature, Abilities
+        from dnd_engine.systems.initiative import InitiativeTracker
+        from unittest.mock import MagicMock
 
-        # Get healer's turn
+        goblin_abilities = Abilities(
+            strength=8, dexterity=14, constitution=10,
+            intelligence=10, wisdom=8, charisma=8
+        )
+        goblin = Creature(name="Goblin", max_hp=7, ac=13, abilities=goblin_abilities)
+
+        # Set up combat state
+        game_state_healer.in_combat = True
+        game_state_healer.active_enemies = [goblin]
+        game_state_healer.initiative_tracker = InitiativeTracker()
+
+        # Add combatants to initiative
+        game_state_healer.initiative_tracker.add_combatant(healer)
+        game_state_healer.initiative_tracker.add_combatant(injured_ally)
+        game_state_healer.initiative_tracker.add_combatant(goblin)
+
+        # Sort by initiative
+        game_state_healer.initiative_tracker._sort_initiative()
+
+        # Find healer's turn
         current = game_state_healer.initiative_tracker.get_current_combatant()
-        while current.creature != healer:
+        while current and current.creature != healer:
             game_state_healer.initiative_tracker.next_turn()
             current = game_state_healer.initiative_tracker.get_current_combatant()
 
         # Verify it's healer's turn
+        assert current is not None
         assert current.creature == healer
 
         # Get potion data

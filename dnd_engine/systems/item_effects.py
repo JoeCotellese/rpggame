@@ -100,11 +100,13 @@ def _apply_healing_effect(
     # Store HP before healing to calculate actual healing
     hp_before = target.current_hp
 
-    # Apply healing (Creature.heal handles max HP cap and dead creatures)
-    target.heal(healing_amount)
-
-    # Calculate actual healing received (might be less due to max HP)
-    actual_healing = target.current_hp - hp_before
+    # Apply healing - use Character.recover_hp if available (handles unconscious/death saves)
+    # Otherwise fall back to Creature.heal for non-Characters
+    if hasattr(target, 'recover_hp'):
+        actual_healing = target.recover_hp(healing_amount)
+    else:
+        target.heal(healing_amount)
+        actual_healing = target.current_hp - hp_before
 
     # Emit healing event if event bus provided
     if event_bus is not None:
