@@ -397,20 +397,31 @@ class TestInventoryEdgeCases:
         assert self.player.current_hp == self.player.max_hp
         assert self.player.current_hp == old_hp  # No change
 
-    def test_search_already_searched_room(self):
-        """Test that searching an already-searched room yields nothing"""
-        # Move to storage room
-        self.game_state.move("north")
-        self.game_state.move("east")
+    def test_search_multiple_times_shows_current_items(self):
+        """Test that searching multiple times shows current items in room"""
+        # Ensure entrance room has fresh items for this test
+        self.game_state.dungeon["rooms"]["entrance"]["items"] = [
+            {"type": "item", "id": "alchemists_fire"},
+            {"type": "item", "id": "acid_vial"}
+        ]
+        self.game_state.dungeon["rooms"]["entrance"]["searched"] = False
 
         # First search
         items1 = self.game_state.search_room()
-        gold1 = self.player.inventory.gold
-        assert len(items1) > 0
+        initial_count = len(items1)
+        assert initial_count == 2, f"Expected 2 items initially, got {initial_count}"
 
-        # Second search
+        # Second search returns same items
         items2 = self.game_state.search_room()
-        gold2 = self.player.inventory.gold
+        assert len(items2) == initial_count, "Second search should return same items as first"
 
-        assert len(items2) == 0
-        assert gold2 == gold1  # No additional gold
+        # Take an item
+        non_currency_items = [item for item in items1 if item["type"] not in ["gold", "currency"]]
+        assert len(non_currency_items) > 0, "Test requires at least one non-currency item"
+
+        item_to_take = non_currency_items[0]["id"]
+        self.game_state.take_item(item_to_take, self.player)
+
+        # Search again - should show fewer items
+        items3 = self.game_state.search_room()
+        assert len(items3) == initial_count - 1, f"Expected {initial_count - 1} items after taking one, but got {len(items3)}"

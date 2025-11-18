@@ -143,26 +143,25 @@ class GameState:
 
     def search_room(self) -> List[Dict[str, Any]]:
         """
-        Search the current room for hidden items.
+        Search the current room for items.
 
         Only reveals items without picking them up.
         Use take_item() to actually pick up items.
+        Can be called multiple times to see current room state.
 
         Returns:
-            List of items found
+            List of items currently in the room
         """
         room = self.get_current_room()
-
-        if room.get("searched"):
-            return []  # Already searched
 
         if not room.get("searchable"):
             return []  # Not searchable
 
-        # Mark as searched to reveal items
-        room["searched"] = True
+        # Mark as searched to reveal items (first time only)
+        if not room.get("searched"):
+            room["searched"] = True
 
-        # Return items found without adding to inventory
+        # Always return current items in the room
         return room.get("items", [])
 
     def get_available_items_in_room(self) -> List[Dict[str, Any]]:

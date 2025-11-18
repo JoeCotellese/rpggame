@@ -162,9 +162,9 @@ class TestGameState:
 
         assert "attack" in actions
 
-    def test_room_already_searched(self):
-        """Test that rooms can only be searched once"""
-        self.game_state.current_room_id = "storage_room"
+    def test_room_marked_as_searched(self):
+        """Test that rooms are marked as searched after first search"""
+        self.game_state.current_room_id = "storage"
         room = self.game_state.get_current_room()
 
         # Search the room
@@ -175,6 +175,10 @@ class TestGameState:
             # Room should now be marked as searched
             room = self.game_state.get_current_room()
             assert room["searched"] is True
+
+            # But can be searched again and returns current items
+            items_found_again = self.game_state.search_room()
+            assert items_found_again == items_found
 
     def test_empty_room_no_enemies(self):
         """Test that empty rooms don't start combat"""

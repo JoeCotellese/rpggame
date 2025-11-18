@@ -260,22 +260,29 @@ class TestInventoryGameStateIntegration:
         assert "amount" in event.data
         assert event.data["amount"] == 2
 
-    def test_cannot_search_room_twice(self):
-        """Test that a room can only be searched once"""
-        # Clear enemies from guard_post to allow movement
-        self.game_state.dungeon["rooms"]["guard_post"]["enemies"] = []
-
+    def test_can_search_room_multiple_times(self):
+        """Test that a room can be searched multiple times to see current items"""
         # Move to storage room
         self.game_state.move("north")
-        self.game_state.move("east")
 
         # First search succeeds
         items1 = self.game_state.search_room()
         assert len(items1) > 0
 
-        # Second search returns nothing
+        # Second search returns same items
         items2 = self.game_state.search_room()
-        assert len(items2) == 0
+        assert len(items2) == len(items1)
+
+        # Take an item
+        non_currency_items = [item for item in items1 if item["type"] not in ["gold", "currency"]]
+        if non_currency_items:
+            item_to_take = non_currency_items[0]["id"]
+            self.game_state.take_item(item_to_take, self.player)
+
+            # Search again - should show one less item
+            items3 = self.game_state.search_room()
+            non_currency_items3 = [item for item in items3 if item["type"] not in ["gold", "currency"]]
+            assert len(non_currency_items3) == len(non_currency_items) - 1
 
     def test_search_non_searchable_room(self):
         """Test searching a non-searchable room returns nothing"""
