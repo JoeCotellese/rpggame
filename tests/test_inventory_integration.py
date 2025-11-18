@@ -260,26 +260,40 @@ class TestInventoryGameStateIntegration:
         assert "amount" in event.data
         assert event.data["amount"] == 2
 
-    def test_cannot_search_room_twice(self):
-        """Test that a room can only be searched once"""
-        # Clear enemies from guard_post to allow movement
-        self.game_state.dungeon["rooms"]["guard_post"]["enemies"] = []
-
-        # Move to storage room
-        self.game_state.move("north")
-        self.game_state.move("east")
+    def test_can_search_room_multiple_times(self):
+        """Test that a room can be searched multiple times to see current state"""
+        # Use current room and set up for testing
+        room = self.game_state.get_current_room()
+        room["searchable"] = True
+        room["searched"] = False
+        room["items"] = [
+            {"type": "item", "id": "potion_of_healing"},
+            {"type": "item", "id": "shortsword"}
+        ]
 
         # First search succeeds
         items1 = self.game_state.search_room()
-        assert len(items1) > 0
+        assert len(items1) == 2
 
-        # Second search returns nothing
+        # Second search returns same items
         items2 = self.game_state.search_room()
-        assert len(items2) == 0
+        assert len(items2) == 2
+
+        # Take one item
+        self.game_state.take_item("potion_of_healing", self.player)
+
+        # Third search returns remaining items
+        items3 = self.game_state.search_room()
+        assert len(items3) == 1
+        assert items3[0]["id"] == "shortsword"
 
     def test_search_non_searchable_room(self):
         """Test searching a non-searchable room returns nothing"""
-        # Entrance room is not marked as searchable
+        # Set up current room as non-searchable
+        room = self.game_state.get_current_room()
+        room["searchable"] = False
+        room["items"] = [{"type": "item", "id": "dagger"}]
+
         items = self.game_state.search_room()
         assert len(items) == 0
 

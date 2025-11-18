@@ -163,18 +163,62 @@ class TestGameState:
         assert "attack" in actions
 
     def test_room_already_searched(self):
-        """Test that rooms can only be searched once"""
-        self.game_state.current_room_id = "storage_room"
+        """Test that rooms are marked as searched after first search"""
+        # Use the current room and make it searchable
         room = self.game_state.get_current_room()
+        room["searchable"] = True
+        room["searched"] = False
+        room["items"] = [{"type": "item", "id": "dagger"}]
 
-        # Search the room
-        if room.get("searchable"):
-            initial_searched = room.get("searched", False)
-            items_found = self.game_state.search_room()
+        # First search should mark room as searched
+        initial_searched = room.get("searched", False)
+        assert initial_searched is False
 
-            # Room should now be marked as searched
-            room = self.game_state.get_current_room()
-            assert room["searched"] is True
+        items_found = self.game_state.search_room()
+
+        # Room should now be marked as searched
+        room = self.game_state.get_current_room()
+        assert room["searched"] is True
+
+    def test_multiple_searches_return_current_items(self):
+        """Test that searching multiple times shows current item state"""
+        # Use the current room and set it up for testing
+        room = self.game_state.get_current_room()
+        room["searchable"] = True
+        room["searched"] = False
+        room["items"] = [
+            {"type": "item", "id": "potion_of_healing"},
+            {"type": "item", "id": "shortsword"},
+            {"type": "currency", "gold": 20, "silver": 15}
+        ]
+
+        # First search - should return all items
+        first_search = self.game_state.search_room()
+        assert len(first_search) == 3
+        assert room["searched"] is True
+
+        # Second search - should still return all items
+        second_search = self.game_state.search_room()
+        assert len(second_search) == 3
+        assert second_search == first_search
+
+        # Take one item
+        self.game_state.take_item("potion_of_healing", self.character)
+
+        # Third search - should return remaining items
+        third_search = self.game_state.search_room()
+        assert len(third_search) == 2
+        item_ids = [item.get("id") for item in third_search if item["type"] == "item"]
+        assert "potion_of_healing" not in item_ids
+        assert "shortsword" in item_ids
+
+        # Take all remaining items
+        self.game_state.take_item("shortsword", self.character)
+        self.game_state.take_item("gold", self.character)
+
+        # Fourth search - should return empty list
+        fourth_search = self.game_state.search_room()
+        assert len(fourth_search) == 0
 
     def test_empty_room_no_enemies(self):
         """Test that empty rooms don't start combat"""

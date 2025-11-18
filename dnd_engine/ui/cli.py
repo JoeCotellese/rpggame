@@ -617,11 +617,7 @@ class CLI:
                     print_status_message(f"{item.get('id', 'an item')}", "info")
             print_status_message("\nUse 'take <item>' to pick up items", "info")
         else:
-            room = self.game_state.get_current_room()
-            if room.get("searched"):
-                print_status_message("You've already searched this room", "warning")
-            else:
-                print_status_message("You find nothing of interest", "info")
+            print_status_message("You find nothing of interest", "info")
 
     def handle_take(self, item_name: str) -> None:
         """
