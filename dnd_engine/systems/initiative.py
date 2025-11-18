@@ -55,6 +55,7 @@ class InitiativeTracker:
         self.combatants: List[InitiativeEntry] = []
         self.current_turn_index: int = 0
         self.round_number: int = 0
+        self.total_turns_taken: int = 0  # Track total number of turns for narrative context
 
     def add_combatant(self, creature: Creature) -> InitiativeEntry:
         """
@@ -137,6 +138,7 @@ class InitiativeTracker:
             return
 
         self.current_turn_index += 1
+        self.total_turns_taken += 1
 
         # Wrap around to start of initiative order
         if self.current_turn_index >= len(self.combatants):

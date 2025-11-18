@@ -59,6 +59,9 @@ class CLI:
         # Combat display management
         self.combat_status_shown = False
 
+        # Combat history tracking for narrative context
+        self.combat_history: List[str] = []
+
         # Subscribe to game events for display
         self.game_state.event_bus.subscribe(EventType.COMBAT_START, self._on_combat_start)
         self.game_state.event_bus.subscribe(EventType.COMBAT_END, self._on_combat_end)
@@ -185,6 +188,51 @@ class CLI:
                 padding=(0, 1)
             ))
         # No display for enemy turns - the action will print itself
+
+    def _build_battlefield_state(self) -> Dict[str, Any]:
+        """
+        Build current battlefield state for LLM context.
+
+        Returns:
+            Dict with party_hp and enemy_hp lists
+        """
+        party_hp = [
+            (char.name, char.current_hp, char.max_hp)
+            for char in self.game_state.party.characters
+        ]
+
+        enemy_hp = []
+        for enemy in self.game_state.active_enemies:
+            if enemy.is_alive:
+                enemy_num = self._get_enemy_number(enemy)
+                display_name = f"{enemy.name} {enemy_num}" if enemy_num else enemy.name
+                enemy_hp.append((display_name, enemy.current_hp, enemy.max_hp))
+
+        return {
+            "party_hp": party_hp,
+            "enemy_hp": enemy_hp
+        }
+
+    def _record_combat_action(self, result: Any) -> None:
+        """
+        Record a combat action in history for narrative context.
+
+        Args:
+            result: AttackResult from combat engine
+        """
+        if result.hit:
+            if result.critical_hit:
+                action = f"{result.attacker_name} CRITICALLY hit {result.defender_name} for {result.damage} damage"
+            else:
+                action = f"{result.attacker_name} hit {result.defender_name} for {result.damage} damage"
+        else:
+            action = f"{result.attacker_name} missed {result.defender_name}"
+
+        self.combat_history.append(action)
+
+        # Keep only last 12 actions to prevent prompt bloat
+        if len(self.combat_history) > 12:
+            self.combat_history = self.combat_history[-12:]
 
     def display_narrative_panel(self, text: str) -> None:
         """
@@ -399,10 +447,14 @@ class CLI:
                 print_status_message("No exits available from this room.", "warning")
             return
 
-        success = self.game_state.move(direction)
+        # Move without checking for enemies yet
+        success = self.game_state.move(direction, check_for_enemies=False)
         if success:
             print_status_message(f"You move {direction}", "info")
+            # Display room description FIRST
             self.display_room()
+            # THEN check for enemies and potentially start combat
+            self.game_state._check_for_enemies()
         else:
             if self.game_state.in_combat:
                 print_error("You cannot move during combat!")
@@ -566,12 +618,16 @@ class CLI:
                     "damage_type": damage_type,
                     "attacker_race": attacker_race,
                     "defender_armor": defender_armor,
-                    "round_number": self.game_state.initiative_tracker.round_number
+                    "combat_history": self.combat_history,
+                    "battlefield_state": self._build_battlefield_state()
                 },
                 timeout=3.0
             )
             if narrative:
                 self.display_narrative_panel(narrative)
+
+        # Record this action in combat history
+        self._record_combat_action(result)
 
         # 2. Display mechanics after narrative
         console.print(f"[cyan]⚔️  {str(result)}[/cyan]")
@@ -732,12 +788,16 @@ class CLI:
                             "damage_type": damage_type,
                             "attacker_race": attacker_race,
                             "defender_armor": defender_armor,
-                            "round_number": self.game_state.initiative_tracker.round_number
+                            "combat_history": self.combat_history,
+                            "battlefield_state": self._build_battlefield_state()
                         },
                         timeout=3.0
                     )
                     if narrative:
                         self.display_narrative_panel(narrative)
+
+                # Record this action in combat history
+                self._record_combat_action(result)
 
                 # Display mechanics after narrative
                 console.print(f"[cyan]⚔️  {str(result)}[/cyan]")
@@ -1520,6 +1580,9 @@ class CLI:
 
     def _on_combat_start(self, event: Event) -> None:
         """Handle combat start event."""
+        # Clear combat history for new combat
+        self.combat_history = []
+
         # Assign numbers to enemies for this combat
         self._assign_enemy_numbers()
 
@@ -1529,6 +1592,22 @@ class CLI:
             enemy_num = self._get_enemy_number(enemy)
             display_name = f"{enemy.name} {enemy_num}" if enemy_num else enemy.name
             numbered_enemies.append(display_name)
+
+        # Get and display combat start narrative if available
+        if self.llm_enhancer:
+            room = self.game_state.get_current_room()
+            enemy_names = [e.name for e in self.game_state.active_enemies]
+
+            narrative = self.llm_enhancer.get_combat_start_narrative_sync(
+                combat_data={
+                    "enemies": enemy_names,
+                    "location": room.get("name", ""),
+                    "party_size": len(self.game_state.party.characters)
+                },
+                timeout=3.0
+            )
+            if narrative:
+                self.display_narrative_panel(narrative)
 
         print_status_message(f"Combat begins! Enemies: {', '.join(numbered_enemies)}", "warning")
 

@@ -99,12 +99,13 @@ class GameState:
                 actions.append("search")
             return actions
 
-    def move(self, direction: str) -> bool:
+    def move(self, direction: str, check_for_enemies: bool = True) -> bool:
         """
         Move the player in a direction.
 
         Args:
             direction: Direction to move (must match an exit in current room)
+            check_for_enemies: Whether to check for enemies after moving (default True)
 
         Returns:
             True if move was successful, False otherwise
@@ -134,8 +135,9 @@ class GameState:
             }
         ))
 
-        # Check for enemies and start combat if needed
-        self._check_for_enemies()
+        # Check for enemies and start combat if needed (unless explicitly disabled)
+        if check_for_enemies:
+            self._check_for_enemies()
 
         return True
 

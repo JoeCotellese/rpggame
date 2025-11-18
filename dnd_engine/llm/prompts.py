@@ -32,8 +32,11 @@ def build_combat_action_prompt(action_data: Dict[str, Any]) -> str:
     Build prompt for combat action narration.
 
     Args:
-        action_data: Combat details (attacker, target, weapon, damage, hit/miss, location,
-                     attacker_race, attacker_armor, defender_armor, damage_type, round_number)
+        action_data: Combat details including:
+            - attacker, defender, weapon, damage, hit/miss, location
+            - attacker_race, defender_armor, damage_type
+            - combat_history: List of recent action summaries
+            - battlefield_state: Current HP status of all combatants
 
     Returns:
         Formatted prompt for LLM
@@ -44,24 +47,39 @@ def build_combat_action_prompt(action_data: Dict[str, Any]) -> str:
     damage = action_data.get("damage", 0)
     hit = action_data.get("hit", False)
     location = action_data.get("location", "")
-    round_number = action_data.get("round_number", 1)
+
+    # Combat history and battlefield state
+    combat_history = action_data.get("combat_history", [])
+    battlefield_state = action_data.get("battlefield_state", {})
 
     # Additional context for narrative richness
     attacker_race = action_data.get("attacker_race", "")
-    attacker_armor = action_data.get("attacker_armor", "")
     defender_armor = action_data.get("defender_armor", "")
     damage_type = action_data.get("damage_type", "")
 
     # Build context strings
-    location_context = f"\nLocation: {location}" if location else ""
+    location_context = f"Location: {location}\n" if location else ""
 
-    # Round context for pacing
-    # Note: round_number starts at 0 for first round, increments when initiative wraps
-    if round_number <= 1:
-        round_context = "\nThis is the opening exchange of combat."
-    else:
-        round_context = f"\nThis is round {round_number} of an ongoing battle."
+    # Build combat history context
+    history_context = ""
+    if combat_history:
+        history_lines = []
+        for i, action in enumerate(combat_history[-8:], 1):  # Last 8 actions
+            history_lines.append(f"  {i}. {action}")
+        history_context = "Recent Combat Actions:\n" + "\n".join(history_lines) + "\n\n"
 
+    # Build battlefield state context
+    battlefield_context = ""
+    if battlefield_state:
+        party_hp = battlefield_state.get("party_hp", [])
+        enemy_hp = battlefield_state.get("enemy_hp", [])
+
+        if party_hp or enemy_hp:
+            party_status = ", ".join([f"{name} {hp}/{max_hp}" for name, hp, max_hp in party_hp])
+            enemy_status = ", ".join([f"{name} {hp}/{max_hp}" for name, hp, max_hp in enemy_hp])
+            battlefield_context = f"Battlefield: Party [{party_status}] | Enemies [{enemy_status}]\n\n"
+
+    # Build combatant descriptions
     attacker_desc = attacker
     if attacker_race:
         attacker_desc = f"{attacker} (a {attacker_race})"
@@ -74,18 +92,19 @@ def build_combat_action_prompt(action_data: Dict[str, Any]) -> str:
     if damage_type:
         weapon_desc = f"{weapon} ({damage_type} damage)"
 
+    # Build the main prompt
     if hit:
         prompt = f"""Narrate this D&D combat action vividly:
 
-{attacker_desc} attacks {defender_desc} with a {weapon_desc} for {damage} damage.{location_context}{round_context}
+{location_context}{battlefield_context}{history_context}Current Action: {attacker_desc} attacks {defender_desc} with a {weapon_desc} for {damage} damage.
 
-Describe the hit in 2-3 dramatic sentences. Focus on the impact and visual details. Use environmental details appropriate to the location."""
+Describe the hit in 2-3 dramatic sentences. Consider the battlefield state and recent action flow. Focus on the impact and visual details."""
     else:
         prompt = f"""Narrate this D&D combat miss:
 
-{attacker_desc} attacks {defender_desc} with a {weapon_desc} but misses.{location_context}{round_context}
+{location_context}{battlefield_context}{history_context}Current Action: {attacker_desc} attacks {defender_desc} with a {weapon_desc} but misses.
 
-Describe the miss in 1-2 sentences. Why did it fail? Make it cinematic and appropriate to the location."""
+Describe the miss in 1-2 sentences. Consider the battlefield state and recent action flow. Make it cinematic."""
 
     return prompt
 
@@ -138,5 +157,39 @@ def build_victory_prompt(combat_data: Dict[str, Any]) -> str:
 The party defeats {', '.join(enemies)}. The final blow: {final_blow}.
 
 Describe the aftermath in 2-3 sentences. Capture the sense of triumph and relief."""
+
+    return prompt
+
+
+def build_combat_start_prompt(combat_data: Dict[str, Any]) -> str:
+    """
+    Build prompt for combat initiation narration.
+
+    Args:
+        combat_data: Combat details (enemies, location, party)
+
+    Returns:
+        Formatted prompt for LLM
+    """
+    enemies = combat_data.get("enemies", ["enemies"])
+    location = combat_data.get("location", "")
+    party_size = combat_data.get("party_size", 1)
+
+    location_context = f" in the {location}" if location else ""
+    party_desc = "The adventurer" if party_size == 1 else f"The party of {party_size}"
+
+    # Format enemy list for natural language
+    if len(enemies) == 1:
+        enemy_desc = f"a {enemies[0]}"
+    elif len(enemies) == 2:
+        enemy_desc = f"a {enemies[0]} and a {enemies[1]}"
+    else:
+        enemy_desc = f"{len(enemies)} enemies"
+
+    prompt = f"""Narrate the start of a D&D combat encounter:
+
+{party_desc} encounters {enemy_desc}{location_context}.
+
+Describe how combat begins in 2-3 dramatic sentences. Do the enemies ambush the party, or does the party surprise them? Set the scene for the battle to come."""
 
     return prompt

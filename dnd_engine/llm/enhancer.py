@@ -10,6 +10,7 @@ from ..utils.events import Event, EventBus, EventType
 from .base import LLMProvider
 from .prompts import (
     build_combat_action_prompt,
+    build_combat_start_prompt,
     build_death_prompt,
     build_room_description_prompt,
     build_victory_prompt,
@@ -439,6 +440,42 @@ class LLMEnhancer:
             # Cache the result
             if result and self.cache is not None:
                 self.cache[cache_key] = result
+
+            return result
+
+        return self._run_sync(generate(), timeout=timeout)
+
+    def get_combat_start_narrative_sync(self, combat_data: Dict, timeout: float = 3.0) -> Optional[str]:
+        """
+        Generate combat start narrative synchronously with timeout.
+
+        Args:
+            combat_data: Combat data (enemies, location, party_size, etc.)
+            timeout: Timeout in seconds (default: 3.0)
+
+        Returns:
+            Enhanced narrative or None on timeout/error
+        """
+        if not self.provider:
+            return None
+
+        prompt = build_combat_start_prompt(combat_data)
+
+        async def generate():
+            start_time = time.time()
+            result = await self.provider.generate(prompt, temperature=0.8)
+            latency_ms = (time.time() - start_time) * 1000
+
+            # Log LLM call
+            from ..utils.logging_config import get_logging_config
+            logging_config = get_logging_config()
+            if logging_config:
+                logging_config.log_llm_call(
+                    prompt_type="combat_start",
+                    latency_ms=latency_ms,
+                    response_length=len(result) if result else 0,
+                    success=bool(result)
+                )
 
             return result
 
