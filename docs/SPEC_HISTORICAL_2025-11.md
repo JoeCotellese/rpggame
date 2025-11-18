@@ -1,8 +1,18 @@
 # D&D 5E SRD Game Engine - Requirements & Architecture
 
-**Version:** 0.1  
-**Last Updated:** 2025-11-16  
-**Status:** Initial Design
+> ⚠️ **HISTORICAL DOCUMENT - ARCHIVED**
+>
+> This document represents the original design specification from November 2025.
+> Many features marked as "future", "out of scope", or "not implemented" are now **fully implemented**.
+>
+> **For current system architecture and implementation status, see [ARCHITECTURE.md](../ARCHITECTURE.md)**
+>
+> This document is preserved for historical reference and to understand the original design vision and decision-making process.
+
+**Version:** 0.1
+**Last Updated:** 2025-11-16
+**Original Status:** Initial Design
+**Current Status:** ⚠️ ARCHIVED - See ARCHITECTURE.md for current state
 
 ---
 
