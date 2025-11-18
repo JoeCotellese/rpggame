@@ -1,1 +1,2 @@
 - no need to run all tests, I can do it manually, just tell me.
+- for UI based tests, I will test manually

@@ -370,9 +370,40 @@ class CLI:
         if command == "use" or command.startswith("use "):
             parts = command.split()[1:]
             if not parts:
-                print_error("Specify an item to use. Example: 'use potion' or 'use potion on 2'")
+                # Progressive disclosure: prompt for item, then target
+                item_selection = self._prompt_consumable_selection()
+                if not item_selection:
+                    return  # User cancelled
+
+                item_id, item_data = item_selection
+                item_name = item_data.get("name", item_id)
+
+                # Prompt for target
+                target_character = self._prompt_target_selection(item_name)
+                if not isinstance(target_character, Character):
+                    return  # User cancelled or invalid selection
+
+                # Find which character has this item
+                owner = None
+                for char in self.game_state.party.characters:
+                    if char.is_alive:
+                        consumables = char.inventory.get_items_by_category("consumables")
+                        for inv_item in consumables:
+                            if inv_item.item_id == item_id:
+                                owner = char
+                                break
+                    if owner:
+                        break
+
+                if not owner:
+                    print_error(f"Could not find {item_name} in any party member's inventory!")
+                    return
+
+                # Execute the use on the selected target
+                self.handle_use_item_direct(item_id, target_character, owner)
                 return
-            # Parse with support for "on" keyword
+
+            # Parse with support for "on" keyword (old syntax still works)
             item_id, player_id = self._parse_command_with_target(parts)
             self.handle_use_item(item_id, player_id)
             return
@@ -452,9 +483,36 @@ class CLI:
         if command == "use" or command.startswith("use "):
             parts = command.split()[1:]
             if not parts:
-                print_error("Specify an item to use. Example: 'use potion'")
+                # Progressive disclosure: prompt for item (combat mode - self only for now)
+                # Get current combatant
+                if not self.game_state.in_combat or not self.game_state.initiative_tracker:
+                    print_error("Not in combat!")
+                    return
+
+                current = self.game_state.initiative_tracker.get_current_combatant()
+                if not current:
+                    print_error("No current combatant!")
+                    return
+
+                # Check if current combatant is a party member
+                if current.creature not in self.game_state.party.characters:
+                    print_error("It's not a party member's turn!")
+                    return
+
+                character = current.creature
+
+                # Prompt for item selection (showing action costs)
+                item_selection = self._prompt_consumable_selection(character=character, show_action_cost=True)
+                if not item_selection:
+                    return  # User cancelled
+
+                item_id, item_data = item_selection
+
+                # Execute the use (self-target only in combat)
+                self.handle_use_item_combat_direct(item_id, item_data, character)
                 return
-            # Use item during combat (self-target only for Phase 3)
+
+            # Use item during combat (old syntax still works)
             item_id = parts[0]
             self.handle_use_item_combat(item_id)
             return
@@ -1072,6 +1130,143 @@ class CLI:
         # Fall back to old syntax (last word might be player identifier)
         return self._parse_item_and_player(parts)
 
+    def _prompt_consumable_selection(self, character: Optional[Character] = None, show_action_cost: bool = False) -> Optional[tuple[str, Dict[str, Any]]]:
+        """
+        Prompt user to select a consumable item from inventory.
+
+        Args:
+            character: Character whose inventory to use. If None, searches all party members.
+            show_action_cost: Whether to show action cost (for combat mode)
+
+        Returns:
+            Tuple of (item_id, item_data) or None if cancelled
+        """
+        import questionary
+
+        items_data = self.game_state.data_loader.load_items()
+        consumables_list = []
+
+        # Gather consumables from specified character or all party
+        if character:
+            inventory = character.inventory
+            consumables = inventory.get_items_by_category("consumables")
+            for inv_item in consumables:
+                item_data = items_data["consumables"].get(inv_item.item_id, {})
+                consumables_list.append({
+                    "item_id": inv_item.item_id,
+                    "item_data": item_data,
+                    "quantity": inv_item.quantity,
+                    "owner": character.name
+                })
+        else:
+            # Aggregate from all party members
+            for char in self.game_state.party.characters:
+                if not char.is_alive:
+                    continue
+                inventory = char.inventory
+                consumables = inventory.get_items_by_category("consumables")
+                for inv_item in consumables:
+                    item_data = items_data["consumables"].get(inv_item.item_id, {})
+                    consumables_list.append({
+                        "item_id": inv_item.item_id,
+                        "item_data": item_data,
+                        "quantity": inv_item.quantity,
+                        "owner": char.name
+                    })
+
+        if not consumables_list:
+            print_error("No consumable items available!")
+            return None
+
+        # Build choices for questionary
+        choices = []
+        for item in consumables_list:
+            item_name = item["item_data"].get("name", item["item_id"])
+            quantity = item["quantity"]
+            owner = item["owner"]
+
+            display_parts = [item_name]
+
+            if show_action_cost:
+                action_cost = item["item_data"].get("action_required", "action")
+                display_parts.append(f"({action_cost.replace('_', ' ')})")
+
+            display_parts.append(f"(x{quantity})")
+
+            if not character:
+                display_parts.append(f"- {owner}")
+
+            choice_text = " ".join(display_parts)
+            choices.append(questionary.Choice(title=choice_text, value=item))
+
+        # Add cancel option
+        choices.append(questionary.Choice(title="Cancel", value=None))
+
+        # Get user selection with arrow keys
+        try:
+            result = questionary.select(
+                "Select Item to Use:",
+                choices=choices,
+                use_arrow_keys=True
+            ).ask()
+
+            # Check if user cancelled or selected Cancel option
+            # questionary returns None when cancelled, but also check for dict to be safe
+            if result is None or not isinstance(result, dict):
+                return None
+
+            return (result["item_id"], result["item_data"])
+        except (EOFError, KeyboardInterrupt):
+            return None
+
+    def _prompt_target_selection(self, item_name: str) -> Optional[Character]:
+        """
+        Prompt user to select a target character for item use.
+
+        Args:
+            item_name: Name of the item being used (for display)
+
+        Returns:
+            Selected Character or None if cancelled
+        """
+        import questionary
+
+        living_members = self.game_state.party.get_living_members()
+        if not living_members:
+            print_error("No living party members to target!")
+            return None
+
+        # Build choices for questionary
+        choices = []
+        for character in living_members:
+            hp_pct = character.current_hp / character.max_hp if character.max_hp > 0 else 0
+
+            # Use text-based indicators since questionary doesn't support rich formatting
+            if hp_pct > 0.5:
+                hp_indicator = "●●●"
+            elif hp_pct > 0.25:
+                hp_indicator = "●●○"
+            else:
+                hp_indicator = "●○○"
+
+            choice_text = f"{character.name} (HP: {character.current_hp}/{character.max_hp} {hp_indicator})"
+            choices.append(questionary.Choice(title=choice_text, value=character))
+
+        # Add cancel option
+        choices.append(questionary.Choice(title="Cancel", value=None))
+
+        # Get user selection with arrow keys
+        try:
+            result = questionary.select(
+                f"Use {item_name} on:",
+                choices=choices,
+                use_arrow_keys=True
+            ).ask()
+
+            return result
+        except (EOFError, KeyboardInterrupt):
+            return None
+
     def _parse_item_and_player(self, parts: List[str]) -> tuple[str, Optional[str]]:
         """
         Parse item/slot name and optional player identifier from command parts.
@@ -1383,9 +1578,60 @@ class CLI:
         else:
             print_status_message(f"{character.name} has nothing equipped in {slot_name} slot.", "warning")
 
+    def handle_use_item_direct(self, item_id: str, target: Character, owner: Character) -> None:
+        """
+        Handle using a consumable item with explicit character references.
+
+        Args:
+            item_id: The item to use (ID)
+            target: Character to apply the effect to
+            owner: Character who owns the item
+        """
+        from dnd_engine.systems.item_effects import apply_item_effect
+
+        inventory = owner.inventory
+        items_data = self.game_state.data_loader.load_items()
+
+        # Use the item from owner's inventory (removes it)
+        success, item_info = inventory.use_item(item_id, items_data)
+
+        if not success:
+            print_error(f"Failed to use {item_id}")
+            return
+
+        item_name = item_info.get("name", item_id)
+
+        # Apply the item's effect to the target
+        result = apply_item_effect(
+            item_info=item_info,
+            target=target,
+            dice_roller=self.game_state.dice_roller,
+            event_bus=self.game_state.event_bus
+        )
+
+        # Display the result
+        if owner == target:
+            print_status_message(f"{owner.name} uses {item_name}", "info")
+        else:
+            print_status_message(f"{owner.name} uses {item_name} on {target.name}", "info")
+        print_message(result.message)
+
+        # Emit item used event
+        self.game_state.event_bus.emit(Event(
+            type=EventType.ITEM_USED,
+            data={
+                "character": owner.name,
+                "target": target.name,
+                "item_id": item_id,
+                "item_name": item_name,
+                "effect_type": result.effect_type,
+                "success": result.success
+            }
+        ))
+
     def handle_use_item(self, item_id: str, player_identifier: Optional[str] = None) -> None:
         """
-        Handle using a consumable item for a specific party member.
+        Handle using a consumable item for a specific party member (legacy method).
 
         Args:
             item_id: The item to use (ID or name)
@@ -1449,9 +1695,95 @@ class CLI:
             }
         ))
 
+    def handle_use_item_combat_direct(self, item_id: str, item_data: Dict[str, Any], character: Character) -> None:
+        """
+        Handle using a consumable item during combat with explicit item data.
+
+        Validates action economy, consumes action, and applies item effect.
+
+        Args:
+            item_id: The item ID to use
+            item_data: The item data dictionary
+            character: The character using the item
+        """
+        from dnd_engine.systems.item_effects import apply_item_effect
+        from dnd_engine.systems.action_economy import ActionType
+
+        inventory = character.inventory
+        items_data = self.game_state.data_loader.load_items()
+
+        item_name = item_data.get("name", item_id)
+        action_required_str = item_data.get("action_required", "action")
+
+        # Map string to ActionType
+        action_type_map = {
+            "action": ActionType.ACTION,
+            "bonus_action": ActionType.BONUS_ACTION,
+            "free_object": ActionType.FREE_OBJECT,
+            "no_action": ActionType.NO_ACTION
+        }
+        action_required = action_type_map.get(action_required_str, ActionType.ACTION)
+
+        # Check if action is available
+        turn_state = self.game_state.initiative_tracker.get_current_turn_state()
+        if not turn_state:
+            print_error("Unable to get current turn state!")
+            return
+
+        if not turn_state.is_action_available(action_required):
+            action_name = action_required_str.replace("_", " ").title()
+            print_error(f"You don't have a {action_name} available this turn!")
+            print_status_message(f"Available: {turn_state}", "info")
+            return
+
+        # Consume the action
+        if not turn_state.consume_action(action_required):
+            print_error(f"Failed to consume {action_required_str}!")
+            return
+
+        # Use the item from inventory (removes it)
+        success, used_item_data = inventory.use_item(item_id, items_data)
+
+        if not success:
+            print_error(f"Failed to use {item_name}")
+            # Restore the action since item use failed
+            turn_state.reset()
+            turn_state.consume_action(action_required)  # Put back what we consumed
+            return
+
+        # Apply the item's effect
+        result = apply_item_effect(
+            item_info=used_item_data,
+            target=character,
+            dice_roller=self.game_state.dice_roller,
+            event_bus=self.game_state.event_bus
+        )
+
+        # Display the result
+        action_cost_msg = f"({action_required_str.replace('_', ' ')})"
+        print_status_message(f"{character.name} uses {item_name} {action_cost_msg}", "info")
+        print_message(result.message)
+
+        # Show remaining actions
+        remaining_actions = str(turn_state)
+        print_status_message(f"Remaining this turn: {remaining_actions}", "info")
+
+        # Emit item used event
+        self.game_state.event_bus.emit(Event(
+            type=EventType.ITEM_USED,
+            data={
+                "character": character.name,
+                "item_id": item_id,
+                "item_name": item_name,
+                "effect_type": result.effect_type,
+                "action_cost": action_required_str,
+                "success": result.success
+            }
+        ))
+
     def handle_use_item_combat(self, item_id: str) -> None:
         """
-        Handle using a consumable item during combat.
+        Handle using a consumable item during combat (legacy method).
 
         Validates action economy, consumes action, and applies item effect.
 
