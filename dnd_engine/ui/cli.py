@@ -420,6 +420,16 @@ class CLI:
             self.handle_rest()
             return
 
+        if command.startswith("take ") or command.startswith("get ") or command.startswith("pickup "):
+            # Extract item name from command
+            parts = command.split(maxsplit=1)
+            if len(parts) > 1:
+                item_name = parts[1]
+                self.handle_take(item_name)
+            else:
+                print_error("Specify an item to take. Example: 'take dagger'")
+            return
+
         print_status_message("Unknown command. Type 'help' for available commands.", "warning")
 
     def process_combat_command(self, command: str) -> None:
@@ -567,14 +577,152 @@ class CLI:
             for item in items:
                 if item["type"] == "gold":
                     print_status_message(f"{item['amount']} gold pieces", "info")
+                elif item["type"] == "currency":
+                    currency_parts = []
+                    if item.get("gold", 0) > 0:
+                        currency_parts.append(f"{item['gold']} gold")
+                    if item.get("silver", 0) > 0:
+                        currency_parts.append(f"{item['silver']} silver")
+                    if item.get("copper", 0) > 0:
+                        currency_parts.append(f"{item['copper']} copper")
+                    print_status_message(", ".join(currency_parts), "info")
                 else:
                     print_status_message(f"{item.get('id', 'an item')}", "info")
+            print_status_message("\nUse 'take <item>' to pick up items", "info")
         else:
             room = self.game_state.get_current_room()
             if room.get("searched"):
                 print_status_message("You've already searched this room", "warning")
             else:
                 print_status_message("You find nothing of interest", "info")
+
+    def handle_take(self, item_name: str) -> None:
+        """
+        Handle taking an item from the current room.
+
+        Args:
+            item_name: Name or ID of the item to take
+        """
+        # Get available items in the room
+        available_items = self.game_state.get_available_items_in_room()
+
+        if not available_items:
+            room = self.game_state.get_current_room()
+            if room.get("searchable") and not room.get("searched"):
+                print_error("You haven't searched this room yet. Use 'search' first.")
+            else:
+                print_error("There are no items to take here.")
+            return
+
+        # Normalize item name for matching
+        item_name_lower = item_name.lower().replace("_", " ")
+
+        # Find matching item
+        item_to_take = None
+        for item in available_items:
+            if item["type"] == "gold" and item_name_lower in ["gold", "gold pieces"]:
+                item_to_take = item
+                break
+            elif item["type"] == "currency" and item_name_lower in ["gold", "silver", "copper", "currency", "coins"]:
+                item_to_take = item
+                break
+            elif item["type"] == "item":
+                item_id = item.get("id", "")
+                # Match by ID or display name
+                if item_id.lower() == item_name_lower or item_id.lower().replace("_", " ") == item_name_lower:
+                    item_to_take = item
+                    break
+
+        if not item_to_take:
+            print_error(f"'{item_name}' not found in this room.")
+            print_status_message("Available items:", "info")
+            for item in available_items:
+                if item["type"] == "gold":
+                    print_status_message(f"  - gold ({item['amount']} pieces)", "info")
+                elif item["type"] == "currency":
+                    currency_parts = []
+                    if item.get("gold", 0) > 0:
+                        currency_parts.append(f"{item['gold']} gold")
+                    if item.get("silver", 0) > 0:
+                        currency_parts.append(f"{item['silver']} silver")
+                    if item.get("copper", 0) > 0:
+                        currency_parts.append(f"{item['copper']} copper")
+                    print_status_message(f"  - currency ({', '.join(currency_parts)})", "info")
+                else:
+                    print_status_message(f"  - {item.get('id', 'unknown')}", "info")
+            return
+
+        # Handle currency/gold specially - auto-add to party
+        if item_to_take["type"] in ["gold", "currency"]:
+            # Currency goes to all party members automatically
+            success = self.game_state.take_item(item_name, self.game_state.party.characters[0])
+            if success:
+                if item_to_take["type"] == "gold":
+                    amount = item_to_take["amount"]
+                    split = amount // len(self.game_state.party.characters)
+                    print_status_message(f"You pick up {amount} gold pieces ({split} each).", "success")
+                else:
+                    currency_parts = []
+                    if item_to_take.get("gold", 0) > 0:
+                        currency_parts.append(f"{item_to_take['gold']} gold")
+                    if item_to_take.get("silver", 0) > 0:
+                        currency_parts.append(f"{item_to_take['silver']} silver")
+                    if item_to_take.get("copper", 0) > 0:
+                        currency_parts.append(f"{item_to_take['copper']} copper")
+                    print_status_message(f"You pick up {', '.join(currency_parts)} and split it among the party.", "success")
+            else:
+                print_error("Failed to pick up the currency.")
+            return
+
+        # For regular items, select character if multi-character party
+        living_members = self.game_state.party.get_living_members()
+        if not living_members:
+            print_error("No living party members to take the item!")
+            return
+
+        selected_character = None
+        if len(living_members) == 1:
+            # Single character party - auto-assign
+            selected_character = living_members[0]
+        else:
+            # Multi-character party - prompt for selection
+            import questionary
+
+            # Build choices for questionary
+            choices = []
+            item_id = item_to_take.get("id", item_name)
+
+            for character in living_members:
+                choice_text = f"{character.name} ({character.character_class})"
+                choices.append(questionary.Choice(title=choice_text, value=character))
+
+            # Add cancel option
+            choices.append(questionary.Choice(title="Cancel", value=None))
+
+            # Get user selection
+            try:
+                result = questionary.select(
+                    f"Who should receive the {item_id}?",
+                    choices=choices,
+                    use_arrow_keys=True
+                ).ask()
+
+                if result is None:
+                    print_status_message("Cancelled.", "warning")
+                    return
+                selected_character = result
+            except (EOFError, KeyboardInterrupt):
+                print_status_message("Cancelled.", "warning")
+                return
+
+        # Take the item
+        item_id = item_to_take.get("id", item_name)
+        success = self.game_state.take_item(item_id, selected_character)
+
+        if success:
+            print_status_message(f"{selected_character.name} picks up the {item_id}.", "success")
+        else:
+            print_error(f"Failed to pick up {item_id}.")
 
     def handle_attack(self, target_name: str) -> None:
         """Handle attack command during combat."""
@@ -2148,6 +2296,7 @@ class CLI:
             ("move/go <direction>", "Move in a direction (e.g., 'go north')"),
             ("look or l", "Look around the current room"),
             ("search", "Search the room for items"),
+            ("take/get/pickup <item>", "Pick up an item (e.g., 'take dagger', 'get gold')"),
             ("inventory / i [filter]", "Show inventory. Filter: summary, player name/number, or item type"),
             ("equip <item> [on <player>]", "Equip weapon/armor (e.g., 'equip sword on 2')"),
             ("unequip <slot> [on <player>]", "Unequip weapon/armor (e.g., 'unequip weapon on gandalf')"),

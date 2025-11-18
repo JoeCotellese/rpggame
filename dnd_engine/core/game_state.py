@@ -145,9 +145,8 @@ class GameState:
         """
         Search the current room for hidden items.
 
-        Adds items to party members' inventories and emits events.
-        Gold is split evenly among all party members.
-        Items go to the first living party member.
+        Only reveals items without picking them up.
+        Use take_item() to actually pick up items.
 
         Returns:
             List of items found
@@ -160,63 +159,115 @@ class GameState:
         if not room.get("searchable"):
             return []  # Not searchable
 
-        # Mark as searched
+        # Mark as searched to reveal items
         room["searched"] = True
 
-        # Get items and add to inventory
+        # Return items found without adding to inventory
+        return room.get("items", [])
+
+    def get_available_items_in_room(self) -> List[Dict[str, Any]]:
+        """
+        Get list of items available to pick up in the current room.
+
+        Returns items if:
+        - Room has been searched and has items, OR
+        - Room is not searchable but has items (visible items)
+
+        Returns:
+            List of available items
+        """
+        room = self.get_current_room()
         items = room.get("items", [])
-        living_members = self.party.get_living_members()
 
-        if not living_members:
-            return items  # No one alive to pick up items
+        # Items are available if room is searched or not searchable
+        if room.get("searched") or not room.get("searchable"):
+            return items
+        return []
 
+    def take_item(self, item_id: str, character: Character) -> bool:
+        """
+        Pick up an item from the current room and add it to a character's inventory.
+
+        Args:
+            item_id: ID of the item to pick up (or "gold" for currency)
+            character: Character who should receive the item
+
+        Returns:
+            True if item was successfully taken, False otherwise
+        """
+        room = self.get_current_room()
+        items = room.get("items", [])
+
+        # Find the item in the room
+        item_to_take = None
         for item in items:
-            if item["type"] == "currency":
-                # Handle currency with gold, silver, and copper
-                from dnd_engine.systems.currency import Currency
-                gold = item.get("gold", 0)
-                silver = item.get("silver", 0)
-                copper = item.get("copper", 0)
+            if item["type"] == "gold" and item_id.lower() == "gold":
+                item_to_take = item
+                break
+            elif item["type"] == "currency" and item_id.lower() in ["gold", "silver", "copper", "currency"]:
+                item_to_take = item
+                break
+            elif item["type"] == "item" and item.get("id") == item_id:
+                item_to_take = item
+                break
 
-                currency = Currency(gold=gold, silver=silver, copper=copper)
-                # Split total value evenly among all party members
-                total_cp = currency.to_copper()
-                split_cp = total_cp // len(self.party.characters)
+        if not item_to_take:
+            return False  # Item not found in room
 
-                for character in self.party.characters:
-                    split_currency = Currency()
-                    split_currency._from_copper(split_cp)
-                    character.inventory.currency.add(split_currency)
+        # Handle different item types
+        if item_to_take["type"] == "currency":
+            # Handle currency with gold, silver, and copper
+            from dnd_engine.systems.currency import Currency
+            gold = item_to_take.get("gold", 0)
+            silver = item_to_take.get("silver", 0)
+            copper = item_to_take.get("copper", 0)
 
-                # Emit gold acquired event
-                self.event_bus.emit(Event(
-                    type=EventType.GOLD_ACQUIRED,
-                    data={"amount": gold, "silver": silver, "copper": copper}
-                ))
-            elif item["type"] == "gold":
-                amount = item["amount"]
-                # Split gold evenly among all party members (living and dead)
-                split_amount = amount // len(self.party.characters)
-                for character in self.party.characters:
-                    character.inventory.add_gold(split_amount)
-                # Emit gold acquired event
-                self.event_bus.emit(Event(
-                    type=EventType.GOLD_ACQUIRED,
-                    data={"amount": amount}
-                ))
-            elif item["type"] == "item":
-                item_id = item["id"]
-                category = self._get_item_category(item_id)
-                if category:
-                    # Add item to first living party member's inventory
-                    living_members[0].inventory.add_item(item_id, category)
-                    # Emit item acquired event
-                    self.event_bus.emit(Event(
-                        type=EventType.ITEM_ACQUIRED,
-                        data={"item_id": item_id, "category": category, "character": living_members[0].name}
-                    ))
+            currency = Currency(gold=gold, silver=silver, copper=copper)
+            # Split total value evenly among all party members
+            total_cp = currency.to_copper()
+            split_cp = total_cp // len(self.party.characters)
 
-        return items
+            for char in self.party.characters:
+                split_currency = Currency()
+                split_currency._from_copper(split_cp)
+                char.inventory.currency.add(split_currency)
+
+            # Emit gold acquired event
+            self.event_bus.emit(Event(
+                type=EventType.GOLD_ACQUIRED,
+                data={"amount": gold, "silver": silver, "copper": copper}
+            ))
+
+        elif item_to_take["type"] == "gold":
+            amount = item_to_take["amount"]
+            # Split gold evenly among all party members
+            split_amount = amount // len(self.party.characters)
+            for char in self.party.characters:
+                char.inventory.add_gold(split_amount)
+
+            # Emit gold acquired event
+            self.event_bus.emit(Event(
+                type=EventType.GOLD_ACQUIRED,
+                data={"amount": amount}
+            ))
+
+        elif item_to_take["type"] == "item":
+            category = self._get_item_category(item_id)
+            if not category:
+                return False  # Unknown item category
+
+            # Add item to the specified character's inventory
+            character.inventory.add_item(item_id, category)
+
+            # Emit item acquired event
+            self.event_bus.emit(Event(
+                type=EventType.ITEM_ACQUIRED,
+                data={"item_id": item_id, "category": category, "character": character.name}
+            ))
+
+        # Remove item from room
+        items.remove(item_to_take)
+        return True
 
     def _get_item_category(self, item_id: str) -> Optional[str]:
         """

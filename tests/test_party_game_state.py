@@ -99,7 +99,7 @@ class TestPartyExploration:
             assert game_state_with_party.current_room_id != initial_room
 
     def test_party_search_distributes_gold(self, game_state_with_party, party_of_four):
-        """Test that gold is distributed among party members."""
+        """Test that taking gold distributes it among party members."""
         # Move to a searchable room with gold
         room = game_state_with_party.get_current_room()
 
@@ -108,19 +108,26 @@ class TestPartyExploration:
         room["searched"] = False
         room["items"] = [{"type": "gold", "amount": 100}]
 
-        # Search the room
+        # Search the room (reveals items)
         items = game_state_with_party.search_room()
+
+        # Gold should NOT be distributed yet
+        for character in party_of_four.characters:
+            assert character.inventory.currency.gold == 0
+
+        # Take the gold
+        game_state_with_party.take_item("gold", party_of_four.characters[0])
 
         # Check that gold was distributed
         expected_gold_per_character = 100 // 4  # 25 gold each
 
         for character in party_of_four.characters:
-            assert character.inventory.gold == expected_gold_per_character
+            assert character.inventory.currency.gold == expected_gold_per_character
 
     def test_party_search_gives_item_to_first_living(
         self, game_state_with_party, party_of_four
     ):
-        """Test that items go to the first living party member."""
+        """Test that items can be taken and given to a specific party member."""
         room = game_state_with_party.get_current_room()
 
         # Mock a room with an item
@@ -128,15 +135,22 @@ class TestPartyExploration:
         room["searched"] = False
         room["items"] = [{"type": "item", "id": "longsword"}]
 
-        # Search the room
+        # Search the room (reveals items)
         items = game_state_with_party.search_room()
 
-        # First living member should have the item
+        # First living member should NOT have the item yet
         first_living = party_of_four.get_living_members()[0]
+        assert not first_living.inventory.has_item("longsword")
+
+        # Take the item and give to first living member
+        game_state_with_party.take_item("longsword", first_living)
+
+        # First living member should now have the item
         items_in_inventory = first_living.inventory.get_items_by_category("weapons")
 
         # Check that the item was added
         assert len(items_in_inventory) > 0
+        assert first_living.inventory.has_item("longsword")
 
 
 class TestPartyGameOver:
