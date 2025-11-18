@@ -1,0 +1,166 @@
+{
+  "name": "The Poisoned Laboratory",
+  "description": "An abandoned alchemist's workshop filled with dangerous fumes, volatile chemicals, and the mad alchemist's failed experiments",
+  "start_room": "entrance",
+  "rooms": {
+    "entrance": {
+      "name": "Collapsed Entrance Hall",
+      "description": "The entrance to the laboratory is partially collapsed. Broken glass vials litter the floor, and a faint chemical smell hangs in the air. To the north, you hear bubbling liquids and smell acrid smoke.",
+      "exits": {
+        "north": "storage"
+      },
+      "enemies": [],
+      "items": [
+        {
+          "type": "item",
+          "id": "alchemists_fire"
+        },
+        {
+          "type": "item",
+          "id": "acid_vial"
+        }
+      ],
+      "searched": false,
+      "searchable": true
+    },
+    "storage": {
+      "name": "Alchemical Storage",
+      "description": "Shelves line the walls, filled with labeled bottles and ingredients. A large iron door to the east is marked with a skull symbol. The western passage leads to what sounds like hissing steam.",
+      "exits": {
+        "south": "entrance",
+        "east": "laboratory",
+        "west": "furnace_room"
+      },
+      "enemies": [],
+      "items": [
+        {
+          "type": "currency",
+          "gold": 20,
+          "silver": 15
+        },
+        {
+          "type": "item",
+          "id": "potion_of_healing"
+        },
+        {
+          "type": "item",
+          "id": "antitoxin"
+        },
+        {
+          "type": "item",
+          "id": "elixir_of_health"
+        }
+      ],
+      "searched": false,
+      "searchable": true,
+      "safe_rest": true
+    },
+    "laboratory": {
+      "name": "Main Laboratory",
+      "description": "The heart of the alchemist's workshop. Bubbling cauldrons, distillation equipment, and mysterious glowing liquids cover every surface. A sickly green gas seeps from cracked flasks on the northern workbench. Two animated skeletons guard the northern passage - failed experiments that still move.",
+      "exits": {
+        "west": "storage",
+        "north": "sanctum"
+      },
+      "enemies": ["goblin", "goblin"],
+      "items": [
+        {
+          "type": "currency",
+          "gold": 25
+        },
+        {
+          "type": "item",
+          "id": "potion_of_healing"
+        },
+        {
+          "type": "item",
+          "id": "acid_vial"
+        }
+      ],
+      "searched": false,
+      "environmental_hazard": {
+        "type": "poison_gas",
+        "description": "Green poison gas fills the room!",
+        "effect": "All creatures in the room at the start of their turn must succeed on a DC 12 Constitution saving throw or become poisoned until the end of their next turn.",
+        "condition": "poisoned"
+      }
+    },
+    "furnace_room": {
+      "name": "Furnace Chamber",
+      "description": "A massive furnace roars in the center of this sweltering room, used to heat alchemical reactions. The heat is intense. A large dire wolf, its fur singed and eyes glowing red, guards a pile of treasure near the furnace. Its breath smells of sulfur.",
+      "exits": {
+        "east": "storage"
+      },
+      "enemies": ["wolf"],
+      "items": [
+        {
+          "type": "currency",
+          "gold": 30,
+          "silver": 20
+        },
+        {
+          "type": "item",
+          "id": "potion_of_fire_resistance"
+        },
+        {
+          "type": "item",
+          "id": "potion_of_healing"
+        },
+        {
+          "type": "item",
+          "id": "alchemists_fire"
+        }
+      ],
+      "searched": false,
+      "searchable": true,
+      "environmental_hazard": {
+        "type": "extreme_heat",
+        "description": "The furnace radiates intense heat!",
+        "effect": "Creatures without fire resistance suffer 1d6 fire damage at the start of each turn.",
+        "note": "Potion of Fire Resistance prevents this damage"
+      }
+    },
+    "sanctum": {
+      "name": "The Mad Alchemist's Sanctum",
+      "description": "The alchemist's private laboratory, filled with his most dangerous experiments. The air crackles with volatile energy. Archibald the Mad, a twisted figure in stained robes, cackles as he throws vials of alchemist's fire in your direction. His workbench is covered in scrolls and potions - the fruits of his insane research.",
+      "exits": {
+        "south": "laboratory"
+      },
+      "enemies": ["goblin_boss"],
+      "items": [
+        {
+          "type": "currency",
+          "gold": 50,
+          "platinum": 2
+        },
+        {
+          "type": "item",
+          "id": "scroll_of_magic_missile"
+        },
+        {
+          "type": "item",
+          "id": "scroll_of_cure_wounds"
+        },
+        {
+          "type": "item",
+          "id": "potion_of_greater_healing"
+        },
+        {
+          "type": "item",
+          "id": "antitoxin"
+        },
+        {
+          "type": "item",
+          "id": "alchemists_fire"
+        },
+        {
+          "type": "item",
+          "id": "acid_vial"
+        }
+      ],
+      "searched": false,
+      "searchable": true,
+      "boss_room": true
+    }
+  }
+}
