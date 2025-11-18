@@ -516,9 +516,21 @@ class CLI:
                     return  # User cancelled
 
                 item_id, item_data = item_selection
+                item_name = item_data.get("name", item_id)
 
-                # Execute the use (self-target only in combat)
-                self.handle_use_item_combat_direct(item_id, item_data, character)
+                # Check if item can target others
+                target_type = item_data.get("target_type", "self")
+                if target_type == "any":
+                    # Prompt for target selection (allies within range)
+                    target = self._prompt_combat_ally_selection(item_name, item_data, character)
+                    if not isinstance(target, Character):
+                        return  # User cancelled or invalid selection
+                else:
+                    # Self-target only
+                    target = character
+
+                # Execute the use with selected target
+                self.handle_use_item_combat_with_target(item_id, item_data, character, target)
                 return
 
             # Use item during combat (old syntax still works)
@@ -1461,6 +1473,70 @@ class CLI:
         except (EOFError, KeyboardInterrupt):
             return None
 
+    def _prompt_combat_ally_selection(self, item_name: str, item_data: Dict[str, Any], user: Character) -> Optional[Character]:
+        """
+        Prompt user to select an ally to use an item on during combat.
+        Validates range and includes unconscious allies.
+
+        Args:
+            item_name: Name of the item being used
+            item_data: Item data dictionary
+            user: Character using the item
+
+        Returns:
+            Selected Character or None if cancelled
+        """
+        import questionary
+
+        # Get item range (default 5 feet for touch items)
+        item_range = item_data.get("range", 5)
+
+        # Get all party members (including unconscious ones)
+        # In D&D 5E combat, we assume all party members are within 5 feet (touch range)
+        # For this implementation, we'll consider all party members as valid targets
+        valid_targets = [c for c in self.game_state.party.characters if c.is_alive or c.is_unconscious]
+
+        if not valid_targets:
+            print_error("No valid targets available!")
+            return None
+
+        # Build choices for questionary
+        choices = []
+        for character in valid_targets:
+            hp_pct = character.current_hp / character.max_hp if character.max_hp > 0 else 0
+
+            # Use text-based indicators
+            if character.is_unconscious:
+                hp_indicator = "💀 UNCONSCIOUS"
+                status = f"(HP: 0/{character.max_hp})"
+            elif hp_pct > 0.5:
+                hp_indicator = "●●●"
+                status = f"(HP: {character.current_hp}/{character.max_hp})"
+            elif hp_pct > 0.25:
+                hp_indicator = "●●○"
+                status = f"(HP: {character.current_hp}/{character.max_hp})"
+            else:
+                hp_indicator = "●○○"
+                status = f"(HP: {character.current_hp}/{character.max_hp})"
+
+            choice_text = f"{character.name} {status} {hp_indicator}"
+            choices.append(questionary.Choice(title=choice_text, value=character))
+
+        # Add cancel option
+        choices.append(questionary.Choice(title="Cancel", value=None))
+
+        # Get user selection with arrow keys
+        try:
+            result = questionary.select(
+                f"Use {item_name} on:",
+                choices=choices,
+                use_arrow_keys=True
+            ).ask()
+
+            return result
+        except (EOFError, KeyboardInterrupt):
+            return None
+
     def _parse_item_and_player(self, parts: List[str]) -> tuple[str, Optional[str]]:
         """
         Parse item/slot name and optional player identifier from command parts.
@@ -1967,6 +2043,106 @@ class CLI:
             type=EventType.ITEM_USED,
             data={
                 "character": character.name,
+                "item_id": item_id,
+                "item_name": item_name,
+                "effect_type": result.effect_type,
+                "action_cost": action_required_str,
+                "success": result.success
+            }
+        ))
+
+    def handle_use_item_combat_with_target(self, item_id: str, item_data: Dict[str, Any], user: Character, target: Character) -> None:
+        """
+        Handle using a consumable item during combat on a specified target.
+
+        Validates action economy, consumes action, and applies item effect to target.
+
+        Args:
+            item_id: The item ID to use
+            item_data: The item data dictionary
+            user: The character using the item
+            target: The character receiving the item's effect
+        """
+        from dnd_engine.systems.item_effects import apply_item_effect
+        from dnd_engine.systems.action_economy import ActionType
+
+        inventory = user.inventory
+        items_data = self.game_state.data_loader.load_items()
+
+        item_name = item_data.get("name", item_id)
+        action_required_str = item_data.get("action_required", "action")
+
+        # Map string to ActionType
+        action_type_map = {
+            "action": ActionType.ACTION,
+            "bonus_action": ActionType.BONUS_ACTION,
+            "free_object": ActionType.FREE_OBJECT,
+            "no_action": ActionType.NO_ACTION
+        }
+        action_required = action_type_map.get(action_required_str, ActionType.ACTION)
+
+        # Check if action is available
+        turn_state = self.game_state.initiative_tracker.get_current_turn_state()
+        if not turn_state:
+            print_error("Unable to get current turn state!")
+            return
+
+        if not turn_state.is_action_available(action_required):
+            action_name = action_required_str.replace("_", " ").title()
+            print_error(f"You don't have a {action_name} available this turn!")
+            print_status_message(f"Available: {turn_state}", "info")
+            return
+
+        # Consume the action
+        if not turn_state.consume_action(action_required):
+            print_error(f"Failed to consume {action_required_str}!")
+            return
+
+        # Show HP before healing (if target is alive or unconscious)
+        hp_before = target.current_hp
+
+        # Use the item from inventory (removes it)
+        success, used_item_data = inventory.use_item(item_id, items_data)
+
+        if not success:
+            print_error(f"Failed to use {item_name}")
+            # Restore the action since item use failed
+            turn_state.reset()
+            turn_state.consume_action(action_required)  # Put back what we consumed
+            return
+
+        # Apply the item's effect to the target
+        result = apply_item_effect(
+            item_info=used_item_data,
+            target=target,
+            dice_roller=self.game_state.dice_roller,
+            event_bus=self.game_state.event_bus
+        )
+
+        # Display the result with target information
+        action_cost_msg = f"({action_required_str.replace('_', ' ')})"
+        if user == target:
+            print_status_message(f"{user.name} uses {item_name} {action_cost_msg}", "info")
+        else:
+            print_status_message(f"{user.name} uses {item_name} on {target.name} {action_cost_msg}", "info")
+
+        print_message(result.message)
+
+        # Show HP change if healing occurred
+        if result.effect_type == "healing" and target.current_hp > hp_before:
+            hp_gained = target.current_hp - hp_before
+            print_status_message(f"{target.name}: {hp_before} → {target.current_hp} HP (+{hp_gained})", "success")
+
+        # Show remaining actions
+        remaining_actions = str(turn_state)
+        print_status_message(f"Remaining this turn: {remaining_actions}", "info")
+
+        # Emit item used event
+        self.game_state.event_bus.emit(Event(
+            type=EventType.ITEM_USED,
+            data={
+                "character": user.name,
+                "target": target.name,
                 "item_id": item_id,
                 "item_name": item_name,
                 "effect_type": result.effect_type,
