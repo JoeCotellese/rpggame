@@ -57,3 +57,4 @@ Thumbs.db
 
 # Generated dungeons (runtime artifacts, not source content)
 dnd_engine/data/content/dungeons/generated_*.json
+saves/
