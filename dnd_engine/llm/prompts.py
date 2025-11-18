@@ -9,20 +9,46 @@ def build_room_description_prompt(room_data: dict[str, Any]) -> str:
     Build prompt for room description enhancement.
 
     Args:
-        room_data: Room info (name, description, exits, contents)
+        room_data: Room info (name, description, exits, contents, monsters)
 
     Returns:
         Formatted prompt for LLM
     """
     base_desc = room_data.get("description", "")
     room_type = room_data.get("name", "chamber")
+    monsters = room_data.get("monsters", [])
+
+    # Build monster context if present
+    monster_context = ""
+    if monsters:
+        # Format monster list for natural language
+        monster_count = len(monsters)
+        if monster_count == 1:
+            monster_context = f"\nPresent in the room: {monsters[0]} (hostile)"
+        elif monster_count == 2:
+            monster_context = f"\nPresent in the room: {monsters[0]} and {monsters[1]} (hostile)"
+        else:
+            # Group by type for readability
+            from collections import Counter
+            monster_counts = Counter(monsters)
+            monster_parts = []
+            for monster, count in monster_counts.items():
+                if count == 1:
+                    monster_parts.append(monster)
+                else:
+                    monster_parts.append(f"{count} {monster}s")
+            if len(monster_parts) == 1:
+                monster_context = f"\nPresent in the room: {monster_parts[0]} (hostile)"
+            else:
+                monster_list = ", ".join(monster_parts[:-1]) + f", and {monster_parts[-1]}"
+                monster_context = f"\nPresent in the room: {monster_list} (hostile)"
 
     prompt = f"""Enhance this D&D dungeon room description with atmospheric details:
 
 Room: {room_type}
-Basic description: {base_desc}
+Basic description: {base_desc}{monster_context}
 
-Add vivid sensory details (sights, sounds, smells) in 2-3 sentences. Make it immersive but concise."""
+Add vivid sensory details (sights, sounds, smells) in 2-3 sentences. Make it immersive but concise.{" Acknowledge the presence of hostile creatures naturally in your description - describe their stance, readiness, or threatening demeanor." if monster_context else ""}"""
 
     return prompt
 

@@ -85,13 +85,24 @@ class CLI:
         basic_desc = room.get("description", self.game_state.get_room_description())
         exits = room.get("exits", [])
 
+        # Check for monsters in the room
+        enemy_ids = room.get("enemies", [])
+        monster_names = []
+        if enemy_ids:
+            # Load monster data to get display names
+            monsters_data = self.game_state.data_loader.load_monsters()
+            for enemy_id in enemy_ids:
+                if enemy_id in monsters_data:
+                    monster_names.append(monsters_data[enemy_id]["name"])
+
         # Try to get enhanced description from LLM
         enhanced_desc = None
         if self.llm_enhancer:
             room_data = {
                 "id": room.get("id", room_name.lower().replace(" ", "_")),
                 "name": room_name,
-                "description": basic_desc
+                "description": basic_desc,
+                "monsters": monster_names  # Include monster info for LLM
             }
             enhanced_desc = self.llm_enhancer.get_room_description_sync(room_data, timeout=3.0)
 
