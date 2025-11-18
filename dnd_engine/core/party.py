@@ -36,10 +36,26 @@ class Party:
         """
         Check if the entire party is dead (game over condition).
 
+        With death saves:
+        - Unconscious characters (0 HP, < 3 failures) are still "alive"
+        - Only characters with 3 death save failures are truly dead
+        - Party is wiped only when ALL characters are truly dead
+
         Returns:
             True if all party members are dead, False otherwise
         """
-        return len(self.get_living_members()) == 0
+        for char in self.characters:
+            # If character has is_dead property (supports death saves)
+            if hasattr(char, 'is_dead'):
+                if not char.is_dead:
+                    return False  # At least one character is not dead
+            else:
+                # Fallback to is_alive for characters without death saves
+                if char.is_alive:
+                    return False
+
+        # All characters are dead
+        return True
 
     def add_character(self, character: Character) -> None:
         """

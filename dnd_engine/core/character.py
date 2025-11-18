@@ -86,6 +86,11 @@ class Character(Creature):
         self.resource_pools: Dict[str, ResourcePool] = {}
         self._dice_roller = DiceRoller()
 
+        # Death saving throw state
+        self.death_save_successes: int = 0
+        self.death_save_failures: int = 0
+        self.stabilized: bool = False
+
     @property
     def proficiency_bonus(self) -> int:
         """
@@ -763,9 +768,61 @@ class Character(Creature):
         """
         return self.resource_pools.get(pool_name)
 
+    def take_damage(self, amount: int, event_bus=None) -> None:
+        """
+        Apply damage to the character.
+
+        Handles D&D 5E death save mechanics:
+        - If damage brings character to 0 HP, they fall unconscious
+        - If damage at 0 HP: add 1 death save failure
+        - If damage >= max HP at 0 HP: instant death (massive damage)
+
+        Args:
+            amount: Amount of damage to apply
+            event_bus: Optional EventBus for event emission
+        """
+        from dnd_engine.utils.events import Event, EventType
+
+        was_unconscious = self.is_unconscious
+
+        # Apply damage (parent implementation)
+        super().take_damage(amount)
+
+        # Handle damage while at 0 HP
+        if was_unconscious:
+            # Check for massive damage (damage >= max HP = instant death)
+            if amount >= self.max_hp:
+                # Instant death
+                self.death_save_failures = 3
+
+                if event_bus is not None:
+                    event_bus.emit(Event(
+                        type=EventType.MASSIVE_DAMAGE_DEATH,
+                        data={
+                            "character": self.name,
+                            "damage": amount,
+                            "max_hp": self.max_hp
+                        }
+                    ))
+            else:
+                # Taking damage at 0 HP = 1 automatic death save failure
+                self.add_death_save_failure(1)
+
+                if event_bus is not None:
+                    event_bus.emit(Event(
+                        type=EventType.DAMAGE_AT_ZERO_HP,
+                        data={
+                            "character": self.name,
+                            "damage": amount,
+                            "failures": self.death_save_failures
+                        }
+                    ))
+
     def recover_hp(self, amount: Optional[int] = None) -> int:
         """
         Recover hit points.
+
+        If recovering from 0 HP, resets death saves.
 
         Args:
             amount: Amount to heal (None = full heal)
@@ -773,11 +830,18 @@ class Character(Creature):
         Returns:
             Amount actually healed
         """
+        was_unconscious = (self.current_hp == 0)
+
         if amount is None:
             amount = self.max_hp - self.current_hp
 
         healed = min(amount, self.max_hp - self.current_hp)
         self.current_hp += healed
+
+        # Reset death saves if regaining HP from unconscious
+        if was_unconscious and self.current_hp > 0:
+            self.reset_death_saves()
+
         return healed
 
     def recover_resources(self, rest_type: str) -> List[str]:
@@ -857,6 +921,179 @@ class Character(Creature):
             "resources_recovered": resources_recovered,
             "conditions_removed": []  # Future
         }
+
+    @property
+    def is_unconscious(self) -> bool:
+        """
+        Check if the character is unconscious.
+
+        A character is unconscious when:
+        - HP is 0
+        - AND has not reached 3 death save failures (which means death)
+
+        Returns:
+            True if unconscious but alive, False otherwise
+        """
+        return self.current_hp == 0 and self.death_save_failures < 3
+
+    @property
+    def is_dead(self) -> bool:
+        """
+        Check if the character is dead.
+
+        A character is dead when:
+        - They have 3 death save failures
+
+        Returns:
+            True if dead, False otherwise
+        """
+        return self.death_save_failures >= 3
+
+    def make_death_save(self, event_bus=None) -> Dict[str, Any]:
+        """
+        Roll a death saving throw.
+
+        D&D 5E death save rules:
+        - Roll 1d20 (no modifiers)
+        - 10+ = Success
+        - 9 or less = Failure
+        - Natural 20 = Regain 1 HP and become conscious
+        - Natural 1 = Counts as 2 failures
+        - 3 successes = Stabilized
+        - 3 failures = Death
+
+        Returns:
+            Dictionary with:
+            - "roll": int (the d20 roll)
+            - "success": bool (whether the save succeeded)
+            - "natural_20": bool (whether it was a nat 20)
+            - "natural_1": bool (whether it was a nat 1)
+            - "successes": int (total successes after this roll)
+            - "failures": int (total failures after this roll)
+            - "stabilized": bool (whether character is now stabilized)
+            - "dead": bool (whether character is now dead)
+            - "conscious": bool (whether character regained consciousness)
+        """
+        from dnd_engine.utils.events import Event, EventType
+
+        # Cannot make death saves if not unconscious
+        if not self.is_unconscious:
+            raise ValueError(f"{self.name} cannot make death saves (not unconscious)")
+
+        # Already stabilized characters don't make death saves
+        if self.stabilized:
+            return {
+                "roll": 0,
+                "success": True,
+                "natural_20": False,
+                "natural_1": False,
+                "successes": self.death_save_successes,
+                "failures": self.death_save_failures,
+                "stabilized": True,
+                "dead": False,
+                "conscious": False
+            }
+
+        # Roll d20
+        roll_result = self._dice_roller.roll("1d20")
+        roll = roll_result.total
+
+        # Check for natural 20 or 1
+        natural_20 = (roll == 20)
+        natural_1 = (roll == 1)
+
+        # Determine success/failure
+        success = roll >= 10
+        conscious = False
+
+        # Apply results
+        if natural_20:
+            # Natural 20: regain 1 HP and become conscious
+            self.current_hp = 1
+            self.reset_death_saves()
+            conscious = True
+        elif natural_1:
+            # Natural 1: counts as 2 failures
+            self.death_save_failures += 2
+        elif success:
+            # Success
+            self.death_save_successes += 1
+            # Check for stabilization (3 successes)
+            if self.death_save_successes >= 3:
+                self.stabilized = True
+        else:
+            # Failure
+            self.death_save_failures += 1
+
+        # Build result
+        result = {
+            "roll": roll,
+            "success": success,
+            "natural_20": natural_20,
+            "natural_1": natural_1,
+            "successes": self.death_save_successes,
+            "failures": self.death_save_failures,
+            "stabilized": self.stabilized,
+            "dead": self.is_dead,
+            "conscious": conscious
+        }
+
+        # Emit event
+        if event_bus is not None:
+            event = Event(
+                type=EventType.DEATH_SAVE,
+                data={
+                    "character": self.name,
+                    "roll": roll,
+                    "success": success,
+                    "natural_20": natural_20,
+                    "natural_1": natural_1,
+                    "successes": self.death_save_successes,
+                    "failures": self.death_save_failures,
+                    "stabilized": self.stabilized,
+                    "dead": self.is_dead,
+                    "conscious": conscious
+                }
+            )
+            event_bus.emit(event)
+
+        return result
+
+    def reset_death_saves(self) -> None:
+        """
+        Reset death saving throws.
+
+        Called when:
+        - Character regains any HP
+        - Natural 20 on death save
+        """
+        self.death_save_successes = 0
+        self.death_save_failures = 0
+        self.stabilized = False
+
+    def add_death_save_failure(self, count: int = 1) -> None:
+        """
+        Add death save failure(s).
+
+        Used when:
+        - Character takes damage while at 0 HP (1 failure)
+        - Massive damage (instant death)
+
+        Args:
+            count: Number of failures to add (default 1)
+        """
+        self.death_save_failures += count
+
+    def stabilize_character(self) -> None:
+        """
+        Stabilize the character.
+
+        Used when:
+        - Ally uses Medicine check (DC 10) successfully
+        - Character gets 3 death save successes
+        """
+        if self.current_hp == 0:
+            self.stabilized = True
 
     def __str__(self) -> str:
         """String representation of the character"""
