@@ -259,7 +259,10 @@ class SaveManager:
             "abilities": asdict(character.abilities),
             "inventory": self._serialize_inventory(character.inventory),
             "conditions": list(character.conditions),
-            "resource_pools": self._serialize_resource_pools(character)
+            "resource_pools": self._serialize_resource_pools(character),
+            "spellcasting_ability": character.spellcasting_ability,
+            "known_spells": character.known_spells,
+            "prepared_spells": character.prepared_spells
         }
 
     def _serialize_inventory(self, inventory: Inventory) -> Dict[str, Any]:
@@ -412,7 +415,10 @@ class SaveManager:
             xp=char_data["xp"],
             inventory=inventory,
             race=char_data["race"],
-            subclass=char_data.get("subclass")  # Optional, defaults to None for old saves
+            subclass=char_data.get("subclass"),  # Optional, defaults to None for old saves
+            spellcasting_ability=char_data.get("spellcasting_ability"),  # Optional
+            known_spells=char_data.get("known_spells"),  # Optional
+            prepared_spells=char_data.get("prepared_spells")  # Optional
         )
 
         # Restore conditions
