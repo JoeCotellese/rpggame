@@ -1439,6 +1439,175 @@ class Character(Creature):
 
         return 8 + self.proficiency_bonus + ability_mod
 
+    def get_max_prepared_spells(self) -> int:
+        """
+        Calculate maximum number of spells that can be prepared.
+
+        For wizards: INT modifier + wizard level (minimum 1)
+        For other classes: varies by class
+
+        Returns:
+            Maximum number of prepared spells
+        """
+        if self.spellcasting_ability is None:
+            return 0
+
+        ability_mod = self._get_ability_modifier(self.spellcasting_ability)
+        max_prepared = ability_mod + self.level
+        return max(1, max_prepared)  # Minimum of 1
+
+    def can_prepare_spell(self, spell_id: str) -> bool:
+        """
+        Check if a spell can be prepared.
+
+        A spell can be prepared if:
+        - It is in the character's known spells
+        - It is not a cantrip (cantrips are always prepared)
+        - The character has room for more prepared spells
+
+        Args:
+            spell_id: ID of the spell to check
+
+        Returns:
+            True if the spell can be prepared, False otherwise
+        """
+        # Check if spell is known
+        if spell_id not in self.known_spells:
+            return False
+
+        # Check if already prepared
+        if spell_id in self.prepared_spells:
+            return False
+
+        # Count current non-cantrip prepared spells
+        # (assuming cantrips have level 0 and are in known_spells but not prepared_spells)
+        current_prepared_count = len(self.prepared_spells)
+        max_prepared = self.get_max_prepared_spells()
+
+        return current_prepared_count < max_prepared
+
+    def prepare_spell(self, spell_id: str) -> bool:
+        """
+        Prepare a spell from the character's known spells.
+
+        Args:
+            spell_id: ID of the spell to prepare
+
+        Returns:
+            True if spell was prepared successfully, False otherwise
+        """
+        if not self.can_prepare_spell(spell_id):
+            return False
+
+        self.prepared_spells.append(spell_id)
+        return True
+
+    def unprepare_spell(self, spell_id: str) -> bool:
+        """
+        Unprepare a spell.
+
+        Args:
+            spell_id: ID of the spell to unprepare
+
+        Returns:
+            True if spell was unprepared successfully, False if not in prepared spells
+        """
+        if spell_id not in self.prepared_spells:
+            return False
+
+        self.prepared_spells.remove(spell_id)
+        return True
+
+    def set_prepared_spells(self, spell_ids: List[str]) -> bool:
+        """
+        Set the character's prepared spells to a specific list.
+
+        Validates that:
+        - All spells are in known_spells
+        - Number of spells doesn't exceed maximum
+        - No cantrips are included (they're always available)
+
+        Args:
+            spell_ids: List of spell IDs to prepare
+
+        Returns:
+            True if prepared spells were set successfully, False otherwise
+        """
+        # Validate all spells are known
+        for spell_id in spell_ids:
+            if spell_id not in self.known_spells:
+                return False
+
+        # Validate count doesn't exceed maximum
+        if len(spell_ids) > self.get_max_prepared_spells():
+            return False
+
+        # Set prepared spells
+        self.prepared_spells = spell_ids[:]
+        return True
+
+    def use_arcane_recovery(self, spell_slot_levels: Dict[int, int]) -> bool:
+        """
+        Use Arcane Recovery to restore spell slots.
+
+        Wizards can recover spell slots with a combined level equal to half their
+        wizard level (rounded up), once per long rest.
+
+        Args:
+            spell_slot_levels: Dictionary mapping spell level to number of slots to recover
+                              e.g., {1: 2} means recover 2 first-level slots
+                              e.g., {1: 1, 2: 1} means recover 1 first-level and 1 second-level slot
+
+        Returns:
+            True if Arcane Recovery was used successfully, False otherwise
+
+        Raises:
+            ValueError: If attempting to recover too many spell slot levels or invalid levels
+        """
+        # Check if Arcane Recovery is available
+        arcane_recovery_pool = self.get_resource_pool("arcane_recovery")
+        if arcane_recovery_pool is None or not arcane_recovery_pool.is_available(1):
+            return False
+
+        # Validate no slot above 5th level (D&D 5E rule) - check this first
+        if any(level > 5 for level in spell_slot_levels.keys()):
+            raise ValueError("Arcane Recovery cannot restore spell slots of 6th level or higher.")
+
+        # Validate spell slot pools exist - check before calculating totals
+        for level, count in spell_slot_levels.items():
+            if count > 0:
+                slot_pool_name = f"{self._get_spell_level_name(level)} level slots"
+                pool = self.get_resource_pool(slot_pool_name)
+                if pool is None:
+                    raise ValueError(f"No spell slot pool found for level {level}")
+
+        # Calculate maximum spell slot levels that can be recovered
+        max_slot_levels = (self.level + 1) // 2  # Half wizard level, rounded up
+
+        # Calculate total slot levels being recovered
+        total_slot_levels = sum(level * count for level, count in spell_slot_levels.items())
+
+        if total_slot_levels > max_slot_levels:
+            raise ValueError(
+                f"Cannot recover {total_slot_levels} spell slot levels. "
+                f"Maximum for level {self.level} wizard is {max_slot_levels}."
+            )
+
+        # Recover the spell slots
+        for level, count in spell_slot_levels.items():
+            if count <= 0:
+                continue
+
+            slot_pool_name = f"{self._get_spell_level_name(level)} level slots"
+            pool = self.get_resource_pool(slot_pool_name)
+
+            # Recover slots (won't exceed maximum)
+            pool.recover(count)
+
+        # Consume Arcane Recovery use
+        arcane_recovery_pool.use(1)
+        return True
+
     def _get_spell_level_name(self, level: int) -> str:
         """
         Convert spell level number to ordinal name.

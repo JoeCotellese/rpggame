@@ -403,10 +403,80 @@ class CharacterFactory:
             character.inventory.add_gold(starting_gold)
 
     @staticmethod
+    def select_spells(
+        spell_type: str,
+        num_to_choose: int,
+        available_spells: List[Tuple[str, Dict[str, Any]]],
+        spells_data: Dict[str, Any]
+    ) -> List[str]:
+        """
+        Let player select spells interactively.
+
+        Args:
+            spell_type: Type of spells being selected (e.g., "Cantrips", "1st Level Spells")
+            num_to_choose: Number of spells to select
+            available_spells: List of (spell_id, spell_data) tuples
+            spells_data: All spell definitions from spells.json
+
+        Returns:
+            List of selected spell IDs
+        """
+        if num_to_choose == 0 or not available_spells:
+            return []
+
+        print_section(f"Choose {num_to_choose} {spell_type}")
+
+        # Sort spells by school then name for better organization
+        sorted_spells = sorted(
+            available_spells,
+            key=lambda x: (x[1].get("school", ""), x[1].get("name", ""))
+        )
+
+        # Display available spells
+        options = []
+        for i, (spell_id, spell_data) in enumerate(sorted_spells, 1):
+            name = spell_data.get("name", spell_id.title())
+            school = spell_data.get("school", "").capitalize()
+            description = spell_data.get("description", "")
+            # Truncate description to fit on one line
+            desc_short = description[:60] + "..." if len(description) > 60 else description
+            options.append({
+                "number": str(i),
+                "text": f"{name} ({school}) - {desc_short}"
+            })
+
+        print_choice_menu(f"Available {spell_type} (Choose {num_to_choose})", options)
+
+        selected = []
+        while len(selected) < num_to_choose:
+            remaining = num_to_choose - len(selected)
+            prompt = f"Enter spell number (select {remaining} more)" if remaining > 1 else "Enter spell number"
+            try:
+                choice = print_input_prompt(prompt).strip()
+                idx = int(choice) - 1
+                if 0 <= idx < len(sorted_spells):
+                    spell_id, spell_data = sorted_spells[idx]
+                    if spell_id not in selected:
+                        selected.append(spell_id)
+                        spell_name = spell_data.get("name", spell_id.title())
+                        print_status_message(f"Selected: {spell_name}", "success")
+                    else:
+                        print_status_message("You already selected that spell.", "warning")
+                else:
+                    print_status_message(f"Please enter a number between 1 and {len(sorted_spells)}.", "warning")
+            except ValueError:
+                print_status_message("Please enter a valid number.", "warning")
+            except KeyboardInterrupt:
+                raise
+
+        return selected
+
+    @staticmethod
     def initialize_spellcasting(
         character: Character,
         class_data: Dict[str, Any],
-        spells_data: Dict[str, Any]
+        spells_data: Dict[str, Any],
+        interactive: bool = True
     ) -> None:
         """
         Initialize spellcasting properties for spellcasting classes.
@@ -418,6 +488,7 @@ class CharacterFactory:
             character: Character object to initialize spellcasting for
             class_data: Class definition with optional spellcasting metadata
             spells_data: All spell definitions from spells.json
+            interactive: If True, prompt user to select spells; if False, auto-select first N
 
         Side Effects:
             - Sets character.spellcasting_ability
@@ -449,11 +520,11 @@ class CharacterFactory:
                 # For level 3, 2nd level, 1st level, and cantrips
                 max_spell_level = (character.level + 1) // 2  # 1->1, 2->1, 3->2, etc.
                 if spell_level <= max_spell_level:
-                    available_spells.append((spell_id, spell_level))
+                    available_spells.append((spell_id, spell_data, spell_level))
 
         # Separate cantrips from leveled spells
-        cantrips = [s[0] for s in available_spells if s[1] == 0]
-        leveled_spells = [s[0] for s in available_spells if s[1] > 0]
+        cantrip_list = [(s[0], s[1]) for s in available_spells if s[2] == 0]
+        leveled_spell_list = [(s[0], s[1]) for s in available_spells if s[2] > 0]
 
         # Determine how many cantrips and spells the character knows
         cantrips_known_count = spellcasting.get("cantrips_known", {}).get(str(character.level), 0)
@@ -465,12 +536,35 @@ class CharacterFactory:
             # For sorcerers/bards who know a limited number of spells
             spells_known_count = spellcasting.get("spells_known", {}).get(str(character.level), 0)
 
-        # Select cantrips (just take first N for simplicity)
-        character.known_spells = cantrips[:cantrips_known_count] + leveled_spells[:spells_known_count]
+        # Select spells
+        if interactive and (cantrips_known_count > 0 or spells_known_count > 0):
+            selected_cantrips = []
+            selected_leveled_spells = []
 
-        # For wizards, all known spells can be prepared (limited by int_mod + level)
-        # For simplicity, prepare all known leveled spells initially
-        character.prepared_spells = leveled_spells[:spells_known_count]
+            if cantrips_known_count > 0:
+                selected_cantrips = CharacterFactory.select_spells(
+                    "Cantrips",
+                    cantrips_known_count,
+                    cantrip_list,
+                    spells_data
+                )
+
+            if spells_known_count > 0:
+                selected_leveled_spells = CharacterFactory.select_spells(
+                    "1st Level Spells for Spellbook" if spellcasting.get("spells_known_type") == "spellbook" else "Known Spells",
+                    spells_known_count,
+                    leveled_spell_list,
+                    spells_data
+                )
+
+            character.known_spells = selected_cantrips + selected_leveled_spells
+            character.prepared_spells = selected_leveled_spells[:]
+        else:
+            # Non-interactive: just take first N spells
+            cantrips = [s[0] for s in cantrip_list]
+            leveled_spells = [s[0] for s in leveled_spell_list]
+            character.known_spells = cantrips[:cantrips_known_count] + leveled_spells[:spells_known_count]
+            character.prepared_spells = leveled_spells[:spells_known_count]
 
     @staticmethod
     def initialize_class_resources(
