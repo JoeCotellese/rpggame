@@ -64,7 +64,7 @@ class TestSpellcastingIntegration:
         # Initialize resources and spellcasting
         CharacterFactory.initialize_class_resources(character, wizard_class_data, 1)
         spells_data = data_loader.load_spells()
-        CharacterFactory.initialize_spellcasting(character, wizard_class_data, spells_data)
+        CharacterFactory.initialize_spellcasting(character, wizard_class_data, spells_data, interactive=False)
 
         return character
 

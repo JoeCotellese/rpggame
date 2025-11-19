@@ -141,7 +141,12 @@
         },
         {
           "name": "Arcane Recovery",
-          "description": "You can regain some of your magical energy by studying your spellbook. Once per day when you finish a short rest, you can choose expended spell slots to recover."
+          "description": "You can regain some of your magical energy by studying your spellbook. Once per day when you finish a short rest, you can choose expended spell slots to recover.",
+          "resource": {
+            "pool": "arcane_recovery",
+            "max_uses": 1,
+            "recovery": "long_rest"
+          }
         }
       ],
       "2": [

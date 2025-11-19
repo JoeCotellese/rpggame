@@ -48,7 +48,8 @@ def level_1_wizard(wizard_abilities):
         level=1,
         abilities=wizard_abilities,
         max_hp=8,
-        ac=12
+        ac=12,
+        spellcasting_ability="int"
     )
     # Add spell slots
     wizard.add_resource_pool(ResourcePool(
@@ -83,7 +84,8 @@ def level_1_cleric(cleric_abilities):
         level=1,
         abilities=cleric_abilities,
         max_hp=10,
-        ac=16
+        ac=16,
+        spellcasting_ability="wis"
     )
     # Add spell slots
     cleric.add_resource_pool(ResourcePool(
@@ -170,17 +172,17 @@ class TestSpellSaveDC:
         """Test wizard spell save DC at level 1."""
         # DC = 8 + proficiency + INT mod
         # DC = 8 + 2 + 3 = 13
-        assert level_1_wizard.get_spell_save_dc("int") == 13
+        assert level_1_wizard.get_spell_save_dc() == 13
 
     def test_cleric_spell_save_dc(self, level_1_cleric):
         """Test cleric spell save DC at level 1."""
         # DC = 8 + proficiency + WIS mod
         # DC = 8 + 2 + 3 = 13
-        assert level_1_cleric.get_spell_save_dc("wis") == 13
+        assert level_1_cleric.get_spell_save_dc() == 13
 
     def test_spell_save_dc_with_full_name(self, level_1_wizard):
-        """Test spell save DC accepts full ability name."""
-        assert level_1_wizard.get_spell_save_dc("intelligence") == 13
+        """Test spell save DC uses character's spellcasting ability."""
+        assert level_1_wizard.get_spell_save_dc() == 13
 
 
 class TestCantripDamageScaling:
