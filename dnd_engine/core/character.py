@@ -13,6 +13,8 @@ class CharacterClass(Enum):
     """Available character classes"""
     FIGHTER = "fighter"
     ROGUE = "rogue"
+    WIZARD = "wizard"
+    CLERIC = "cleric"
 
 
 class Character(Creature):
@@ -791,6 +793,215 @@ class Character(Creature):
             ResourcePool instance or None if not found
         """
         return self.resource_pools.get(pool_name)
+
+    def get_spell_attack_bonus(self, ability: str) -> int:
+        """
+        Calculate spell attack bonus.
+
+        Spell attack bonus = proficiency bonus + spellcasting ability modifier
+
+        Args:
+            ability: Spellcasting ability (e.g., "int", "wis", "cha")
+
+        Returns:
+            Total spell attack bonus
+
+        Raises:
+            ValueError: If ability name is invalid
+        """
+        # Map short ability names to full names
+        short_to_full = {
+            "str": "strength", "dex": "dexterity", "con": "constitution",
+            "int": "intelligence", "wis": "wisdom", "cha": "charisma"
+        }
+
+        # Normalize to short ability name
+        ability_lower = ability.lower()
+        if ability_lower in short_to_full:
+            ability_full = short_to_full[ability_lower]
+        else:
+            # Assume it's already a full name
+            full_to_short = {v: k for k, v in short_to_full.items()}
+            if ability_lower in full_to_short:
+                ability_full = ability_lower
+            else:
+                raise ValueError(f"Invalid ability name: {ability}")
+
+        # Get ability modifier
+        if ability_full == "strength":
+            modifier = self.abilities.str_mod
+        elif ability_full == "dexterity":
+            modifier = self.abilities.dex_mod
+        elif ability_full == "constitution":
+            modifier = self.abilities.con_mod
+        elif ability_full == "intelligence":
+            modifier = self.abilities.int_mod
+        elif ability_full == "wisdom":
+            modifier = self.abilities.wis_mod
+        elif ability_full == "charisma":
+            modifier = self.abilities.cha_mod
+        else:
+            raise ValueError(f"Invalid ability name: {ability}")
+
+        return self.proficiency_bonus + modifier
+
+    def get_spell_save_dc(self, ability: str) -> int:
+        """
+        Calculate spell save DC.
+
+        Spell save DC = 8 + proficiency bonus + spellcasting ability modifier
+
+        Args:
+            ability: Spellcasting ability (e.g., "int", "wis", "cha")
+
+        Returns:
+            Spell save DC
+
+        Raises:
+            ValueError: If ability name is invalid
+        """
+        # Map short ability names to full names
+        short_to_full = {
+            "str": "strength", "dex": "dexterity", "con": "constitution",
+            "int": "intelligence", "wis": "wisdom", "cha": "charisma"
+        }
+
+        # Normalize to short ability name
+        ability_lower = ability.lower()
+        if ability_lower in short_to_full:
+            ability_full = short_to_full[ability_lower]
+        else:
+            # Assume it's already a full name
+            full_to_short = {v: k for k, v in short_to_full.items()}
+            if ability_lower in full_to_short:
+                ability_full = ability_lower
+            else:
+                raise ValueError(f"Invalid ability name: {ability}")
+
+        # Get ability modifier
+        if ability_full == "strength":
+            modifier = self.abilities.str_mod
+        elif ability_full == "dexterity":
+            modifier = self.abilities.dex_mod
+        elif ability_full == "constitution":
+            modifier = self.abilities.con_mod
+        elif ability_full == "intelligence":
+            modifier = self.abilities.int_mod
+        elif ability_full == "wisdom":
+            modifier = self.abilities.wis_mod
+        elif ability_full == "charisma":
+            modifier = self.abilities.cha_mod
+        else:
+            raise ValueError(f"Invalid ability name: {ability}")
+
+        return 8 + self.proficiency_bonus + modifier
+
+    def get_available_spell_slots(self, level: int) -> int:
+        """
+        Get the number of available spell slots for a given level.
+
+        Args:
+            level: Spell level (1-9)
+
+        Returns:
+            Number of available spell slots (0 if pool doesn't exist or is exhausted)
+        """
+        if level < 1 or level > 9:
+            return 0
+
+        pool_name = f"spell_slots_level_{level}"
+        pool = self.resource_pools.get(pool_name)
+
+        if pool is None:
+            return 0
+
+        return pool.current
+
+    def use_spell_slot(self, level: int) -> bool:
+        """
+        Use a spell slot of the given level.
+
+        Args:
+            level: Spell level (1-9)
+
+        Returns:
+            True if spell slot was used successfully, False if no slots available
+        """
+        if level < 1 or level > 9:
+            return False
+
+        pool_name = f"spell_slots_level_{level}"
+        return self.use_resource(pool_name, 1)
+
+    @staticmethod
+    def _level_to_ordinal(level: int) -> str:
+        """
+        Convert spell level number to ordinal string.
+
+        Args:
+            level: Spell level (0-9)
+
+        Returns:
+            Ordinal string (e.g., "1st", "2nd", "3rd", "4th")
+        """
+        if level == 0:
+            return "cantrip"
+        elif level == 1:
+            return "1st"
+        elif level == 2:
+            return "2nd"
+        elif level == 3:
+            return "3rd"
+        else:
+            return f"{level}th"
+
+    def scale_cantrip_damage(self, base_damage_dice: str) -> str:
+        """
+        Scale cantrip damage based on character level.
+
+        D&D 5E cantrip scaling:
+        - Levels 1-4: base damage (e.g., 1d10)
+        - Levels 5-10: 2x base damage (e.g., 2d10)
+        - Levels 11-16: 3x base damage (e.g., 3d10)
+        - Levels 17-20: 4x base damage (e.g., 4d10)
+
+        Args:
+            base_damage_dice: Base damage dice (e.g., "1d10", "1d8")
+
+        Returns:
+            Scaled damage dice notation
+        """
+        import re
+
+        # Determine scaling multiplier based on level
+        if self.level >= 17:
+            multiplier = 4
+        elif self.level >= 11:
+            multiplier = 3
+        elif self.level >= 5:
+            multiplier = 2
+        else:
+            multiplier = 1
+
+        # Parse the base damage dice
+        pattern = re.compile(r'^(\d*)d(\d+)(([+-])(\d+))?$', re.IGNORECASE)
+        match = pattern.match(base_damage_dice.strip())
+
+        if not match:
+            # If we can't parse it, return as-is
+            return base_damage_dice
+
+        # Extract components
+        count_str = match.group(1)
+        count = int(count_str) if count_str else 1
+        sides = match.group(2)
+        modifier_part = match.group(3) if match.group(3) else ""
+
+        # Apply multiplier to dice count
+        scaled_count = count * multiplier
+
+        # Reconstruct the notation
+        return f"{scaled_count}d{sides}{modifier_part}"
 
     def take_damage(self, amount: int, event_bus=None) -> None:
         """
