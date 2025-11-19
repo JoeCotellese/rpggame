@@ -7,6 +7,7 @@ from pathlib import Path
 from dnd_engine.core.campaign_manager import CampaignManager
 from dnd_engine.core.character_vault import CharacterVault
 from dnd_engine.core.game_state import GameState
+from dnd_engine.ui.campaign_wizard import CampaignCreationWizard
 from dnd_engine.ui.rich_ui import (
     console,
     print_banner,
@@ -368,6 +369,47 @@ class MainMenu:
         )
         return None
 
+    def handle_new_campaign(self) -> Optional[GameState]:
+        """
+        Handle new campaign creation flow.
+
+        Returns:
+            GameState if campaign created and ready to play, None otherwise
+        """
+        wizard = CampaignCreationWizard(
+            campaign_manager=self.campaign_manager,
+            character_vault=self.character_vault
+        )
+
+        campaign_name = wizard.run()
+
+        if campaign_name is None:
+            return None
+
+        # Load the newly created campaign
+        try:
+            game_state = self.campaign_manager.load_campaign_state(
+                campaign_name,
+                slot_name="auto"
+            )
+            print_status_message(
+                f"Starting '{campaign_name}'...",
+                "success"
+            )
+            return game_state
+        except FileNotFoundError:
+            # No auto-save yet, that's OK - campaign was just created
+            # We'll need to initialize a new game state
+            # For now, return None and let the user load it normally
+            print_status_message(
+                f"Campaign created! Use 'Load Campaign' to start playing.",
+                "info"
+            )
+            return None
+        except Exception as e:
+            print_error(f"Failed to load campaign: {str(e)}")
+            return None
+
     def handle_character_vault(self) -> None:
         """
         Handle navigation to Character Vault menu.
@@ -411,11 +453,9 @@ class MainMenu:
                     return game_state
 
             elif choice == "new":
-                print_status_message(
-                    "New Campaign creation coming soon! (Issue #84)",
-                    "info"
-                )
-                # TODO: Implement in Issue #84
+                game_state = self.handle_new_campaign()
+                if game_state:
+                    return game_state
 
             elif choice == "vault":
                 self.handle_character_vault()
