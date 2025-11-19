@@ -190,3 +190,33 @@ class DiceRoller:
             Random integer between 1 and sides (inclusive)
         """
         return self.random.randint(1, sides)
+
+
+def format_dice_with_modifier(base_dice: str, modifier: int) -> str:
+    """
+    Format dice notation with modifier, handling negative values correctly.
+
+    This function prevents generating invalid dice notation like "1d8+-1"
+    when the modifier is negative.
+
+    Args:
+        base_dice: Base dice notation (e.g., "1d8", "2d6")
+        modifier: Modifier to add (can be positive, negative, or zero)
+
+    Returns:
+        Properly formatted dice notation
+
+    Examples:
+        >>> format_dice_with_modifier("1d8", 3)
+        "1d8+3"
+        >>> format_dice_with_modifier("1d8", -1)
+        "1d8-1"
+        >>> format_dice_with_modifier("1d8", 0)
+        "1d8"
+    """
+    if modifier > 0:
+        return f"{base_dice}+{modifier}"
+    elif modifier < 0:
+        return f"{base_dice}{modifier}"  # negative sign already included
+    else:
+        return base_dice

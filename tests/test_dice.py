@@ -2,7 +2,7 @@
 # ABOUTME: Tests dice notation parsing, rolling mechanics, and advantage/disadvantage
 
 import pytest
-from dnd_engine.core.dice import DiceRoller, DiceRoll
+from dnd_engine.core.dice import DiceRoller, DiceRoll, format_dice_with_modifier
 
 
 class TestDiceRoller:
@@ -218,3 +218,44 @@ class TestDiceRoll:
         )
         # Should take min (8) and add modifier
         assert roll.total == 11
+
+
+class TestFormatDiceWithModifier:
+    """Test the format_dice_with_modifier helper function"""
+
+    def test_format_with_positive_modifier(self):
+        """Test formatting with positive modifier"""
+        assert format_dice_with_modifier("1d8", 3) == "1d8+3"
+        assert format_dice_with_modifier("2d6", 5) == "2d6+5"
+        assert format_dice_with_modifier("1d20", 1) == "1d20+1"
+
+    def test_format_with_negative_modifier(self):
+        """Test formatting with negative modifier (prevents 1d8+-1)"""
+        assert format_dice_with_modifier("1d8", -1) == "1d8-1"
+        assert format_dice_with_modifier("2d6", -3) == "2d6-3"
+        assert format_dice_with_modifier("1d20", -5) == "1d20-5"
+
+    def test_format_with_zero_modifier(self):
+        """Test formatting with zero modifier (no modifier added)"""
+        assert format_dice_with_modifier("1d8", 0) == "1d8"
+        assert format_dice_with_modifier("2d6", 0) == "2d6"
+        assert format_dice_with_modifier("1d20", 0) == "1d20"
+
+    def test_formatted_string_can_be_parsed(self):
+        """Test that formatted strings can be successfully parsed by DiceRoller"""
+        roller = DiceRoller()
+
+        # Test positive modifier
+        notation = format_dice_with_modifier("1d20", 3)
+        result = roller.roll(notation)
+        assert result.modifier == 3
+
+        # Test negative modifier (the bug case)
+        notation = format_dice_with_modifier("1d8", -1)
+        result = roller.roll(notation)
+        assert result.modifier == -1
+
+        # Test zero modifier
+        notation = format_dice_with_modifier("1d6", 0)
+        result = roller.roll(notation)
+        assert result.modifier == 0

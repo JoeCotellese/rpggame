@@ -7,6 +7,7 @@ from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities
 from dnd_engine.core.game_state import GameState
 from dnd_engine.core.combat import AttackResult
+from dnd_engine.core.dice import format_dice_with_modifier
 from dnd_engine.utils.events import EventBus, Event, EventType
 from dnd_engine.systems.inventory import EquipmentSlot
 from dnd_engine.systems.condition_manager import ConditionManager
@@ -876,12 +877,12 @@ class CLI:
             # Get weapon damage dice from item data
             weapon_data = items_data.get("weapons", {}).get(equipped_weapon, {})
             damage_dice = weapon_data.get("damage", "1d8")
-            damage_dice = f"{damage_dice}+{damage_bonus}"
+            damage_dice = format_dice_with_modifier(damage_dice, damage_bonus)
         else:
             # Fallback to melee attack if no weapon equipped
             attack_bonus = attacker.melee_attack_bonus
             damage_bonus = attacker.melee_damage_bonus
-            damage_dice = f"1d8+{damage_bonus}"
+            damage_dice = format_dice_with_modifier("1d8", damage_bonus)
 
         # Perform attack (resolve mechanics)
         result = self.game_state.combat_engine.resolve_attack(

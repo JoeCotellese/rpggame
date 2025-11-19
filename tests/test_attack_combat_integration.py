@@ -283,3 +283,64 @@ class TestBackwardCompatibilityInCombat:
         # Should still be able to attack with melee bonus
         assert str_fighter.melee_attack_bonus == 5
         assert str_fighter.melee_damage_bonus == 3
+
+    def test_wizard_with_negative_str_generates_valid_dice_notation(self, combat_engine, items_data):
+        """Test that wizard with negative STR modifier generates valid dice notation (1d8-1 not 1d8+-1)"""
+        # Create a wizard with low STR (typical for spellcasters)
+        abilities = Abilities(
+            strength=8,   # -1 modifier
+            dexterity=14,  # +2 modifier
+            constitution=12,
+            intelligence=16,
+            wisdom=10,
+            charisma=10
+        )
+        wizard = Character(
+            name="Tim",
+            character_class=CharacterClass.WIZARD,
+            level=1,
+            abilities=abilities,
+            max_hp=7,
+            ac=12,
+            weapon_proficiencies=["simple"],
+            armor_proficiencies=[]
+        )
+
+        # Create a goblin target
+        goblin = Creature(
+            name="Goblin",
+            max_hp=7,
+            ac=15,
+            abilities=Abilities(
+                strength=8,
+                dexterity=14,
+                constitution=10,
+                intelligence=10,
+                wisdom=8,
+                charisma=8
+            )
+        )
+
+        # Verify wizard has negative damage bonus
+        assert wizard.melee_damage_bonus == -1
+
+        # Import the formatting function that the CLI uses
+        from dnd_engine.core.dice import format_dice_with_modifier
+
+        # This is what the CLI does for unequipped attacks
+        damage_dice = format_dice_with_modifier("1d8", wizard.melee_damage_bonus)
+
+        # Should generate "1d8-1" not "1d8+-1"
+        assert damage_dice == "1d8-1"
+
+        # Verify the notation can be successfully parsed and used in combat
+        result = combat_engine.resolve_attack(
+            attacker=wizard,
+            defender=goblin,
+            attack_bonus=wizard.melee_attack_bonus,
+            damage_dice=damage_dice,
+            apply_damage=False  # Don't actually apply damage, just test notation
+        )
+
+        # If we got here without raising ValueError, the notation was valid
+        assert result is not None
