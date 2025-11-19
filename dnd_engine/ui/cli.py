@@ -41,16 +41,20 @@ class CLI:
     - Game loop
     """
 
-    def __init__(self, game_state: GameState, auto_save_enabled: bool = True, llm_enhancer=None):
+    def __init__(self, game_state: GameState, campaign_manager, campaign_name: str, auto_save_enabled: bool = True, llm_enhancer=None):
         """
         Initialize the CLI.
 
         Args:
             game_state: The game state to interact with
+            campaign_manager: CampaignManager for save operations
+            campaign_name: Name of the current campaign
             auto_save_enabled: Whether to enable auto-save feature
             llm_enhancer: Optional LLM enhancer for narrative generation
         """
         self.game_state = game_state
+        self.campaign_manager = campaign_manager
+        self.campaign_name = campaign_name
         self.running = True
         self.auto_save_enabled = auto_save_enabled
         self.llm_enhancer = llm_enhancer
@@ -70,7 +74,7 @@ class CLI:
         # Combat history tracking for narrative context
         self.combat_history: List[str] = []
 
-        # Subscribe to game events for display
+        # Subscribe to game events for display and auto-save
         self.game_state.event_bus.subscribe(EventType.COMBAT_START, self._on_combat_start)
         self.game_state.event_bus.subscribe(EventType.COMBAT_END, self._on_combat_end)
         self.game_state.event_bus.subscribe(EventType.COMBAT_FLED, self._on_combat_fled)
@@ -79,6 +83,7 @@ class CLI:
         self.game_state.event_bus.subscribe(EventType.ROOM_ENTER, self._on_room_enter)
         self.game_state.event_bus.subscribe(EventType.LEVEL_UP, self._on_level_up)
         self.game_state.event_bus.subscribe(EventType.FEATURE_GRANTED, self._on_feature_granted)
+        self.game_state.event_bus.subscribe(EventType.LONG_REST, self._on_long_rest)
 
     def display_banner(self) -> None:
         """Display the game banner."""
@@ -430,6 +435,10 @@ class CLI:
 
         if command in ["save"]:
             self.handle_save()
+            return
+
+        if command in ["qs", "quicksave"]:
+            self.handle_quick_save()
             return
 
         if command in ["reset"] or command.startswith("reset "):
@@ -2848,9 +2857,8 @@ class CLI:
         ))
 
     def handle_save(self) -> None:
-        """Handle manual save command."""
-        # Check if save_manager is available
-        if not hasattr(self.game_state, 'save_manager'):
+        """Handle manual named save command."""
+        if not self.campaign_manager or not self.campaign_name:
             print_error("Save functionality not available")
             return
 
@@ -2863,14 +2871,34 @@ class CLI:
             return
 
         try:
-            save_path = self.game_state.save_manager.save_game(
-                self.game_state,
-                save_name,
-                auto_save=False
-            )
-            print_status_message(f"Game saved successfully: {save_path.stem}", "success")
+            with console.status("[cyan]Saving...[/cyan]", spinner="dots"):
+                self.campaign_manager.save_campaign_state(
+                    campaign_name=self.campaign_name,
+                    game_state=self.game_state,
+                    slot_name=save_name,
+                    save_type="manual"
+                )
+            print_status_message(f"✓ Game saved: {save_name}", "success")
         except Exception as e:
             print_error(f"Failed to save game: {e}")
+
+    def handle_quick_save(self) -> None:
+        """Handle quick-save command (S key)."""
+        if not self.campaign_manager or not self.campaign_name:
+            print_error("Save functionality not available")
+            return
+
+        try:
+            with console.status("[cyan]Saving...[/cyan]", spinner="dots"):
+                self.campaign_manager.save_campaign_state(
+                    campaign_name=self.campaign_name,
+                    game_state=self.game_state,
+                    slot_name="quick",
+                    save_type="quick"
+                )
+            print_status_message("✓ Quick-saved", "success")
+        except Exception as e:
+            print_error(f"Failed to quick-save: {e}")
 
     def handle_rest(self) -> None:
         """
@@ -3059,7 +3087,8 @@ class CLI:
             ("use <item> [on <player>]", "Use consumable (e.g., 'use potion on 2')"),
             ("status", "Show your character status"),
             ("rest", "Take a short or long rest"),
-            ("save", "Save your game"),
+            ("save", "Create a named save"),
+            ("qs / quicksave", "Quick-save"),
             ("reset", "Reset campaign with same party"),
             ("reset --dungeon <name>", "Switch to a different dungeon"),
             ("help or ?", "Show this help message"),
@@ -3275,6 +3304,9 @@ class CLI:
         print_status_message(f"{char_name} reached level {new_level}!", "success")
         print_message(f"❤️  HP increased by {hp_increase}")
 
+        # Auto-save after level-up
+        self._auto_save("level_up")
+
     def _on_feature_granted(self, event: Event) -> None:
         """Handle feature granted event."""
         char_name = event.data["character"]
@@ -3287,9 +3319,14 @@ class CLI:
         # Auto-save when entering a new room
         self._auto_save("room_change")
 
+    def _on_long_rest(self, event: Event) -> None:
+        """Handle long rest event."""
+        # Auto-save after long rest
+        self._auto_save("long_rest")
+
     def _auto_save(self, trigger: str) -> None:
         """
-        Perform an auto-save.
+        Perform an auto-save using CampaignManager.
 
         Args:
             trigger: What triggered the auto-save (for logging)
@@ -3297,16 +3334,20 @@ class CLI:
         if not self.auto_save_enabled:
             return
 
-        if not hasattr(self.game_state, 'save_manager'):
+        if not self.campaign_manager or not self.campaign_name:
             return
 
         try:
-            # Use "autosave" as the save name
-            self.game_state.save_manager.save_game(
-                self.game_state,
-                "autosave",
-                auto_save=True
-            )
+            # Show saving indicator
+            with console.status("[cyan]Saving...[/cyan]", spinner="dots"):
+                self.campaign_manager.save_campaign_state(
+                    campaign_name=self.campaign_name,
+                    game_state=self.game_state,
+                    slot_name="auto",
+                    save_type="auto"
+                )
+            # Brief success message
+            print_status_message("✓ Saved", "success")
         except Exception:
             # Silently fail auto-save to avoid disrupting gameplay
             pass
