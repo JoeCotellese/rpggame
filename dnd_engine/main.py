@@ -7,6 +7,7 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
+from dnd_engine.core.campaign_manager import CampaignManager
 from dnd_engine.core.character_factory import CharacterFactory
 from dnd_engine.core.game_state import GameState
 from dnd_engine.core.party import Party
@@ -372,8 +373,9 @@ def main() -> None:
     if llm_provider:
         llm_enhancer = LLMEnhancer(llm_provider, event_bus)
 
-    # Initialize save manager
+    # Initialize save manager and campaign manager
     save_manager = SaveManager()
+    campaign_manager = CampaignManager()
 
     try:
         # Show save/load menu
@@ -416,8 +418,17 @@ def main() -> None:
         # Store save manager in game state for later use
         game_state.save_manager = save_manager
 
-        # Initialize UI with LLM enhancer
-        cli = CLI(game_state, llm_enhancer=llm_enhancer)
+        # Determine campaign name from save or create default
+        campaign_name = save_to_load if save_to_load else f"adventure_{dungeon_name}"
+
+        # Initialize CLI with campaign manager and auto-save enabled
+        cli = CLI(
+            game_state=game_state,
+            campaign_manager=campaign_manager,
+            campaign_name=campaign_name,
+            auto_save_enabled=True,
+            llm_enhancer=llm_enhancer
+        )
 
         # Start game loop
         cli.run()
