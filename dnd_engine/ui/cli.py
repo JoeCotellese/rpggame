@@ -7,6 +7,7 @@ from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities
 from dnd_engine.core.game_state import GameState
 from dnd_engine.core.combat import AttackResult
+from dnd_engine.core.dice import format_dice_with_modifier
 from dnd_engine.utils.events import EventBus, Event, EventType
 from dnd_engine.systems.inventory import EquipmentSlot
 from dnd_engine.systems.condition_manager import ConditionManager
@@ -127,19 +128,17 @@ class CLI:
 
     def display_player_status(self) -> None:
         """Display status for all party members."""
-        party_status = self.game_state.get_player_status()
-
-        # Convert party status to table format
+        # Convert party data to table format
         party_data = []
-        for status in party_status:
+        for char in self.game_state.party.characters:
             party_data.append({
-                "name": status['name'],
-                "class": "Fighter",  # TODO: Get actual class from character
-                "level": status['level'],
-                "hp": status['hp'],
-                "max_hp": status['max_hp'],
-                "ac": status['ac'],
-                "xp": status['xp']
+                "name": char.name,
+                "class": char.character_class.value.capitalize(),
+                "level": char.level,
+                "hp": char.current_hp,
+                "max_hp": char.max_hp,
+                "ac": char.ac,
+                "xp": char.xp
             })
 
         table = create_party_status_table(party_data)
@@ -878,12 +877,12 @@ class CLI:
             # Get weapon damage dice from item data
             weapon_data = items_data.get("weapons", {}).get(equipped_weapon, {})
             damage_dice = weapon_data.get("damage", "1d8")
-            damage_dice = f"{damage_dice}+{damage_bonus}"
+            damage_dice = format_dice_with_modifier(damage_dice, damage_bonus)
         else:
             # Fallback to melee attack if no weapon equipped
             attack_bonus = attacker.melee_attack_bonus
             damage_bonus = attacker.melee_damage_bonus
-            damage_dice = f"1d8+{damage_bonus}"
+            damage_dice = format_dice_with_modifier("1d8", damage_bonus)
 
         # Perform attack (resolve mechanics)
         result = self.game_state.combat_engine.resolve_attack(
@@ -1538,6 +1537,7 @@ class CLI:
             # Choose target from living party members (lowest HP)
             living_party = self.game_state.party.get_living_members()
             if not living_party:
+                self.game_state.initiative_tracker.next_turn()
                 break  # No one to attack
 
             target = min(living_party, key=lambda c: c.current_hp)
@@ -3100,6 +3100,7 @@ class CLI:
         """Display help for combat commands."""
         commands = [
             ("attack <enemy>", "Attack an enemy (e.g., 'attack goblin 1' or 'attack 1')"),
+            ("cast <spell>", "Cast a spell (e.g., 'cast magic missile')"),
             ("use <item>", "Use a consumable item (e.g., 'use potion') - costs an action"),
             ("stabilize <ally>", "Stabilize an unconscious ally (Medicine DC 10)"),
             ("flee / run / escape", "Flee from combat (enemies get opportunity attacks)"),
