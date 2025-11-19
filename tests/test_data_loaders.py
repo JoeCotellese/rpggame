@@ -141,3 +141,164 @@ class TestDataLoader:
         assert classes is not None
         assert "fighter" in classes
         assert classes["fighter"]["name"] == "Fighter"
+
+    def test_load_spells(self):
+        """Test loading spells from JSON"""
+        spells = self.loader.load_spells()
+
+        assert spells is not None
+        assert len(spells) > 0
+        assert "fireball" in spells
+        assert "magic_missile" in spells
+        assert "cure_wounds" in spells
+
+    def test_spell_structure(self):
+        """Test that spell data has expected structure"""
+        spells = self.loader.load_spells()
+        fireball = spells["fireball"]
+
+        # Check required fields
+        assert fireball["id"] == "fireball"
+        assert fireball["name"] == "Fireball"
+        assert fireball["level"] == 3
+        assert fireball["school"] == "evocation"
+        assert "casting_time" in fireball
+        assert "range_ft" in fireball
+        assert "components" in fireball
+        assert "duration" in fireball
+        assert "description" in fireball
+
+    def test_get_spell(self):
+        """Test getting a specific spell by ID"""
+        fireball = self.loader.get_spell("fireball")
+
+        assert fireball is not None
+        assert fireball["name"] == "Fireball"
+        assert fireball["level"] == 3
+        assert fireball["school"] == "evocation"
+
+    def test_get_nonexistent_spell(self):
+        """Test getting a spell that doesn't exist"""
+        with pytest.raises(KeyError):
+            self.loader.get_spell("super_fireball")
+
+    def test_cantrip_spells(self):
+        """Test that cantrips have level 0"""
+        spells = self.loader.load_spells()
+        fire_bolt = spells["fire_bolt"]
+
+        assert fire_bolt["level"] == 0
+
+    def test_spell_damage_data(self):
+        """Test that damage spells have damage information"""
+        spells = self.loader.load_spells()
+        fireball = spells["fireball"]
+
+        assert "damage" in fireball
+        assert "dice" in fireball["damage"]
+        assert "damage_type" in fireball["damage"]
+        assert fireball["damage"]["damage_type"] == "fire"
+
+    def test_spell_healing_data(self):
+        """Test that healing spells have healing information"""
+        spells = self.loader.load_spells()
+        cure_wounds = spells["cure_wounds"]
+
+        assert "healing" in cure_wounds
+        assert "dice" in cure_wounds["healing"]
+
+    def test_spell_components(self):
+        """Test that spell components are properly structured"""
+        spells = self.loader.load_spells()
+        fireball = spells["fireball"]
+
+        assert "components" in fireball
+        components = fireball["components"]
+        assert "verbal" in components
+        assert "somatic" in components
+        assert "material" in components
+
+    def test_spell_saving_throw(self):
+        """Test that spells with saving throws have proper structure"""
+        spells = self.loader.load_spells()
+        fireball = spells["fireball"]
+
+        assert "saving_throw" in fireball
+        save = fireball["saving_throw"]
+        assert "ability" in save
+        assert "on_success" in save
+        assert save["ability"] == "dexterity"
+
+    def test_spell_schools_variety(self):
+        """Test that we have spells from multiple schools"""
+        spells = self.loader.load_spells()
+        schools = set()
+
+        for spell_data in spells.values():
+            schools.add(spell_data["school"])
+
+        # Should have at least 5 different schools
+        assert len(schools) >= 5
+
+    def test_spell_level_variety(self):
+        """Test that we have spells of different levels"""
+        spells = self.loader.load_spells()
+        levels = set()
+
+        for spell_data in spells.values():
+            levels.add(spell_data["level"])
+
+        # Should have cantrips (0) and levels 1-3
+        assert 0 in levels
+        assert 1 in levels
+        assert 2 in levels
+        assert 3 in levels
+
+    def test_spell_attack_type(self):
+        """Test that attack spells have attack type"""
+        spells = self.loader.load_spells()
+        fire_bolt = spells["fire_bolt"]
+
+        assert "attack_type" in fire_bolt
+        assert fire_bolt["attack_type"] == "ranged"
+
+    def test_spell_area_of_effect(self):
+        """Test that AoE spells have area information"""
+        spells = self.loader.load_spells()
+        fireball = spells["fireball"]
+
+        assert "area_of_effect" in fireball
+        assert "radius" in fireball["area_of_effect"]
+
+    def test_spell_concentration(self):
+        """Test concentration spell flag"""
+        spells = self.loader.load_spells()
+        mage_hand = spells["mage_hand"]
+
+        assert "concentration" in mage_hand
+        assert mage_hand["concentration"] is True
+
+    def test_spell_ritual(self):
+        """Test ritual spell flag"""
+        spells = self.loader.load_spells()
+        detect_magic = spells["detect_magic"]
+
+        assert "ritual" in detect_magic
+        assert detect_magic["ritual"] is True
+
+    def test_spell_higher_levels(self):
+        """Test that spells have higher level scaling information"""
+        spells = self.loader.load_spells()
+        magic_missile = spells["magic_missile"]
+
+        assert "higher_levels" in magic_missile
+        assert magic_missile["higher_levels"] is not None
+
+    def test_spell_classes(self):
+        """Test that spells have class lists"""
+        spells = self.loader.load_spells()
+        fireball = spells["fireball"]
+
+        assert "classes" in fireball
+        assert isinstance(fireball["classes"], list)
+        assert len(fireball["classes"]) > 0
