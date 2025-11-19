@@ -127,19 +127,17 @@ class CLI:
 
     def display_player_status(self) -> None:
         """Display status for all party members."""
-        party_status = self.game_state.get_player_status()
-
-        # Convert party status to table format
+        # Convert party data to table format
         party_data = []
-        for status in party_status:
+        for char in self.game_state.party.characters:
             party_data.append({
-                "name": status['name'],
-                "class": "Fighter",  # TODO: Get actual class from character
-                "level": status['level'],
-                "hp": status['hp'],
-                "max_hp": status['max_hp'],
-                "ac": status['ac'],
-                "xp": status['xp']
+                "name": char.name,
+                "class": char.character_class.value.capitalize(),
+                "level": char.level,
+                "hp": char.current_hp,
+                "max_hp": char.max_hp,
+                "ac": char.ac,
+                "xp": char.xp
             })
 
         table = create_party_status_table(party_data)
@@ -1538,6 +1536,7 @@ class CLI:
             # Choose target from living party members (lowest HP)
             living_party = self.game_state.party.get_living_members()
             if not living_party:
+                self.game_state.initiative_tracker.next_turn()
                 break  # No one to attack
 
             target = min(living_party, key=lambda c: c.current_hp)
@@ -3100,6 +3099,7 @@ class CLI:
         """Display help for combat commands."""
         commands = [
             ("attack <enemy>", "Attack an enemy (e.g., 'attack goblin 1' or 'attack 1')"),
+            ("cast <spell>", "Cast a spell (e.g., 'cast magic missile')"),
             ("use <item>", "Use a consumable item (e.g., 'use potion') - costs an action"),
             ("stabilize <ally>", "Stabilize an unconscious ally (Medicine DC 10)"),
             ("flee / run / escape", "Flee from combat (enemies get opportunity attacks)"),
