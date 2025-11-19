@@ -1,17 +1,27 @@
 # ABOUTME: Campaign management system for creating, loading, and organizing campaigns
-# ABOUTME: Handles campaign directories, save slots, and integration with existing SaveManager
+# ABOUTME: Handles campaign directories, save slots, and game state serialization
 
 import json
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+from dataclasses import asdict
 
 from dnd_engine.core.campaign import Campaign, SaveSlotMetadata
-from dnd_engine.core.save_manager import SaveManager
 from dnd_engine.core.game_state import GameState
+from dnd_engine.core.character import Character, CharacterClass
+from dnd_engine.core.creature import Abilities
+from dnd_engine.core.party import Party
+from dnd_engine.systems.inventory import Inventory, EquipmentSlot
+from dnd_engine.systems.currency import Currency
+from dnd_engine.systems.resources import ResourcePool
 from dnd_engine.utils.events import EventBus
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.core.dice import DiceRoller
+
+
+# Current save file version
+SAVE_VERSION = "1.0.0"
 
 
 class CampaignManager:
@@ -151,10 +161,6 @@ class CampaignManager:
         if not campaign_dir.exists():
             raise FileNotFoundError(f"Campaign '{campaign_name}' not found")
 
-        # Create SaveManager for this campaign's saves directory
-        saves_dir = campaign_dir / "saves"
-        save_manager = SaveManager(saves_dir=saves_dir)
-
         # Determine save file name based on slot
         if slot_name == "auto":
             save_file_name = "save_auto"
@@ -166,13 +172,16 @@ class CampaignManager:
             safe_slot_name = self._sanitize_filename(slot_name)
             save_file_name = f"save_{safe_slot_name}_{timestamp}"
 
-        # Save the game state
+        # Serialize game state
         auto_save = (save_type == "auto")
-        save_path = save_manager.save_game(
-            game_state=game_state,
-            save_name=save_file_name,
-            auto_save=auto_save
-        )
+        save_data = self._serialize_game_state(game_state, auto_save)
+
+        # Write to file
+        saves_dir = campaign_dir / "saves"
+        saves_dir.mkdir(exist_ok=True)
+        save_path = saves_dir / f"{save_file_name}.json"
+        with open(save_path, 'w', encoding='utf-8') as f:
+            json.dump(save_data, f, indent=2, ensure_ascii=False)
 
         # Update campaign metadata
         campaign = self.load_campaign(campaign_name)
@@ -217,10 +226,6 @@ class CampaignManager:
         if not campaign_dir.exists():
             raise FileNotFoundError(f"Campaign '{campaign_name}' not found")
 
-        # Create SaveManager for this campaign's saves directory
-        saves_dir = campaign_dir / "saves"
-        save_manager = SaveManager(saves_dir=saves_dir)
-
         # Determine save file name based on slot
         if slot_name == "auto":
             save_file_name = "save_auto"
@@ -231,18 +236,48 @@ class CampaignManager:
             # This is a simplified approach - in practice, you'd want a better lookup
             save_file_name = slot_name
 
-        # Load the game state
-        game_state = save_manager.load_game(
-            save_name=save_file_name,
-            event_bus=event_bus,
-            data_loader=data_loader,
-            dice_roller=dice_roller
+        # Load save file
+        saves_dir = campaign_dir / "saves"
+        save_path = saves_dir / f"{save_file_name}.json"
+
+        if not save_path.exists():
+            raise FileNotFoundError(f"Save file not found: {save_file_name}")
+
+        # Read and deserialize save file
+        try:
+            with open(save_path, 'r', encoding='utf-8') as f:
+                save_data = json.load(f)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Corrupted save file: {e}")
+
+        # Validate save file
+        self._validate_save_data(save_data)
+
+        # Check version compatibility
+        save_version = save_data.get("version", "0.0.0")
+        if not self._is_compatible_version(save_version):
+            raise ValueError(
+                f"Incompatible save version: {save_version} "
+                f"(current version: {SAVE_VERSION})"
+            )
+
+        # Deserialize game state
+        game_state = self._deserialize_game_state(
+            save_data,
+            event_bus,
+            data_loader,
+            dice_roller
         )
 
         # Update campaign last_played timestamp
         campaign = self.load_campaign(campaign_name)
         campaign.last_played = datetime.now()
         self._save_campaign_metadata(safe_name, campaign)
+
+        # Update last_played in save file as well
+        save_data["metadata"]["last_played"] = datetime.now().isoformat()
+        with open(save_path, 'w', encoding='utf-8') as f:
+            json.dump(save_data, f, indent=2, ensure_ascii=False)
 
         return game_state
 
@@ -462,3 +497,299 @@ class CampaignManager:
             filename = "save"
 
         return filename
+
+    def _serialize_game_state(
+        self,
+        game_state: GameState,
+        auto_save: bool
+    ) -> Dict[str, Any]:
+        """
+        Serialize game state to a dictionary.
+
+        Args:
+            game_state: Game state to serialize
+            auto_save: Whether this is an auto-save
+
+        Returns:
+            Dictionary representation of game state
+        """
+        now = datetime.now().isoformat()
+
+        return {
+            "version": SAVE_VERSION,
+            "metadata": {
+                "created": now,
+                "last_played": now,
+                "auto_save": auto_save
+            },
+            "party": [self._serialize_character(char) for char in game_state.party.characters],
+            "game_state": {
+                "dungeon_name": game_state.dungeon_name,
+                "current_room_id": game_state.current_room_id,
+                "dungeon_state": self._serialize_dungeon_state(game_state.dungeon),
+                "in_combat": game_state.in_combat,
+                "action_history": game_state.action_history,
+                "last_entry_direction": game_state.last_entry_direction
+            }
+        }
+
+    def _serialize_character(self, character: Character) -> Dict[str, Any]:
+        """
+        Serialize a character to a dictionary.
+
+        Args:
+            character: Character to serialize
+
+        Returns:
+            Dictionary representation of character
+        """
+        return {
+            "name": character.name,
+            "character_class": character.character_class.value,
+            "level": character.level,
+            "race": character.race,
+            "subclass": character.subclass,
+            "xp": character.xp,
+            "max_hp": character.max_hp,
+            "current_hp": character.current_hp,
+            "ac": character.ac,
+            "abilities": asdict(character.abilities),
+            "inventory": self._serialize_inventory(character.inventory),
+            "conditions": list(character.conditions),
+            "resource_pools": self._serialize_resource_pools(character),
+            "spellcasting_ability": character.spellcasting_ability,
+            "known_spells": character.known_spells,
+            "prepared_spells": character.prepared_spells
+        }
+
+    def _serialize_inventory(self, inventory: Inventory) -> Dict[str, Any]:
+        """
+        Serialize inventory to a dictionary.
+
+        Args:
+            inventory: Inventory to serialize
+
+        Returns:
+            Dictionary representation of inventory
+        """
+        return {
+            "items": [
+                {
+                    "item_id": item.item_id,
+                    "category": item.category,
+                    "quantity": item.quantity
+                }
+                for item in inventory.items.values()
+            ],
+            "equipped": {
+                "weapon": inventory.equipped[EquipmentSlot.WEAPON],
+                "armor": inventory.equipped[EquipmentSlot.ARMOR]
+            },
+            "currency": asdict(inventory.currency)
+        }
+
+    def _serialize_resource_pools(self, character: Character) -> List[Dict[str, Any]]:
+        """
+        Serialize character resource pools to a list of dictionaries.
+
+        Args:
+            character: Character to serialize resource pools from
+
+        Returns:
+            List of dictionaries representing each resource pool
+        """
+        return [
+            {
+                "name": pool.name,
+                "current": pool.current,
+                "maximum": pool.maximum,
+                "recovery_type": pool.recovery_type
+            }
+            for pool in character.resource_pools.values()
+        ]
+
+    def _serialize_dungeon_state(self, dungeon: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Serialize dungeon state (room modifications).
+
+        Args:
+            dungeon: Dungeon data
+
+        Returns:
+            Dictionary with room states
+        """
+        room_states = {}
+
+        for room_id, room_data in dungeon.get("rooms", {}).items():
+            room_states[room_id] = {
+                "searched": room_data.get("searched", False),
+                "enemies": room_data.get("enemies", [])
+            }
+
+        return room_states
+
+    def _deserialize_game_state(
+        self,
+        save_data: Dict[str, Any],
+        event_bus: Optional[EventBus],
+        data_loader: Optional[DataLoader],
+        dice_roller: Optional[DiceRoller]
+    ) -> GameState:
+        """
+        Deserialize game state from save data.
+
+        Args:
+            save_data: Save data dictionary
+            event_bus: Event bus for the game
+            data_loader: Data loader for content
+            dice_roller: Dice roller
+
+        Returns:
+            Reconstructed GameState
+        """
+        # Create party from saved characters
+        characters = [
+            self._deserialize_character(char_data)
+            for char_data in save_data["party"]
+        ]
+        party = Party(characters)
+
+        # Get game state data
+        gs_data = save_data["game_state"]
+
+        # Create game state (this loads fresh dungeon)
+        game_state = GameState(
+            party=party,
+            dungeon_name=gs_data["dungeon_name"],
+            event_bus=event_bus,
+            data_loader=data_loader,
+            dice_roller=dice_roller
+        )
+
+        # Restore room-specific state
+        room_states = gs_data.get("dungeon_state", {})
+        for room_id, room_state in room_states.items():
+            if room_id in game_state.dungeon["rooms"]:
+                game_state.dungeon["rooms"][room_id]["searched"] = room_state.get("searched", False)
+                game_state.dungeon["rooms"][room_id]["enemies"] = room_state.get("enemies", [])
+
+        # Restore current position
+        game_state.current_room_id = gs_data["current_room_id"]
+
+        # Restore action history
+        game_state.action_history = gs_data.get("action_history", [])
+
+        # Restore navigation tracking
+        game_state.last_entry_direction = gs_data.get("last_entry_direction")
+
+        return game_state
+
+    def _deserialize_character(self, char_data: Dict[str, Any]) -> Character:
+        """
+        Deserialize character from save data.
+
+        Args:
+            char_data: Character data dictionary
+
+        Returns:
+            Reconstructed Character
+        """
+        abilities = Abilities(**char_data["abilities"])
+        inventory = self._deserialize_inventory(char_data["inventory"])
+
+        character = Character(
+            name=char_data["name"],
+            character_class=CharacterClass(char_data["character_class"]),
+            level=char_data["level"],
+            abilities=abilities,
+            max_hp=char_data["max_hp"],
+            ac=char_data["ac"],
+            current_hp=char_data["current_hp"],
+            xp=char_data["xp"],
+            inventory=inventory,
+            race=char_data["race"],
+            subclass=char_data.get("subclass"),
+            spellcasting_ability=char_data.get("spellcasting_ability"),
+            known_spells=char_data.get("known_spells"),
+            prepared_spells=char_data.get("prepared_spells")
+        )
+
+        # Restore conditions
+        for condition in char_data.get("conditions", []):
+            character.add_condition(condition)
+
+        # Restore resource pools
+        for pool_data in char_data.get("resource_pools", []):
+            pool = ResourcePool(**pool_data)
+            character.add_resource_pool(pool)
+
+        return character
+
+    def _deserialize_inventory(self, inv_data: Dict[str, Any]) -> Inventory:
+        """
+        Deserialize inventory from save data.
+
+        Args:
+            inv_data: Inventory data dictionary
+
+        Returns:
+            Reconstructed Inventory
+        """
+        inventory = Inventory()
+
+        # Restore items
+        for item_data in inv_data.get("items", []):
+            inventory.add_item(
+                item_id=item_data["item_id"],
+                category=item_data["category"],
+                quantity=item_data["quantity"]
+            )
+
+        # Restore equipped items
+        equipped_data = inv_data.get("equipped", {})
+        if equipped_data.get("weapon"):
+            inventory.equip_item(equipped_data["weapon"], EquipmentSlot.WEAPON)
+        if equipped_data.get("armor"):
+            inventory.equip_item(equipped_data["armor"], EquipmentSlot.ARMOR)
+
+        # Restore currency
+        currency_data = inv_data.get("currency", {})
+        inventory.currency = Currency(**currency_data)
+
+        return inventory
+
+    def _validate_save_data(self, save_data: Dict[str, Any]) -> None:
+        """
+        Validate save file structure.
+
+        Args:
+            save_data: Save data to validate
+
+        Raises:
+            ValueError: If save data is invalid
+        """
+        required_keys = ["version", "metadata", "party", "game_state"]
+
+        for key in required_keys:
+            if key not in save_data:
+                raise ValueError(f"Invalid save file: missing '{key}'")
+
+        if not isinstance(save_data["party"], list):
+            raise ValueError("Invalid save file: 'party' must be a list")
+
+        if len(save_data["party"]) == 0:
+            raise ValueError("Invalid save file: party cannot be empty")
+
+    def _is_compatible_version(self, save_version: str) -> bool:
+        """
+        Check if save version is compatible with current version.
+
+        Args:
+            save_version: Version string from save file
+
+        Returns:
+            True if compatible
+        """
+        # For now, we only support exact version match
+        # In the future, this could support migration between versions
+        return save_version == SAVE_VERSION

@@ -11,7 +11,6 @@ from dnd_engine.core.save_slot import SaveSlot
 from dnd_engine.core.save_slot_manager import SaveSlotManager
 from dnd_engine.core.character_vault_v2 import CharacterVaultV2
 from dnd_engine.core.campaign import Campaign
-from dnd_engine.core.save_manager import SaveManager
 
 
 class MigrationManager:
