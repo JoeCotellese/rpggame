@@ -403,6 +403,76 @@ class CharacterFactory:
             character.inventory.add_gold(starting_gold)
 
     @staticmethod
+    def initialize_spellcasting(
+        character: Character,
+        class_data: Dict[str, Any],
+        spells_data: Dict[str, Any]
+    ) -> None:
+        """
+        Initialize spellcasting properties for spellcasting classes.
+
+        Sets up spellcasting_ability, known_spells, and prepared_spells based on
+        class spellcasting metadata.
+
+        Args:
+            character: Character object to initialize spellcasting for
+            class_data: Class definition with optional spellcasting metadata
+            spells_data: All spell definitions from spells.json
+
+        Side Effects:
+            - Sets character.spellcasting_ability
+            - Populates character.known_spells with appropriate spell IDs
+            - Populates character.prepared_spells (same as known_spells for wizards)
+        """
+        # Check if class has spellcasting
+        spellcasting = class_data.get("spellcasting")
+        if not spellcasting:
+            return
+
+        # Set spellcasting ability
+        character.spellcasting_ability = spellcasting["ability"]
+
+        # Get spells for this class and level
+        class_name = class_data["name"].lower()
+        available_spells = []
+
+        # Find all spells this class can learn
+        for spell_id, spell_data in spells_data.items():
+            spell_classes = spell_data.get("classes", [])
+            spell_level = spell_data.get("level", 0)
+
+            # Check if spell is available to this class
+            if class_name in spell_classes:
+                # Wizards can learn all wizard spells up to their highest spell slot level
+                # For level 1 wizard, that's 1st level spells and cantrips
+                # For level 2, still 1st level and cantrips
+                # For level 3, 2nd level, 1st level, and cantrips
+                max_spell_level = (character.level + 1) // 2  # 1->1, 2->1, 3->2, etc.
+                if spell_level <= max_spell_level:
+                    available_spells.append((spell_id, spell_level))
+
+        # Separate cantrips from leveled spells
+        cantrips = [s[0] for s in available_spells if s[1] == 0]
+        leveled_spells = [s[0] for s in available_spells if s[1] > 0]
+
+        # Determine how many cantrips and spells the character knows
+        cantrips_known_count = spellcasting.get("cantrips_known", {}).get(str(character.level), 0)
+
+        # For wizards, use spells_in_spellbook
+        if spellcasting.get("spells_known_type") == "spellbook":
+            spells_known_count = spellcasting.get("spells_in_spellbook", {}).get(str(character.level), 0)
+        else:
+            # For sorcerers/bards who know a limited number of spells
+            spells_known_count = spellcasting.get("spells_known", {}).get(str(character.level), 0)
+
+        # Select cantrips (just take first N for simplicity)
+        character.known_spells = cantrips[:cantrips_known_count] + leveled_spells[:spells_known_count]
+
+        # For wizards, all known spells can be prepared (limited by int_mod + level)
+        # For simplicity, prepare all known leveled spells initially
+        character.prepared_spells = leveled_spells[:spells_known_count]
+
+    @staticmethod
     def initialize_class_resources(
         character: Character,
         class_data: Dict[str, Any],
@@ -436,9 +506,16 @@ class CharacterFactory:
                     resource_data = feature["resource"]
                     pool_name = resource_data["pool"]
 
-                    # Only add pool if we haven't already added it
-                    # (e.g., multiple features might share the same pool)
-                    if pool_name not in added_pools:
+                    # Check if pool already exists
+                    existing_pool = character.get_resource_pool(pool_name)
+
+                    if existing_pool is not None:
+                        # Update existing pool with new maximum (for spell slot upgrades)
+                        existing_pool.maximum = resource_data["max_uses"]
+                        existing_pool.current = resource_data["max_uses"]
+                    elif pool_name not in added_pools:
+                        # Only add pool if we haven't already added it
+                        # (e.g., multiple features might share the same pool)
                         pool = ResourcePool(
                             name=pool_name,
                             current=resource_data["max_uses"],
@@ -713,8 +790,15 @@ class CharacterFactory:
         # Store race (will add field to Character class)
         character.race = race_choice
 
+        # Store saving throw proficiencies from class data
+        character.saving_throw_proficiencies = class_data.get("saving_throw_proficiencies", [])
+
         # Initialize class resources (spell slots, ki points, etc.)
         self.initialize_class_resources(character, class_data, 1)
+
+        # Initialize spellcasting (for spellcasting classes)
+        spells_data = data_loader.load_spells()
+        self.initialize_spellcasting(character, class_data, spells_data)
 
         print_section("Adding Starting Equipment")
 

@@ -5,6 +5,7 @@ from enum import Enum
 from typing import Optional, List, Dict, Any
 from dnd_engine.core.creature import Creature, Abilities
 from dnd_engine.core.dice import DiceRoller
+from dnd_engine.core.spell import Spell
 from dnd_engine.systems.inventory import Inventory
 from dnd_engine.systems.resources import ResourcePool
 
@@ -13,6 +14,7 @@ class CharacterClass(Enum):
     """Available character classes"""
     FIGHTER = "fighter"
     ROGUE = "rogue"
+    WIZARD = "wizard"
 
 
 class Character(Creature):
@@ -44,7 +46,10 @@ class Character(Creature):
         skill_proficiencies: Optional[list[str]] = None,
         expertise_skills: Optional[List[str]] = None,
         weapon_proficiencies: Optional[List[str]] = None,
-        armor_proficiencies: Optional[List[str]] = None
+        armor_proficiencies: Optional[List[str]] = None,
+        spellcasting_ability: Optional[str] = None,
+        known_spells: Optional[List[str]] = None,
+        prepared_spells: Optional[List[str]] = None
     ):
         """
         Initialize a player character.
@@ -66,6 +71,9 @@ class Character(Creature):
             expertise_skills: List of skills with expertise (doubled proficiency bonus)
             weapon_proficiencies: List of weapon types the character is proficient in (e.g., ["simple", "martial"])
             armor_proficiencies: List of armor types the character is proficient in (e.g., ["light", "medium", "heavy", "shields"])
+            spellcasting_ability: The ability used for spellcasting (e.g., "int", "wis", "cha")
+            known_spells: List of spell IDs the character knows
+            prepared_spells: List of spell IDs the character has prepared
         """
         super().__init__(
             name=name,
@@ -88,6 +96,11 @@ class Character(Creature):
         self.armor_proficiencies = armor_proficiencies if armor_proficiencies is not None else []
         self.resource_pools: Dict[str, ResourcePool] = {}
         self._dice_roller = DiceRoller()
+
+        # Spellcasting properties
+        self.spellcasting_ability = spellcasting_ability
+        self.known_spells = known_spells if known_spells is not None else []
+        self.prepared_spells = prepared_spells if prepared_spells is not None else []
 
         # Death saving throw state
         self.death_save_successes: int = 0
@@ -1118,6 +1131,151 @@ class Character(Creature):
         """
         if self.current_hp == 0:
             self.stabilized = True
+
+    def can_cast_spell(self, spell: Spell) -> bool:
+        """
+        Check if character can cast a spell.
+
+        A spell can be cast if:
+        - It's a cantrip (level 0), OR
+        - The spell is in the character's prepared spells list AND
+        - The character has available spell slots of the appropriate level
+
+        Args:
+            spell: The Spell object to check
+
+        Returns:
+            True if the character can cast the spell, False otherwise
+        """
+        # Cantrips can always be cast (no spell slot required)
+        if spell.is_cantrip():
+            return True
+
+        # Check if spell is prepared
+        if spell.id not in self.prepared_spells:
+            return False
+
+        # Check if character has available spell slots of appropriate level
+        slot_pool_name = f"{self._get_spell_level_name(spell.level)} level slots"
+        pool = self.get_resource_pool(slot_pool_name)
+
+        if pool is None:
+            return False
+
+        return pool.is_available(1)
+
+    def cast_spell(self, spell: Spell) -> bool:
+        """
+        Cast a spell, consuming the appropriate spell slot.
+
+        Cantrips (level 0 spells) do not consume spell slots.
+        For leveled spells, consumes one spell slot of the appropriate level.
+
+        Args:
+            spell: The Spell object to cast
+
+        Returns:
+            True if the spell was successfully cast, False otherwise
+        """
+        # Check if spell can be cast
+        if not self.can_cast_spell(spell):
+            return False
+
+        # Cantrips don't consume spell slots
+        if spell.is_cantrip():
+            return True
+
+        # Consume spell slot
+        slot_pool_name = f"{self._get_spell_level_name(spell.level)} level slots"
+        return self.use_resource(slot_pool_name, 1)
+
+    def get_spell_attack_modifier(self) -> int:
+        """
+        Calculate spell attack modifier.
+
+        Formula: proficiency bonus + spellcasting ability modifier
+
+        Returns:
+            Spell attack modifier
+
+        Raises:
+            ValueError: If character has no spellcasting ability
+        """
+        if self.spellcasting_ability is None:
+            raise ValueError(f"{self.name} has no spellcasting ability")
+
+        # Get the ability modifier
+        ability_mod = self._get_ability_modifier(self.spellcasting_ability)
+
+        return self.proficiency_bonus + ability_mod
+
+    def get_spell_save_dc(self) -> int:
+        """
+        Calculate spell save DC.
+
+        Formula: 8 + proficiency bonus + spellcasting ability modifier
+
+        Returns:
+            Spell save DC
+
+        Raises:
+            ValueError: If character has no spellcasting ability
+        """
+        if self.spellcasting_ability is None:
+            raise ValueError(f"{self.name} has no spellcasting ability")
+
+        # Get the ability modifier
+        ability_mod = self._get_ability_modifier(self.spellcasting_ability)
+
+        return 8 + self.proficiency_bonus + ability_mod
+
+    def _get_spell_level_name(self, level: int) -> str:
+        """
+        Convert spell level number to ordinal name.
+
+        Args:
+            level: Spell level (1-9)
+
+        Returns:
+            Ordinal name (e.g., "1st", "2nd", "3rd")
+        """
+        if level == 1:
+            return "1st"
+        elif level == 2:
+            return "2nd"
+        elif level == 3:
+            return "3rd"
+        else:
+            return f"{level}th"
+
+    def _get_ability_modifier(self, ability: str) -> int:
+        """
+        Get ability modifier by ability name.
+
+        Args:
+            ability: Ability name (short form: "str", "dex", "con", "int", "wis", "cha")
+
+        Returns:
+            Ability modifier
+
+        Raises:
+            ValueError: If ability name is invalid
+        """
+        ability_lower = ability.lower()
+        if ability_lower == "str":
+            return self.abilities.str_mod
+        elif ability_lower == "dex":
+            return self.abilities.dex_mod
+        elif ability_lower == "con":
+            return self.abilities.con_mod
+        elif ability_lower == "int":
+            return self.abilities.int_mod
+        elif ability_lower == "wis":
+            return self.abilities.wis_mod
+        elif ability_lower == "cha":
+            return self.abilities.cha_mod
+        else:
+            raise ValueError(f"Invalid ability name: {ability}")
 
     def __str__(self) -> str:
         """String representation of the character"""
