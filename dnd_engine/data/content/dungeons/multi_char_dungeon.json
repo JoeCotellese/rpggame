@@ -1,0 +1,16 @@
+{
+  "name": "Multi Character Dungeon",
+  "description": "A test dungeon for multiple characters",
+  "start_room": "room1",
+  "rooms": {
+    "room1": {
+      "name": "Test Room 1",
+      "description": "A test room for multiple characters",
+      "exits": {},
+      "enemies": [],
+      "items": [],
+      "searched": false,
+      "searchable": true
+    }
+  }
+}
