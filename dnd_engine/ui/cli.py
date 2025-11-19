@@ -1537,8 +1537,13 @@ class CLI:
             # Choose target from living party members (lowest HP)
             living_party = self.game_state.party.get_living_members()
             if not living_party:
+                # No conscious targets - check if combat should end (party defeated)
+                self.game_state._check_combat_end()
+                if not self.game_state.in_combat:
+                    break  # Combat ended (party wiped or all stabilized)
+                # Combat continues (e.g., stabilized characters), advance turn
                 self.game_state.initiative_tracker.next_turn()
-                break  # No one to attack
+                break
 
             target = min(living_party, key=lambda c: c.current_hp)
 
