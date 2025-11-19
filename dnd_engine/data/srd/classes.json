@@ -93,5 +93,88 @@
         }
       ]
     }
+  },
+  "wizard": {
+    "name": "Wizard",
+    "description": "A scholarly magic-user capable of manipulating the structures of reality through arcane knowledge and spells",
+    "hit_die": "1d6",
+    "primary_ability": "int",
+    "ability_priorities": ["intelligence", "constitution", "dexterity", "wisdom", "charisma", "strength"],
+    "saving_throw_proficiencies": ["int", "wis"],
+    "armor_proficiencies": [],
+    "weapon_proficiencies": ["daggers", "darts", "slings", "quarterstaffs", "light_crossbows"],
+    "skill_proficiencies": {
+      "choose": 2,
+      "from": ["arcana", "history", "insight", "investigation", "medicine", "religion"]
+    },
+    "starting_equipment": ["quarterstaff", "dagger", "potion_of_healing"],
+    "starting_gold": 5,
+    "spellcasting": {
+      "ability": "int",
+      "cantrips_known": {
+        "1": 3,
+        "2": 3,
+        "3": 3
+      },
+      "spells_known_type": "spellbook",
+      "spells_in_spellbook": {
+        "1": 6,
+        "2": 8,
+        "3": 10
+      },
+      "preparation_formula": "int_mod + wizard_level"
+    },
+    "features_by_level": {
+      "1": [
+        {
+          "name": "Spellcasting",
+          "description": "As a student of arcane magic, you have a spellbook containing spells that show the first glimmerings of your true power."
+        },
+        {
+          "name": "1st Level Spell Slots",
+          "description": "You have two 1st-level spell slots to cast your spells of 1st level and higher.",
+          "resource": {
+            "pool": "1st level slots",
+            "max_uses": 2,
+            "recovery": "long_rest"
+          }
+        },
+        {
+          "name": "Arcane Recovery",
+          "description": "You can regain some of your magical energy by studying your spellbook. Once per day when you finish a short rest, you can choose expended spell slots to recover."
+        }
+      ],
+      "2": [
+        {
+          "name": "1st Level Spell Slots",
+          "description": "Your spell slots increase to three 1st-level spell slots.",
+          "resource": {
+            "pool": "1st level slots",
+            "max_uses": 3,
+            "recovery": "long_rest"
+          }
+        }
+      ],
+      "3": [
+        {
+          "name": "1st Level Spell Slots",
+          "description": "Your spell slots increase to four 1st-level spell slots.",
+          "resource": {
+            "pool": "1st level slots",
+            "max_uses": 4,
+            "recovery": "long_rest"
+          }
+        },
+        {
+          "name": "2nd Level Spell Slots",
+          "description": "You gain two 2nd-level spell slots.",
+          "resource": {
+            "pool": "2nd level slots",
+            "max_uses": 2,
+            "recovery": "long_rest"
+          }
+        }
+      ]
+    }
   }
 }
