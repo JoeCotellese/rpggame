@@ -150,6 +150,99 @@ class Creature:
         """
         return condition.lower() in self.conditions
 
+    def make_saving_throw(
+        self,
+        ability: str,
+        dc: int,
+        advantage: bool = False,
+        disadvantage: bool = False,
+        event_bus=None
+    ) -> dict:
+        """
+        Roll an ability saving throw against a DC.
+
+        Basic implementation for creatures (monsters). Characters may override
+        this to add proficiency bonuses.
+
+        Args:
+            ability: Ability to save with (e.g., "str", "dex", "con", "int", "wis", "cha")
+            dc: Difficulty class to beat
+            advantage: Roll with advantage (roll twice, take higher)
+            disadvantage: Roll with disadvantage (roll twice, take lower)
+            event_bus: Optional EventBus instance to emit saving throw event
+
+        Returns:
+            Dictionary with:
+            - "success": bool (total >= dc)
+            - "roll": int (the d20 roll before modifier)
+            - "modifier": int (ability modifier)
+            - "total": int (roll + modifier)
+            - "dc": int (the DC that was beaten)
+            - "ability": str (the ability that was saved with, in short form)
+
+        Raises:
+            ValueError: If ability name is invalid
+        """
+        from dnd_engine.core.dice import DiceRoller
+
+        # Normalize ability to short name
+        short_to_full = {
+            "str": "strength", "dex": "dexterity", "con": "constitution",
+            "int": "intelligence", "wis": "wisdom", "cha": "charisma"
+        }
+        full_to_short = {
+            "strength": "str", "dexterity": "dex", "constitution": "con",
+            "intelligence": "int", "wisdom": "wis", "charisma": "cha"
+        }
+
+        ability_lower = ability.lower()
+        if ability_lower in short_to_full:
+            ability_short = ability_lower
+            ability_full = short_to_full[ability_lower]
+        elif ability_lower in full_to_short:
+            ability_short = full_to_short[ability_lower]
+            ability_full = ability_lower
+        else:
+            raise ValueError(f"Invalid ability name: {ability}")
+
+        # Get ability modifier
+        if ability_full == "strength":
+            modifier = self.abilities.str_mod
+        elif ability_full == "dexterity":
+            modifier = self.abilities.dex_mod
+        elif ability_full == "constitution":
+            modifier = self.abilities.con_mod
+        elif ability_full == "intelligence":
+            modifier = self.abilities.int_mod
+        elif ability_full == "wisdom":
+            modifier = self.abilities.wis_mod
+        elif ability_full == "charisma":
+            modifier = self.abilities.cha_mod
+        else:
+            raise ValueError(f"Invalid ability name: {ability}")
+
+        # Roll the saving throw
+        roller = DiceRoller()
+        roll_result = roller.roll("d20", advantage=advantage, disadvantage=disadvantage)
+
+        # Calculate total
+        total = roll_result.total + modifier
+
+        # Determine success
+        success = total >= dc
+
+        # Create result dict
+        result = {
+            "success": success,
+            "roll": roll_result.rolls[0] if len(roll_result.rolls) == 1 else max(roll_result.rolls) if advantage else min(roll_result.rolls),
+            "modifier": modifier,
+            "total": total,
+            "dc": dc,
+            "ability": ability_short
+        }
+
+        return result
+
     def __str__(self) -> str:
         """String representation of the creature"""
         status = "alive" if self.is_alive else "dead"

@@ -438,3 +438,221 @@ class CombatEngine:
             event_bus.emit(event)
 
         return result
+
+    def resolve_spell_save(
+        self,
+        caster,
+        targets: list,
+        spell,
+        upcast_level: Optional[int] = None,
+        apply_damage: bool = False,
+        event_bus=None
+    ) -> Dict[str, Any]:
+        """
+        Resolve a spell that requires saving throws.
+
+        Handles spell save mechanics:
+        1. Calculate caster's spell save DC
+        2. Each target makes a saving throw
+        3. Roll damage for the spell
+        4. Apply damage based on save result (full, half, or none)
+        5. Emit spell save events
+
+        Args:
+            caster: The creature casting the spell (must have get_spell_save_dc method)
+            targets: List of creatures targeted by the spell
+            spell: Spell object or dict containing:
+                - "name": spell name
+                - "damage": dict with "dice" and "damage_type"
+                - "saving_throw": dict with "ability" and "on_success"
+                - "level": spell level
+            upcast_level: Spell slot level used (for upcasting), defaults to spell's base level
+            apply_damage: If True, apply damage to targets' HP
+            event_bus: Optional EventBus instance for event emission
+
+        Returns:
+            Dictionary with spell cast results:
+            {
+                "spell_name": str,
+                "caster": str,
+                "save_dc": int,
+                "save_ability": str,
+                "targets": [
+                    {
+                        "name": str,
+                        "roll": int,
+                        "modifier": int,
+                        "total": int,
+                        "success": bool,
+                        "damage": int,
+                        "damage_type": str
+                    },
+                    ...
+                ]
+            }
+
+        Raises:
+            ValueError: If caster doesn't have spell save DC or spell lacks saving throw info
+        """
+        from dnd_engine.utils.events import Event, EventType
+
+        # Get spell info
+        if hasattr(spell, 'name'):
+            # Spell object
+            spell_name = spell.name
+            spell_level = spell.level
+            spell_id = spell.id
+            save_info = spell.saving_throw
+            damage_info = spell.damage
+        else:
+            # Dict format
+            spell_name = spell.get("name", "Unknown Spell")
+            spell_level = spell.get("level", 1)
+            spell_id = spell.get("id", "unknown")
+            save_info = spell.get("saving_throw")
+            damage_info = spell.get("damage")
+
+        if not save_info:
+            raise ValueError(f"Spell {spell_name} does not have saving throw information")
+
+        # Get save ability and effect
+        if hasattr(save_info, 'ability'):
+            save_ability = save_info.ability
+            on_success = save_info.on_success
+        else:
+            save_ability = save_info.get("ability")
+            on_success = save_info.get("on_success", "half")
+
+        # Get caster's spell save DC
+        if not hasattr(caster, 'get_spell_save_dc'):
+            raise ValueError(f"{caster.name} cannot cast spells (no spell save DC)")
+
+        save_dc = caster.get_spell_save_dc()
+
+        # Determine actual spell slot level (for upcasting)
+        actual_level = upcast_level if upcast_level is not None else spell_level
+
+        # Roll damage once for the spell
+        base_damage = self._roll_spell_save_damage(spell, damage_info, spell_level, actual_level)
+
+        # Process each target
+        target_results = []
+        for target in targets:
+            # Target makes saving throw
+            save_result = target.make_saving_throw(
+                ability=save_ability,
+                dc=save_dc,
+                advantage=False,
+                disadvantage=False,
+                event_bus=event_bus
+            )
+
+            # Determine damage based on save result
+            if save_result["success"]:
+                if on_success == "half":
+                    damage = base_damage // 2
+                elif on_success == "none" or on_success == "negates":
+                    damage = 0
+                else:
+                    damage = base_damage  # Unknown effect, take full damage
+            else:
+                damage = base_damage
+
+            # Apply damage if requested
+            if apply_damage and damage > 0:
+                # Check if target's take_damage accepts event_bus (Character) or not (Creature)
+                if hasattr(target.take_damage, '__code__') and 'event_bus' in target.take_damage.__code__.co_varnames:
+                    target.take_damage(damage, event_bus=event_bus)
+                else:
+                    target.take_damage(damage)
+
+            # Get damage type
+            if damage_info:
+                damage_type = damage_info.get("damage_type") if isinstance(damage_info, dict) else damage_info.damage_type
+            else:
+                damage_type = None
+
+            target_results.append({
+                "name": target.name,
+                "roll": save_result["roll"],
+                "modifier": save_result["modifier"],
+                "total": save_result["total"],
+                "success": save_result["success"],
+                "damage": damage,
+                "damage_type": damage_type
+            })
+
+        # Emit spell save event
+        if event_bus is not None:
+            event = Event(
+                type=EventType.SPELL_SAVE,
+                data={
+                    "spell_id": spell_id,
+                    "spell_name": spell_name,
+                    "caster": caster.name,
+                    "spell_level": spell_level,
+                    "slot_level": actual_level,
+                    "save_dc": save_dc,
+                    "save_ability": save_ability,
+                    "targets": target_results
+                }
+            )
+            event_bus.emit(event)
+
+        return {
+            "spell_name": spell_name,
+            "caster": caster.name,
+            "save_dc": save_dc,
+            "save_ability": save_ability,
+            "targets": target_results
+        }
+
+    def _roll_spell_save_damage(
+        self,
+        spell,
+        damage_info,
+        base_level: int,
+        cast_level: int
+    ) -> int:
+        """
+        Roll damage for a save-based spell, handling upcasting.
+
+        Args:
+            spell: Spell object or dict
+            damage_info: SpellDamage object or dict with damage information
+            base_level: Base level of the spell
+            cast_level: Level of spell slot used to cast
+
+        Returns:
+            Total damage rolled
+        """
+        if not damage_info:
+            return 0
+
+        # Get base damage dice
+        if hasattr(damage_info, 'dice'):
+            base_dice = damage_info.dice
+            higher_levels = damage_info.higher_levels
+        else:
+            base_dice = damage_info.get("dice", "1d6")
+            higher_levels = damage_info.get("higher_levels")
+
+        # Roll base damage
+        damage_roll = self.dice_roller.roll(base_dice)
+        total_damage = damage_roll.total
+
+        # Handle upcasting
+        if cast_level > base_level and higher_levels:
+            extra_levels = cast_level - base_level
+
+            # Parse higher_levels string for damage scaling
+            # Common patterns: "1d6 per slot level above 1st", "2d6 per level above 3rd"
+            import re
+            dice_match = re.search(r'(\d+d\d+)', higher_levels)
+            if dice_match:
+                extra_dice = dice_match.group(1)
+                for _ in range(extra_levels):
+                    extra_roll = self.dice_roller.roll(extra_dice)
+                    total_damage += extra_roll.total
+
+        return total_damage
