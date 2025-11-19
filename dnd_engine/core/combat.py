@@ -343,3 +343,240 @@ class CombatEngine:
             "damage_taken": damage_taken,
             "effect": effect_description
         }
+
+    def resolve_spell_save(
+        self,
+        caster,
+        targets: list,
+        spell_data: Dict[str, Any],
+        upcast_level: Optional[int] = None,
+        apply_damage: bool = False,
+        event_bus=None
+    ) -> Dict[str, Any]:
+        """
+        Resolve a spell that requires saving throws.
+
+        Handles spell save mechanics including:
+        - Calculating spell save DC from caster
+        - Rolling damage (with upcasting support)
+        - Applying saves for each target
+        - Half damage on success or negating effects
+
+        Args:
+            caster: Character casting the spell (must have spell_save_dc property)
+            targets: List of creatures targeted by the spell
+            spell_data: Dictionary containing spell information (from spells.json)
+            upcast_level: Spell slot level used (None = base spell level)
+            apply_damage: If True, apply damage to targets
+            event_bus: Optional EventBus instance for event emission
+
+        Returns:
+            Dictionary with:
+            - "spell_id": str (spell ID)
+            - "spell_name": str (spell name)
+            - "caster": str (caster name)
+            - "save_dc": int (DC for the save)
+            - "save_ability": str (ability used for save)
+            - "targets": list of dicts, each containing:
+                - "name": str (target name)
+                - "save_result": dict (result from make_saving_throw)
+                - "damage_rolled": int (damage before save)
+                - "damage_taken": int (actual damage taken)
+                - "effect": str (description of what happened)
+
+        Raises:
+            ValueError: If spell doesn't have saving throw, or caster lacks spell_save_dc
+        """
+        # Validate spell has saving throw
+        if "saving_throw" not in spell_data or spell_data["saving_throw"] is None:
+            raise ValueError(f"Spell '{spell_data.get('name', 'unknown')}' does not require a saving throw")
+
+        # Get spell save DC from caster
+        if not hasattr(caster, 'spell_save_dc'):
+            raise ValueError(f"{caster.name} does not have spell save DC (not a spellcaster)")
+
+        spell_id = spell_data["id"]
+        spell_name = spell_data["name"]
+        spell_level = spell_data["level"]
+        save_dc = caster.spell_save_dc
+        save_ability = spell_data["saving_throw"]["ability"]
+        on_success = spell_data["saving_throw"]["on_success"]
+
+        # Roll damage once (all targets get the same damage roll)
+        damage_rolled = 0
+        damage_type = None
+        if "damage" in spell_data and spell_data["damage"] is not None:
+            damage_rolled = self._roll_spell_save_damage(
+                spell_data,
+                spell_level,
+                upcast_level
+            )
+            damage_type = spell_data["damage"].get("damage_type", "")
+
+        # Process each target
+        target_results = []
+        for target in targets:
+            # Check if target can make saving throws
+            if not hasattr(target, 'make_saving_throw'):
+                # Skip targets that can't make saves (objects, etc.)
+                continue
+
+            # Make saving throw
+            save_result = target.make_saving_throw(
+                ability=save_ability,
+                dc=save_dc,
+                event_bus=event_bus
+            )
+
+            # Determine damage taken based on save result and spell effect
+            damage_taken = damage_rolled
+            effect_description = ""
+
+            if save_result["success"]:
+                if on_success == "half":
+                    # Success halves damage
+                    damage_taken = damage_rolled // 2
+                    effect_description = f"Saved! Takes {damage_taken} {damage_type} damage (half of {damage_rolled})"
+                elif on_success == "none" or on_success == "negates":
+                    # Success negates all damage/effects
+                    damage_taken = 0
+                    effect_description = f"Saved! No damage taken"
+                else:
+                    # Other effects (rare)
+                    effect_description = f"Saved, but takes {damage_taken} {damage_type} damage"
+            else:
+                # Failed save - full damage
+                effect_description = f"Failed save! Takes {damage_taken} {damage_type} damage"
+
+            # Apply damage if requested
+            if apply_damage and damage_taken > 0:
+                import inspect
+                if hasattr(target, 'take_damage'):
+                    sig = inspect.signature(target.take_damage)
+                    if 'event_bus' in sig.parameters:
+                        target.take_damage(damage_taken, event_bus=event_bus)
+                    else:
+                        target.take_damage(damage_taken)
+
+            target_results.append({
+                "name": target.name,
+                "save_result": save_result,
+                "damage_rolled": damage_rolled,
+                "damage_taken": damage_taken,
+                "effect": effect_description
+            })
+
+        # Emit spell save event
+        if event_bus is not None:
+            from dnd_engine.utils.events import Event, EventType
+            event = Event(
+                type=EventType.SPELL_CAST,
+                data={
+                    "caster": caster.name,
+                    "spell_id": spell_id,
+                    "spell_name": spell_name,
+                    "spell_level": spell_level,
+                    "upcast_level": upcast_level,
+                    "save_dc": save_dc,
+                    "save_ability": save_ability,
+                    "targets": [
+                        {
+                            "name": tr["name"],
+                            "saved": tr["save_result"]["success"],
+                            "damage": tr["damage_taken"]
+                        }
+                        for tr in target_results
+                    ]
+                }
+            )
+            event_bus.emit(event)
+
+        return {
+            "spell_id": spell_id,
+            "spell_name": spell_name,
+            "caster": caster.name,
+            "save_dc": save_dc,
+            "save_ability": save_ability,
+            "targets": target_results
+        }
+
+    def _roll_spell_save_damage(
+        self,
+        spell_data: Dict[str, Any],
+        base_level: int,
+        upcast_level: Optional[int] = None
+    ) -> int:
+        """
+        Roll damage for a spell with saving throw.
+
+        Handles damage scaling when casting at higher levels (upcasting).
+
+        Args:
+            spell_data: Dictionary containing spell information
+            base_level: Base level of the spell
+            upcast_level: Level of spell slot used (None = base level)
+
+        Returns:
+            Total damage rolled
+
+        Raises:
+            ValueError: If spell has no damage
+        """
+        if "damage" not in spell_data or spell_data["damage"] is None:
+            raise ValueError(f"Spell '{spell_data.get('name', 'unknown')}' has no damage")
+
+        damage_info = spell_data["damage"]
+        base_dice = damage_info["dice"]
+
+        # Check if spell is being upcast
+        actual_level = upcast_level if upcast_level is not None else base_level
+
+        # Calculate additional damage from upcasting
+        if actual_level > base_level and "higher_levels" in damage_info:
+            higher_levels_text = damage_info["higher_levels"]
+            # Parse the higher_levels text to determine scaling
+            # Common formats: "1d6 per slot level above 3rd", "1d8 for each slot level above 1st"
+
+            import re
+            # Match patterns like "1d6 per slot level" or "1d8 for each slot level"
+            match = re.search(r'(\d+d\d+)\s+(?:per|for each)\s+(?:slot )?level', higher_levels_text, re.IGNORECASE)
+
+            if match:
+                bonus_dice = match.group(1)
+                levels_above = actual_level - base_level
+
+                # Roll base damage + bonus damage for each level above
+                total_damage = self.dice_roller.roll(base_dice).total
+                for _ in range(levels_above):
+                    total_damage += self.dice_roller.roll(bonus_dice).total
+
+                return total_damage
+
+        # No upcasting or couldn't parse - just roll base damage
+        return self.dice_roller.roll(base_dice).total
+
+    def _get_targets_in_area(
+        self,
+        all_targets: list,
+        area_description: str,
+        selected_targets: Optional[list] = None
+    ) -> list:
+        """
+        Get targets affected by an area of effect spell.
+
+        MVP implementation: Returns selected targets (player chooses who is affected).
+        Future: Automatically calculate based on positioning and area shape.
+
+        Args:
+            all_targets: All possible targets (enemies, allies, etc.)
+            area_description: Description of AOE (e.g., "20-foot radius sphere")
+            selected_targets: Targets selected by player (None = all targets)
+
+        Returns:
+            List of creatures in the affected area
+        """
+        # MVP: Return selected targets or all targets
+        if selected_targets is not None:
+            return selected_targets
+        else:
+            return all_targets

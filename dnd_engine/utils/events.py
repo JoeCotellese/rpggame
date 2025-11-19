@@ -25,6 +25,7 @@ class EventType(Enum):
     TURN_END = "turn_end"
     ATTACK_ROLL = "attack_roll"
     SAVING_THROW = "saving_throw"
+    SPELL_CAST = "spell_cast"
     DAMAGE_DEALT = "damage_dealt"
     DAMAGE_TAKEN = "damage_taken"
     HEALING_DONE = "healing_done"

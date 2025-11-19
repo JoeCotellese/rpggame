@@ -44,7 +44,9 @@ class Character(Creature):
         skill_proficiencies: Optional[list[str]] = None,
         expertise_skills: Optional[List[str]] = None,
         weapon_proficiencies: Optional[List[str]] = None,
-        armor_proficiencies: Optional[List[str]] = None
+        armor_proficiencies: Optional[List[str]] = None,
+        spellcasting_ability: Optional[str] = None,
+        known_spells: Optional[List[str]] = None
     ):
         """
         Initialize a player character.
@@ -66,6 +68,8 @@ class Character(Creature):
             expertise_skills: List of skills with expertise (doubled proficiency bonus)
             weapon_proficiencies: List of weapon types the character is proficient in (e.g., ["simple", "martial"])
             armor_proficiencies: List of armor types the character is proficient in (e.g., ["light", "medium", "heavy", "shields"])
+            spellcasting_ability: Ability used for spellcasting (e.g., "int" for wizards, "wis" for clerics, "cha" for sorcerers)
+            known_spells: List of spell IDs the character knows or has prepared
         """
         super().__init__(
             name=name,
@@ -86,6 +90,8 @@ class Character(Creature):
         self.expertise_skills = expertise_skills if expertise_skills is not None else []
         self.weapon_proficiencies = weapon_proficiencies if weapon_proficiencies is not None else []
         self.armor_proficiencies = armor_proficiencies if armor_proficiencies is not None else []
+        self.spellcasting_ability = spellcasting_ability
+        self.known_spells = known_spells if known_spells is not None else []
         self.resource_pools: Dict[str, ResourcePool] = {}
         self._dice_roller = DiceRoller()
 
@@ -109,6 +115,65 @@ class Character(Creature):
             Proficiency bonus for the character's level
         """
         return 2 + (self.level - 1) // 4
+
+    def get_spellcasting_modifier(self) -> int:
+        """
+        Get the spellcasting ability modifier.
+
+        Returns:
+            Spellcasting ability modifier (e.g., INT mod for wizards)
+
+        Raises:
+            ValueError: If character has no spellcasting ability
+        """
+        if not self.spellcasting_ability:
+            raise ValueError(f"{self.name} has no spellcasting ability")
+
+        ability = self.spellcasting_ability.lower()
+        if ability == "int" or ability == "intelligence":
+            return self.abilities.int_mod
+        elif ability == "wis" or ability == "wisdom":
+            return self.abilities.wis_mod
+        elif ability == "cha" or ability == "charisma":
+            return self.abilities.cha_mod
+        elif ability == "str" or ability == "strength":
+            return self.abilities.str_mod
+        elif ability == "dex" or ability == "dexterity":
+            return self.abilities.dex_mod
+        elif ability == "con" or ability == "constitution":
+            return self.abilities.con_mod
+        else:
+            raise ValueError(f"Invalid spellcasting ability: {self.spellcasting_ability}")
+
+    @property
+    def spell_save_dc(self) -> int:
+        """
+        Calculate spell save DC.
+
+        D&D 5E formula: 8 + proficiency bonus + spellcasting ability modifier
+
+        Returns:
+            Spell save DC
+
+        Raises:
+            ValueError: If character has no spellcasting ability
+        """
+        return 8 + self.proficiency_bonus + self.get_spellcasting_modifier()
+
+    @property
+    def spell_attack_bonus(self) -> int:
+        """
+        Calculate spell attack bonus.
+
+        D&D 5E formula: proficiency bonus + spellcasting ability modifier
+
+        Returns:
+            Spell attack bonus
+
+        Raises:
+            ValueError: If character has no spellcasting ability
+        """
+        return self.proficiency_bonus + self.get_spellcasting_modifier()
 
     @property
     def melee_attack_bonus(self) -> int:
@@ -1118,6 +1183,90 @@ class Character(Creature):
         """
         if self.current_hp == 0:
             self.stabilized = True
+
+    def knows_spell(self, spell_id: str) -> bool:
+        """
+        Check if the character knows or has prepared a spell.
+
+        Args:
+            spell_id: ID of the spell to check
+
+        Returns:
+            True if the spell is in the character's known_spells list
+        """
+        return spell_id in self.known_spells
+
+    def can_cast_spell(self, spell_level: int, spell_id: str) -> bool:
+        """
+        Check if the character can cast a spell.
+
+        Requirements:
+        - Character must know the spell (for cantrips and known spells)
+        - For cantrips (level 0), always True if known
+        - For leveled spells, must have available spell slot
+
+        Args:
+            spell_level: Level of the spell (0 for cantrips, 1-9 for leveled spells)
+            spell_id: ID of the spell
+
+        Returns:
+            True if the character can cast the spell, False otherwise
+        """
+        # Check if character knows the spell
+        if not self.knows_spell(spell_id):
+            return False
+
+        # Cantrips don't require spell slots
+        if spell_level == 0:
+            return True
+
+        # Check for available spell slot
+        slot_name = self._get_spell_slot_name(spell_level)
+        pool = self.get_resource_pool(slot_name)
+
+        if pool is None:
+            return False
+
+        return pool.is_available(1)
+
+    def cast_spell(self, spell_level: int, upcast_level: Optional[int] = None) -> bool:
+        """
+        Consume a spell slot to cast a spell.
+
+        Args:
+            spell_level: Base level of the spell (0 for cantrips)
+            upcast_level: Level of spell slot to use (None = use base level)
+
+        Returns:
+            True if spell slot was consumed, False if no slot available
+
+        Note:
+            Cantrips (level 0) don't consume slots and always return True
+        """
+        # Cantrips don't consume slots
+        if spell_level == 0:
+            return True
+
+        # Determine which spell slot to use
+        slot_level = upcast_level if upcast_level is not None else spell_level
+
+        # Use the spell slot
+        slot_name = self._get_spell_slot_name(slot_level)
+        return self.use_resource(slot_name, 1)
+
+    def _get_spell_slot_name(self, level: int) -> str:
+        """
+        Get the resource pool name for a spell slot level.
+
+        Args:
+            level: Spell slot level (1-9)
+
+        Returns:
+            Resource pool name (e.g., "1st level slots", "2nd level slots")
+        """
+        suffixes = {1: "st", 2: "nd", 3: "rd"}
+        suffix = suffixes.get(level, "th")
+        return f"{level}{suffix} level slots"
 
     def __str__(self) -> str:
         """String representation of the character"""
