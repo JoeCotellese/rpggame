@@ -272,19 +272,29 @@ pytest -v
 
 ## Development Status
 
-🚧 **Currently in development** - This is an MVP implementation focused on core gameplay mechanics.
+✅ **MVP Complete - Beyond Initial Release**
 
-See [MVP.md](MVP.md) for detailed architecture and implementation plans.
+The project has successfully completed its MVP and several post-MVP features including party support, save/load system, multiple dungeons, and enhanced terminal UI.
+
+## Documentation
+
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Current system architecture and implementation details ⭐ **START HERE**
+- **[ROADMAP.md](ROADMAP.md)** - Development roadmap and planned features
+- **[CLAUDE.md](CLAUDE.md)** - Development standards and coding practices
+- **[docs/SPEC_HISTORICAL_2025-11.md](docs/SPEC_HISTORICAL_2025-11.md)** - Original design specification (historical reference)
+- **[MVP.md](MVP.md)** - Original MVP architecture overview (historical reference)
 
 ## Future Enhancements
 
-- Additional character classes (Rogue, Cleric)
-- Spellcasting system
-- Character creation and leveling
-- Multiple dungeons and campaigns
+See [ROADMAP.md](ROADMAP.md) for the complete development roadmap. Upcoming features include:
+
+- Spellcasting system with spell slots and targeting
+- Character leveling and XP progression
+- Death saves (5E-accurate mechanics)
 - Quest system with branching outcomes
-- Web-based UI
-- Save/load functionality
+- Campaign system with connected dungeons
+- Web-based UI (FastAPI + React)
+- Multiplayer/co-op support
 
 ## Contributing
 
