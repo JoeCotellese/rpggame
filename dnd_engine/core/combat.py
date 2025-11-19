@@ -343,3 +343,98 @@ class CombatEngine:
             "damage_taken": damage_taken,
             "effect": effect_description
         }
+
+    def resolve_spell_attack(
+        self,
+        caster: Creature,
+        target: Creature,
+        spell: Dict[str, Any],
+        spellcasting_ability: str,
+        advantage: bool = False,
+        disadvantage: bool = False,
+        apply_damage: bool = False,
+        event_bus=None
+    ) -> AttackResult:
+        """
+        Resolve a spell attack roll.
+
+        Handles spell attack mechanics:
+        1. Calculate spell attack bonus (proficiency + spellcasting ability modifier)
+        2. Roll attack (1d20 + spell attack bonus vs AC)
+        3. Handle cantrip damage scaling based on caster level
+        4. Roll damage on hit (critical hits double dice)
+        5. Emit spell attack events
+        6. Apply damage if requested
+
+        Args:
+            caster: The creature casting the spell (must be a Character for cantrip scaling)
+            target: The target of the spell attack
+            spell: Spell data dictionary containing:
+                - "name": spell name
+                - "damage": dict with "dice" and "damage_type"
+                - "level": spell level (0 for cantrips)
+            spellcasting_ability: Ability used for spellcasting (e.g., "int", "wis", "cha")
+            advantage: Roll with advantage
+            disadvantage: Roll with disadvantage
+            apply_damage: If True, apply damage to target's HP
+            event_bus: Optional EventBus instance for event emission
+
+        Returns:
+            AttackResult with spell attack details
+
+        Raises:
+            ValueError: If caster doesn't have get_spell_attack_bonus method
+        """
+        from dnd_engine.utils.events import Event, EventType
+
+        # Get spell attack bonus from caster
+        if not hasattr(caster, 'get_spell_attack_bonus'):
+            raise ValueError(f"{caster.name} cannot cast spells (no spell attack bonus)")
+
+        spell_attack_bonus = caster.get_spell_attack_bonus(spellcasting_ability)
+
+        # Get damage dice from spell
+        damage_data = spell.get("damage", {})
+        base_damage_dice = damage_data.get("dice", "1d6")
+        damage_type = damage_data.get("damage_type", "force")
+
+        # Scale cantrip damage if this is a cantrip (level 0)
+        if spell.get("level", 0) == 0 and hasattr(caster, 'scale_cantrip_damage'):
+            damage_dice = caster.scale_cantrip_damage(base_damage_dice)
+        else:
+            damage_dice = base_damage_dice
+
+        # Use the existing resolve_attack method for the mechanics
+        result = self.resolve_attack(
+            attacker=caster,
+            defender=target,
+            attack_bonus=spell_attack_bonus,
+            damage_dice=damage_dice,
+            advantage=advantage,
+            disadvantage=disadvantage,
+            apply_damage=apply_damage,
+            event_bus=event_bus
+        )
+
+        # Emit spell-specific attack event
+        if event_bus is not None:
+            event = Event(
+                type=EventType.ATTACK_ROLL,
+                data={
+                    "attacker": caster.name,
+                    "target": target.name,
+                    "spell": spell.get("name", "Unknown Spell"),
+                    "attack_roll": result.attack_roll,
+                    "attack_bonus": spell_attack_bonus,
+                    "total": result.total_attack,
+                    "target_ac": target.ac,
+                    "hit": result.hit,
+                    "critical_hit": result.critical_hit,
+                    "damage": result.damage,
+                    "damage_type": damage_type,
+                    "attack_type": "spell"
+                }
+            )
+            event_bus.emit(event)
+
+        return result

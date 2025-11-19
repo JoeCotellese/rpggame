@@ -501,6 +501,16 @@ class CLI:
             self.handle_attack(target_name)
             return
 
+        if command.startswith("cast "):
+            spell_name = " ".join(command.split()[1:])
+            self.handle_cast_spell(spell_name)
+            return
+
+        if command == "cast":
+            # Prompt for spell selection
+            self.handle_cast_spell("")
+            return
+
         if command in ["flee", "run", "escape", "retreat"]:
             self.handle_flee()
             return
@@ -956,6 +966,250 @@ class CLI:
                     self.display_narrative_panel(death_narrative)
 
             # 4. Display defeated message after death narrative
+            print_status_message(f"{target.name} is defeated!", "success")
+
+        # End player turn
+        self.game_state.initiative_tracker.next_turn()
+
+        # Check if combat is over
+        self.game_state._check_combat_end()
+
+        if self.game_state.in_combat:
+            # Process enemy turns
+            self.process_enemy_turns()
+
+    def handle_cast_spell(self, spell_name: str) -> None:
+        """Handle cast spell command during combat."""
+        if not self.game_state.in_combat:
+            print_error("You're not in combat!")
+            return
+
+        # Check if it's a party member's turn
+        current = self.game_state.initiative_tracker.get_current_combatant()
+        caster = None
+        for character in self.game_state.party.characters:
+            if current.creature == character and character.is_alive:
+                caster = character
+                break
+
+        if not caster:
+            # Show whose turn it is
+            enemy_turn = False
+            for enemy in self.game_state.active_enemies:
+                if current.creature == enemy:
+                    enemy_num = self._get_enemy_number(enemy)
+                    display_name = f"{enemy.name} {enemy_num}" if enemy_num else enemy.name
+                    print_status_message(f"It's {display_name}'s turn, not a party member's!", "warning")
+                    enemy_turn = True
+                    break
+            if not enemy_turn:
+                print_status_message(f"It's not a valid combatant's turn!", "warning")
+            return
+
+        # Check action economy
+        from dnd_engine.systems.action_economy import ActionType
+        turn_state = self.game_state.initiative_tracker.get_current_turn_state()
+        if not turn_state:
+            print_error("Unable to get current turn state!")
+            return
+
+        if not turn_state.is_action_available(ActionType.ACTION):
+            print_error("You don't have an Action available this turn!")
+            print_status_message(f"Available: {turn_state}", "info")
+            return
+
+        # Get spellcasting ability from class data
+        classes_data = self.game_state.data_loader.load_classes()
+        class_data = classes_data.get(caster.character_class.value, {})
+        spellcasting_ability = class_data.get("spellcasting_ability")
+
+        if not spellcasting_ability:
+            print_error(f"{caster.character_class.value.title()} cannot cast spells!")
+            return
+
+        # Load spells data
+        spells_data = self.game_state.data_loader.load_spells()
+
+        # Get available spells for this character (for now, use all spells of their class)
+        # In future, this should come from character's known spells
+        available_spells = []
+        for spell_id, spell_data in spells_data.items():
+            if caster.character_class.value in spell_data.get("classes", []):
+                # Only include attack spells
+                if spell_data.get("attack_type"):
+                    available_spells.append((spell_id, spell_data))
+
+        if not available_spells:
+            print_error(f"{caster.name} doesn't know any attack spells!")
+            return
+
+        # If no spell specified, show list and prompt for selection
+        spell_data = None
+        spell_id = None
+
+        if not spell_name:
+            # Display available spells with slot information
+            console.print("\n[bold cyan]Available Spells:[/bold cyan]")
+            spell_choices = []
+            for sid, sdata in available_spells:
+                spell_level = sdata.get("level", 0)
+                spell_display_name = sdata.get("name", sid)
+                damage_info = sdata.get("damage", {})
+                damage_dice = damage_info.get("dice", "")
+                damage_type = damage_info.get("damage_type", "")
+
+                # Scale cantrip damage for display
+                if spell_level == 0:
+                    damage_dice = caster.scale_cantrip_damage(damage_dice)
+                    slot_info = "[green](cantrip)[/green]"
+                else:
+                    available_slots = caster.get_available_spell_slots(spell_level)
+                    ordinal = caster._level_to_ordinal(spell_level)
+                    if available_slots > 0:
+                        slot_info = f"[green]({ordinal}, {available_slots} slots)[/green]"
+                    else:
+                        slot_info = f"[red]({ordinal}, no slots)[/red]"
+
+                spell_choices.append(f"{spell_display_name} - {damage_dice} {damage_type} {slot_info}")
+
+            # Use questionary for selection
+            from questionary import select
+            selected = select(
+                "Choose a spell to cast:",
+                choices=spell_choices + ["Cancel"]
+            ).ask()
+
+            if not selected or selected == "Cancel":
+                return
+
+            # Extract spell name from selection
+            selected_spell_name = selected.split(" - ")[0]
+            # Find the spell data
+            for sid, sdata in available_spells:
+                if sdata.get("name", sid) == selected_spell_name:
+                    spell_id = sid
+                    spell_data = sdata
+                    break
+        else:
+            # Find spell by name
+            spell_name_lower = spell_name.lower()
+            for sid, sdata in available_spells:
+                if sdata.get("name", "").lower() == spell_name_lower or sid == spell_name_lower:
+                    spell_id = sid
+                    spell_data = sdata
+                    break
+
+        if not spell_data:
+            print_error(f"Unknown spell: {spell_name}")
+            return
+
+        # Check and consume spell slot for leveled spells
+        spell_level = spell_data.get("level", 0)
+        if spell_level > 0:
+            if not caster.use_spell_slot(spell_level):
+                ordinal = caster._level_to_ordinal(spell_level)
+                print_error(f"No {ordinal}-level spell slots available!")
+                return
+
+        # Prompt for target selection
+        target = self._prompt_enemy_selection()
+        if target is None or target == "Cancel":
+            # Refund spell slot if cancelled
+            if spell_level > 0:
+                pool_name = f"spell_slots_level_{spell_level}"
+                pool = caster.get_resource_pool(pool_name)
+                if pool:
+                    pool.current += 1
+            return
+
+        # Consume the action
+        if not turn_state.consume_action(ActionType.ACTION):
+            print_error("Failed to consume action!")
+            # Refund spell slot
+            if spell_level > 0:
+                pool_name = f"spell_slots_level_{spell_level}"
+                pool = caster.get_resource_pool(pool_name)
+                if pool:
+                    pool.current += 1
+            return
+
+        # Log player action
+        from dnd_engine.utils.logging_config import get_logging_config
+        logging_config = get_logging_config()
+        if logging_config:
+            logging_config.log_player_action(
+                character=caster.name,
+                action="cast_spell",
+                details=f"spell={spell_data.get('name')}, target={target.name}"
+            )
+
+        # Perform spell attack
+        result = self.game_state.combat_engine.resolve_spell_attack(
+            caster=caster,
+            target=target,
+            spell=spell_data,
+            spellcasting_ability=spellcasting_ability,
+            apply_damage=True,
+            event_bus=self.game_state.event_bus
+        )
+
+        # Display narrative if available
+        if self.llm_enhancer and result.hit:
+            room = self.game_state.get_current_room()
+            location = room.get("name", "")
+
+            damage_info = spell_data.get("damage", {})
+            damage_type = damage_info.get("damage_type", "magical")
+
+            # Get caster race
+            races_data = self.game_state.data_loader.load_races()
+            caster_race_data = races_data.get(caster.race, {})
+            caster_race = caster_race_data.get("name", "")
+
+            with console.status("", spinner="dots"):
+                narrative = self.llm_enhancer.get_combat_narrative_sync(
+                    action_data={
+                        "attacker": result.attacker_name,
+                        "defender": result.defender_name,
+                        "damage": result.damage,
+                        "critical": result.critical_hit,
+                        "hit": result.hit,
+                        "location": location,
+                        "weapon": spell_data.get("name", "spell"),
+                        "damage_type": damage_type,
+                        "attacker_race": caster_race,
+                        "defender_armor": "",
+                        "combat_history": self.combat_history,
+                        "battlefield_state": self._build_battlefield_state(),
+                        "is_spell": True
+                    },
+                    timeout=3.0
+                )
+            if narrative:
+                self.display_narrative_panel(narrative)
+
+        # Record this action in combat history
+        self._record_combat_action(result)
+
+        # Display mechanics
+        spell_display_name = spell_data.get("name", spell_id)
+        console.print(f"[magenta]✨ {caster.name} casts {spell_display_name}![/magenta]")
+        console.print(f"[cyan]⚔️  {str(result)}[/cyan]")
+
+        # If target died, show death narrative
+        if not target.is_alive:
+            if self.llm_enhancer:
+                with console.status("", spinner="dots"):
+                    death_narrative = self.llm_enhancer.get_death_narrative_sync(
+                        character_data={
+                            "name": target.name,
+                            "is_player": isinstance(target, Character)
+                        },
+                        timeout=3.0
+                    )
+                if death_narrative:
+                    self.display_narrative_panel(death_narrative)
+
             print_status_message(f"{target.name} is defeated!", "success")
 
         # End player turn
