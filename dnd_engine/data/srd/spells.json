@@ -1,0 +1,488 @@
+{
+  "fire_bolt": {
+    "id": "fire_bolt",
+    "name": "Fire Bolt",
+    "level": 0,
+    "school": "evocation",
+    "casting_time": "1 action",
+    "range_ft": 120,
+    "components": {
+      "verbal": true,
+      "somatic": true,
+      "material": false
+    },
+    "duration": "Instantaneous",
+    "concentration": false,
+    "ritual": false,
+    "description": "You hurl a mote of fire at a creature or object within range. Make a ranged spell attack against the target. On a hit, the target takes 1d10 fire damage. A flammable object hit by this spell ignites if it isn't being worn or carried.",
+    "damage": {
+      "dice": "1d10",
+      "damage_type": "fire",
+      "higher_levels": "This spell's damage increases by 1d10 when you reach 5th level (2d10), 11th level (3d10), and 17th level (4d10)."
+    },
+    "attack_type": "ranged",
+    "higher_levels": "This spell's damage increases by 1d10 when you reach 5th level (2d10), 11th level (3d10), and 17th level (4d10).",
+    "classes": ["wizard", "sorcerer"],
+    "source": "D&D 5E SRD (CC BY 4.0)"
+  },
+  "ray_of_frost": {
+    "id": "ray_of_frost",
+    "name": "Ray of Frost",
+    "level": 0,
+    "school": "evocation",
+    "casting_time": "1 action",
+    "range_ft": 60,
+    "components": {
+      "verbal": true,
+      "somatic": true,
+      "material": false
+    },
+    "duration": "Instantaneous",
+    "concentration": false,
+    "ritual": false,
+    "description": "A frigid beam of blue-white light streaks toward a creature within range. Make a ranged spell attack against the target. On a hit, it takes 1d8 cold damage, and its speed is reduced by 10 feet until the start of your next turn.",
+    "damage": {
+      "dice": "1d8",
+      "damage_type": "cold",
+      "higher_levels": "The spell's damage increases by 1d8 when you reach 5th level (2d8), 11th level (3d8), and 17th level (4d8)."
+    },
+    "attack_type": "ranged",
+    "higher_levels": "The spell's damage increases by 1d8 when you reach 5th level (2d8), 11th level (3d8), and 17th level (4d8).",
+    "classes": ["wizard", "sorcerer"],
+    "source": "D&D 5E SRD (CC BY 4.0)"
+  },
+  "sacred_flame": {
+    "id": "sacred_flame",
+    "name": "Sacred Flame",
+    "level": 0,
+    "school": "evocation",
+    "casting_time": "1 action",
+    "range_ft": 60,
+    "components": {
+      "verbal": true,
+      "somatic": true,
+      "material": false
+    },
+    "duration": "Instantaneous",
+    "concentration": false,
+    "ritual": false,
+    "description": "Flame-like radiance descends on a creature that you can see within range. The target must succeed on a Dexterity saving throw or take 1d8 radiant damage. The target gains no benefit from cover for this saving throw.",
+    "damage": {
+      "dice": "1d8",
+      "damage_type": "radiant",
+      "higher_levels": "The spell's damage increases by 1d8 when you reach 5th level (2d8), 11th level (3d8), and 17th level (4d8)."
+    },
+    "saving_throw": {
+      "ability": "dexterity",
+      "on_success": "none"
+    },
+    "higher_levels": "The spell's damage increases by 1d8 when you reach 5th level (2d8), 11th level (3d8), and 17th level (4d8).",
+    "classes": ["cleric"],
+    "source": "D&D 5E SRD (CC BY 4.0)"
+  },
+  "light": {
+    "id": "light",
+    "name": "Light",
+    "level": 0,
+    "school": "evocation",
+    "casting_time": "1 action",
+    "range_ft": -1,
+    "components": {
+      "verbal": true,
+      "somatic": false,
+      "material": true,
+      "material_description": "a firefly or phosphorescent moss"
+    },
+    "duration": "Timed",
+    "duration_value": "1 hour",
+    "concentration": false,
+    "ritual": false,
+    "description": "You touch one object that is no larger than 10 feet in any dimension. Until the spell ends, the object sheds bright light in a 20-foot radius and dim light for an additional 20 feet. The light can be colored as you like. Completely covering the object with something opaque blocks the light. The spell ends if you cast it again or dismiss it as an action.",
+    "classes": ["wizard", "cleric", "sorcerer"],
+    "source": "D&D 5E SRD (CC BY 4.0)"
+  },
+  "mage_hand": {
+    "id": "mage_hand",
+    "name": "Mage Hand",
+    "level": 0,
+    "school": "conjuration",
+    "casting_time": "1 action",
+    "range_ft": 30,
+    "components": {
+      "verbal": true,
+      "somatic": true,
+      "material": false
+    },
+    "duration": "Concentration",
+    "duration_value": "1 minute",
+    "concentration": true,
+    "ritual": false,
+    "description": "A spectral, floating hand appears at a point you choose within range. The hand lasts for the duration or until you dismiss it as an action. The hand vanishes if it is ever more than 30 feet away from you or if you cast this spell again. You can use your action to control the hand. You can use the hand to manipulate an object, open an unlocked door or container, stow or retrieve an item from an open container, or pour the contents out of a vial. You can move the hand up to 30 feet each time you use it. The hand can't attack, activate magic items, or carry more than 10 pounds.",
+    "classes": ["wizard", "sorcerer"],
+    "source": "D&D 5E SRD (CC BY 4.0)"
+  },
+  "prestidigitation": {
+    "id": "prestidigitation",
+    "name": "Prestidigitation",
+    "level": 0,
+    "school": "transmutation",
+    "casting_time": "1 action",
+    "range_ft": 10,
+    "components": {
+      "verbal": true,
+      "somatic": true,
+      "material": false
+    },
+    "duration": "Timed",
+    "duration_value": "up to 1 hour",
+    "concentration": false,
+    "ritual": false,
+    "description": "This spell is a minor magical trick that novice spellcasters use for practice. You create one of the following magical effects within range: You create an instantaneous, harmless sensory effect, such as a shower of sparks, a puff of wind, faint musical notes, or an odd odor. You instantaneously light or snuff out a candle, a torch, or a small campfire. You instantaneously clean or soil an object no larger than 1 cubic foot. You chill, warm, or flavor up to 1 cubic foot of nonliving material for 1 hour. You make a color, a small mark, or a symbol appear on an object or a surface for 1 hour. You create a nonmagical trinket or an illusory image that can fit in your hand and that lasts until the end of your next turn. If you cast this spell multiple times, you can have up to three of its non-instantaneous effects active at a time, and you can dismiss such an effect as an action.",
+    "classes": ["wizard", "sorcerer"],
+    "source": "D&D 5E SRD (CC BY 4.0)"
+  },
+  "magic_missile": {
+    "id": "magic_missile",
+    "name": "Magic Missile",
+    "level": 1,
+    "school": "evocation",
+    "casting_time": "1 action",
+    "range_ft": 120,
+    "components": {
+      "verbal": true,
+      "somatic": true,
+      "material": false
+    },
+    "duration": "Instantaneous",
+    "concentration": false,
+    "ritual": false,
+    "description": "You create three glowing darts of magical force. Each dart hits a creature of your choice that you can see within range. A dart deals 1d4 + 1 force damage to its target. The darts all strike simultaneously, and you can direct them to hit one creature or several.",
+    "damage": {
+      "dice": "1d4+1",
+      "damage_type": "force",
+      "higher_levels": "When you cast this spell using a spell slot of 2nd level or higher, the spell creates one more dart for each slot level above 1st."
+    },
+    "higher_levels": "When you cast this spell using a spell slot of 2nd level or higher, the spell creates one more dart for each slot level above 1st.",
+    "classes": ["wizard", "sorcerer"],
+    "source": "D&D 5E SRD (CC BY 4.0)"
+  },
+  "cure_wounds": {
+    "id": "cure_wounds",
+    "name": "Cure Wounds",
+    "level": 1,
+    "school": "evocation",
+    "casting_time": "1 action",
+    "range_ft": -1,
+    "components": {
+      "verbal": true,
+      "somatic": true,
+      "material": false
+    },
+    "duration": "Instantaneous",
+    "concentration": false,
+    "ritual": false,
+    "description": "A creature you touch regains a number of hit points equal to 1d8 + your spellcasting ability modifier. This spell has no effect on undead or constructs.",
+    "healing": {
+      "dice": "1d8",
+      "higher_levels": "When you cast this spell using a spell slot of 2nd level or higher, the healing increases by 1d8 for each slot level above 1st."
+    },
+    "higher_levels": "When you cast this spell using a spell slot of 2nd level or higher, the healing increases by 1d8 for each slot level above 1st.",
+    "classes": ["cleric", "paladin"],
+    "source": "D&D 5E SRD (CC BY 4.0)"
+  },
+  "shield": {
+    "id": "shield",
+    "name": "Shield",
+    "level": 1,
+    "school": "abjuration",
+    "casting_time": "1 reaction",
+    "range_ft": 0,
+    "components": {
+      "verbal": true,
+      "somatic": true,
+      "material": false
+    },
+    "duration": "Timed",
+    "duration_value": "1 round",
+    "concentration": false,
+    "ritual": false,
+    "description": "An invisible barrier of magical force appears and protects you. Until the start of your next turn, you have a +5 bonus to AC, including against the triggering attack, and you take no damage from magic missile.",
+    "classes": ["wizard", "sorcerer"],
+    "source": "D&D 5E SRD (CC BY 4.0)"
+  },
+  "burning_hands": {
+    "id": "burning_hands",
+    "name": "Burning Hands",
+    "level": 1,
+    "school": "evocation",
+    "casting_time": "1 action",
+    "range_ft": 0,
+    "components": {
+      "verbal": true,
+      "somatic": true,
+      "material": false
+    },
+    "duration": "Instantaneous",
+    "concentration": false,
+    "ritual": false,
+    "description": "As you hold your hands with thumbs touching and fingers spread, a thin sheet of flames shoots forth from your outstretched fingertips. Each creature in a 15-foot cone must make a Dexterity saving throw. A creature takes 3d6 fire damage on a failed save, or half as much damage on a successful one. The fire ignites any flammable objects in the area that aren't being worn or carried.",
+    "damage": {
+      "dice": "3d6",
+      "damage_type": "fire",
+      "higher_levels": "When you cast this spell using a spell slot of 2nd level or higher, the damage increases by 1d6 for each slot level above 1st."
+    },
+    "saving_throw": {
+      "ability": "dexterity",
+      "on_success": "half"
+    },
+    "area_of_effect": "15-foot cone",
+    "higher_levels": "When you cast this spell using a spell slot of 2nd level or higher, the damage increases by 1d6 for each slot level above 1st.",
+    "classes": ["wizard", "sorcerer"],
+    "source": "D&D 5E SRD (CC BY 4.0)"
+  },
+  "detect_magic": {
+    "id": "detect_magic",
+    "name": "Detect Magic",
+    "level": 1,
+    "school": "divination",
+    "casting_time": "1 action",
+    "range_ft": 0,
+    "components": {
+      "verbal": true,
+      "somatic": true,
+      "material": false
+    },
+    "duration": "Concentration",
+    "duration_value": "10 minutes",
+    "concentration": true,
+    "ritual": true,
+    "description": "For the duration, you sense the presence of magic within 30 feet of you. If you sense magic in this way, you can use your action to see a faint aura around any visible creature or object in the area that bears magic, and you learn its school of magic, if any. The spell can penetrate most barriers, but it is blocked by 1 foot of stone, 1 inch of common metal, a thin sheet of lead, or 3 feet of wood or dirt.",
+    "classes": ["wizard", "cleric", "sorcerer"],
+    "source": "D&D 5E SRD (CC BY 4.0)"
+  },
+  "sleep": {
+    "id": "sleep",
+    "name": "Sleep",
+    "level": 1,
+    "school": "enchantment",
+    "casting_time": "1 action",
+    "range_ft": 90,
+    "components": {
+      "verbal": true,
+      "somatic": true,
+      "material": true,
+      "material_description": "a pinch of fine sand, rose petals, or a cricket"
+    },
+    "duration": "Timed",
+    "duration_value": "1 minute",
+    "concentration": false,
+    "ritual": false,
+    "description": "This spell sends creatures into a magical slumber. Roll 5d8; the total is how many hit points of creatures this spell can affect. Creatures within 20 feet of a point you choose within range are affected in ascending order of their current hit points (ignoring unconscious creatures). Starting with the creature that has the lowest current hit points, each creature affected by this spell falls unconscious until the spell ends, the sleeper takes damage, or someone uses an action to shake or slap the sleeper awake. Subtract each creature's hit points from the total before moving on to the creature with the next lowest hit points. A creature's hit points must be equal to or less than the remaining total for that creature to be affected.",
+    "area_of_effect": "20-foot radius",
+    "higher_levels": "When you cast this spell using a spell slot of 2nd level or higher, roll an additional 2d8 for each slot level above 1st.",
+    "classes": ["wizard", "sorcerer"],
+    "source": "D&D 5E SRD (CC BY 4.0)"
+  },
+  "scorching_ray": {
+    "id": "scorching_ray",
+    "name": "Scorching Ray",
+    "level": 2,
+    "school": "evocation",
+    "casting_time": "1 action",
+    "range_ft": 120,
+    "components": {
+      "verbal": true,
+      "somatic": true,
+      "material": false
+    },
+    "duration": "Instantaneous",
+    "concentration": false,
+    "ritual": false,
+    "description": "You create three rays of fire and hurl them at targets within range. You can hurl them at one target or several. Make a ranged spell attack for each ray. On a hit, the target takes 2d6 fire damage.",
+    "damage": {
+      "dice": "2d6",
+      "damage_type": "fire",
+      "higher_levels": "When you cast this spell using a spell slot of 3rd level or higher, you create one additional ray for each slot level above 2nd."
+    },
+    "attack_type": "ranged",
+    "higher_levels": "When you cast this spell using a spell slot of 3rd level or higher, you create one additional ray for each slot level above 2nd.",
+    "classes": ["wizard", "sorcerer"],
+    "source": "D&D 5E SRD (CC BY 4.0)"
+  },
+  "hold_person": {
+    "id": "hold_person",
+    "name": "Hold Person",
+    "level": 2,
+    "school": "enchantment",
+    "casting_time": "1 action",
+    "range_ft": 60,
+    "components": {
+      "verbal": true,
+      "somatic": true,
+      "material": true,
+      "material_description": "a small, straight piece of iron"
+    },
+    "duration": "Concentration",
+    "duration_value": "1 minute",
+    "concentration": true,
+    "ritual": false,
+    "description": "Choose a humanoid that you can see within range. The target must succeed on a Wisdom saving throw or be paralyzed for the duration. At the end of each of its turns, the target can make another Wisdom saving throw. On a success, the spell ends on the target.",
+    "saving_throw": {
+      "ability": "wisdom",
+      "on_success": "negates"
+    },
+    "higher_levels": "When you cast this spell using a spell slot of 3rd level or higher, you can target one additional humanoid for each slot level above 2nd. The humanoids must be within 30 feet of each other when you target them.",
+    "classes": ["wizard", "cleric", "sorcerer"],
+    "source": "D&D 5E SRD (CC BY 4.0)"
+  },
+  "spiritual_weapon": {
+    "id": "spiritual_weapon",
+    "name": "Spiritual Weapon",
+    "level": 2,
+    "school": "evocation",
+    "casting_time": "1 bonus action",
+    "range_ft": 60,
+    "components": {
+      "verbal": true,
+      "somatic": true,
+      "material": false
+    },
+    "duration": "Timed",
+    "duration_value": "1 minute",
+    "concentration": false,
+    "ritual": false,
+    "description": "You create a floating, spectral weapon within range that lasts for the duration or until you cast this spell again. When you cast the spell, you can make a melee spell attack against a creature within 5 feet of the weapon. On a hit, the target takes force damage equal to 1d8 + your spellcasting ability modifier. As a bonus action on your turn, you can move the weapon up to 20 feet and repeat the attack against a creature within 5 feet of it.",
+    "damage": {
+      "dice": "1d8",
+      "damage_type": "force",
+      "higher_levels": "When you cast this spell using a spell slot of 3rd level or higher, the damage increases by 1d8 for every two slot levels above 2nd."
+    },
+    "attack_type": "melee",
+    "higher_levels": "When you cast this spell using a spell slot of 3rd level or higher, the damage increases by 1d8 for every two slot levels above 2nd.",
+    "classes": ["cleric"],
+    "source": "D&D 5E SRD (CC BY 4.0)"
+  },
+  "misty_step": {
+    "id": "misty_step",
+    "name": "Misty Step",
+    "level": 2,
+    "school": "conjuration",
+    "casting_time": "1 bonus action",
+    "range_ft": 0,
+    "components": {
+      "verbal": true,
+      "somatic": false,
+      "material": false
+    },
+    "duration": "Instantaneous",
+    "concentration": false,
+    "ritual": false,
+    "description": "Briefly surrounded by silvery mist, you teleport up to 30 feet to an unoccupied space that you can see.",
+    "classes": ["wizard", "sorcerer"],
+    "source": "D&D 5E SRD (CC BY 4.0)"
+  },
+  "fireball": {
+    "id": "fireball",
+    "name": "Fireball",
+    "level": 3,
+    "school": "evocation",
+    "casting_time": "1 action",
+    "range_ft": 150,
+    "components": {
+      "verbal": true,
+      "somatic": true,
+      "material": true,
+      "material_description": "a tiny ball of bat guano and sulfur"
+    },
+    "duration": "Instantaneous",
+    "concentration": false,
+    "ritual": false,
+    "description": "A bright streak flashes from your pointing finger to a point you choose within range and then blossoms with a low roar into an explosion of flame. Each creature in a 20-foot-radius sphere centered on that point must make a Dexterity saving throw. A target takes 8d6 fire damage on a failed save, or half as much damage on a successful one. The fire spreads around corners. It ignites flammable objects in the area that aren't being worn or carried.",
+    "damage": {
+      "dice": "8d6",
+      "damage_type": "fire",
+      "higher_levels": "When you cast this spell using a spell slot of 4th level or higher, the damage increases by 1d6 for each slot level above 3rd."
+    },
+    "saving_throw": {
+      "ability": "dexterity",
+      "on_success": "half"
+    },
+    "area_of_effect": "20-foot radius sphere",
+    "higher_levels": "When you cast this spell using a spell slot of 4th level or higher, the damage increases by 1d6 for each slot level above 3rd.",
+    "classes": ["wizard", "sorcerer"],
+    "source": "D&D 5E SRD (CC BY 4.0)"
+  },
+  "counterspell": {
+    "id": "counterspell",
+    "name": "Counterspell",
+    "level": 3,
+    "school": "abjuration",
+    "casting_time": "1 reaction",
+    "range_ft": 60,
+    "components": {
+      "verbal": false,
+      "somatic": true,
+      "material": false
+    },
+    "duration": "Instantaneous",
+    "concentration": false,
+    "ritual": false,
+    "description": "You attempt to interrupt a creature in the process of casting a spell. If the creature is casting a spell of 3rd level or lower, its spell fails and has no effect. If it is casting a spell of 4th level or higher, make an ability check using your spellcasting ability. The DC equals 10 + the spell's level. On a success, the creature's spell fails and has no effect.",
+    "higher_levels": "When you cast this spell using a spell slot of 4th level or higher, the interrupted spell has no effect if its level is less than or equal to the level of the spell slot you used.",
+    "classes": ["wizard", "sorcerer"],
+    "source": "D&D 5E SRD (CC BY 4.0)"
+  },
+  "lightning_bolt": {
+    "id": "lightning_bolt",
+    "name": "Lightning Bolt",
+    "level": 3,
+    "school": "evocation",
+    "casting_time": "1 action",
+    "range_ft": 0,
+    "components": {
+      "verbal": true,
+      "somatic": true,
+      "material": true,
+      "material_description": "a bit of fur and a rod of amber, crystal, or glass"
+    },
+    "duration": "Instantaneous",
+    "concentration": false,
+    "ritual": false,
+    "description": "A stroke of lightning forming a line 100 feet long and 5 feet wide blasts out from you in a direction you choose. Each creature in the line must make a Dexterity saving throw. A creature takes 8d6 lightning damage on a failed save, or half as much damage on a successful one. The lightning ignites flammable objects in the area that aren't being worn or carried.",
+    "damage": {
+      "dice": "8d6",
+      "damage_type": "lightning",
+      "higher_levels": "When you cast this spell using a spell slot of 4th level or higher, the damage increases by 1d6 for each slot level above 3rd."
+    },
+    "saving_throw": {
+      "ability": "dexterity",
+      "on_success": "half"
+    },
+    "area_of_effect": "100-foot line (5 feet wide)",
+    "higher_levels": "When you cast this spell using a spell slot of 4th level or higher, the damage increases by 1d6 for each slot level above 3rd.",
+    "classes": ["wizard", "sorcerer"],
+    "source": "D&D 5E SRD (CC BY 4.0)"
+  },
+  "revivify": {
+    "id": "revivify",
+    "name": "Revivify",
+    "level": 3,
+    "school": "necromancy",
+    "casting_time": "1 action",
+    "range_ft": -1,
+    "components": {
+      "verbal": true,
+      "somatic": true,
+      "material": true,
+      "material_description": "diamonds worth 300 gp, which the spell consumes",
+      "material_cost": 300,
+      "material_consumed": true
+    },
+    "duration": "Instantaneous",
+    "concentration": false,
+    "ritual": false,
+    "description": "You touch a creature that has died within the last minute. That creature returns to life with 1 hit point. This spell can't return to life a creature that has died of old age, nor can it restore any missing body parts.",
+    "classes": ["cleric", "paladin"],
+    "source": "D&D 5E SRD (CC BY 4.0)"
+  }
+}

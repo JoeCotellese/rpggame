@@ -161,3 +161,34 @@ class DataLoader:
         progression_file = self.data_path / "srd" / "progression.json"
         with open(progression_file, 'r') as f:
             return json.load(f)
+
+    def load_spells(self) -> Dict[str, Any]:
+        """
+        Load all spell definitions from JSON.
+
+        Returns:
+            Dictionary mapping spell IDs to spell data
+        """
+        spells_file = self.data_path / "srd" / "spells.json"
+        with open(spells_file, 'r') as f:
+            return json.load(f)
+
+    def get_spell(self, spell_id: str) -> Dict[str, Any]:
+        """
+        Get a specific spell by its ID.
+
+        Args:
+            spell_id: ID of the spell to retrieve (e.g., "fireball")
+
+        Returns:
+            Dictionary containing spell data
+
+        Raises:
+            KeyError: If spell_id doesn't exist
+        """
+        spells = self.load_spells()
+
+        if spell_id not in spells:
+            raise KeyError(f"Spell '{spell_id}' not found in spell definitions")
+
+        return spells[spell_id]
