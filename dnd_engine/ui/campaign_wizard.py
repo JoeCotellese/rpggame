@@ -9,6 +9,7 @@ from dnd_engine.core.character_vault import CharacterVault, CharacterState
 from dnd_engine.core.character_factory import CharacterFactory
 from dnd_engine.core.character import Character
 from dnd_engine.rules.loader import DataLoader
+from dnd_engine.ui.character_wizard import CharacterCreationWizard
 from dnd_engine.ui.rich_ui import (
     console,
     print_banner,
@@ -220,12 +221,22 @@ class CampaignCreationWizard:
         console.print()
         print_status_message("Creating new character at level {}...".format(self.starting_level), "info")
 
-        # Launch character creation (interactive)
-        character = self.character_factory.create_character_interactive(level=self.starting_level)
+        # Launch new character creation wizard
+        wizard = CharacterCreationWizard(
+            character_factory=self.character_factory,
+            data_loader=self.data_loader
+        )
+        character = wizard.run()
 
         if character is None:
             print_status_message("Character creation cancelled", "warning")
             return
+
+        # Set level if different from 1
+        if self.starting_level != 1:
+            character.level = self.starting_level
+            # Recalculate HP for higher levels
+            # TODO: Implement proper leveling system
 
         # Save to vault
         char_id = self.character_vault.save_character(

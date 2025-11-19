@@ -1,0 +1,108 @@
+{
+  "classic_fighter": {
+    "name": "Classic Fighter",
+    "description": "Human warrior with great weapon fighting style",
+    "race": "human",
+    "class": "fighter",
+    "abilities": {
+      "strength": 15,
+      "dexterity": 12,
+      "constitution": 14,
+      "intelligence": 8,
+      "wisdom": 13,
+      "charisma": 10
+    },
+    "skill_choices": ["athletics", "intimidation"],
+    "equipment_preference": "melee"
+  },
+  "sneaky_rogue": {
+    "name": "Sneaky Rogue",
+    "description": "Halfling rogue specializing in stealth and deception",
+    "race": "halfling",
+    "class": "rogue",
+    "abilities": {
+      "strength": 8,
+      "dexterity": 15,
+      "constitution": 12,
+      "intelligence": 13,
+      "wisdom": 10,
+      "charisma": 14
+    },
+    "skill_choices": ["stealth", "sleight_of_hand", "deception", "perception"],
+    "expertise_choices": ["stealth", "sleight_of_hand"],
+    "equipment_preference": "finesse"
+  },
+  "wise_wizard": {
+    "name": "Wise Wizard",
+    "description": "Mountain Dwarf wizard with defensive magic focus",
+    "race": "mountain_dwarf",
+    "class": "wizard",
+    "abilities": {
+      "strength": 10,
+      "dexterity": 12,
+      "constitution": 14,
+      "intelligence": 15,
+      "wisdom": 13,
+      "charisma": 8
+    },
+    "skill_choices": ["arcana", "history"],
+    "spell_preferences": {
+      "cantrips": ["fire_bolt", "mage_hand", "light"],
+      "level_1": ["mage_armor", "shield", "magic_missile", "detect_magic", "identify", "burning_hands"]
+    },
+    "equipment_preference": "arcane_focus"
+  },
+  "arcane_wizard": {
+    "name": "Arcane Wizard",
+    "description": "High Elf wizard specializing in evocation magic",
+    "race": "high_elf",
+    "class": "wizard",
+    "abilities": {
+      "strength": 8,
+      "dexterity": 13,
+      "constitution": 12,
+      "intelligence": 15,
+      "wisdom": 14,
+      "charisma": 10
+    },
+    "skill_choices": ["arcana", "investigation"],
+    "spell_preferences": {
+      "cantrips": ["fire_bolt", "mage_hand", "light"],
+      "level_1": ["mage_armor", "magic_missile", "shield", "detect_magic", "burning_hands", "sleep"]
+    },
+    "equipment_preference": "arcane_focus"
+  },
+  "versatile_fighter": {
+    "name": "Versatile Fighter",
+    "description": "High Elf fighter with archery focus",
+    "race": "high_elf",
+    "class": "fighter",
+    "abilities": {
+      "strength": 12,
+      "dexterity": 15,
+      "constitution": 14,
+      "intelligence": 13,
+      "wisdom": 10,
+      "charisma": 8
+    },
+    "skill_choices": ["acrobatics", "perception"],
+    "equipment_preference": "ranged"
+  },
+  "cunning_rogue": {
+    "name": "Cunning Rogue",
+    "description": "Human rogue with balanced skills",
+    "race": "human",
+    "class": "rogue",
+    "abilities": {
+      "strength": 10,
+      "dexterity": 15,
+      "constitution": 12,
+      "intelligence": 14,
+      "wisdom": 13,
+      "charisma": 8
+    },
+    "skill_choices": ["investigation", "perception", "stealth", "sleight_of_hand"],
+    "expertise_choices": ["investigation", "stealth"],
+    "equipment_preference": "finesse"
+  }
+}

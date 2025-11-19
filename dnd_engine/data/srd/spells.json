@@ -283,6 +283,47 @@
     "classes": ["wizard", "sorcerer"],
     "source": "D&D 5E SRD (CC BY 4.0)"
   },
+  "mage_armor": {
+    "id": "mage_armor",
+    "name": "Mage Armor",
+    "level": 1,
+    "school": "abjuration",
+    "casting_time": "1 action",
+    "range_ft": -1,
+    "components": {
+      "verbal": true,
+      "somatic": true,
+      "material": true,
+      "material_description": "a piece of cured leather"
+    },
+    "duration": "Timed",
+    "duration_value": "8 hours",
+    "concentration": false,
+    "ritual": false,
+    "description": "You touch a willing creature who isn't wearing armor, and a protective magical force surrounds it until the spell ends. The target's base AC becomes 13 + its Dexterity modifier. The spell ends if the target dons armor or if you dismiss the spell as an action.",
+    "classes": ["wizard", "sorcerer"],
+    "source": "D&D 5E SRD (CC BY 4.0)"
+  },
+  "identify": {
+    "id": "identify",
+    "name": "Identify",
+    "level": 1,
+    "school": "divination",
+    "casting_time": "1 minute",
+    "range_ft": -1,
+    "components": {
+      "verbal": true,
+      "somatic": true,
+      "material": true,
+      "material_description": "a pearl worth at least 100 gp and an owl feather"
+    },
+    "duration": "Instantaneous",
+    "concentration": false,
+    "ritual": true,
+    "description": "You choose one object that you must touch throughout the casting of the spell. If it is a magic item or some other magic-imbued object, you learn its properties and how to use them, whether it requires attunement to use, and how many charges it has, if any. You learn whether any spells are affecting the item and what they are. If the item was created by a spell, you learn which spell created it.",
+    "classes": ["wizard"],
+    "source": "D&D 5E SRD (CC BY 4.0)"
+  },
   "scorching_ray": {
     "id": "scorching_ray",
     "name": "Scorching Ray",
