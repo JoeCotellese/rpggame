@@ -32,6 +32,32 @@ class Party:
         """
         return [char for char in self.characters if char.is_alive]
 
+    def get_targetable_members(self) -> List[Character]:
+        """
+        Get all party members that can be targeted with items/abilities.
+
+        This includes:
+        - Living members (HP > 0)
+        - Unconscious members (0 HP but < 3 death save failures)
+
+        Excludes:
+        - Dead members (3 death save failures)
+
+        Returns:
+            List of characters that can be targeted for healing/buffs/etc.
+        """
+        targetable = []
+        for char in self.characters:
+            # Use is_dead if available (supports death saves)
+            if hasattr(char, 'is_dead'):
+                if not char.is_dead:
+                    targetable.append(char)
+            else:
+                # Fallback to is_alive for creatures without death saves
+                if char.is_alive:
+                    targetable.append(char)
+        return targetable
+
     def is_wiped(self) -> bool:
         """
         Check if the entire party is dead (game over condition).

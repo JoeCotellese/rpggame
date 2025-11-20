@@ -336,7 +336,9 @@ class CLI:
             "north": "north", "n": "north",
             "south": "south", "s": "south",
             "east": "east", "e": "east",
-            "west": "west", "w": "west"
+            "west": "west", "w": "west",
+            "up": "up", "u": "up",
+            "down": "down", "d": "down"
         }
 
         if command.startswith("move ") or command.startswith("go ") or command.startswith("m ") or command.startswith("g "):
@@ -622,6 +624,11 @@ class CLI:
                 print_status_message("No exits available from this room.", "warning")
             return
 
+        # Check if exit is locked before attempting move
+        if self.game_state.is_exit_locked(direction):
+            self.handle_unlock(direction)
+            return
+
         # Move without checking for enemies yet
         success = self.game_state.move(direction, check_for_enemies=False)
         if success:
@@ -641,6 +648,175 @@ class CLI:
                     print_error(f"You cannot go {direction} from here. Available exits: {', '.join(exits)}")
                 else:
                     print_error("No exits available from this room.")
+
+    def handle_unlock(self, direction: str) -> None:
+        """Handle unlocking a locked door."""
+        # Get unlock methods
+        unlock_methods = self.game_state.get_unlock_methods(direction)
+
+        if not unlock_methods:
+            print_error(f"The door to the {direction} is locked, but you cannot find a way to open it.")
+            return
+
+        # Check for item-based auto-unlock first
+        for idx, method in enumerate(unlock_methods):
+            if "requires_item" in method:
+                item_id = method["requires_item"]
+                # Check if party has the item
+                has_item = any(char.inventory.has_item(item_id) for char in self.game_state.party.characters)
+                if has_item:
+                    print_status_message(f"The door to the {direction} is locked, but you have {item_id}!", "success")
+                    # Auto-unlock with item
+                    result = self.game_state.attempt_unlock(direction, idx, self.game_state.party.characters[0])
+                    if result["success"]:
+                        print_status_message(f"You unlock the door with the {item_id}!", "success")
+                        # Now move through the unlocked door
+                        self.handle_move(direction)
+                    return
+
+        # Display locked door message
+        print_status_message(f"The door to the {direction} is locked.", "warning")
+        console.print()
+
+        # Build unlock methods content
+        methods_content = []
+        for idx, method in enumerate(unlock_methods):
+            desc = method.get("description", "unknown method")
+            if "skill" in method:
+                skill = method["skill"]
+                dc = method["dc"]
+                tool_req = ""
+                if "tool_proficiency" in method:
+                    tool_req = f" + {method['tool_proficiency'].replace('_', ' ').title()}"
+                methods_content.append(f"  {idx + 1}. {desc.capitalize()} ({skill}{tool_req} DC {dc})")
+            elif "requires_item" in method:
+                methods_content.append(f"  {idx + 1}. {desc.capitalize()} (requires {method['requires_item']})")
+
+        # Display unlock methods in box
+        print_section("Available unlock methods:", "\n".join(methods_content))
+        console.print()
+
+        # Prompt for method selection
+        try:
+            method_input = input("Choose a method (number) or 'cancel': ").strip().lower()
+            if method_input == "cancel":
+                return
+
+            method_index = int(method_input) - 1
+            if method_index < 0 or method_index >= len(unlock_methods):
+                print_error("Invalid method number.")
+                return
+
+        except ValueError:
+            print_error("Invalid input. Enter a number or 'cancel'.")
+            return
+
+        method = unlock_methods[method_index]
+
+        # For skill-based methods, prompt for character selection
+        if "skill" in method:
+            character = self._prompt_character_for_unlock(method)
+            if not character:
+                return  # User cancelled
+
+            # Attempt unlock
+            result = self.game_state.attempt_unlock(direction, method_index, character)
+
+            # Display result
+            if result["success"]:
+                check_result = result.get("skill_check_result", {})
+                roll = check_result.get("roll", 0)
+                modifier = check_result.get("modifier", 0)
+                total = check_result.get("total", 0)
+                dc = method.get("dc", 0)
+
+                print_mechanics_panel(
+                    f"{character.name} attempts to {method['description']}\n"
+                    f"d20: {roll} + {modifier} = {total} vs DC {dc}"
+                )
+                print_status_message(f"Success! {character.name} unlocks the door.", "success")
+                console.print()
+
+                # Now move through the unlocked door
+                self.handle_move(direction)
+            else:
+                check_result = result.get("skill_check_result", {})
+                if check_result:
+                    roll = check_result.get("roll", 0)
+                    modifier = check_result.get("modifier", 0)
+                    total = check_result.get("total", 0)
+                    dc = method.get("dc", 0)
+
+                    print_mechanics_panel(
+                        f"{character.name} attempts to {method['description']}\n"
+                        f"d20: {roll} + {modifier} = {total} vs DC {dc}"
+                    )
+                print_error(f"Failed! The door remains locked. You can try again.")
+
+    def _prompt_character_for_unlock(self, method: dict) -> Optional[Character]:
+        """
+        Prompt player to select which character attempts the unlock.
+
+        Args:
+            method: The unlock method being used
+
+        Returns:
+            Selected Character or None if cancelled
+        """
+        skill = method.get("skill", "")
+        dc = method.get("dc", 0)
+        tool_proficiency = method.get("tool_proficiency")
+
+        # Load skills data
+        skills_data = self.game_state.data_loader.load_skills()
+
+        # Build header
+        header = f"Choose a character to {method['description']} ({skill}"
+        if tool_proficiency:
+            header += f" + {tool_proficiency.replace('_', ' ').title()}"
+        header += f" DC {dc}):"
+
+        # Build character list content
+        living_chars = [c for c in self.game_state.party.characters if c.is_alive]
+        char_list_content = []
+        for idx, char in enumerate(living_chars, 1):
+            # Get skill modifier
+            skill_mod = char.get_skill_modifier(skill, skills_data)
+
+            # Check tool proficiency
+            tool_prof_str = ""
+            if tool_proficiency:
+                has_prof = hasattr(char, 'tool_proficiencies') and tool_proficiency in char.tool_proficiencies
+                if has_prof:
+                    # Tool proficiency adds proficiency bonus
+                    tool_bonus = char.proficiency_bonus if hasattr(char, 'proficiency_bonus') else 2
+                    tool_prof_str = f", {tool_proficiency.replace('_', ' ').title()} +{tool_bonus}"
+                else:
+                    tool_prof_str = f" (no {tool_proficiency.replace('_', ' ').title()})"
+
+            char_list_content.append(f"  {idx}. {char.name} - {skill.upper()} +{skill_mod}{tool_prof_str}")
+
+        # Display in box
+        console.print()
+        print_section(header, "\n".join(char_list_content))
+        console.print()
+
+        # Prompt for selection
+        try:
+            char_input = input("Enter number or 'cancel': ").strip().lower()
+            if char_input == "cancel":
+                return None
+
+            char_index = int(char_input) - 1
+            if char_index < 0 or char_index >= len(living_chars):
+                print_error("Invalid character number.")
+                return None
+
+            return living_chars[char_index]
+
+        except ValueError:
+            print_error("Invalid input. Enter a number or 'cancel'.")
+            return None
 
     def handle_search(self) -> None:
         """Handle search command."""
@@ -1357,11 +1533,15 @@ class CLI:
         if result["natural_20"]:
             print_status_message(f"Natural 20! {character.name} regains 1 HP and consciousness!", "success")
         elif result["natural_1"]:
-            print_error(f"Natural 1! Two failures recorded. Failures: {result['failures']}/3")
+            # Natural 1 counts as 2 failures
+            failures_display = min(result['failures'], 3)  # Cap display at 3
+            print_status_message(f"Natural 1! Two failures recorded. Failures: {failures_display}/3", "warning")
         elif result["success"]:
             print_status_message(f"Success! (rolled {result['roll']}) Successes: {result['successes']}/3", "info")
         else:
-            print_error(f"Failure (rolled {result['roll']}) Failures: {result['failures']}/3")
+            # Regular failure
+            failures_display = min(result['failures'], 3)  # Cap display at 3
+            print_status_message(f"Failure (rolled {result['roll']}) Failures: {failures_display}/3", "warning")
 
         # Check outcomes
         if result["conscious"]:
@@ -1858,18 +2038,22 @@ class CLI:
         """
         import questionary
 
-        living_members = self.game_state.party.get_living_members()
-        if not living_members:
-            print_error("No living party members to target!")
+        # Get targetable members from game engine (includes living + unconscious)
+        targetable_members = self.game_state.party.get_targetable_members()
+
+        if not targetable_members:
+            print_error("No party members can be targeted!")
             return None
 
         # Build choices for questionary
         choices = []
-        for character in living_members:
+        for character in targetable_members:
             hp_pct = character.current_hp / character.max_hp if character.max_hp > 0 else 0
 
             # Use text-based indicators since questionary doesn't support rich formatting
-            if hp_pct > 0.5:
+            if character.is_unconscious:
+                hp_indicator = "💀 UNCONSCIOUS"
+            elif hp_pct > 0.5:
                 hp_indicator = "●●●"
             elif hp_pct > 0.25:
                 hp_indicator = "●●○"
@@ -3121,6 +3305,9 @@ class CLI:
         self.display_banner()
         self.display_room()
         self.display_player_status()
+
+        # Start the game (GameState handles checking starting room for enemies)
+        self.game_state.start()
 
         print_status_message("Type 'help' for available commands", "info")
 

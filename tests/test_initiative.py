@@ -190,6 +190,56 @@ class TestInitiativeTracker:
         # Index should be adjusted down
         assert self.tracker.current_turn_index == 1
 
+    def test_remove_combatant_resets_new_current_turn_state(self):
+        """Test that removing a combatant resets turn state when shifting to new current combatant
+
+        This tests the bug fix where:
+        1. First combatant uses their action
+        2. Turns advance to last combatant in initiative
+        3. Last combatant is removed (wraps index to 0)
+        4. First combatant should have their turn state reset
+        """
+        # Setup: Add three combatants
+        self.tracker.add_combatant(self.fighter)
+        self.tracker.add_combatant(self.goblin)
+        self.tracker.add_combatant(self.wizard)
+
+        # Identify the combatants by their position
+        first_creature = self.tracker.combatants[0].creature
+        last_creature = self.tracker.combatants[2].creature
+
+        # Turn 1: First combatant uses their action
+        assert self.tracker.current_turn_index == 0
+        turn_state = self.tracker.get_current_turn_state()
+        from dnd_engine.systems.action_economy import ActionType
+        turn_state.consume_action(ActionType.ACTION)
+        assert not turn_state.action_available
+
+        # Advance to turn 2 (middle combatant)
+        self.tracker.next_turn()
+        assert self.tracker.current_turn_index == 1
+
+        # Advance to turn 3 (last combatant)
+        self.tracker.next_turn()
+        assert self.tracker.current_turn_index == 2
+
+        # Remove the last combatant while it's their turn
+        # This triggers the wrap-around to index 0
+        self.tracker.remove_combatant(last_creature)
+
+        # Should wrap to index 0
+        assert self.tracker.current_turn_index == 0
+        current = self.tracker.get_current_combatant()
+        assert current.creature == first_creature
+
+        # CRITICAL: First creature's turn state should be reset
+        # This is the bug fix - without it, they'd still have no action
+        turn_state = self.tracker.get_current_turn_state()
+        assert turn_state is not None
+        assert turn_state.action_available, "Turn state should be reset when wrapping back to this combatant"
+        assert turn_state.bonus_action_available
+        assert not turn_state.free_object_interaction_used
+
     def test_is_combat_over_no_combatants(self):
         """Test that combat is over when no combatants"""
         assert self.tracker.is_combat_over() is True

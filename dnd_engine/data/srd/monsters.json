@@ -228,5 +228,112 @@
         "damage_type": "piercing"
       }
     ]
+  },
+  "skeleton": {
+    "name": "Skeleton",
+    "source": "D&D 5E SRD (CC BY 4.0)",
+    "size": "medium",
+    "type": "undead",
+    "alignment": "lawful evil",
+    "ac": 13,
+    "ac_source": "armor scraps",
+    "hp": "2d8+4",
+    "hp_average": 13,
+    "speed": 30,
+    "abilities": {
+      "str": 10,
+      "dex": 14,
+      "con": 15,
+      "int": 6,
+      "wis": 8,
+      "cha": 5
+    },
+    "skills": {},
+    "damage_vulnerabilities": ["bludgeoning"],
+    "damage_immunities": ["poison"],
+    "condition_immunities": ["exhaustion", "poisoned"],
+    "senses": "darkvision 60 ft., passive Perception 9",
+    "languages": ["understands all languages it knew in life but can't speak"],
+    "cr": "1/4",
+    "xp": 50,
+    "loot": {
+      "copper": 8,
+      "silver": 12
+    },
+    "traits": [],
+    "actions": [
+      {
+        "name": "Shortsword",
+        "type": "melee-weapon-attack",
+        "attack_bonus": 4,
+        "reach": "5 ft.",
+        "damage": "1d6+2",
+        "damage_average": 5,
+        "damage_type": "piercing"
+      },
+      {
+        "name": "Shortbow",
+        "type": "ranged-weapon-attack",
+        "attack_bonus": 4,
+        "range": "80/320 ft.",
+        "damage": "1d6+2",
+        "damage_average": 5,
+        "damage_type": "piercing"
+      }
+    ]
+  },
+  "ghoul": {
+    "name": "Ghoul",
+    "source": "D&D 5E SRD (CC BY 4.0) / The Unquiet Dead (Adventures Await Studios, OGL)",
+    "size": "medium",
+    "type": "undead",
+    "alignment": "chaotic evil",
+    "ac": 12,
+    "ac_source": "natural armor",
+    "hp": "5d8",
+    "hp_average": 22,
+    "speed": 30,
+    "abilities": {
+      "str": 13,
+      "dex": 15,
+      "con": 10,
+      "int": 7,
+      "wis": 10,
+      "cha": 6
+    },
+    "skills": {},
+    "damage_immunities": ["poison"],
+    "condition_immunities": ["charmed", "exhaustion", "poisoned"],
+    "senses": "darkvision 60 ft., passive Perception 10",
+    "languages": ["Common"],
+    "cr": "1",
+    "xp": 200,
+    "loot": {
+      "silver": 15,
+      "copper": 25
+    },
+    "traits": [],
+    "actions": [
+      {
+        "name": "Bite",
+        "type": "melee-weapon-attack",
+        "attack_bonus": 2,
+        "reach": "5 ft.",
+        "damage": "2d6+2",
+        "damage_average": 9,
+        "damage_type": "piercing"
+      },
+      {
+        "name": "Claws",
+        "type": "melee-weapon-attack",
+        "attack_bonus": 4,
+        "reach": "5 ft.",
+        "damage": "2d4+2",
+        "damage_average": 7,
+        "damage_type": "slashing",
+        "special": "If the target is a creature other than an undead, it must succeed on a DC 10 Constitution saving throw or be paralyzed for 1 minute. The target can repeat the saving throw at the end of each of its turns, ending the effect on itself on a success.",
+        "notes": "Paralysis condition not yet fully implemented in combat system - will need saving throw mechanics"
+      }
+    ]
   }
 }

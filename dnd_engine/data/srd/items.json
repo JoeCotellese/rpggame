@@ -163,6 +163,22 @@
       "damage_type": "piercing",
       "properties": ["finesse"],
       "value": 25
+    },
+    "longsword_plus_1": {
+      "name": "Longsword +1",
+      "source": "The Unquiet Dead (Adventures Await Studios, OGL)",
+      "type": "weapon",
+      "weapon_type": "martial",
+      "category": "melee",
+      "damage": "1d8",
+      "damage_type": "slashing",
+      "properties": ["versatile", "magic"],
+      "versatile_damage": "1d10",
+      "attack_bonus": 1,
+      "damage_bonus": 1,
+      "rarity": "uncommon",
+      "value": 150,
+      "description": "You have a +1 bonus to attack and damage rolls made with this magic weapon. This weapon was found in the coffin of Davos the cleric, and still carries a faint divine aura."
     }
   },
   "armor": {
@@ -455,6 +471,20 @@
       "range": 5,
       "description": "A spell scroll bears the words of a single spell, written in a mystical cipher. If the spell is on your class's spell list, you can use an action to read the scroll and cast its spell. This scroll contains cure wounds.",
       "value": 50
+    },
+    "gorgus_journal": {
+      "name": "Cultist's Journal",
+      "source": "The Unquiet Dead (Adventures Await Studios, OGL)",
+      "type": "consumable",
+      "rarity": "common",
+      "effect_type": "information",
+      "action_required": "free",
+      "target_type": "self",
+      "range": 0,
+      "quest_item": true,
+      "description": "A leather-bound journal recovered from the corpse of a cultist in Davos's tomb. The pages are filled with frantic scrawlings in Common. Reading it reveals: The cultist's name was Gorgus. He was a member of the Cult of Durgon, an ancient devil-worshipping sect. The cult is working to bring their master back from the dead. They needed the skull of the cleric Davos to complete their resurrection ritual. Tucked in the back is a crude map showing a route to the cult's hideout - a basement beneath an abandoned warehouse in the city. The symbol of the Cult of Durgon (a horned skull wreathed in flames) is drawn repeatedly in the margins.",
+      "value": 0,
+      "notes": "This is a quest item that should unlock the 'Cult Hideout' dungeon location. Multi-dungeon campaign progression not yet implemented."
     }
   }
 }

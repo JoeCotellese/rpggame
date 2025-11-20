@@ -1,0 +1,174 @@
+{
+  "name": "The Unquiet Dead: Davos Family Crypt",
+  "description": "The skeletons of the Davos family ancestors have begun to rise from their ancient crypt. Strange figures were seen skulking about in the dark. The local noble is offering 50 gold pieces to investigate and put the dead back to rest. But something darker lurks within these halls - a cult plot that threatens far more than just a family's legacy.",
+  "start_room": "graveyard_entrance",
+  "level_range": "1-2",
+  "estimated_playtime": "45-60 minutes",
+  "focus": "combat, investigation",
+  "notes": "First part of a three-part campaign. Completing this dungeon should reveal clues leading to the Cult Hideout location. Some features from the original module cannot yet be implemented: locked doors (room 6), skill checks (Perception DC 16, Medicine DC 12), ghoul enemy (using goblin_boss as placeholder), and story items (journal treated as lootable text).",
+  "rooms": {
+    "graveyard_entrance": {
+      "name": "Overgrown Graveyard",
+      "description": "A rusted iron gate opens into a small graveyard. Ancient headstones lean at odd angles, covered in moss and ivy. At the center stands a stone mausoleum bearing the name 'DAVOS' in weathered letters. The heavy door hangs ajar, revealing darkness within. As you approach, you hear a rattling sound - bones shifting against stone. Two skeletal figures rise from the ground, their empty eye sockets fixing on you as they reach for rusted weapons.",
+      "exits": {
+        "down": "hall_of_the_dead"
+      },
+      "enemies": [
+        "skeleton",
+        "skeleton"
+      ],
+      "items": [
+        {
+          "type": "currency",
+          "gold": 0,
+          "silver": 13,
+          "copper": 0
+        }
+      ],
+      "searched": false,
+      "searchable": true
+    },
+    "hall_of_the_dead": {
+      "name": "Hall of the Dead",
+      "description": "Dusty stone stairs descend into a large burial chamber. The walls are lined with plaques and sealed coffins bearing the names of deceased Davos family members - generations of the dead laid to rest in this silent hall. Cobwebs hang thick in the corners, though recent disturbance has cleared a path through them. Footprints in the dust lead deeper into the crypt. The air is cold and still, carrying the faint scent of decay.",
+      "exits": {
+        "up": "graveyard_entrance",
+        "north": "antechamber"
+      },
+      "enemies": [],
+      "items": [],
+      "searched": false,
+      "searchable": false,
+      "notes": "Original module: DC 16 Perception check to spot skeletons in eastern_crypt from here. Feature not yet implemented."
+    },
+    "antechamber": {
+      "name": "Antechamber",
+      "description": "This octagonal chamber serves as a central hub for the crypt. Doors of solid oak with iron reinforcements stand in each cardinal direction, their metal hinges spotted with rust. The stone floor here shows heavy foot traffic - many boots have passed through recently. A faint scraping sound echoes from somewhere nearby, like bone dragging across stone.",
+      "exits": {
+        "south": "hall_of_the_dead",
+        "east": "eastern_crypt",
+        "west": {
+          "destination": "family_shrine",
+          "locked": true,
+          "unlock_methods": [
+            {
+              "skill": "sleight_of_hand",
+              "tool_proficiency": "thieves_tools",
+              "dc": 12,
+              "description": "pick the lock",
+              "silent": true
+            },
+            {
+              "skill": "athletics",
+              "dc": 12,
+              "description": "break down the door",
+              "silent": false
+            }
+          ]
+        },
+        "north": "northern_crypt",
+        "down": "southern_crypt"
+      },
+      "enemies": [],
+      "items": [],
+      "searched": false,
+      "searchable": false,
+      "notes": "Original module: Western door (family_shrine) should be LOCKED requiring DC 12 Dexterity (Thieves' Tools) or DC 12 Strength (Athletics) to open. DC 14 Perception check to hear skeletons in northern/southern crypts. Locked door and skill check features not yet implemented."
+    },
+    "eastern_crypt": {
+      "name": "Eastern Crypt",
+      "description": "Two large stone coffins are embedded in the northern and southern walls of this burial chamber. Their lids have been pushed aside, revealing empty interiors lined with rotting cloth. Two skeletal guardians stand motionless in the center of the room, their heads turning toward you with an audible creak. Rusted short swords hang from their bony hands as they begin their lurching advance.",
+      "exits": {
+        "west": "antechamber"
+      },
+      "enemies": [
+        "skeleton",
+        "skeleton"
+      ],
+      "items": [
+        {
+          "type": "currency",
+          "gold": 0,
+          "silver": 14,
+          "copper": 0
+        }
+      ],
+      "searched": false,
+      "searchable": true
+    },
+    "northern_crypt": {
+      "name": "Northern Crypt",
+      "description": "This burial chamber mirrors its southern counterpart - coffins and memorial plaques line the granite walls, bearing dates that span centuries. Three skeletal warriors guard this section of the crypt, their bones yellowed with age. They drag their short swords along the stone floor, creating an eerie scraping rhythm as they close in.",
+      "exits": {
+        "south": "antechamber"
+      },
+      "enemies": [
+        "skeleton",
+        "skeleton",
+        "skeleton"
+      ],
+      "items": [
+        {
+          "type": "currency",
+          "gold": 0,
+          "silver": 16,
+          "copper": 0
+        }
+      ],
+      "searched": false,
+      "searchable": true
+    },
+    "southern_crypt": {
+      "name": "Southern Crypt",
+      "description": "More ancestral remains rest here, their names carved into brass plaques that have long since tarnished. The air grows colder, and a malevolent presence seems to permeate the chamber. Three skeletons shamble among the coffins, their movements more aggressive than those above. They attack without hesitation.",
+      "exits": {
+        "up": "antechamber"
+      },
+      "enemies": [
+        "skeleton",
+        "skeleton",
+        "skeleton"
+      ],
+      "items": [
+        {
+          "type": "currency",
+          "gold": 0,
+          "silver": 15,
+          "copper": 0
+        }
+      ],
+      "searched": false,
+      "searchable": true
+    },
+    "family_shrine": {
+      "name": "Family Shrine - Chamber of Davos",
+      "description": "A small stone dais rises against the western wall. Upon it rests an ornate coffin, clearly more elaborate than the others you've seen. The lid has been violently smashed inward, splinters of ancient wood scattered across the floor. This was the final resting place of Davos the cleric, whose divine power once sealed away a great evil. In the corner, hunched over a fresh corpse, a pale creature with elongated claws tears at dead flesh. It wears the tattered robes of a cultist. As it becomes aware of your presence, it raises its blood-streaked face and hisses, baring needle-sharp teeth.",
+      "exits": {
+        "east": "antechamber"
+      },
+      "enemies": [
+        "ghoul"
+      ],
+      "items": [
+        {
+          "type": "item",
+          "id": "longsword_plus_1"
+        },
+        {
+          "type": "currency",
+          "gold": 8,
+          "silver": 12,
+          "copper": 0
+        },
+        {
+          "type": "item",
+          "id": "gorgus_journal"
+        }
+      ],
+      "searched": false,
+      "searchable": true,
+      "boss_room": true,
+      "notes": "Original module: DC 12 Medicine check reveals skull was cut free recently (skill check not implemented). Journal is a story item that should unlock the Cult Hideout location - currently just a readable item. Original loot: +1 weapon of player's choice - using longsword_plus_1. Ghoul's paralysis attack requires saving throw mechanics not yet fully implemented."
+    }
+  }
+}

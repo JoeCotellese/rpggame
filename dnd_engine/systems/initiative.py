@@ -124,6 +124,12 @@ class InitiativeTracker:
         if self.combatants and self.current_turn_index >= len(self.combatants):
             self.current_turn_index = 0
 
+        # Reset turn state for the new current combatant
+        # This handles the case where removing a combatant shifts us to a different turn
+        current = self.get_current_combatant()
+        if current and current.creature in self.turn_states:
+            self.turn_states[current.creature].reset()
+
     def get_current_combatant(self) -> Optional[InitiativeEntry]:
         """
         Get the combatant whose turn it currently is.

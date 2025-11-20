@@ -18,7 +18,9 @@ REVERSE_DIRECTIONS = {
     "north": "south",
     "south": "north",
     "east": "west",
-    "west": "east"
+    "west": "east",
+    "up": "down",
+    "down": "up"
 }
 
 
@@ -94,6 +96,15 @@ class GameState:
         # Action history for narrative context
         self.action_history: List[str] = []
 
+    def start(self) -> None:
+        """
+        Begin the game.
+
+        Called once after initialization to check the starting room
+        for enemies and perform any other game start logic.
+        """
+        self._check_for_enemies()
+
     def get_current_room(self) -> Dict[str, Any]:
         """
         Get the current room data.
@@ -139,11 +150,21 @@ class GameState:
         if direction not in exits:
             return False  # Invalid direction
 
+        # Check if exit is locked
+        if self.is_exit_locked(direction):
+            return False  # Door is locked
+
         # Track direction for flee mechanic (before moving)
         self.last_entry_direction = direction
 
+        # Get destination (handle both string and dict formats)
+        exit_info = exits[direction]
+        if isinstance(exit_info, str):
+            new_room_id = exit_info
+        else:
+            new_room_id = exit_info["destination"]
+
         # Move to new room
-        new_room_id = exits[direction]
         self.current_room_id = new_room_id
 
         # Emit room enter event
@@ -160,6 +181,191 @@ class GameState:
             self._check_for_enemies()
 
         return True
+
+    def get_exit_info(self, direction: str) -> Optional[Dict[str, Any]]:
+        """
+        Get exit information for a direction.
+
+        Args:
+            direction: Direction to check
+
+        Returns:
+            Exit info dict or None if exit doesn't exist
+        """
+        current_room = self.get_current_room()
+        exits = current_room.get("exits", {})
+
+        if direction not in exits:
+            return None
+
+        exit_data = exits[direction]
+
+        # Handle backwards compatibility (string exits)
+        if isinstance(exit_data, str):
+            return {
+                "destination": exit_data,
+                "locked": False,
+                "unlock_methods": []
+            }
+
+        # Return dict exit as-is
+        return exit_data
+
+    def is_exit_locked(self, direction: str) -> bool:
+        """
+        Check if an exit is locked.
+
+        Args:
+            direction: Direction to check
+
+        Returns:
+            True if exit is locked, False otherwise
+        """
+        exit_info = self.get_exit_info(direction)
+        if not exit_info:
+            return False
+
+        return exit_info.get("locked", False)
+
+    def get_unlock_methods(self, direction: str) -> List[Dict[str, Any]]:
+        """
+        Get available unlock methods for a locked exit.
+
+        Args:
+            direction: Direction to check
+
+        Returns:
+            List of unlock method dicts, empty list if not locked or no methods
+        """
+        exit_info = self.get_exit_info(direction)
+        if not exit_info:
+            return []
+
+        return exit_info.get("unlock_methods", [])
+
+    def attempt_unlock(
+        self,
+        direction: str,
+        method_index: int,
+        character: Character
+    ) -> Dict[str, Any]:
+        """
+        Attempt to unlock a door using a specific method.
+
+        Args:
+            direction: Direction of the locked door
+            method_index: Index of the unlock method to use
+            character: Character attempting the unlock
+
+        Returns:
+            Dict with unlock result:
+            - success: bool - Whether unlock succeeded
+            - method: dict - The unlock method used
+            - skill_check_result: dict - Skill check details (if applicable)
+            - reason: str - Failure reason (if failed)
+        """
+        # Validate exit exists and is locked
+        exit_info = self.get_exit_info(direction)
+        if not exit_info:
+            return {
+                "success": False,
+                "reason": f"No exit in direction '{direction}'"
+            }
+
+        if not exit_info.get("locked", False):
+            return {
+                "success": False,
+                "reason": "Door is not locked"
+            }
+
+        # Get unlock methods
+        unlock_methods = exit_info.get("unlock_methods", [])
+        if method_index < 0 or method_index >= len(unlock_methods):
+            return {
+                "success": False,
+                "reason": "Invalid unlock method"
+            }
+
+        method = unlock_methods[method_index]
+
+        # Handle item-based unlocking
+        if "requires_item" in method:
+            item_id = method["requires_item"]
+            # Check if any party member has the item
+            for char in self.party.characters:
+                if char.inventory.has_item(item_id):
+                    # Unlock the door
+                    exit_info["locked"] = False
+                    # Emit event
+                    self.event_bus.emit(Event(
+                        type=EventType.SKILL_CHECK,
+                        data={
+                            "character": character.name,
+                            "action": f"unlock door with {item_id}",
+                            "success": True,
+                            "automatic": True
+                        }
+                    ))
+                    return {
+                        "success": True,
+                        "method": method,
+                        "automatic": True
+                    }
+
+            return {
+                "success": False,
+                "method": method,
+                "reason": f"Party does not have {item_id}"
+            }
+
+        # Handle skill-based unlocking
+        if "skill" in method:
+            skill = method["skill"]
+            dc = method["dc"]
+
+            # Check tool proficiency requirement
+            tool_proficiency = method.get("tool_proficiency")
+            if tool_proficiency:
+                # Load proficiencies data to check if character has the tool
+                if not hasattr(character, 'tool_proficiencies') or tool_proficiency not in character.tool_proficiencies:
+                    # Character lacks required tool proficiency - they can still attempt but without proficiency bonus
+                    pass
+
+            # Load skills data
+            skills_data = self.data_loader.load_skills()
+
+            # Make skill check
+            check_result = character.make_skill_check(skill, dc, skills_data)
+
+            # Emit skill check event
+            self.event_bus.emit(Event(
+                type=EventType.SKILL_CHECK,
+                data={
+                    "character": character.name,
+                    "skill": skill,
+                    "dc": dc,
+                    "roll": check_result["roll"],
+                    "modifier": check_result["modifier"],
+                    "total": check_result["total"],
+                    "success": check_result["success"],
+                    "action": method["description"]
+                }
+            ))
+
+            if check_result["success"]:
+                # Unlock the door
+                exit_info["locked"] = False
+
+            return {
+                "success": check_result["success"],
+                "method": method,
+                "skill_check_result": check_result
+            }
+
+        return {
+            "success": False,
+            "reason": "Invalid unlock method configuration"
+        }
 
     def search_room(self) -> List[Dict[str, Any]]:
         """

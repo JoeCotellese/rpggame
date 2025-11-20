@@ -174,6 +174,64 @@ class TestGetLivingMembers:
         assert len(living) == 0
 
 
+class TestGetTargetableMembers:
+    """Test getting targetable party members (living + unconscious, excluding dead)."""
+
+    def test_all_alive(self, party_with_characters):
+        """Test getting targetable members when all are alive."""
+        targetable = party_with_characters.get_targetable_members()
+        assert len(targetable) == 3
+
+    def test_includes_unconscious_members(self, party_with_characters, fighter1):
+        """Test that unconscious members (0 HP, < 3 death save failures) are targetable."""
+        # Reduce to 0 HP but don't set death save failures (unconscious, not dead)
+        fighter1.take_damage(fighter1.max_hp)
+        assert fighter1.current_hp == 0
+        assert fighter1.is_unconscious
+        assert not fighter1.is_dead
+
+        targetable = party_with_characters.get_targetable_members()
+        assert len(targetable) == 3
+        assert fighter1 in targetable
+
+    def test_excludes_dead_members(self, party_with_characters, fighter1, fighter2):
+        """Test that truly dead members (3 death save failures) are not targetable."""
+        # Fighter1: Unconscious (0 HP, no death save failures)
+        fighter1.take_damage(fighter1.max_hp)
+        assert fighter1.is_unconscious
+
+        # Fighter2: Truly dead (0 HP, 3 death save failures)
+        fighter2.take_damage(fighter2.max_hp)
+        fighter2.death_save_failures = 3
+        assert fighter2.is_dead
+
+        targetable = party_with_characters.get_targetable_members()
+        assert len(targetable) == 2
+        assert fighter1 in targetable  # Unconscious is targetable
+        assert fighter2 not in targetable  # Dead is not targetable
+
+    def test_mixed_states(self, party_with_characters, fighter1, fighter2, fighter3):
+        """Test targetable members with mixed character states."""
+        # Fighter1: Alive and healthy
+        # Fighter2: Unconscious (0 HP, 1 death save failure)
+        fighter2.take_damage(fighter2.max_hp)
+        fighter2.death_save_failures = 1
+        # Fighter3: Dead (0 HP, 3 death save failures)
+        fighter3.take_damage(fighter3.max_hp)
+        fighter3.death_save_failures = 3
+
+        targetable = party_with_characters.get_targetable_members()
+        assert len(targetable) == 2
+        assert fighter1 in targetable  # Alive
+        assert fighter2 in targetable  # Unconscious
+        assert fighter3 not in targetable  # Dead
+
+    def test_empty_party_targetable_members(self, empty_party):
+        """Test getting targetable members from an empty party."""
+        targetable = empty_party.get_targetable_members()
+        assert len(targetable) == 0
+
+
 class TestIsWiped:
     """Test checking if the party is wiped out."""
 

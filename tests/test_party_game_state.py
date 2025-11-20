@@ -404,3 +404,106 @@ class TestPartyCombatVictory:
         assert not game_state_with_party.in_combat
         assert not game_state_with_party.party.is_wiped()
         assert len(game_state_with_party.party.get_living_members()) == 2
+
+
+class TestGameStateStart:
+    """Test GameState.start() method."""
+
+    def test_start_checks_for_enemies_in_starting_room(self, party_of_four, monkeypatch):
+        """Test that start() checks for enemies in the starting room."""
+        event_bus = EventBus()
+        data_loader = DataLoader()
+
+        # Mock dungeon with enemies in starting room
+        mock_dungeon = {
+            "name": "Test Dungeon",
+            "start_room": "entrance",
+            "rooms": {
+                "entrance": {
+                    "name": "Entrance",
+                    "description": "You enter a dungeon.",
+                    "exits": {"north": "hallway"},
+                    "enemies": ["goblin"],
+                    "items": [],
+                    "searchable": False
+                },
+                "hallway": {
+                    "name": "Hallway",
+                    "description": "A long hallway.",
+                    "exits": {"south": "entrance"},
+                    "enemies": [],
+                    "items": [],
+                    "searchable": False
+                }
+            }
+        }
+
+        # Mock the load_dungeon method
+        monkeypatch.setattr(data_loader, 'load_dungeon', lambda name: mock_dungeon)
+
+        # Create game state
+        game_state = GameState(
+            party=party_of_four,
+            dungeon_name="test_dungeon",
+            event_bus=event_bus,
+            data_loader=data_loader
+        )
+
+        # Initially should not be in combat
+        assert not game_state.in_combat
+        assert len(game_state.active_enemies) == 0
+
+        # Call start()
+        game_state.start()
+
+        # Should now be in combat with enemies from starting room
+        assert game_state.in_combat
+        assert len(game_state.active_enemies) > 0
+        assert game_state.initiative_tracker is not None
+
+    def test_start_no_enemies_in_starting_room(self, party_of_four, monkeypatch):
+        """Test that start() works when starting room has no enemies."""
+        event_bus = EventBus()
+        data_loader = DataLoader()
+
+        # Mock dungeon with NO enemies in starting room
+        mock_dungeon = {
+            "name": "Test Dungeon",
+            "start_room": "safe_room",
+            "rooms": {
+                "safe_room": {
+                    "name": "Safe Room",
+                    "description": "A peaceful room.",
+                    "exits": {"north": "danger_room"},
+                    "enemies": [],  # No enemies here
+                    "items": [],
+                    "searchable": False
+                },
+                "danger_room": {
+                    "name": "Danger Room",
+                    "description": "A dangerous room.",
+                    "exits": {"south": "safe_room"},
+                    "enemies": ["goblin"],  # Enemies here but not in starting room
+                    "items": [],
+                    "searchable": False
+                }
+            }
+        }
+
+        # Mock the load_dungeon method
+        monkeypatch.setattr(data_loader, 'load_dungeon', lambda name: mock_dungeon)
+
+        # Create game state
+        game_state = GameState(
+            party=party_of_four,
+            dungeon_name="test_dungeon",
+            event_bus=event_bus,
+            data_loader=data_loader
+        )
+
+        # Call start()
+        game_state.start()
+
+        # Should NOT be in combat
+        assert not game_state.in_combat
+        assert len(game_state.active_enemies) == 0
