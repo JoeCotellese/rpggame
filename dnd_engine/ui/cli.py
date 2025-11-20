@@ -976,8 +976,21 @@ class CLI:
             return
 
         # Perform examination
-        self.game_state.examine_exit(direction, character)
-        # Results are displayed by the event handler
+        result = self.game_state.examine_exit(direction, character)
+
+        # Handle locked door case (no skill check involved)
+        if result.get("is_locked"):
+            print_status_message(f"\n🔒 {result.get('description', 'The door is locked.')}", "info")
+
+            unlock_methods = result.get("unlock_methods", [])
+            if unlock_methods:
+                print_status_message("\n   Available unlock methods:", "info")
+                for method in unlock_methods:
+                    method_desc = method.get("description", "unknown method")
+                    print_status_message(f"      • {method_desc.capitalize()}", "info")
+            return
+
+        # Results are displayed by the event handler for skill-based examinations
 
     def _prompt_simple_character_selection(self, prompt: str = "Select character:") -> Optional[Character]:
         """

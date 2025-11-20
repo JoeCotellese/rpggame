@@ -109,7 +109,26 @@ def mock_dungeon_with_skill_checks():
                             }
                         ]
                     },
-                    "south": "hallway"  # Simple exit for testing
+                    "south": "hallway",  # Simple exit for testing
+                    "west": {
+                        "destination": "locked_chamber",
+                        "locked": True,
+                        "unlock_methods": [
+                            {
+                                "skill": "sleight_of_hand",
+                                "tool_proficiency": "thieves_tools",
+                                "dc": 12,
+                                "description": "pick the lock",
+                                "silent": True
+                            },
+                            {
+                                "skill": "athletics",
+                                "dc": 12,
+                                "description": "break down the door",
+                                "silent": False
+                            }
+                        ]
+                    }
                 },
                 "enemies": [],
                 "items": [],
@@ -135,6 +154,14 @@ def mock_dungeon_with_skill_checks():
                 "name": "Southern Hallway",
                 "description": "A long hallway",
                 "exits": {"north": "entrance"},
+                "enemies": [],
+                "items": [],
+                "searchable": False
+            },
+            "locked_chamber": {
+                "name": "Locked Chamber",
+                "description": "A secure chamber",
+                "exits": {"east": "entrance"},
                 "enemies": [],
                 "items": [],
                 "searchable": False
@@ -498,6 +525,58 @@ class TestExaminableExits:
 
         assert result["success"] is False
         assert "error" in result
+
+    def test_locked_door_is_examinable(
+        self,
+        high_perception_character,
+        data_loader,
+        event_bus
+    ):
+        """Locked doors should be examinable even without examine_checks."""
+        party = Party([high_perception_character])
+        game_state = GameState(
+            party=party,
+            dungeon_name="test_crypt",
+            event_bus=event_bus,
+            data_loader=data_loader
+        )
+
+        game_state.start()
+
+        exits = game_state.get_examinable_exits()
+        assert "west" in exits  # Locked door
+        assert "north" in exits  # Door with examine_checks
+        assert "south" not in exits  # Simple exit
+
+    def test_examine_locked_door(
+        self,
+        high_perception_character,
+        data_loader,
+        event_bus
+    ):
+        """Examining a locked door should return lock information."""
+        party = Party([high_perception_character])
+        game_state = GameState(
+            party=party,
+            dungeon_name="test_crypt",
+            event_bus=event_bus,
+            data_loader=data_loader
+        )
+
+        game_state.start()
+
+        result = game_state.examine_exit("west", high_perception_character)
+
+        assert result["success"] is True
+        assert result["direction"] == "west"
+        assert result["is_locked"] is True
+        assert "locked" in result["description"].lower()
+        assert len(result["unlock_methods"]) == 2
+
+        # Check unlock methods are present
+        method_descriptions = [m.get("description", "") for m in result["unlock_methods"]]
+        assert "pick the lock" in method_descriptions
+        assert "break down the door" in method_descriptions
 
 
 class TestEnhancedSearch:

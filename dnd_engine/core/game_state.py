@@ -389,16 +389,19 @@ class GameState:
         Get list of exits that can be examined in the current room.
 
         Returns:
-            List of direction names that have examine_checks
+            List of direction names that have examine_checks or are locked
         """
         room = self.get_current_room()
         exits = room.get("exits", {})
         examinable = []
 
         for direction, exit_data in exits.items():
-            # Check if exit has examine_checks (dict format only)
-            if isinstance(exit_data, dict) and exit_data.get("examine_checks"):
-                examinable.append(direction)
+            # Include exits with examine_checks or locked doors
+            if isinstance(exit_data, dict):
+                has_examine_checks = exit_data.get("examine_checks")
+                is_locked = exit_data.get("locked", False)
+                if has_examine_checks or is_locked:
+                    examinable.append(direction)
 
         return examinable
 
@@ -428,13 +431,26 @@ class GameState:
                 "error": f"No exit in direction '{direction}'"
             }
 
-        # Check if exit is examinable
+        # Check if exit has examine_checks
         examine_checks = exit_info.get("examine_checks", [])
+
+        # If no examine_checks but door is locked, provide locked door info
         if not examine_checks:
-            return {
-                "success": False,
-                "error": f"Exit '{direction}' cannot be examined"
-            }
+            is_locked = exit_info.get("locked", False)
+            if is_locked:
+                unlock_methods = exit_info.get("unlock_methods", [])
+                return {
+                    "success": True,
+                    "direction": direction,
+                    "is_locked": True,
+                    "unlock_methods": unlock_methods,
+                    "description": f"The door to the {direction} is locked. You notice a sturdy lock mechanism."
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": f"Exit '{direction}' cannot be examined"
+                }
 
         # Load skills data
         skills_data = self.data_loader.load_skills()
