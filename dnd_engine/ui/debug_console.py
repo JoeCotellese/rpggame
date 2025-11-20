@@ -73,6 +73,30 @@ class DebugConsole:
             "gold": self.cmd_gold,
             "clearinventory": self.cmd_clear_inventory,
 
+            # HIGH - Condition Testing
+            "addcondition": self.cmd_add_condition,
+            "removecondition": self.cmd_remove_condition,
+            "clearconditions": self.cmd_clear_conditions,
+            "listconditions": self.cmd_list_conditions,
+
+            # HIGH - Resource Management
+            "setslots": self.cmd_set_slots,
+            "restoreslots": self.cmd_restore_slots,
+            "setresource": self.cmd_set_resource,
+            "shortrest": self.cmd_short_rest,
+            "longrest": self.cmd_long_rest,
+
+            # HIGH - Navigation & Exploration
+            "teleport": self.cmd_teleport,
+            "listrooms": self.cmd_list_rooms,
+            "unlock": self.cmd_unlock,
+            "reveal": self.cmd_reveal,
+
+            # HIGH - Spellcasting
+            "learnspell": self.cmd_learn_spell,
+            "forgetspell": self.cmd_forget_spell,
+            "listspells": self.cmd_list_spells,
+
             # System
             "help": self.cmd_help,
             "reset": self.cmd_reset,
@@ -662,6 +686,462 @@ class DebugConsole:
         print_status_message(f"Cleared inventory for {character.name}", "success")
 
     # =====================================================================
+    # HIGH PRIORITY - Condition Testing
+    # =====================================================================
+
+    def cmd_add_condition(self, args: List[str]) -> None:
+        """Add a condition to a character."""
+        if len(args) < 2:
+            print_error("Usage: /addcondition <character_name> <condition>")
+            print_message("Use /listconditions to see available conditions")
+            return
+
+        condition = args[-1].lower()
+        char_name = " ".join(args[:-1])
+
+        character = self._find_character(char_name)
+        if not character:
+            return
+
+        # Add condition
+        character.add_condition(condition)
+
+        print_status_message(
+            f"Added condition '{condition}' to {character.name}",
+            "success"
+        )
+
+    def cmd_remove_condition(self, args: List[str]) -> None:
+        """Remove a condition from a character."""
+        if len(args) < 2:
+            print_error("Usage: /removecondition <character_name> <condition>")
+            return
+
+        condition = args[-1].lower()
+        char_name = " ".join(args[:-1])
+
+        character = self._find_character(char_name)
+        if not character:
+            return
+
+        if not character.has_condition(condition):
+            print_error(f"{character.name} does not have condition '{condition}'")
+            return
+
+        # Remove condition
+        character.remove_condition(condition)
+
+        print_status_message(
+            f"Removed condition '{condition}' from {character.name}",
+            "success"
+        )
+
+    def cmd_clear_conditions(self, args: List[str]) -> None:
+        """Clear all conditions from a character."""
+        if not args:
+            print_error("Usage: /clearconditions <character_name>")
+            return
+
+        char_name = " ".join(args)
+        character = self._find_character(char_name)
+
+        if not character:
+            return
+
+        # Clear all conditions
+        condition_count = len(character.conditions)
+        character.conditions.clear()
+
+        print_status_message(
+            f"Cleared {condition_count} condition(s) from {character.name}",
+            "success"
+        )
+
+    def cmd_list_conditions(self, args: List[str]) -> None:
+        """List all available conditions."""
+        from dnd_engine.systems.condition_manager import ConditionManager
+
+        condition_mgr = ConditionManager(
+            dice_roller=self.game_state.dice_roller,
+            event_bus=self.game_state.event_bus
+        )
+
+        print_section("Available Conditions")
+
+        for condition_id, data in condition_mgr.conditions_data.items():
+            name = data.get("name", condition_id)
+            desc = data.get("description", "No description")
+            print_message(f"• {condition_id}: {name}")
+            print_message(f"  {desc}")
+
+    # =====================================================================
+    # HIGH PRIORITY - Resource Management
+    # =====================================================================
+
+    def cmd_set_slots(self, args: List[str]) -> None:
+        """Set spell slot count for a character."""
+        if len(args) < 3:
+            print_error("Usage: /setslots <character_name> <level> <count>")
+            print_message("Example: /setslots Gandalf 3 5")
+            return
+
+        try:
+            count = int(args[-1])
+            level = int(args[-2])
+            char_name = " ".join(args[:-2])
+        except ValueError:
+            print_error("Level and count must be numbers")
+            return
+
+        if level < 1 or level > 9:
+            print_error("Spell level must be between 1 and 9")
+            return
+
+        character = self._find_character(char_name)
+        if not character:
+            return
+
+        # Set spell slot
+        slot_key = f"level_{level}"
+        if slot_key not in character.spell_slots:
+            print_error(f"{character.name} doesn't have {level}th level spell slots")
+            return
+
+        character.spell_slots[slot_key]["current"] = count
+        character.spell_slots[slot_key]["max"] = max(count, character.spell_slots[slot_key]["max"])
+
+        print_status_message(
+            f"Set {character.name}'s level {level} spell slots to {count}",
+            "success"
+        )
+
+    def cmd_restore_slots(self, args: List[str]) -> None:
+        """Restore all spell slots for a character."""
+        if not args:
+            print_error("Usage: /restoreslots <character_name>")
+            return
+
+        char_name = " ".join(args)
+        character = self._find_character(char_name)
+
+        if not character:
+            return
+
+        # Restore all spell slots
+        for slot_key in character.spell_slots:
+            character.spell_slots[slot_key]["current"] = character.spell_slots[slot_key]["max"]
+
+        print_status_message(
+            f"Restored all spell slots for {character.name}",
+            "success"
+        )
+
+    def cmd_set_resource(self, args: List[str]) -> None:
+        """Set a resource pool value."""
+        if len(args) < 3:
+            print_error("Usage: /setresource <character_name> <resource_name> <amount>")
+            print_message("Example: /setresource Fighter 'Action Surge' 2")
+            return
+
+        try:
+            amount = int(args[-1])
+            resource_name = args[-2]
+            char_name = " ".join(args[:-2])
+        except ValueError:
+            print_error("Amount must be a number")
+            return
+
+        character = self._find_character(char_name)
+        if not character:
+            return
+
+        # Find resource pool (case-insensitive)
+        pool = None
+        for pool_name, pool_obj in character.resource_pools.items():
+            if pool_name.lower() == resource_name.lower():
+                pool = pool_obj
+                resource_name = pool_name  # Use actual name
+                break
+
+        if not pool:
+            print_error(f"Resource pool '{resource_name}' not found on {character.name}")
+            print_message(f"Available: {', '.join(character.resource_pools.keys())}")
+            return
+
+        # Set resource
+        pool.current = min(amount, pool.maximum)
+
+        print_status_message(
+            f"Set {character.name}'s {resource_name} to {pool.current}/{pool.maximum}",
+            "success"
+        )
+
+    def cmd_short_rest(self, args: List[str]) -> None:
+        """Instantly take a short rest (all party members)."""
+        print_section("Short Rest")
+
+        for character in self.game_state.party.characters:
+            character.take_short_rest()
+
+        print_status_message("Party took a short rest", "success")
+
+    def cmd_long_rest(self, args: List[str]) -> None:
+        """Instantly take a long rest (all party members)."""
+        print_section("Long Rest")
+
+        for character in self.game_state.party.characters:
+            character.take_long_rest()
+
+        print_status_message("Party took a long rest and is fully restored!", "success")
+
+    # =====================================================================
+    # HIGH PRIORITY - Navigation & Exploration
+    # =====================================================================
+
+    def cmd_teleport(self, args: List[str]) -> None:
+        """Teleport to a specific room."""
+        if not args:
+            print_error("Usage: /teleport <room_id>")
+            print_message("Use /listrooms to see available room IDs")
+            return
+
+        room_id = "_".join(args)
+
+        # Check if room exists
+        if room_id not in self.game_state.dungeon["rooms"]:
+            print_error(f"Room not found: {room_id}")
+            print_message("Use /listrooms to see available rooms")
+            return
+
+        # Teleport
+        old_room = self.game_state.current_room_id
+        self.game_state.current_room_id = room_id
+
+        # End combat if in combat
+        if self.game_state.in_combat:
+            self.game_state.end_combat()
+
+        print_status_message(
+            f"Teleported from {old_room} to {room_id}",
+            "success"
+        )
+
+    def cmd_list_rooms(self, args: List[str]) -> None:
+        """List all rooms in the current dungeon."""
+        print_section(f"Rooms in {self.game_state.dungeon_name}")
+
+        table = Table(show_header=True, header_style="bold magenta")
+        table.add_column("Room ID", style="cyan")
+        table.add_column("Name", style="white")
+        table.add_column("Type", style="yellow")
+
+        for room_id, room_data in self.game_state.dungeon["rooms"].items():
+            room_name = room_data.get("name", "Unknown")
+            room_type = room_data.get("type", "unknown")
+
+            # Mark current room
+            if room_id == self.game_state.current_room_id:
+                room_id = f"→ {room_id}"
+
+            table.add_row(room_id, room_name, room_type)
+
+        console.print(table)
+
+    def cmd_unlock(self, args: List[str]) -> None:
+        """Unlock a door in the current room."""
+        if not args:
+            print_error("Usage: /unlock <direction>")
+            print_message("Example: /unlock north")
+            return
+
+        direction = args[0].lower()
+        current_room = self.game_state.get_current_room()
+        exits = current_room.get("exits", {})
+
+        if direction not in exits:
+            print_error(f"No exit to the {direction}")
+            return
+
+        exit_data = exits[direction]
+
+        # Check if door is locked
+        if not exit_data.get("locked", False):
+            print_message(f"The {direction} exit is already unlocked")
+            return
+
+        # Unlock it
+        exit_data["locked"] = False
+
+        print_status_message(f"Unlocked the {direction} exit", "success")
+
+    def cmd_reveal(self, args: List[str]) -> None:
+        """Reveal all hidden features in the current room."""
+        current_room = self.game_state.get_current_room()
+
+        # Mark room as searched
+        current_room["searched"] = True
+
+        # Show hidden features
+        hidden_features = current_room.get("hidden_features", [])
+
+        if not hidden_features:
+            print_message("No hidden features in this room")
+            return
+
+        print_section("Revealed Hidden Features")
+
+        for feature in hidden_features:
+            desc = feature.get("description", "Unknown feature")
+            print_message(f"• {desc}")
+
+        print_status_message("Revealed all hidden features", "success")
+
+    # =====================================================================
+    # HIGH PRIORITY - Spellcasting
+    # =====================================================================
+
+    def cmd_learn_spell(self, args: List[str]) -> None:
+        """Add a spell to a character's known spells."""
+        if len(args) < 2:
+            print_error("Usage: /learnspell <character_name> <spell_name>")
+            return
+
+        # Find character and spell
+        spell_name = args[-1]
+        char_name = " ".join(args[:-1])
+
+        character = self._find_character(char_name)
+        if not character:
+            return
+
+        # Load spells
+        spells = self.game_state.data_loader.load_spells()
+
+        # Find spell (case-insensitive, handle underscores)
+        spell_id = None
+        for key in spells.keys():
+            if key.lower().replace("_", " ") == spell_name.lower().replace("_", " "):
+                spell_id = key
+                break
+
+        if not spell_id:
+            print_error(f"Spell not found: {spell_name}")
+            return
+
+        # Add to known spells if not already known
+        if spell_id in character.known_spells:
+            print_message(f"{character.name} already knows {spell_id}")
+            return
+
+        character.known_spells.append(spell_id)
+
+        # Also add to prepared spells if character prepares spells
+        if spell_id not in character.prepared_spells:
+            character.prepared_spells.append(spell_id)
+
+        print_status_message(
+            f"{character.name} learned {spell_id}",
+            "success"
+        )
+
+    def cmd_forget_spell(self, args: List[str]) -> None:
+        """Remove a spell from a character's known spells."""
+        if len(args) < 2:
+            print_error("Usage: /forgetspell <character_name> <spell_name>")
+            return
+
+        spell_name = args[-1]
+        char_name = " ".join(args[:-1])
+
+        character = self._find_character(char_name)
+        if not character:
+            return
+
+        # Find spell in known spells (case-insensitive)
+        spell_id = None
+        for known_spell in character.known_spells:
+            if known_spell.lower().replace("_", " ") == spell_name.lower().replace("_", " "):
+                spell_id = known_spell
+                break
+
+        if not spell_id:
+            print_error(f"{character.name} doesn't know {spell_name}")
+            return
+
+        # Remove from known and prepared
+        character.known_spells.remove(spell_id)
+        if spell_id in character.prepared_spells:
+            character.prepared_spells.remove(spell_id)
+
+        print_status_message(
+            f"{character.name} forgot {spell_id}",
+            "success"
+        )
+
+    def cmd_list_spells(self, args: List[str]) -> None:
+        """List available spells, optionally filtered by class and level."""
+        spells = self.game_state.data_loader.load_spells()
+
+        # Parse filters
+        class_filter = None
+        level_filter = None
+
+        if len(args) >= 1:
+            class_filter = args[0].lower()
+        if len(args) >= 2:
+            try:
+                level_filter = int(args[1])
+            except ValueError:
+                print_error("Level must be a number (0-9)")
+                return
+
+        print_section("Available Spells")
+
+        table = Table(show_header=True, header_style="bold magenta")
+        table.add_column("Spell", style="cyan", no_wrap=True)
+        table.add_column("Level", style="white", justify="center")
+        table.add_column("School", style="yellow")
+        table.add_column("Classes", style="green")
+
+        count = 0
+        for spell_id, spell_data in sorted(spells.items()):
+            level = spell_data.get("level", 0)
+            school = spell_data.get("school", "unknown")
+            classes = spell_data.get("classes", [])
+
+            # Apply filters
+            if class_filter and class_filter not in [c.lower() for c in classes]:
+                continue
+            if level_filter is not None and level != level_filter:
+                continue
+
+            # Format level
+            level_str = "Cantrip" if level == 0 else str(level)
+
+            # Format classes
+            classes_str = ", ".join(classes[:3])  # Show first 3 classes
+            if len(classes) > 3:
+                classes_str += "..."
+
+            table.add_row(spell_id, level_str, school, classes_str)
+            count += 1
+
+            # Limit output
+            if count >= 50:
+                print_message(f"\n... and {len(spells) - 50} more spells")
+                break
+
+        console.print(table)
+
+        if class_filter or level_filter is not None:
+            filters = []
+            if class_filter:
+                filters.append(f"class={class_filter}")
+            if level_filter is not None:
+                filters.append(f"level={level_filter}")
+            print_message(f"\nFiltered by: {', '.join(filters)}")
+
+    # =====================================================================
     # System Commands
     # =====================================================================
 
@@ -701,7 +1181,7 @@ class DebugConsole:
         print_section("Debug Console Commands")
 
         table = Table(show_header=True, header_style="bold magenta")
-        table.add_column("Category", style="cyan")
+        table.add_column("Category", style="cyan", no_wrap=True)
         table.add_column("Commands", style="white")
 
         # CRITICAL - Character
@@ -720,6 +1200,30 @@ class DebugConsole:
         table.add_row(
             "Inventory",
             "/give, /remove, /gold, /clearinventory"
+        )
+
+        # HIGH - Conditions
+        table.add_row(
+            "Conditions",
+            "/addcondition, /removecondition\n/clearconditions, /listconditions"
+        )
+
+        # HIGH - Resources
+        table.add_row(
+            "Resources",
+            "/setslots, /restoreslots, /setresource\n/shortrest, /longrest"
+        )
+
+        # HIGH - Navigation
+        table.add_row(
+            "Navigation",
+            "/teleport, /listrooms, /unlock, /reveal"
+        )
+
+        # HIGH - Spells
+        table.add_row(
+            "Spells",
+            "/learnspell, /forgetspell, /listspells"
         )
 
         # System
