@@ -1029,7 +1029,8 @@ class CLI:
         # Get spellcasting ability from class data
         classes_data = self.game_state.data_loader.load_classes()
         class_data = classes_data.get(caster.character_class.value, {})
-        spellcasting_ability = class_data.get("spellcasting_ability")
+        spellcasting = class_data.get("spellcasting", {})
+        spellcasting_ability = spellcasting.get("ability")
 
         if not spellcasting_ability:
             print_error(f"{caster.character_class.value.title()} cannot cast spells!")
