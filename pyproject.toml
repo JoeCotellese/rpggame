@@ -30,7 +30,7 @@ dev = [
 ]
 
 [project.scripts]
-dnd-game = "dnd_engine.main:main"
+dnd-game = "dnd_engine.main_v2:main"
 
 [build-system]
 requires = ["hatchling"]
