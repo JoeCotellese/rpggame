@@ -11,6 +11,7 @@ from dnd_engine.core.dice import format_dice_with_modifier
 from dnd_engine.utils.events import EventBus, Event, EventType
 from dnd_engine.systems.inventory import EquipmentSlot
 from dnd_engine.systems.condition_manager import ConditionManager
+from dnd_engine.ui.debug_console import DebugConsole
 from rich.status import Status
 from dnd_engine.ui.rich_ui import (
     console,
@@ -74,6 +75,9 @@ class CLI:
 
         # Combat history tracking for narrative context
         self.combat_history: List[str] = []
+
+        # Debug console for testing and development
+        self.debug_console = DebugConsole(game_state)
 
         # Subscribe to game events for display and auto-save
         self.game_state.event_bus.subscribe(EventType.COMBAT_START, self._on_combat_start)
@@ -321,6 +325,11 @@ class CLI:
         Args:
             command: The player's command
         """
+        # Check for debug commands first (start with /)
+        if self.debug_console.is_debug_command(command):
+            self.debug_console.execute(command)
+            return
+
         if command in ["quit", "exit", "q"]:
             self.running = False
             print_status_message("Thanks for playing!", "success")
@@ -452,9 +461,8 @@ class CLI:
             self.handle_quick_save()
             return
 
-        if command in ["reset"] or command.startswith("reset "):
-            self.handle_reset(command)
-            return
+        # Note: 'reset' command moved to debug console as '/reset'
+        # Use '/reset' in debug mode (DEBUG_MODE=true) for reset functionality
 
         if command in ["rest"]:
             self.handle_rest()
@@ -494,6 +502,11 @@ class CLI:
         Args:
             command: The player's command
         """
+        # Check for debug commands first (start with /)
+        if self.debug_console.is_debug_command(command):
+            self.debug_console.execute(command)
+            return
+
         if command in ["help", "h", "?"]:
             self.display_help_combat()
             return
@@ -3472,12 +3485,18 @@ class CLI:
             ("rest", "Take a short or long rest"),
             ("save", "Create a named save"),
             ("qs / quicksave", "Quick-save"),
-            ("reset", "Reset campaign with same party"),
-            ("reset --dungeon <name>", "Switch to a different dungeon"),
             ("help or ?", "Show this help message"),
             ("quit / exit", "Exit the game"),
         ]
         print_help_section("Exploration Commands", commands)
+
+        # Show debug mode hint if enabled
+        if self.debug_console.enabled:
+            debug_commands = [
+                ("/help", "Show debug console commands (character, combat, inventory manipulation)"),
+                ("/reset", "Reset campaign with same party"),
+            ]
+            print_help_section("Debug Commands", debug_commands)
 
     def display_help_combat(self) -> None:
         """Display help for combat commands."""
