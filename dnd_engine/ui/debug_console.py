@@ -450,13 +450,13 @@ class DebugConsole:
             monsters = self.game_state.data_loader.load_monsters()
 
             # Find monster (case-insensitive)
-            monster_data = None
+            monster_id = None
             for key, data in monsters.items():
                 if key.lower() == monster_name.lower():
-                    monster_data = data
+                    monster_id = key
                     break
 
-            if not monster_data:
+            if not monster_id:
                 print_error(f"Monster not found: {monster_name}")
                 print_message("Use /listmonsters to see available monsters")
                 return
@@ -464,7 +464,7 @@ class DebugConsole:
             # Create creatures
             spawned = []
             for i in range(count):
-                creature = Creature.from_monster_data(monster_data, self.game_state.dice_roller)
+                creature = self.game_state.data_loader.create_monster(monster_id)
                 spawned.append(creature)
 
             # If not in combat, start combat
