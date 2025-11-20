@@ -233,6 +233,80 @@ class TestInitiativeTracker:
         current = self.tracker.get_current_combatant()
         assert current is None
 
+    def test_multiple_enemies_same_name_turn_states(self):
+        """Test that multiple enemies with the same name have independent turn states (Issue #89)"""
+        # Create two goblins with identical names
+        goblin1 = Creature(
+            name="Goblin",
+            max_hp=7,
+            ac=15,
+            abilities=Abilities(8, 14, 10, 10, 8, 8)
+        )
+        goblin2 = Creature(
+            name="Goblin",
+            max_hp=7,
+            ac=15,
+            abilities=Abilities(8, 14, 10, 10, 8, 8)
+        )
+
+        # Add both goblins to initiative
+        self.tracker.add_combatant(goblin1)
+        self.tracker.add_combatant(goblin2)
+        self.tracker.add_combatant(self.fighter)
+
+        # Verify both goblins have their own turn states
+        assert len(self.tracker.turn_states) == 3
+        assert goblin1 in self.tracker.turn_states
+        assert goblin2 in self.tracker.turn_states
+        assert self.fighter in self.tracker.turn_states
+
+        # Verify the turn states are different objects
+        assert self.tracker.turn_states[goblin1] is not self.tracker.turn_states[goblin2]
+
+        # Verify actions can be tracked independently
+        goblin1_state = self.tracker.turn_states[goblin1]
+        goblin2_state = self.tracker.turn_states[goblin2]
+
+        # Use an action on goblin1's turn state
+        from dnd_engine.systems.action_economy import ActionType
+        success = goblin1_state.consume_action(ActionType.ACTION)
+        assert success is True
+        assert goblin1_state.action_available is False
+        assert goblin2_state.action_available is True  # goblin2's state should be unaffected
+
+    def test_multiple_enemies_same_name_remove_one(self):
+        """Test that removing one enemy with duplicate name doesn't affect the other"""
+        # Create two goblins with identical names
+        goblin1 = Creature(
+            name="Goblin",
+            max_hp=7,
+            ac=15,
+            abilities=Abilities(8, 14, 10, 10, 8, 8)
+        )
+        goblin2 = Creature(
+            name="Goblin",
+            max_hp=7,
+            ac=15,
+            abilities=Abilities(8, 14, 10, 10, 8, 8)
+        )
+
+        # Add both goblins
+        self.tracker.add_combatant(goblin1)
+        self.tracker.add_combatant(goblin2)
+
+        assert len(self.tracker.combatants) == 2
+        assert len(self.tracker.turn_states) == 2
+
+        # Remove goblin1
+        self.tracker.remove_combatant(goblin1)
+
+        # goblin2 should still be in combat with its own turn state
+        assert len(self.tracker.combatants) == 1
+        assert len(self.tracker.turn_states) == 1
+        assert goblin1 not in self.tracker.turn_states
+        assert goblin2 in self.tracker.turn_states
+        assert self.tracker.combatants[0].creature == goblin2
+
 
 class TestInitiativeEntry:
     """Test the InitiativeEntry class"""

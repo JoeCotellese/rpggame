@@ -185,13 +185,13 @@ class TestInitiativeTrackerActions:
         tracker.add_combatant(hero)
         tracker.add_combatant(enemy)
 
-        # Verify turn states exist
-        assert "Hero" in tracker.turn_states
-        assert "Goblin" in tracker.turn_states
+        # Verify turn states exist (keys are creature instances, not names)
+        assert hero in tracker.turn_states
+        assert enemy in tracker.turn_states
 
         # Verify they are TurnState instances
-        assert isinstance(tracker.turn_states["Hero"], TurnState)
-        assert isinstance(tracker.turn_states["Goblin"], TurnState)
+        assert isinstance(tracker.turn_states[hero], TurnState)
+        assert isinstance(tracker.turn_states[enemy], TurnState)
 
     def test_get_current_turn_state(self):
         """Test getting the turn state for the current combatant"""
@@ -256,13 +256,13 @@ class TestInitiativeTrackerActions:
         tracker.add_combatant(hero)
         tracker.add_combatant(enemy)
 
-        assert "Goblin" in tracker.turn_states
+        assert enemy in tracker.turn_states
 
         # Remove goblin
         tracker.remove_combatant(enemy)
 
         # Turn state should be removed
-        assert "Goblin" not in tracker.turn_states
+        assert enemy not in tracker.turn_states
 
     def test_turn_state_persists_across_rounds(self):
         """Test that turn state is properly managed across multiple rounds"""

@@ -57,7 +57,7 @@ class InitiativeTracker:
         self.current_turn_index: int = 0
         self.round_number: int = 0
         self.total_turns_taken: int = 0  # Track total number of turns for narrative context
-        self.turn_states: Dict[str, TurnState] = {}  # Maps creature name to their turn state
+        self.turn_states: Dict[Creature, TurnState] = {}  # Maps creature instance to their turn state
 
     def add_combatant(self, creature: Creature) -> InitiativeEntry:
         """
@@ -79,7 +79,7 @@ class InitiativeTracker:
         self.combatants.append(entry)
 
         # Initialize turn state for this combatant
-        self.turn_states[creature.name] = TurnState()
+        self.turn_states[creature] = TurnState()
 
         # Sort by initiative (highest first), ties broken by DEX modifier
         self._sort_initiative()
@@ -117,8 +117,8 @@ class InitiativeTracker:
         removed_entry = self.combatants.pop(remove_index)
 
         # Remove their turn state
-        if removed_entry.creature.name in self.turn_states:
-            del self.turn_states[removed_entry.creature.name]
+        if removed_entry.creature in self.turn_states:
+            del self.turn_states[removed_entry.creature]
 
         # Ensure index is valid
         if self.combatants and self.current_turn_index >= len(self.combatants):
@@ -147,7 +147,7 @@ class InitiativeTracker:
         if current is None:
             return None
 
-        return self.turn_states.get(current.creature.name)
+        return self.turn_states.get(current.creature)
 
     def next_turn(self) -> None:
         """
@@ -170,8 +170,8 @@ class InitiativeTracker:
 
         # Reset actions for the new turn
         current = self.get_current_combatant()
-        if current and current.creature.name in self.turn_states:
-            self.turn_states[current.creature.name].reset()
+        if current and current.creature in self.turn_states:
+            self.turn_states[current.creature].reset()
 
     def get_all_combatants(self) -> List[InitiativeEntry]:
         """
