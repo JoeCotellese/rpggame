@@ -408,15 +408,15 @@ The project has successfully completed its MVP and several post-MVP features inc
 
 ## Documentation
 
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Current system architecture and implementation details ⭐ **START HERE**
-- **[ROADMAP.md](ROADMAP.md)** - Development roadmap and planned features
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Current system architecture and implementation details ⭐ **START HERE**
+- **[docs/ROADMAP.md](docs/ROADMAP.md)** - Development roadmap and planned features
 - **[CLAUDE.md](CLAUDE.md)** - Development standards and coding practices
+- **[docs/DEBUG_LLM.md](docs/DEBUG_LLM.md)** - Debug LLM provider documentation
 - **[docs/SPEC_HISTORICAL_2025-11.md](docs/SPEC_HISTORICAL_2025-11.md)** - Original design specification (historical reference)
-- **[MVP.md](MVP.md)** - Original MVP architecture overview (historical reference)
 
 ## Future Enhancements
 
-See [ROADMAP.md](ROADMAP.md) for the complete development roadmap. Upcoming features include:
+See [docs/ROADMAP.md](docs/ROADMAP.md) for the complete development roadmap. Upcoming features include:
 
 - Spellcasting system with spell slots and targeting
 - Character leveling and XP progression
