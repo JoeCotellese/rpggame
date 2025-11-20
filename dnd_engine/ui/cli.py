@@ -85,6 +85,7 @@ class CLI:
         self.game_state.event_bus.subscribe(EventType.LEVEL_UP, self._on_level_up)
         self.game_state.event_bus.subscribe(EventType.FEATURE_GRANTED, self._on_feature_granted)
         self.game_state.event_bus.subscribe(EventType.LONG_REST, self._on_long_rest)
+        self.game_state.event_bus.subscribe(EventType.SKILL_CHECK, self._on_skill_check)
 
     def display_banner(self) -> None:
         """Display the game banner."""
@@ -361,6 +362,15 @@ class CLI:
 
         if command in ["search"]:
             self.handle_search()
+            return
+
+        if command == "examine" or command.startswith("examine ") or command in ["x", "ex"] or command.startswith("x ") or command.startswith("ex "):
+            parts = command.split()[1:]
+            if not parts:
+                self.handle_examine_menu()
+            else:
+                object_id = "_".join(parts)
+                self.handle_examine(object_id)
             return
 
         if command in ["inventory", "i", "inv"] or command.startswith("inventory ") or command.startswith("inv "):
@@ -819,27 +829,196 @@ class CLI:
             return None
 
     def handle_search(self) -> None:
-        """Handle search command."""
-        items = self.game_state.search_room()
-        if items:
-            print_status_message("You search the room and find:", "success")
-            for item in items:
-                if item["type"] == "gold":
-                    print_status_message(f"{item['amount']} gold pieces", "info")
-                elif item["type"] == "currency":
-                    currency_parts = []
-                    if item.get("gold", 0) > 0:
-                        currency_parts.append(f"{item['gold']} gold")
-                    if item.get("silver", 0) > 0:
-                        currency_parts.append(f"{item['silver']} silver")
-                    if item.get("copper", 0) > 0:
-                        currency_parts.append(f"{item['copper']} copper")
-                    print_status_message(", ".join(currency_parts), "info")
+        """Handle search command with optional skill checks."""
+        room = self.game_state.get_current_room()
+
+        # Check if room has search_checks
+        has_skill_check = bool(room.get("search_checks"))
+
+        if has_skill_check:
+            # Skill check required - select character
+            character = self._prompt_simple_character_selection("Who will search the room?")
+            if not character:
+                return
+
+            result = self.game_state.search_room(character)
+
+            if result.get("already_searched"):
+                if result["items"]:
+                    print_status_message("You already searched this room. Items found:", "info")
+                    self._display_items_list(result["items"])
                 else:
-                    print_status_message(f"{item.get('id', 'an item')}", "info")
-            print_status_message("\nUse 'take <item>' to pick up items", "info")
+                    print_status_message("You already searched this room and found nothing.", "info")
+                return
+
+            # Success/failure and detailed results are displayed by event handler
+            if result["success"]:
+                if result["items"]:
+                    print_status_message("\nItems found:", "success")
+                    self._display_items_list(result["items"])
+                else:
+                    print_status_message("The search was successful but nothing was found.", "info")
+            else:
+                # Failure message already shown by event handler
+                pass
         else:
-            print_status_message("You find nothing of interest", "info")
+            # No skill check - automatic success (backward compatibility)
+            result = self.game_state.search_room()
+
+            if result.get("already_searched"):
+                if result["items"]:
+                    print_status_message("You already searched this room. Items found:", "info")
+                    self._display_items_list(result["items"])
+                else:
+                    print_status_message("You already searched this room and found nothing.", "info")
+                return
+
+            if result["success"] and result["items"]:
+                print_status_message("You search the room and find:", "success")
+                self._display_items_list(result["items"])
+            else:
+                print_status_message("You find nothing of interest.", "info")
+
+    def _display_items_list(self, items: list) -> None:
+        """Helper to display a list of items."""
+        for item in items:
+            if item["type"] == "gold":
+                print_status_message(f"  • {item['amount']} gold pieces", "info")
+            elif item["type"] == "currency":
+                currency_parts = []
+                if item.get("gold", 0) > 0:
+                    currency_parts.append(f"{item['gold']} gold")
+                if item.get("silver", 0) > 0:
+                    currency_parts.append(f"{item['silver']} silver")
+                if item.get("copper", 0) > 0:
+                    currency_parts.append(f"{item['copper']} copper")
+                print_status_message(f"  • {', '.join(currency_parts)}", "info")
+            else:
+                print_status_message(f"  • {item.get('id', 'an item')}", "info")
+        print_status_message("\nUse 'take <item>' to pick up items", "info")
+
+    def handle_examine_menu(self) -> None:
+        """Show what can be examined in the current room."""
+        objects = self.game_state.get_examinable_objects()
+        exits = self.game_state.get_examinable_exits()
+
+        if not objects and not exits:
+            print_status_message("There's nothing to examine here.", "info")
+            return
+
+        print_status_message("You can examine:", "info")
+
+        if objects:
+            print_status_message("\n  Objects:", "header")
+            for obj in objects:
+                print_status_message(f"    • {obj['name']} - use: examine {obj['id']}", "info")
+
+        if exits:
+            print_status_message("\n  Exits:", "header")
+            for direction in exits:
+                print_status_message(f"    • {direction} door - use: examine {direction}", "info")
+
+    def handle_examine(self, target: str) -> None:
+        """
+        Examine an object or exit.
+
+        Args:
+            target: The object ID or direction to examine
+        """
+        # Check if it's an examinable exit
+        exits = self.game_state.get_examinable_exits()
+        if target in exits:
+            self._examine_exit(target)
+            return
+
+        # Check if it's an examinable object
+        objects = self.game_state.get_examinable_objects()
+        obj = next((o for o in objects if o["id"] == target), None)
+
+        if obj:
+            self._examine_object(target, obj)
+            return
+
+        # Not found
+        print_error(f"Cannot examine '{target}'. Type 'examine' to see what you can examine.")
+
+    def _examine_object(self, object_id: str, obj_data: dict) -> None:
+        """
+        Examine an object with skill check.
+
+        Args:
+            object_id: ID of the object
+            obj_data: Object data dict
+        """
+        # Select character
+        character = self._prompt_simple_character_selection(f"Who will examine the {obj_data['name']}?")
+        if not character:
+            return
+
+        # Perform examination
+        result = self.game_state.examine_object(object_id, character)
+
+        if result.get("already_checked"):
+            print_status_message(f"You already examined the {result['object_name']}.", "info")
+
+        # Results are displayed by the event handler
+
+    def _examine_exit(self, direction: str) -> None:
+        """
+        Examine an exit (listen at door, etc.).
+
+        Args:
+            direction: Direction of the exit
+        """
+        # Select character
+        character = self._prompt_simple_character_selection(f"Who will examine the {direction} exit?")
+        if not character:
+            return
+
+        # Perform examination
+        self.game_state.examine_exit(direction, character)
+        # Results are displayed by the event handler
+
+    def _prompt_simple_character_selection(self, prompt: str = "Select character:") -> Optional[Character]:
+        """
+        Prompt user to select a character from living party members.
+
+        Args:
+            prompt: The prompt message to display
+
+        Returns:
+            Selected Character or None if cancelled
+        """
+        living_members = self.game_state.party.get_living_members()
+
+        if not living_members:
+            print_error("No living party members!")
+            return None
+
+        if len(living_members) == 1:
+            return living_members[0]
+
+        print_status_message(f"\n{prompt}", "info")
+        for i, char in enumerate(living_members, 1):
+            print_status_message(f"  {i}. {char.name}", "info")
+
+        choice = input("\n> ").strip()
+
+        if choice.lower() in ["cancel", "c"]:
+            return None
+
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(living_members):
+                return living_members[idx]
+        except ValueError:
+            # Try to match by name
+            for char in living_members:
+                if char.name.lower() == choice.lower():
+                    return char
+
+        print_error("Invalid selection.")
+        return None
 
     def handle_take(self, item_name: str) -> None:
         """
@@ -3269,6 +3448,7 @@ class CLI:
             ("north/n, south/s, east/e, west/w", "Move in a direction (shorthand)"),
             ("move/go <direction>", "Move in a direction (e.g., 'go north')"),
             ("look or l", "Look around the current room"),
+            ("examine / x [target]", "Examine objects or listen at doors (e.g., 'examine corpse')"),
             ("search", "Search the room for items"),
             ("take/get/pickup <item>", "Pick up an item (e.g., 'take dagger', 'get gold')"),
             ("inventory / i [filter]", "Show inventory. Filter: summary, player name/number, or item type"),
@@ -3517,6 +3697,34 @@ class CLI:
         """Handle long rest event."""
         # Auto-save after long rest
         self._auto_save("long_rest")
+
+    def _on_skill_check(self, event: Event) -> None:
+        """Handle skill check event for display."""
+        data = event.data
+
+        if data.get("passive"):
+            # Passive check (e.g., Passive Perception)
+            if data["success"]:
+                print_status_message(
+                    f"🔍 {data['character']} (Passive Perception {data['total']}): {data['success_text']}",
+                    "success"
+                )
+        else:
+            # Active check
+            result_text = "✓ SUCCESS" if data["success"] else "✗ FAILURE"
+            color = "success" if data["success"] else "error"
+
+            print_status_message(
+                f"🎲 {data['character']} {data['skill'].title()} check (DC {data['dc']}): "
+                f"rolled {data['roll']} + {data['modifier']} = {data['total']} - {result_text}",
+                color
+            )
+
+            # Display result text
+            if data["success"] and data.get("success_text"):
+                print_status_message(f"   → {data['success_text']}", "info")
+            elif not data["success"] and data.get("failure_text"):
+                print_status_message(f"   → {data['failure_text']}", "info")
 
     def _auto_save(self, trigger: str) -> None:
         """
