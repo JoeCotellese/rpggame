@@ -159,13 +159,14 @@ class LLMEnhancer:
 
         room_data = event.data
         cache_key = f"room_{room_data.get('id', 'unknown')}"
+        combat_starting = room_data.get('combat_starting', False)
 
         # Check cache
         if self.cache is not None and cache_key in self.cache:
             enhanced = self.cache[cache_key]
         else:
             # Generate enhancement with timing
-            prompt = build_room_description_prompt(room_data)
+            prompt = build_room_description_prompt(room_data, combat_starting=combat_starting)
             start_time = time.time()
             enhanced = await self.provider.generate(prompt)
             latency_ms = (time.time() - start_time) * 1000
@@ -419,7 +420,8 @@ class LLMEnhancer:
         if self.cache and cache_key in self.cache:
             return self.cache[cache_key]
 
-        prompt = build_room_description_prompt(room_data)
+        combat_starting = room_data.get('combat_starting', False)
+        prompt = build_room_description_prompt(room_data, combat_starting=combat_starting)
 
         async def generate():
             start_time = time.time()

@@ -315,3 +315,96 @@ class TestLLMEnhancer:
         assert mock_provider.last_prompt is not None
         assert "Goblin" in mock_provider.last_prompt
         assert "hostile" in mock_provider.last_prompt
+
+    @pytest.mark.asyncio
+    async def test_enhancer_combat_starting_flag_true(self) -> None:
+        """Test room description with combat_starting=True includes combat initiation narrative."""
+        from dnd_engine.llm.enhancer import LLMEnhancer
+
+        mock_provider = MockLLMProvider(
+            response="The goblins spot you and raise their weapons, charging forward with savage cries!"
+        )
+        event_bus = EventBus()
+        enhancer = LLMEnhancer(mock_provider, event_bus)
+
+        # Test synchronous room description with combat_starting flag
+        room_data = {
+            "id": "throne_room",
+            "name": "Throne Room",
+            "description": "A grand chamber with a bone throne.",
+            "monsters": ["Goblin Boss", "Goblin", "Goblin"],
+            "combat_starting": True  # Flag indicating combat initiation
+        }
+        description = enhancer.get_room_description_sync(room_data, timeout=3.0)
+
+        # Verify enhancement includes combat narrative
+        assert description is not None
+        assert "goblins" in description.lower() or "goblin" in description.lower()
+
+        # Verify the prompt was constructed with combat_starting context
+        assert mock_provider.last_prompt is not None
+        assert "Goblin Boss" in mock_provider.last_prompt
+        assert "hostile" in mock_provider.last_prompt
+        # Should have combat initiation instructions
+        assert "combat begins" in mock_provider.last_prompt.lower() or "battle" in mock_provider.last_prompt.lower()
+
+    @pytest.mark.asyncio
+    async def test_enhancer_combat_starting_flag_false(self) -> None:
+        """Test room description with combat_starting=False uses standard monster presence narrative."""
+        from dnd_engine.llm.enhancer import LLMEnhancer
+
+        mock_provider = MockLLMProvider(
+            response="Two goblins lurk in the shadows, watching warily."
+        )
+        event_bus = EventBus()
+        enhancer = LLMEnhancer(mock_provider, event_bus)
+
+        # Test synchronous room description without combat_starting flag
+        room_data = {
+            "id": "barracks",
+            "name": "Barracks",
+            "description": "A messy chamber with scattered bedrolls.",
+            "monsters": ["Goblin", "Goblin"],
+            "combat_starting": False  # Standard monster presence (no combat start)
+        }
+        description = enhancer.get_room_description_sync(room_data, timeout=3.0)
+
+        # Verify enhancement includes monster presence
+        assert description is not None
+        assert "goblins" in description.lower() or "goblin" in description.lower()
+
+        # Verify the prompt uses standard monster instructions
+        assert mock_provider.last_prompt is not None
+        assert "Goblin" in mock_provider.last_prompt
+        assert "hostile" in mock_provider.last_prompt
+        # Should NOT have combat initiation instructions with False flag
+        assert "combat begins" not in mock_provider.last_prompt.lower()
+
+    @pytest.mark.asyncio
+    async def test_enhancer_combat_starting_no_monsters(self) -> None:
+        """Test room description with combat_starting=True but no monsters behaves normally."""
+        from dnd_engine.llm.enhancer import LLMEnhancer
+
+        mock_provider = MockLLMProvider(
+            response="A quiet, empty chamber."
+        )
+        event_bus = EventBus()
+        enhancer = LLMEnhancer(mock_provider, event_bus)
+
+        # Test synchronous room description with combat_starting but no monsters (edge case)
+        room_data = {
+            "id": "empty_room",
+            "name": "Empty Room",
+            "description": "A quiet chamber with nothing of interest.",
+            "monsters": [],
+            "combat_starting": True  # Flag is True but no monsters present
+        }
+        description = enhancer.get_room_description_sync(room_data, timeout=3.0)
+
+        # Verify enhancement
+        assert description is not None
+
+        # Verify the prompt doesn't have combat instructions (no monsters)
+        assert mock_provider.last_prompt is not None
+        assert "hostile" not in mock_provider.last_prompt
+        assert "combat begins" not in mock_provider.last_prompt.lower()
