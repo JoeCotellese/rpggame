@@ -235,6 +235,136 @@ dnd-game --dungeon dragon_lair
 dnd-game --debug
 ```
 
+## Debug Console
+
+The debug console provides slash commands for rapid game state manipulation during development and QA testing. Debug mode must be enabled via the `DEBUG_MODE` environment variable.
+
+### Enabling Debug Mode
+
+```bash
+# Enable debug console
+export DEBUG_MODE=true
+
+# Run the game
+dnd-game
+
+# Or combine with other flags
+DEBUG_MODE=true dnd-game --no-llm
+```
+
+### Available Commands
+
+The debug console provides 34+ slash commands organized into 7 categories:
+
+#### Character Manipulation
+```bash
+/revive <character>              # Revive dead/unconscious character
+/kill <target>                   # Kill character or monster
+/sethp <character> <amount>      # Set exact HP value
+/damage <character> <amount>     # Deal damage for testing
+/heal <character> <amount>       # Direct healing
+/godmode <character>             # Toggle invulnerability
+/setlevel <character> <level>    # Jump to specific level (1-20)
+/addxp <character> <amount>      # Grant XP without combat
+/setstat <character> <ability> <value>  # Modify STR/DEX/CON/INT/WIS/CHA
+```
+
+#### Combat Testing
+```bash
+/spawn <monster> [count]         # Spawn enemies in current room
+/despawn <target>                # Remove monster from combat
+/nextturn                        # Skip to next turn in initiative
+/endcombat                       # Force end combat encounter
+```
+
+#### Inventory & Currency
+```bash
+/give <item> <quantity>          # Spawn any item from items.json
+/remove <item> <quantity>        # Remove items from inventory
+/gold <amount>                   # Add/remove gold (negative to remove)
+/clearinventory <character>      # Empty inventory (with confirmation)
+```
+
+#### Condition Testing
+```bash
+/addcondition <character> <condition>    # Apply status effects
+/removecondition <character> <condition> # Clear specific condition
+/clearconditions <character>             # Remove all conditions
+/listconditions                          # Show available conditions
+```
+
+#### Resource Management
+```bash
+/setslots <character> <level> <count>    # Set spell slot counts
+/restoreslots <character>                # Restore all spell slots
+/setresource <character> <resource> <amount>  # Modify resource pools
+/shortrest                               # Instant short rest (party)
+/longrest                                # Instant long rest (party)
+```
+
+#### Navigation & Exploration
+```bash
+/teleport <room_id>              # Jump to any room instantly
+/listrooms                       # Display all rooms in dungeon
+/unlock <direction>              # Bypass locked doors
+/reveal                          # Show all hidden features
+```
+
+#### Spellcasting
+```bash
+/learnspell <character> <spell>  # Add spell to known/prepared
+/forgetspell <character> <spell> # Remove spell from character
+/listspells [class] [level]      # Browse spells with filters
+```
+
+#### System
+```bash
+/help                            # Show all debug commands
+/help <command>                  # Show help for specific command
+/reset                           # Reset dungeon, keep party
+```
+
+### Usage Examples
+
+#### Test Death Mechanics
+```bash
+/sethp Gandalf 1
+/damage Gandalf 10
+# Test death saves, stabilize mechanics
+```
+
+#### Test Level Progression
+```bash
+/setlevel Aragorn 5
+/addxp Aragorn 6500
+# Verify level-up grants correct features
+```
+
+#### Demo Boss Fight
+```bash
+/teleport boss_room
+/setlevel party 10
+/longrest
+# Jump straight to showcase
+```
+
+#### Test Spell Slot Management
+```bash
+/setslots Wizard 3 0
+cast Fireball
+# Should fail gracefully
+/restoreslots Wizard
+# Should work now
+```
+
+#### Test Conditions
+```bash
+/addcondition Rogue on_fire
+/listconditions
+# Test turn-start effects
+/removecondition Rogue on_fire
+```
+
 ## Testing
 
 ```bash
