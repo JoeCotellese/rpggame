@@ -31,6 +31,7 @@ class EventType(Enum):
     CHARACTER_DEATH = "character_death"
     SNEAK_ATTACK = "sneak_attack"
     DEATH_SAVE = "death_save"
+    SPELL_SAVE = "spell_save"
     DAMAGE_AT_ZERO_HP = "damage_at_zero_hp"
     MASSIVE_DAMAGE_DEATH = "massive_damage_death"
     CHARACTER_STABILIZED = "character_stabilized"
