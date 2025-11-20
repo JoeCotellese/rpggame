@@ -134,7 +134,7 @@
           "name": "1st Level Spell Slots",
           "description": "You have two 1st-level spell slots to cast your spells of 1st level and higher.",
           "resource": {
-            "pool": "1st level slots",
+            "pool": "spell_slots_level_1",
             "max_uses": 2,
             "recovery": "long_rest"
           }
@@ -154,7 +154,7 @@
           "name": "1st Level Spell Slots",
           "description": "Your spell slots increase to three 1st-level spell slots.",
           "resource": {
-            "pool": "1st level slots",
+            "pool": "spell_slots_level_1",
             "max_uses": 3,
             "recovery": "long_rest"
           }
@@ -165,7 +165,7 @@
           "name": "1st Level Spell Slots",
           "description": "Your spell slots increase to four 1st-level spell slots.",
           "resource": {
-            "pool": "1st level slots",
+            "pool": "spell_slots_level_1",
             "max_uses": 4,
             "recovery": "long_rest"
           }
@@ -174,7 +174,7 @@
           "name": "2nd Level Spell Slots",
           "description": "You gain two 2nd-level spell slots.",
           "resource": {
-            "pool": "2nd level slots",
+            "pool": "spell_slots_level_2",
             "max_uses": 2,
             "recovery": "long_rest"
           }
