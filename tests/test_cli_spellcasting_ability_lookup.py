@@ -18,7 +18,15 @@ class TestCLISpellcastingAbilityLookup:
         """Create a mock game state with data loader"""
         game_state = Mock(spec=GameState)
         game_state.data_loader = Mock(spec=DataLoader)
+        game_state.dice_roller = Mock()
+        game_state.event_bus = Mock()
+        game_state.combat = Mock()
         return game_state
+
+    @pytest.fixture
+    def mock_campaign_manager(self):
+        """Create a mock campaign manager"""
+        return Mock()
 
     @pytest.fixture
     def wizard_character(self):
@@ -79,7 +87,7 @@ class TestCLISpellcastingAbilityLookup:
             }
         }
 
-        cli = CLI(mock_game_state)
+        cli = CLI(mock_game_state, Mock(), "test_campaign")
 
         # Mock the turn state and other dependencies
         mock_turn_state = Mock()
@@ -91,7 +99,7 @@ class TestCLISpellcastingAbilityLookup:
         with patch('builtins.input', side_effect=['1', '1', 'n']):
             with patch('dnd_engine.ui.cli.console') as mock_console:
                 # This should not raise an error about "cannot cast spells"
-                cli._handle_cast_spell(wizard_character, None)
+                cli.handle_cast_spell("magic_missile")
 
         # Verify load_classes was called
         mock_game_state.data_loader.load_classes.assert_called_once()
@@ -103,7 +111,7 @@ class TestCLISpellcastingAbilityLookup:
         # Setup
         mock_game_state.data_loader.load_classes.return_value = classes_data_with_spellcasting
 
-        cli = CLI(mock_game_state)
+        cli = CLI(mock_game_state, Mock(), "test_campaign")
 
         # Mock the turn state
         mock_turn_state = Mock()
@@ -112,7 +120,7 @@ class TestCLISpellcastingAbilityLookup:
 
         # Mock print_error to capture the error message
         with patch('dnd_engine.ui.cli.print_error') as mock_print_error:
-            cli._handle_cast_spell(fighter_character, None)
+            cli.handle_cast_spell("magic_missile")
 
         # Verify error message was printed
         mock_print_error.assert_called_once()
@@ -126,7 +134,7 @@ class TestCLISpellcastingAbilityLookup:
         # Setup - fighter has no spellcasting key
         mock_game_state.data_loader.load_classes.return_value = classes_data_with_spellcasting
 
-        cli = CLI(mock_game_state)
+        cli = CLI(mock_game_state, Mock(), "test_campaign")
 
         # Mock the turn state
         mock_turn_state = Mock()
@@ -135,7 +143,7 @@ class TestCLISpellcastingAbilityLookup:
 
         # Should not crash, should print error instead
         with patch('dnd_engine.ui.cli.print_error') as mock_print_error:
-            cli._handle_cast_spell(fighter_character, None)
+            cli.handle_cast_spell("magic_missile")
 
         # Should have printed an error
         assert mock_print_error.called
@@ -153,7 +161,7 @@ class TestCLISpellcastingAbilityLookup:
         }
         mock_game_state.data_loader.load_classes.return_value = classes_data
 
-        cli = CLI(mock_game_state)
+        cli = CLI(mock_game_state, Mock(), "test_campaign")
 
         # Mock the turn state
         mock_turn_state = Mock()
@@ -162,7 +170,7 @@ class TestCLISpellcastingAbilityLookup:
 
         # Should print error about not being able to cast spells
         with patch('dnd_engine.ui.cli.print_error') as mock_print_error:
-            cli._handle_cast_spell(wizard_character, None)
+            cli.handle_cast_spell("magic_missile")
 
         # Should have printed an error
         assert mock_print_error.called
@@ -190,7 +198,7 @@ class TestCLISpellcastingAbilityLookup:
             }
         }
 
-        cli = CLI(mock_game_state)
+        cli = CLI(mock_game_state, Mock(), "test_campaign")
 
         # Mock the turn state
         mock_turn_state = Mock()
@@ -203,7 +211,7 @@ class TestCLISpellcastingAbilityLookup:
             with patch('dnd_engine.ui.cli.console'):
                 # Should not crash and should not print error
                 with patch('dnd_engine.ui.cli.print_error') as mock_print_error:
-                    cli._handle_cast_spell(wizard_character, None)
+                    cli.handle_cast_spell("magic_missile")
 
                     # Should NOT have printed "cannot cast spells" error
                     if mock_print_error.called:

@@ -52,7 +52,7 @@ def game_state_with_party(party_of_four):
 
     game_state = GameState(
         party=party_of_four,
-        dungeon_name="goblin_warren",
+        dungeon_name="test_dungeon",
         event_bus=event_bus,
         data_loader=data_loader,
         dice_roller=dice_roller

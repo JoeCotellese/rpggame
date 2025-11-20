@@ -60,7 +60,7 @@ class TestResetSystem:
 
         self.game_state = GameState(
             party=self.party,
-            dungeon_name="goblin_warren",
+            dungeon_name="test_dungeon",
             event_bus=self.event_bus,
             data_loader=self.loader,
             dice_roller=self.dice_roller
@@ -185,7 +185,7 @@ class TestResetSystem:
 
         assert len(events_received) == 1
         assert events_received[0].type == EventType.RESET_STARTED
-        assert events_received[0].data["old_dungeon"] == "goblin_warren"
+        assert events_received[0].data["old_dungeon"] == "test_dungeon"
 
     def test_reset_emits_reset_complete_event(self):
         """Test that reset emits RESET_COMPLETE event"""
@@ -199,7 +199,7 @@ class TestResetSystem:
 
         assert len(events_received) == 1
         assert events_received[0].type == EventType.RESET_COMPLETE
-        assert events_received[0].data["dungeon"] == "goblin_warren"
+        assert events_received[0].data["dungeon"] == "test_dungeon"
         assert "current_room" in events_received[0].data
 
     def test_reset_to_different_dungeon(self):

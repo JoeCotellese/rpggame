@@ -61,7 +61,7 @@ def sample_game_state(sample_character):
     # Use an existing dungeon file
     game_state = GameState(
         party=party,
-        dungeon_name="goblin_warren",  # Use existing dungeon
+        dungeon_name="test_dungeon",  # Use existing dungeon
         event_bus=event_bus,
         data_loader=data_loader,
         dice_roller=dice_roller

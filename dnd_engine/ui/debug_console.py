@@ -196,9 +196,6 @@ class DebugConsole:
         character.death_save_successes = 0
         character.death_save_failures = 0
 
-        # Clear unconscious/dead status
-        character.is_unconscious = False
-
         print_status_message(f"{character.name} has been revived to full HP!", "success")
 
     def cmd_kill(self, args: List[str]) -> None:
@@ -357,11 +354,14 @@ class DebugConsole:
 
         # Set XP to the minimum for this level
         progression_data = self.game_state.data_loader.load_progression()
-        if str(level) in progression_data["levels"]:
-            character.xp = progression_data["levels"][str(level)]["xp_required"]
+        if str(level) in progression_data.get("xp_by_level", {}):
+            character.xp = progression_data["xp_by_level"][str(level)]
 
         # Reapply class features for new level
-        character.apply_class_features()
+        if hasattr(character, 'apply_class_features'):
+            character.apply_class_features()
+        elif hasattr(character, '_grant_class_features'):
+            character._grant_class_features(self.game_state.data_loader)
 
         print_status_message(
             f"{character.name} level changed from {old_level} to {level}",
@@ -408,10 +408,18 @@ class DebugConsole:
             print_error("Ability value must be a number")
             return
 
-        # Validate ability
-        valid_abilities = ["STR", "DEX", "CON", "INT", "WIS", "CHA"]
-        if ability not in valid_abilities:
-            print_error(f"Invalid ability. Must be one of: {', '.join(valid_abilities)}")
+        # Validate ability and map to full name
+        ability_mapping = {
+            "STR": "strength",
+            "DEX": "dexterity",
+            "CON": "constitution",
+            "INT": "intelligence",
+            "WIS": "wisdom",
+            "CHA": "charisma"
+        }
+
+        if ability not in ability_mapping:
+            print_error(f"Invalid ability. Must be one of: {', '.join(ability_mapping.keys())}")
             return
 
         character = self._find_character(char_name)
@@ -419,8 +427,9 @@ class DebugConsole:
             return
 
         # Set the ability score
-        old_value = getattr(character.abilities, ability.lower())
-        setattr(character.abilities, ability.lower(), value)
+        ability_name = ability_mapping[ability]
+        old_value = getattr(character.abilities, ability_name)
+        setattr(character.abilities, ability_name, value)
 
         print_status_message(
             f"{character.name} {ability} changed from {old_value} to {value}",
@@ -643,21 +652,23 @@ class DebugConsole:
             print_error("Amount must be a number")
             return
 
-        old_gold = self.game_state.party.currency.to_copper() // 100
+        old_gold = self.game_state.party.currency.gold
 
         if amount > 0:
-            self.game_state.party.currency.add_gold(amount)
+            # Add gold directly
+            self.game_state.party.currency.gold += amount
             print_status_message(f"Added {amount} gold to party", "success")
         else:
             # Remove gold
-            try:
-                self.game_state.party.currency.spend_gold(abs(amount))
-                print_status_message(f"Removed {abs(amount)} gold from party", "success")
-            except ValueError as e:
-                print_error(str(e))
+            gold_to_remove = abs(amount)
+            if self.game_state.party.currency.gold >= gold_to_remove:
+                self.game_state.party.currency.gold -= gold_to_remove
+                print_status_message(f"Removed {gold_to_remove} gold from party", "success")
+            else:
+                print_error(f"Not enough gold. Party has {self.game_state.party.currency.gold} gold.")
                 return
 
-        new_gold = self.game_state.party.currency.to_copper() // 100
+        new_gold = self.game_state.party.currency.gold
         print_message(f"Party gold: {old_gold} → {new_gold}")
 
     def cmd_clear_inventory(self, args: List[str]) -> None:

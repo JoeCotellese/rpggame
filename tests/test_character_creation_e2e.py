@@ -102,7 +102,7 @@ class TestCharacterCreationE2E:
         event_bus = EventBus()
         game_state = GameState(
             party=party,
-            dungeon_name="goblin_warren",
+            dungeon_name="test_dungeon",
             event_bus=event_bus
         )
 
@@ -160,7 +160,7 @@ class TestCharacterCreationE2E:
         event_bus = EventBus()
         game_state = GameState(
             party=party,
-            dungeon_name="goblin_warren",
+            dungeon_name="test_dungeon",
             event_bus=event_bus
         )
 
@@ -210,7 +210,7 @@ class TestCharacterCreationE2E:
         event_bus = EventBus()
         game_state = GameState(
             party=party,
-            dungeon_name="goblin_warren",
+            dungeon_name="test_dungeon",
             event_bus=event_bus
         )
 

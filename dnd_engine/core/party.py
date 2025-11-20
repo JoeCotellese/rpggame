@@ -3,6 +3,7 @@
 
 from typing import List, Optional
 from dnd_engine.core.character import Character
+from dnd_engine.systems.currency import Currency
 
 
 class Party:
@@ -22,6 +23,7 @@ class Party:
             characters: List of Character objects (empty list if not provided)
         """
         self.characters: List[Character] = characters if characters is not None else []
+        self.currency: Currency = Currency()  # Shared party currency pool
 
     def get_living_members(self) -> List[Character]:
         """

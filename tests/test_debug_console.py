@@ -6,7 +6,7 @@ import os
 from dnd_engine.ui.debug_console import DebugConsole
 from dnd_engine.core.game_state import GameState
 from dnd_engine.core.party import Party
-from dnd_engine.core.character import Character, CharacterClass, CharacterRace
+from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities, Creature
 from dnd_engine.core.dice import DiceRoller
 
@@ -156,15 +156,18 @@ class TestCharacterManipulation:
 
     def test_revive_character(self):
         """Test /revive command restores character to full HP"""
-        # Create a character
+        # Create a character and set it to near death using proper methods
         character = Character(
             name="Gandalf",
             character_class=CharacterClass.WIZARD,
-            race=CharacterRace.HIGH_ELF,
+            race="high_elf",
+            level=1,
+            max_hp=10,
+            ac=10,
             abilities=Abilities(10, 10, 10, 16, 14, 12)
         )
-        character.current_hp = 0
-        character.is_unconscious = True
+        # Reduce HP to 0 and add death save failures
+        character.take_damage(character.current_hp)
         character.death_save_failures = 2
 
         party = Party([character])
@@ -185,7 +188,10 @@ class TestCharacterManipulation:
         character = Character(
             name="Gandalf",
             character_class=CharacterClass.WIZARD,
-            race=CharacterRace.HIGH_ELF,
+            race="high_elf",
+            level=1,
+            max_hp=10,
+            ac=10,
             abilities=Abilities(10, 10, 10, 16, 14, 12)
         )
 
@@ -205,7 +211,10 @@ class TestCharacterManipulation:
         character = Character(
             name="Gandalf",
             character_class=CharacterClass.WIZARD,
-            race=CharacterRace.HIGH_ELF,
+            race="high_elf",
+            level=1,
+            max_hp=10,
+            ac=10,
             abilities=Abilities(10, 10, 10, 16, 14, 12)
         )
 
@@ -213,18 +222,21 @@ class TestCharacterManipulation:
         game_state = GameState(party, "test_dungeon")
         console = DebugConsole(game_state, enabled=True)
 
-        # Execute sethp command
-        console.cmd_set_hp(["Gandalf", "15"])
+        # Execute sethp command with valid value within max
+        console.cmd_set_hp(["Gandalf", "7"])
 
         # Verify HP is set
-        assert character.current_hp == 15
+        assert character.current_hp == 7
 
     def test_set_hp_clamps_to_max(self):
         """Test /sethp command clamps value to max HP"""
         character = Character(
             name="Gandalf",
             character_class=CharacterClass.WIZARD,
-            race=CharacterRace.HIGH_ELF,
+            race="high_elf",
+            level=1,
+            max_hp=10,
+            ac=10,
             abilities=Abilities(10, 10, 10, 16, 14, 12)
         )
         max_hp = character.max_hp
@@ -244,7 +256,10 @@ class TestCharacterManipulation:
         character = Character(
             name="Gandalf",
             character_class=CharacterClass.WIZARD,
-            race=CharacterRace.HIGH_ELF,
+            race="high_elf",
+            level=1,
+            max_hp=10,
+            ac=10,
             abilities=Abilities(10, 10, 10, 16, 14, 12)
         )
 
@@ -263,7 +278,10 @@ class TestCharacterManipulation:
         character = Character(
             name="Gandalf",
             character_class=CharacterClass.WIZARD,
-            race=CharacterRace.HIGH_ELF,
+            race="high_elf",
+            level=1,
+            max_hp=10,
+            ac=10,
             abilities=Abilities(10, 10, 10, 16, 14, 12)
         )
         initial_hp = character.current_hp
@@ -283,7 +301,10 @@ class TestCharacterManipulation:
         character = Character(
             name="Gandalf",
             character_class=CharacterClass.WIZARD,
-            race=CharacterRace.HIGH_ELF,
+            race="high_elf",
+            level=1,
+            max_hp=10,
+            ac=10,
             abilities=Abilities(10, 10, 10, 16, 14, 12)
         )
         character.current_hp = character.max_hp // 2
@@ -303,7 +324,10 @@ class TestCharacterManipulation:
         character = Character(
             name="Gandalf",
             character_class=CharacterClass.WIZARD,
-            race=CharacterRace.HIGH_ELF,
+            race="high_elf",
+            level=1,
+            max_hp=10,
+            ac=10,
             abilities=Abilities(10, 10, 10, 16, 14, 12)
         )
 
@@ -324,7 +348,10 @@ class TestCharacterManipulation:
         character = Character(
             name="Gandalf",
             character_class=CharacterClass.WIZARD,
-            race=CharacterRace.HIGH_ELF,
+            race="high_elf",
+            level=1,
+            max_hp=10,
+            ac=10,
             abilities=Abilities(10, 10, 10, 16, 14, 12)
         )
 
@@ -343,7 +370,10 @@ class TestCharacterManipulation:
         character = Character(
             name="Gandalf",
             character_class=CharacterClass.WIZARD,
-            race=CharacterRace.HIGH_ELF,
+            race="high_elf",
+            level=1,
+            max_hp=10,
+            ac=10,
             abilities=Abilities(10, 10, 10, 16, 14, 12)
         )
         initial_xp = character.xp
@@ -363,7 +393,10 @@ class TestCharacterManipulation:
         character = Character(
             name="Gandalf",
             character_class=CharacterClass.WIZARD,
-            race=CharacterRace.HIGH_ELF,
+            race="high_elf",
+            level=1,
+            max_hp=10,
+            ac=10,
             abilities=Abilities(10, 10, 10, 16, 14, 12)
         )
 
@@ -375,7 +408,7 @@ class TestCharacterManipulation:
         console.cmd_set_stat(["Gandalf", "INT", "20"])
 
         # Verify stat changed
-        assert character.abilities.int == 20
+        assert character.abilities.intelligence == 20
 
 
 class TestCombatManipulation:
@@ -414,12 +447,12 @@ class TestInventoryManipulation:
         game_state = GameState(party, "test_dungeon")
         console = DebugConsole(game_state, enabled=True)
 
-        initial_gold = game_state.party.currency.to_copper() // 100
+        initial_gold = game_state.party.currency.gold
 
         # Add gold
         console.cmd_gold(["500"])
 
-        new_gold = game_state.party.currency.to_copper() // 100
+        new_gold = game_state.party.currency.gold
         assert new_gold == initial_gold + 500
 
     def test_gold_remove(self):
@@ -427,15 +460,15 @@ class TestInventoryManipulation:
         party = Party([])
         game_state = GameState(party, "test_dungeon")
         # Add some gold first
-        game_state.party.currency.add_gold(1000)
+        game_state.party.currency.gold = 1000
         console = DebugConsole(game_state, enabled=True)
 
-        initial_gold = game_state.party.currency.to_copper() // 100
+        initial_gold = game_state.party.currency.gold
 
         # Remove gold
         console.cmd_gold(["-200"])
 
-        new_gold = game_state.party.currency.to_copper() // 100
+        new_gold = game_state.party.currency.gold
         assert new_gold == initial_gold - 200
 
 
@@ -447,7 +480,10 @@ class TestHelperMethods:
         character = Character(
             name="Gandalf",
             character_class=CharacterClass.WIZARD,
-            race=CharacterRace.HIGH_ELF,
+            race="high_elf",
+            level=1,
+            max_hp=10,
+            ac=10,
             abilities=Abilities(10, 10, 10, 16, 14, 12)
         )
 
