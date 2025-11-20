@@ -103,6 +103,10 @@ class GameState:
         Called once after initialization to check the starting room
         for enemies and perform any other game start logic.
         """
+        # Check for passive perception features
+        self._check_passive_perception()
+
+        # Check for enemies
         self._check_for_enemies()
 
     def get_current_room(self) -> Dict[str, Any]:
@@ -175,6 +179,9 @@ class GameState:
                 "room_name": self.get_current_room()["name"]
             }
         ))
+
+        # Check for passive perception features on room entry
+        self._check_passive_perception()
 
         # Check for enemies and start combat if needed (unless explicitly disabled)
         if check_for_enemies:
@@ -367,29 +374,350 @@ class GameState:
             "reason": "Invalid unlock method configuration"
         }
 
-    def search_room(self) -> List[Dict[str, Any]]:
+    def get_examinable_objects(self) -> List[Dict[str, Any]]:
         """
-        Search the current room for items.
-
-        Only reveals items without picking them up.
-        Use take_item() to actually pick up items.
-        Can be called multiple times to see current room state.
+        Get list of examinable objects in the current room.
 
         Returns:
-            List of items found (returns current items on subsequent searches)
+            List of examinable object dicts with id, name, description
+        """
+        room = self.get_current_room()
+        return room.get("examinable_objects", [])
+
+    def get_examinable_exits(self) -> List[str]:
+        """
+        Get list of exits that can be examined in the current room.
+
+        Returns:
+            List of direction names that have examine_checks or are locked
+        """
+        room = self.get_current_room()
+        exits = room.get("exits", {})
+        examinable = []
+
+        for direction, exit_data in exits.items():
+            # Include exits with examine_checks or locked doors
+            if isinstance(exit_data, dict):
+                has_examine_checks = exit_data.get("examine_checks")
+                is_locked = exit_data.get("locked", False)
+                if has_examine_checks or is_locked:
+                    examinable.append(direction)
+
+        return examinable
+
+    def examine_exit(
+        self,
+        direction: str,
+        character: Character
+    ) -> Dict[str, Any]:
+        """
+        Examine an exit (e.g., listen at a door) with a skill check.
+
+        Args:
+            direction: Direction of the exit to examine
+            character: Character attempting the examination
+
+        Returns:
+            Dict with examination result:
+            - success: bool - Whether any check succeeded
+            - direction: str - Direction examined
+            - results: List[Dict] - Results from each examine check
+        """
+        # Get exit info
+        exit_info = self.get_exit_info(direction)
+        if not exit_info:
+            return {
+                "success": False,
+                "error": f"No exit in direction '{direction}'"
+            }
+
+        # Check if exit has examine_checks
+        examine_checks = exit_info.get("examine_checks", [])
+
+        # If no examine_checks but door is locked, provide locked door info
+        if not examine_checks:
+            is_locked = exit_info.get("locked", False)
+            if is_locked:
+                unlock_methods = exit_info.get("unlock_methods", [])
+                return {
+                    "success": True,
+                    "direction": direction,
+                    "is_locked": True,
+                    "unlock_methods": unlock_methods,
+                    "description": f"The door to the {direction} is locked. You notice a sturdy lock mechanism."
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": f"Exit '{direction}' cannot be examined"
+                }
+
+        # Load skills data
+        skills_data = self.data_loader.load_skills()
+
+        # Perform all examine checks for this exit
+        results = []
+        any_success = False
+
+        for check in examine_checks:
+            skill = check["skill"]
+            dc = check["dc"]
+            action = check.get("action", f"examine {direction} exit")
+
+            # Make skill check
+            check_result = character.make_skill_check(skill, dc, skills_data)
+
+            # Emit skill check event
+            self.event_bus.emit(Event(
+                type=EventType.SKILL_CHECK,
+                data={
+                    "character": character.name,
+                    "skill": skill,
+                    "dc": dc,
+                    "roll": check_result["roll"],
+                    "modifier": check_result["modifier"],
+                    "total": check_result["total"],
+                    "success": check_result["success"],
+                    "action": action,
+                    "success_text": check.get("on_success") if check_result["success"] else None,
+                    "failure_text": check.get("on_failure") if not check_result["success"] else None
+                }
+            ))
+
+            results.append({
+                "skill": skill,
+                "dc": dc,
+                "action": action,
+                "check_result": check_result,
+                "success_text": check.get("on_success") if check_result["success"] else None,
+                "failure_text": check.get("on_failure") if not check_result["success"] else None
+            })
+
+            if check_result["success"]:
+                any_success = True
+
+        return {
+            "success": any_success,
+            "direction": direction,
+            "results": results
+        }
+
+    def examine_object(
+        self,
+        object_id: str,
+        character: Character
+    ) -> Dict[str, Any]:
+        """
+        Examine an object in the current room with a skill check.
+
+        Args:
+            object_id: ID of the object to examine
+            character: Character attempting the examination
+
+        Returns:
+            Dict with examination result:
+            - success: bool - Whether any check succeeded
+            - object_name: str - Name of the examined object
+            - results: List[Dict] - Results from each examine check
+            - already_checked: bool - Whether this object was already examined
         """
         room = self.get_current_room()
 
-        # Not searchable rooms return empty
-        if not room.get("searchable"):
-            return []
+        # Initialize checked_objects set if not present
+        if "checked_objects" not in room:
+            room["checked_objects"] = set()
 
-        # Mark as searched on first search to reveal items
-        if not room.get("searched"):
+        # Find the object
+        examinable_objects = room.get("examinable_objects", [])
+        obj = None
+        for o in examinable_objects:
+            if o["id"] == object_id:
+                obj = o
+                break
+
+        if not obj:
+            return {
+                "success": False,
+                "error": f"Object '{object_id}' not found in room"
+            }
+
+        object_name = obj.get("name", object_id)
+
+        # Check if already examined
+        if object_id in room["checked_objects"]:
+            return {
+                "success": False,
+                "object_name": object_name,
+                "already_checked": True,
+                "results": []
+            }
+
+        # Mark as examined
+        room["checked_objects"].add(object_id)
+
+        # Load skills data
+        skills_data = self.data_loader.load_skills()
+
+        # Perform all examine checks for this object
+        results = []
+        any_success = False
+
+        for check in obj.get("examine_checks", []):
+            skill = check["skill"]
+            dc = check["dc"]
+
+            # Make skill check
+            check_result = character.make_skill_check(skill, dc, skills_data)
+
+            # Emit skill check event
+            self.event_bus.emit(Event(
+                type=EventType.SKILL_CHECK,
+                data={
+                    "character": character.name,
+                    "skill": skill,
+                    "dc": dc,
+                    "roll": check_result["roll"],
+                    "modifier": check_result["modifier"],
+                    "total": check_result["total"],
+                    "success": check_result["success"],
+                    "action": f"examine {object_name}",
+                    "success_text": check.get("on_success") if check_result["success"] else None,
+                    "failure_text": check.get("on_failure") if not check_result["success"] else None
+                }
+            ))
+
+            results.append({
+                "skill": skill,
+                "dc": dc,
+                "check_result": check_result,
+                "success_text": check.get("on_success") if check_result["success"] else None,
+                "failure_text": check.get("on_failure") if not check_result["success"] else None
+            })
+
+            if check_result["success"]:
+                any_success = True
+
+        return {
+            "success": any_success,
+            "object_name": object_name,
+            "already_checked": False,
+            "results": results
+        }
+
+    def search_room(
+        self,
+        character: Optional[Character] = None
+    ) -> Dict[str, Any]:
+        """
+        Search the current room for items, optionally with skill checks.
+
+        If the room has search_checks defined, a skill check is required.
+        Otherwise, searching automatically succeeds (backwards compatibility).
+
+        Only reveals items without picking them up.
+        Use take_item() to actually pick up items.
+
+        Args:
+            character: Character performing the search (required if room has search_checks)
+
+        Returns:
+            Dict with search result:
+            - success: bool - Whether search succeeded
+            - items: List[Dict] - Items found (if successful or already searched)
+            - already_searched: bool - Whether room was already searched
+            - check_result: Dict - Skill check result (if applicable)
+        """
+        room = self.get_current_room()
+
+        # Not searchable rooms return failure
+        if not room.get("searchable"):
+            return {
+                "success": False,
+                "items": [],
+                "error": "This room cannot be searched"
+            }
+
+        # Check if already searched
+        already_searched = room.get("searched", False)
+
+        # If already searched, return current items without requiring another check
+        if already_searched:
+            return {
+                "success": True,
+                "items": room.get("items", []),
+                "already_searched": True
+            }
+
+        # Check if room has search_checks
+        search_checks = room.get("search_checks", [])
+
+        if search_checks:
+            # Skill check required
+            if character is None:
+                return {
+                    "success": False,
+                    "items": [],
+                    "error": "Character required for search with skill check"
+                }
+
+            # Load skills data
+            skills_data = self.data_loader.load_skills()
+
+            # Perform search check (use first check - typically Investigation or Perception)
+            check = search_checks[0]
+            skill = check["skill"]
+            dc = check["dc"]
+
+            # Make skill check
+            check_result = character.make_skill_check(skill, dc, skills_data)
+
+            # Mark room as searched regardless of result
             room["searched"] = True
 
-        # Return current items in the room (allows re-searching to see what remains)
-        return room.get("items", [])
+            # Emit skill check event
+            self.event_bus.emit(Event(
+                type=EventType.SKILL_CHECK,
+                data={
+                    "character": character.name,
+                    "skill": skill,
+                    "dc": dc,
+                    "roll": check_result["roll"],
+                    "modifier": check_result["modifier"],
+                    "total": check_result["total"],
+                    "success": check_result["success"],
+                    "action": "search room",
+                    "success_text": check.get("on_success") if check_result["success"] else None,
+                    "failure_text": check.get("on_failure") if not check_result["success"] else None
+                }
+            ))
+
+            # Return items only if check succeeded
+            if check_result["success"]:
+                return {
+                    "success": True,
+                    "items": room.get("items", []),
+                    "already_searched": False,
+                    "check_result": check_result,
+                    "success_text": check.get("on_success"),
+                    "failure_text": None
+                }
+            else:
+                return {
+                    "success": False,
+                    "items": [],
+                    "already_searched": False,
+                    "check_result": check_result,
+                    "success_text": None,
+                    "failure_text": check.get("on_failure")
+                }
+        else:
+            # No skill check required - automatic success (backwards compatibility)
+            room["searched"] = True
+            return {
+                "success": True,
+                "items": room.get("items", []),
+                "already_searched": False
+            }
 
     def get_available_items_in_room(self) -> List[Dict[str, Any]]:
         """
@@ -580,6 +908,70 @@ class GameState:
 
         # Start combat
         self._start_combat()
+
+    def _check_passive_perception(self) -> None:
+        """
+        Check party members' passive Perception against hidden features on room entry.
+
+        Passive Perception = 10 + Perception modifier
+
+        Only triggers once per room per party. Results are emitted as events.
+        """
+        room = self.get_current_room()
+
+        # Skip if no hidden features or already checked
+        hidden_features = room.get("hidden_features", [])
+        if not hidden_features:
+            return
+
+        # Initialize passive_checks_done flag if not present
+        if "passive_checks_done" not in room:
+            room["passive_checks_done"] = False
+
+        # Only check once per room
+        if room["passive_checks_done"]:
+            return
+
+        # Mark as checked
+        room["passive_checks_done"] = True
+
+        # Load skills data for Perception
+        skills_data = self.data_loader.load_skills()
+
+        # Check each hidden feature with trigger "on_enter"
+        for feature in hidden_features:
+            if feature.get("trigger") != "on_enter":
+                continue
+
+            if feature.get("type") != "passive_perception":
+                continue
+
+            dc = feature.get("dc", 10)
+
+            # Check each party member's passive Perception
+            for character in self.party.characters:
+                # Calculate passive Perception: 10 + Perception modifier
+                perception_mod = character.get_skill_modifier("perception", skills_data)
+                passive_perception = 10 + perception_mod
+
+                success = passive_perception >= dc
+
+                # Emit event for this check
+                self.event_bus.emit(Event(
+                    type=EventType.SKILL_CHECK,
+                    data={
+                        "character": character.name,
+                        "skill": "perception",
+                        "dc": dc,
+                        "modifier": perception_mod,
+                        "total": passive_perception,
+                        "success": success,
+                        "passive": True,
+                        "action": f"passive perception (DC {dc})",
+                        "success_text": feature.get("on_success") if success else None,
+                        "failure_text": feature.get("on_failure") if not success else None
+                    }
+                ))
 
     def _start_combat(self) -> None:
         """Initialize combat with current enemies."""

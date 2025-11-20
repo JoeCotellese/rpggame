@@ -31,6 +31,16 @@
     "hall_of_the_dead": {
       "name": "Hall of the Dead",
       "description": "Dusty stone stairs descend into a large burial chamber. The walls are lined with plaques and sealed coffins bearing the names of deceased Davos family members - generations of the dead laid to rest in this silent hall. Cobwebs hang thick in the corners, though recent disturbance has cleared a path through them. Footprints in the dust lead deeper into the crypt. The air is cold and still, carrying the faint scent of decay.",
+      "hidden_features": [
+        {
+          "type": "passive_perception",
+          "dc": 16,
+          "on_success": "You notice skeletal figures standing motionless in the eastern chamber through a gap in the wall.",
+          "on_failure": null,
+          "trigger": "on_enter",
+          "once_per_room": true
+        }
+      ],
       "exits": {
         "up": "graveyard_entrance",
         "north": "antechamber"
@@ -38,8 +48,7 @@
       "enemies": [],
       "items": [],
       "searched": false,
-      "searchable": false,
-      "notes": "Original module: DC 16 Perception check to spot skeletons in eastern_crypt from here. Feature not yet implemented."
+      "searchable": false
     },
     "antechamber": {
       "name": "Antechamber",
@@ -66,14 +75,35 @@
             }
           ]
         },
-        "north": "northern_crypt",
-        "down": "southern_crypt"
+        "north": {
+          "destination": "northern_crypt",
+          "examine_checks": [
+            {
+              "skill": "perception",
+              "dc": 14,
+              "action": "listen at the door",
+              "on_success": "You hear scraping sounds through the door - bone dragging on stone. Multiple undead are inside.",
+              "on_failure": "You hear nothing unusual through the thick oak door."
+            }
+          ]
+        },
+        "down": {
+          "destination": "southern_crypt",
+          "examine_checks": [
+            {
+              "skill": "perception",
+              "dc": 14,
+              "action": "listen at the door",
+              "on_success": "You hear the shuffling of bones and harsh clicking sounds. Something undead lurks below.",
+              "on_failure": "You hear nothing unusual through the thick oak door."
+            }
+          ]
+        }
       },
       "enemies": [],
       "items": [],
       "searched": false,
-      "searchable": false,
-      "notes": "Original module: Western door (family_shrine) should be LOCKED requiring DC 12 Dexterity (Thieves' Tools) or DC 12 Strength (Athletics) to open. DC 14 Perception check to hear skeletons in northern/southern crypts. Locked door and skill check features not yet implemented."
+      "searchable": false
     },
     "eastern_crypt": {
       "name": "Eastern Crypt",
@@ -143,6 +173,21 @@
     "family_shrine": {
       "name": "Family Shrine - Chamber of Davos",
       "description": "A small stone dais rises against the western wall. Upon it rests an ornate coffin, clearly more elaborate than the others you've seen. The lid has been violently smashed inward, splinters of ancient wood scattered across the floor. This was the final resting place of Davos the cleric, whose divine power once sealed away a great evil. In the corner, hunched over a fresh corpse, a pale creature with elongated claws tears at dead flesh. It wears the tattered robes of a cultist. As it becomes aware of your presence, it raises its blood-streaked face and hisses, baring needle-sharp teeth.",
+      "examinable_objects": [
+        {
+          "id": "cultist_corpse",
+          "name": "fresh corpse",
+          "description": "A fresh corpse lies in the corner, wearing tattered cultist robes. The body shows signs of violence.",
+          "examine_checks": [
+            {
+              "skill": "medicine",
+              "dc": 12,
+              "on_success": "The victim's skull was surgically removed with precision - this was no wild animal attack. The cuts are clean and deliberate, suggesting a dark ritual.",
+              "on_failure": "You see signs of violence but cannot determine the specifics of the injuries."
+            }
+          ]
+        }
+      ],
       "exits": {
         "east": "antechamber"
       },
@@ -167,8 +212,7 @@
       ],
       "searched": false,
       "searchable": true,
-      "boss_room": true,
-      "notes": "Original module: DC 12 Medicine check reveals skull was cut free recently (skill check not implemented). Journal is a story item that should unlock the Cult Hideout location - currently just a readable item. Original loot: +1 weapon of player's choice - using longsword_plus_1. Ghoul's paralysis attack requires saving throw mechanics not yet fully implemented."
+      "boss_room": true
     }
   }
 }
