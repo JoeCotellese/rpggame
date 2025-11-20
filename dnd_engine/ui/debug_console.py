@@ -479,7 +479,7 @@ class DebugConsole:
             # If not in combat, start combat
             if not self.game_state.in_combat:
                 self.game_state.active_enemies = spawned
-                self.game_state.start_combat()
+                self.game_state._start_combat()
                 print_status_message(f"Spawned {count}x {monster_name} and started combat!", "success")
             else:
                 # Add to existing combat
