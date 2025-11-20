@@ -4,12 +4,13 @@
 from typing import Any
 
 
-def build_room_description_prompt(room_data: dict[str, Any]) -> str:
+def build_room_description_prompt(room_data: dict[str, Any], combat_starting: bool = False) -> str:
     """
     Build prompt for room description enhancement.
 
     Args:
         room_data: Room info (name, description, exits, contents, monsters)
+        combat_starting: If True, include combat initiation narrative in description
 
     Returns:
         Formatted prompt for LLM
@@ -43,12 +44,22 @@ def build_room_description_prompt(room_data: dict[str, Any]) -> str:
                 monster_list = ", ".join(monster_parts[:-1]) + f", and {monster_parts[-1]}"
                 monster_context = f"\nPresent in the room: {monster_list} (hostile)"
 
+    # Build instruction based on whether combat is starting
+    if combat_starting and monster_context:
+        instruction = """Add vivid sensory details (sights, sounds, smells) in 2-3 sentences. Make it immersive but concise.
+
+IMPORTANT: This is the moment combat begins. Naturally transition from describing the room into the combat initiation - describe how the enemies react to the party's presence, their threatening stance or aggressive movement toward the party, and the immediate tension as battle is about to erupt. Make it feel like a seamless escalation from scene-setting to action. Do NOT use phrases like "combat begins" - show it through the enemies' actions and the rising tension."""
+    elif monster_context:
+        instruction = " Acknowledge the presence of hostile creatures naturally in your description - describe their stance, readiness, or threatening demeanor."
+    else:
+        instruction = ""
+
     prompt = f"""Enhance this D&D dungeon room description with atmospheric details:
 
 Room: {room_type}
 Basic description: {base_desc}{monster_context}
 
-Add vivid sensory details (sights, sounds, smells) in 2-3 sentences. Make it immersive but concise.{" Acknowledge the presence of hostile creatures naturally in your description - describe their stance, readiness, or threatening demeanor." if monster_context else ""}"""
+Add vivid sensory details (sights, sounds, smells) in 2-3 sentences. Make it immersive but concise.{instruction}"""
 
     return prompt
 

@@ -114,6 +114,10 @@ class CLI:
                 if enemy_id in monsters_data:
                     monster_names.append(monsters_data[enemy_id]["name"])
 
+        # Detect if combat is about to start
+        # Combat starts if there are enemies and we're not already in combat
+        combat_starting = bool(enemy_ids) and not self.game_state.in_combat
+
         # Try to get enhanced description from LLM
         enhanced_desc = None
         if self.llm_enhancer:
@@ -121,7 +125,8 @@ class CLI:
                 "id": room.get("id", room_name.lower().replace(" ", "_")),
                 "name": room_name,
                 "description": basic_desc,
-                "monsters": monster_names  # Include monster info for LLM
+                "monsters": monster_names,  # Include monster info for LLM
+                "combat_starting": combat_starting  # Flag for combat initiation narrative
             }
             with console.status("", spinner="dots"):
                 enhanced_desc = self.llm_enhancer.get_room_description_sync(room_data, timeout=3.0)
@@ -3593,7 +3598,12 @@ class CLI:
             print_title("GAME OVER", "Your party has been wiped out!")
 
     def _on_combat_start(self, event: Event) -> None:
-        """Handle combat start event."""
+        """Handle combat start event.
+
+        Note: Combat start narrative is now integrated into the room description
+        when entering a room with enemies. This handler only displays functional
+        UI elements (combat warning, enemy list).
+        """
         # Clear combat history for new combat
         self.combat_history = []
 
@@ -3607,23 +3617,7 @@ class CLI:
             display_name = f"{enemy.name} {enemy_num}" if enemy_num else enemy.name
             numbered_enemies.append(display_name)
 
-        # Get and display combat start narrative if available
-        if self.llm_enhancer:
-            room = self.game_state.get_current_room()
-            enemy_names = [e.name for e in self.game_state.active_enemies]
-
-            with console.status("", spinner="dots"):
-                narrative = self.llm_enhancer.get_combat_start_narrative_sync(
-                    combat_data={
-                        "enemies": enemy_names,
-                        "location": room.get("name", ""),
-                        "party_size": len(self.game_state.party.characters)
-                    },
-                    timeout=3.0
-                )
-            if narrative:
-                self.display_narrative_panel(narrative)
-
+        # Display combat warning (no separate narrative - it's in room description)
         print_status_message(f"Combat begins! Enemies: {', '.join(numbered_enemies)}", "warning")
 
         # Reset combat status flag for new combat

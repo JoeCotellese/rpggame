@@ -126,6 +126,80 @@ class TestRoomDescriptionPrompt:
         assert "hostile" not in prompt
         assert "threatening" not in prompt
 
+    def test_build_room_description_combat_starting_false(self) -> None:
+        """Test building room description with combat_starting=False (default behavior)."""
+        room_data = {
+            "name": "Guard Post",
+            "description": "A narrow corridor with weapon racks.",
+            "monsters": ["Goblin", "Wolf"]
+        }
+
+        prompt = build_room_description_prompt(room_data, combat_starting=False)
+
+        assert "Guard Post" in prompt
+        assert "Goblin" in prompt
+        assert "Wolf" in prompt
+        assert "hostile" in prompt
+        # Should have standard monster acknowledgment instructions
+        assert "stance" in prompt or "readiness" in prompt or "threatening" in prompt
+        # Should NOT have combat initiation instructions
+        assert "combat begins" not in prompt.lower()
+        assert "battle is about to erupt" not in prompt.lower()
+
+    def test_build_room_description_combat_starting_true(self) -> None:
+        """Test building room description with combat_starting=True (combat initiation)."""
+        room_data = {
+            "name": "Throne Room",
+            "description": "A grand chamber with a bone throne.",
+            "monsters": ["Goblin Boss", "Goblin", "Goblin"]
+        }
+
+        prompt = build_room_description_prompt(room_data, combat_starting=True)
+
+        assert "Throne Room" in prompt
+        assert "Goblin Boss" in prompt
+        assert "2 Goblin" in prompt
+        assert "hostile" in prompt
+        # Should have combat initiation instructions
+        assert "combat begins" in prompt.lower() or "battle" in prompt.lower()
+        assert "enemies react" in prompt.lower() or "threatening stance" in prompt.lower() or "aggressive" in prompt.lower()
+        # Should tell LLM to transition into combat
+        assert "transition" in prompt.lower() or "escalation" in prompt.lower()
+
+    def test_build_room_description_combat_starting_without_monsters(self) -> None:
+        """Test building room description with combat_starting=True but no monsters (edge case)."""
+        room_data = {
+            "name": "Empty Room",
+            "description": "A quiet chamber.",
+            "monsters": []
+        }
+
+        prompt = build_room_description_prompt(room_data, combat_starting=True)
+
+        assert "Empty Room" in prompt
+        assert "quiet chamber" in prompt
+        # No monsters, so should not have combat instructions even if flag is True
+        assert "hostile" not in prompt
+        assert "combat begins" not in prompt.lower()
+
+    def test_build_room_description_combat_starting_default_false(self) -> None:
+        """Test that combat_starting defaults to False when not specified."""
+        room_data = {
+            "name": "Barracks",
+            "description": "A messy chamber with bedrolls.",
+            "monsters": ["Goblin"]
+        }
+
+        # Call without combat_starting parameter (should default to False)
+        prompt = build_room_description_prompt(room_data)
+
+        assert "Barracks" in prompt
+        assert "Goblin" in prompt
+        assert "hostile" in prompt
+        # Should NOT have combat initiation instructions with default
+        assert "combat begins" not in prompt.lower()
+        assert "battle is about to erupt" not in prompt.lower()
+
 
 class TestCombatActionPrompt:
     """Test combat action prompt building."""
