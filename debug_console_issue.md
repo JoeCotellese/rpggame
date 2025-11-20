@@ -22,59 +22,59 @@ Implement a debug console with slash commands (e.g., `/revive`, `/kill`, `/telep
 ## 🎯 CRITICAL PRIORITY - Core Testing Commands
 
 ### Character State Manipulation
-- [ ] `/revive [character]` - Revive dead/unconscious character
-- [ ] `/kill [target]` - Kill character or monster
-- [ ] `/sethp [character] [amount]` - Set exact HP value
-- [ ] `/damage [character] [amount]` - Deal damage for testing healing/death
-- [ ] `/heal [character] [amount]` - Direct healing (bypass spell mechanics)
-- [ ] `/godmode [character]` - Toggle invulnerability for testing
-- [ ] `/setlevel [character] [level]` - Jump to specific level (1-20)
-- [ ] `/addxp [character] [amount]` - Grant XP without combat
-- [ ] `/setstat [character] [ability] [value]` - Modify STR/DEX/CON/INT/WIS/CHA
+- [x] `/revive [character]` - Revive dead/unconscious character
+- [x] `/kill [target]` - Kill character or monster
+- [x] `/sethp [character] [amount]` - Set exact HP value
+- [x] `/damage [character] [amount]` - Deal damage for testing healing/death
+- [x] `/heal [character] [amount]` - Direct healing (bypass spell mechanics)
+- [x] `/godmode [character]` - Toggle invulnerability for testing
+- [x] `/setlevel [character] [level]` - Jump to specific level (1-20)
+- [x] `/addxp [character] [amount]` - Grant XP without combat
+- [x] `/setstat [character] [ability] [value]` - Modify STR/DEX/CON/INT/WIS/CHA
 
 ### Combat Testing
-- [ ] `/spawn [monster] [count]` - Spawn enemies in current room
-- [ ] `/despawn [target]` - Remove monster from combat
-- [ ] `/nextturn` - Skip to next turn in initiative
-- [ ] `/endcombat` - Force end combat encounter
+- [x] `/spawn [monster] [count]` - Spawn enemies in current room
+- [x] `/despawn [target]` - Remove monster from combat
+- [x] `/nextturn` - Skip to next turn in initiative
+- [x] `/endcombat` - Force end combat encounter
 - [ ] `/initiative [target] [value]` - Set initiative order
 - [ ] `/advantage [character]` - Force advantage on next roll
 - [ ] `/crit` - Force next attack to crit (testing crit mechanics)
 
 ### Inventory & Currency
-- [ ] `/give [item] [quantity]` - Spawn any item from items.json
-- [ ] `/remove [item] [quantity]` - Remove items from inventory
-- [ ] `/gold [amount]` - Add/remove gold (negative values subtract)
-- [ ] `/clearinventory [character]` - Empty inventory for clean testing
+- [x] `/give [item] [quantity]` - Spawn any item from items.json
+- [x] `/remove [item] [quantity]` - Remove items from inventory
+- [x] `/gold [amount]` - Add/remove gold (negative values subtract)
+- [x] `/clearinventory [character]` - Empty inventory for clean testing
 
 ---
 
 ## 🔥 HIGH PRIORITY - QA Workflows
 
 ### Condition Testing
-- [ ] `/addcondition [character] [condition]` - Apply status effect (poisoned, stunned, etc.)
-- [ ] `/removecondition [character] [condition]` - Clear specific condition
-- [ ] `/clearconditions [character]` - Remove all conditions
-- [ ] `/listconditions` - Show available condition types
+- [x] `/addcondition [character] [condition]` - Apply status effect (poisoned, stunned, etc.)
+- [x] `/removecondition [character] [condition]` - Clear specific condition
+- [x] `/clearconditions [character]` - Remove all conditions
+- [x] `/listconditions` - Show available condition types
 
 ### Resource Management
-- [ ] `/setslots [character] [level] [count]` - Set spell slot counts
-- [ ] `/restoreslots [character]` - Fully restore spell slots
-- [ ] `/setresource [character] [resource] [amount]` - Set ki/rage/etc.
-- [ ] `/shortrest` - Instant short rest (no time passage)
-- [ ] `/longrest` - Instant long rest (no time passage)
+- [x] `/setslots [character] [level] [count]` - Set spell slot counts
+- [x] `/restoreslots [character]` - Fully restore spell slots
+- [x] `/setresource [character] [resource] [amount]` - Set ki/rage/etc.
+- [x] `/shortrest` - Instant short rest (no time passage)
+- [x] `/longrest` - Instant long rest (no time passage)
 
 ### Navigation & Exploration
-- [ ] `/teleport [room_id]` - Jump to any room instantly
-- [ ] `/listrooms` - Show all room IDs in dungeon
-- [ ] `/unlock [direction]` - Unlock door without checks
-- [ ] `/reveal` - Show all hidden features in room
+- [x] `/teleport [room_id]` - Jump to any room instantly
+- [x] `/listrooms` - Show all room IDs in dungeon
+- [x] `/unlock [direction]` - Unlock door without checks
+- [x] `/reveal` - Show all hidden features in room
 - [ ] `/fog` - Toggle fog of war (show entire map)
 
 ### Spellcasting
-- [ ] `/learnspell [character] [spell]` - Add spell to spellbook
-- [ ] `/forgetspell [character] [spell]` - Remove spell
-- [ ] `/listspells [class] [level]` - Browse available spells
+- [x] `/learnspell [character] [spell]` - Add spell to spellbook
+- [x] `/forgetspell [character] [spell]` - Remove spell
+- [x] `/listspells [class] [level]` - Browse available spells
 - [ ] `/cast [spell] [target]` - Force cast without slot consumption
 
 ---
@@ -241,14 +241,14 @@ attack Goblin
 
 ## Acceptance Criteria
 
-- [ ] Debug console can be enabled/disabled via environment variable or CLI flag
-- [ ] All CRITICAL priority commands implemented and tested
-- [ ] Commands work correctly without breaking game state
-- [ ] Help system (`/help`, `/help [command]`) implemented
+- [x] Debug console can be enabled/disabled via environment variable or CLI flag
+- [x] All CRITICAL priority commands implemented and tested
+- [x] Commands work correctly without breaking game state
+- [x] Help system (`/help`, `/help [command]`) implemented
 - [ ] Debug commands logged to audit file
-- [ ] Existing `reset` command converted to `/reset` slash command
-- [ ] Documentation added to project README
-- [ ] Unit and integration tests added for debug console
+- [x] Existing `reset` command converted to `/reset` slash command
+- [x] Documentation added to project README
+- [x] Unit and integration tests added for debug console
 
 ---
 
