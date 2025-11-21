@@ -170,10 +170,9 @@ A Python-based terminal game for running D&D 5E SRD adventures with LLM-enhanced
 ├── requirements.txt         # Python dependencies
 ├── README.md                # User documentation
 ├── CLAUDE.md                # Development standards
-├── TODO.md                  # Active development tasks
 └── docs/
     ├── ARCHITECTURE.md      # This document
-    ├── ROADMAP.md           # Development roadmap
+    ├── ROADMAP.md           # Strategic planning and feature roadmap
     ├── DEBUG_LLM.md         # Debug provider docs
     └── SPEC_HISTORICAL_2025-11.md  # Historical reference
 ```

@@ -1,7 +1,12 @@
 # D&D 5E Terminal Game - Development Roadmap
 
-**Last Updated:** 2025-11-18
+**Last Updated:** 2025-11-20
 **Current Version:** 0.2.0 (Beyond MVP)
+
+> **Note on Task Tracking:**
+> This roadmap provides strategic planning and high-level feature priorities.
+> Day-to-day task tracking is managed through [GitHub Issues](https://github.com/JoeCotellese/rpggame/issues).
+> See [CLAUDE.md](../CLAUDE.md) for development standards and [ARCHITECTURE.md](ARCHITECTURE.md) for system design.
 
 ---
 
@@ -46,37 +51,38 @@ This roadmap outlines planned features and enhancements for the D&D 5E terminal 
   - Balance testing
 
 #### 2. **Spellcasting System**
-- **Status**: Not started
-- **Requirements**:
-  - Spell slots (per level)
+- **Status**: In Progress - Combat spells implemented, out-of-combat casting needed
+- **Completed**:
+  - ✅ Spell slots (per level) - #37
+  - ✅ Spell save DCs and attack rolls - #38, #39
+  - ✅ Combat spell casting with targeting
+  - ✅ Cantrip damage scaling
+- **Remaining**:
+  - Out-of-combat spellcasting (#116)
   - Spell preparation system
-  - Spell targeting (single target, AoE, self)
   - Concentration mechanics
-  - Spell save DCs and attack rolls
+  - Ritual casting
+  - Reaction spells
 - **Dependencies**: None
-- **Estimated Effort**: 3-4 weeks
+- **Estimated Effort**: 2 weeks remaining
 
 #### 3. **Character Leveling**
-- **Status**: Data structures exist (`progression.json`), not implemented
-- **Requirements**:
-  - XP tracking system
-  - Level-up mechanics
-  - Ability score improvements
-  - New feature grants per level
-  - HP increase calculations
-- **Dependencies**: None
-- **Estimated Effort**: 2 weeks
+- **Status**: ✅ COMPLETE (#40)
+- **Implemented**:
+  - ✅ XP tracking system
+  - ✅ Level-up mechanics
+  - ✅ Ability score improvements
+  - ✅ New feature grants per level
+  - ✅ HP increase calculations
 
 #### 4. **Death Saves (5E Mechanics)**
-- **Status**: Basic death at 0 HP implemented, 5E death saves not implemented
-- **Requirements**:
-  - 3 success / 3 failure tracking
-  - Stabilization mechanics
-  - Healing unconscious characters
-  - Massive damage instant death
-  - Death save on each turn at 0 HP
-- **Dependencies**: None
-- **Estimated Effort**: 1 week
+- **Status**: ✅ COMPLETE
+- **Implemented**:
+  - ✅ 3 success / 3 failure tracking
+  - ✅ Stabilization mechanics
+  - ✅ Healing unconscious characters
+  - ✅ Automatic death saves on each turn at 0 HP
+  - ✅ Character revival with healing items/spells
 
 ---
 
@@ -233,11 +239,12 @@ This roadmap outlines planned features and enhancements for the D&D 5E terminal 
 ## 📊 Implementation Priority
 
 ### Next 3 Months (High Priority)
-1. **Complete Rogue and Cleric classes** (3 weeks)
-2. **Spellcasting system** (4 weeks)
-3. **Character leveling** (2 weeks)
-4. **Death saves** (1 week)
-5. **More content** (ongoing - monsters, dungeons, items)
+1. ✅ **Character leveling** - COMPLETE (#40)
+2. ✅ **Death saves** - COMPLETE
+3. ✅ **Rogue class** - COMPLETE (#41)
+4. **Out-of-combat spellcasting** (#116) - 1-2 weeks
+5. **Complete Cleric class implementation** (2 weeks)
+6. **More content** (ongoing - monsters, dungeons, items)
 
 ### Next 6 Months (Medium Priority)
 6. **Quest system** (3 weeks)
