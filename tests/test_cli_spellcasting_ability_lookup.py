@@ -16,11 +16,23 @@ class TestCLISpellcastingAbilityLookup:
     @pytest.fixture
     def mock_game_state(self):
         """Create a mock game state with data loader"""
-        game_state = Mock(spec=GameState)
+        game_state = Mock()  # Don't use spec= to allow adding attributes dynamically
         game_state.data_loader = Mock(spec=DataLoader)
         game_state.dice_roller = Mock()
         game_state.event_bus = Mock()
         game_state.combat = Mock()
+        game_state.in_combat = True  # Required by CLI.handle_cast_spell
+        game_state.initiative_tracker = Mock()  # Required by CLI.handle_cast_spell
+        game_state.party = Mock()  # Mock party object
+        game_state.party.characters = []  # Empty character list by default
+        game_state.active_enemies = []  # Empty enemy list by default
+
+        # Mock initiative tracker to return a combatant (will be configured per-test)
+        mock_combatant = Mock()
+        mock_combatant.creature = None  # Will be set to character in each test
+        game_state.initiative_tracker.get_current_combatant.return_value = mock_combatant
+        game_state.initiative_tracker.get_current_turn_state.return_value = None  # Will be set per-test
+
         return game_state
 
     @pytest.fixture
@@ -93,7 +105,11 @@ class TestCLISpellcastingAbilityLookup:
         mock_turn_state = Mock()
         mock_turn_state.is_action_available.return_value = True
         mock_game_state.combat.get_turn_state.return_value = mock_turn_state
-        mock_game_state.party = [wizard_character]
+        mock_game_state.party.characters = [wizard_character]
+
+        # Set the current combatant's creature to the wizard so it's their turn
+        mock_game_state.initiative_tracker.get_current_combatant.return_value.creature = wizard_character
+        mock_game_state.initiative_tracker.get_current_turn_state.return_value = mock_turn_state
 
         # Mock user inputs: select spell, select target, cancel
         with patch('builtins.input', side_effect=['1', '1', 'n']):
@@ -117,6 +133,11 @@ class TestCLISpellcastingAbilityLookup:
         mock_turn_state = Mock()
         mock_turn_state.is_action_available.return_value = True
         mock_game_state.combat.get_turn_state.return_value = mock_turn_state
+        mock_game_state.party.characters = [fighter_character]
+
+        # Set the current combatant's creature to the fighter so it's their turn
+        mock_game_state.initiative_tracker.get_current_combatant.return_value.creature = fighter_character
+        mock_game_state.initiative_tracker.get_current_turn_state.return_value = mock_turn_state
 
         # Mock print_error to capture the error message
         with patch('dnd_engine.ui.cli.print_error') as mock_print_error:
@@ -140,6 +161,11 @@ class TestCLISpellcastingAbilityLookup:
         mock_turn_state = Mock()
         mock_turn_state.is_action_available.return_value = True
         mock_game_state.combat.get_turn_state.return_value = mock_turn_state
+        mock_game_state.party.characters = [fighter_character]
+
+        # Set the current combatant's creature to the fighter so it's their turn
+        mock_game_state.initiative_tracker.get_current_combatant.return_value.creature = fighter_character
+        mock_game_state.initiative_tracker.get_current_turn_state.return_value = mock_turn_state
 
         # Should not crash, should print error instead
         with patch('dnd_engine.ui.cli.print_error') as mock_print_error:
@@ -167,6 +193,11 @@ class TestCLISpellcastingAbilityLookup:
         mock_turn_state = Mock()
         mock_turn_state.is_action_available.return_value = True
         mock_game_state.combat.get_turn_state.return_value = mock_turn_state
+        mock_game_state.party.characters = [wizard_character]
+
+        # Set the current combatant's creature to the wizard so it's their turn
+        mock_game_state.initiative_tracker.get_current_combatant.return_value.creature = wizard_character
+        mock_game_state.initiative_tracker.get_current_turn_state.return_value = mock_turn_state
 
         # Should print error about not being able to cast spells
         with patch('dnd_engine.ui.cli.print_error') as mock_print_error:
@@ -204,7 +235,11 @@ class TestCLISpellcastingAbilityLookup:
         mock_turn_state = Mock()
         mock_turn_state.is_action_available.return_value = True
         mock_game_state.combat.get_turn_state.return_value = mock_turn_state
-        mock_game_state.party = [wizard_character]
+        mock_game_state.party.characters = [wizard_character]
+
+        # Set the current combatant's creature to the wizard so it's their turn
+        mock_game_state.initiative_tracker.get_current_combatant.return_value.creature = wizard_character
+        mock_game_state.initiative_tracker.get_current_turn_state.return_value = mock_turn_state
 
         # Mock user inputs to cancel spell selection
         with patch('builtins.input', side_effect=['1', '1', 'n']):
