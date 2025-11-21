@@ -856,6 +856,158 @@ class GameState:
 
         return success
 
+    def cast_spell_exploration(
+        self,
+        caster_name: str,
+        spell_id: str,
+        target_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Cast a spell outside of combat during exploration.
+
+        Handles spell slot consumption, healing calculation, and effect application
+        for out-of-combat spellcasting. Emits SPELL_CAST event.
+
+        Args:
+            caster_name: Name of the character casting the spell
+            spell_id: ID of the spell to cast
+            target_name: Name of the target character (required for healing/buff spells)
+
+        Returns:
+            Dictionary with casting results:
+            {
+                "success": bool,
+                "message": str,
+                "healing_amount": int (if healing spell),
+                "spell_name": str,
+                "error": str (if failed)
+            }
+        """
+        # Find caster
+        caster = self.party.get_character_by_name(caster_name)
+        if not caster:
+            return {
+                "success": False,
+                "error": f"Character '{caster_name}' not found"
+            }
+
+        # Load spell data
+        spell_data = self.data_loader.load_spells().get(spell_id)
+        if not spell_data:
+            return {
+                "success": False,
+                "error": f"Spell '{spell_id}' not found"
+            }
+
+        spell_name = spell_data.get("name", spell_id)
+        spell_level = spell_data.get("level", 0)
+
+        # Check if character knows/has prepared this spell
+        if spell_id not in caster.prepared_spells and spell_id not in caster.known_spells:
+            return {
+                "success": False,
+                "error": f"{caster_name} doesn't know {spell_name}"
+            }
+
+        # Check spell slot availability (cantrips are level 0, always available)
+        if spell_level > 0:
+            available_slots = caster.get_available_spell_slots(spell_level)
+            if available_slots <= 0:
+                return {
+                    "success": False,
+                    "error": f"No level {spell_level} spell slots available"
+                }
+
+        # Handle healing spells
+        if spell_data.get("healing"):
+            if not target_name:
+                return {
+                    "success": False,
+                    "error": "Healing spell requires a target"
+                }
+
+            target = self.party.get_character_by_name(target_name)
+            if not target:
+                return {
+                    "success": False,
+                    "error": f"Target '{target_name}' not found"
+                }
+
+            # Roll healing: dice + spellcasting modifier
+            healing_dice = spell_data["healing"].get("dice", "1d8")
+            healing_roll = self.dice_roller.roll(healing_dice)
+
+            # Get spellcasting modifier from abilities
+            if caster.spellcasting_ability == "int":
+                spellcasting_modifier = caster.abilities.int_mod
+            elif caster.spellcasting_ability == "wis":
+                spellcasting_modifier = caster.abilities.wis_mod
+            elif caster.spellcasting_ability == "cha":
+                spellcasting_modifier = caster.abilities.cha_mod
+            else:
+                spellcasting_modifier = 0
+
+            total_healing = healing_roll.total + spellcasting_modifier
+
+            # Apply healing
+            old_hp = target.current_hp
+            target.heal(total_healing)
+            actual_healing = target.current_hp - old_hp
+
+            # Consume spell slot for non-cantrips
+            if spell_level > 0:
+                caster.use_spell_slot(spell_level)
+
+            # Emit event
+            self.event_bus.emit(Event(
+                type=EventType.SPELL_CAST,
+                data={
+                    "caster": caster_name,
+                    "spell": spell_name,
+                    "target": target_name,
+                    "healing": actual_healing,
+                    "spell_level": spell_level
+                }
+            ))
+
+            return {
+                "success": True,
+                "message": f"{caster_name} cast {spell_name} on {target_name}",
+                "healing_amount": actual_healing,
+                "spell_name": spell_name,
+                "target": target_name,
+                "spell_level": spell_level
+            }
+
+        # Handle utility spells (Light, Detect Magic, etc.)
+        # For now, just provide flavor text and consume spell slot
+        # Future: could track duration, buffs, etc.
+        else:
+            # Consume spell slot for non-cantrips
+            if spell_level > 0:
+                caster.use_spell_slot(spell_level)
+
+            # Emit event
+            self.event_bus.emit(Event(
+                type=EventType.SPELL_CAST,
+                data={
+                    "caster": caster_name,
+                    "spell": spell_name,
+                    "spell_level": spell_level
+                }
+            ))
+
+            # Return spell description as flavor text
+            description = spell_data.get("description", f"{spell_name} takes effect.")
+
+            return {
+                "success": True,
+                "message": f"{caster_name} cast {spell_name}",
+                "spell_name": spell_name,
+                "description": description,
+                "spell_level": spell_level
+            }
+
     def _get_item_category(self, item_id: str) -> Optional[str]:
         """
         Determine the category of an item by ID.
