@@ -3,9 +3,11 @@
 
 import os
 from typing import Optional, List, Dict, Any, Tuple
+import random
 from dnd_engine.core.game_state import GameState
-from dnd_engine.core.character import Character
+from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Creature, Abilities
+from dnd_engine.core.character_factory import CharacterFactory
 from dnd_engine.ui.rich_ui import (
     print_error,
     print_status_message,
@@ -96,6 +98,10 @@ class DebugConsole:
             "learnspell": self.cmd_learn_spell,
             "forgetspell": self.cmd_forget_spell,
             "listspells": self.cmd_list_spells,
+
+            # MEDIUM - Party Management
+            "addcharacter": self.cmd_add_character,
+            "removecharacter": self.cmd_remove_character,
 
             # System
             "help": self.cmd_help,
@@ -1153,6 +1159,211 @@ class DebugConsole:
             print_message(f"\nFiltered by: {', '.join(filters)}")
 
     # =====================================================================
+    # MEDIUM PRIORITY - Party Management
+    # =====================================================================
+
+    def cmd_add_character(self, args: List[str]) -> None:
+        """Add a new character to the party with specified class, optional race and level."""
+        if len(args) < 1:
+            print_error("Usage: /addcharacter <class> [race] [level]")
+            print_message("Examples:")
+            print_message("  /addcharacter wizard            # random race, level 1")
+            print_message("  /addcharacter wizard elf        # specified race, level 1")
+            print_message("  /addcharacter wizard elf 3      # fully specified")
+            print_message("Available classes: fighter, wizard, rogue, cleric")
+            print_message("Available races: human, elf, dwarf, halfling")
+            return
+
+        class_name = args[0].lower()
+        race_name = None
+        level = 1
+
+        # Parse optional race argument
+        if len(args) >= 2:
+            # Check if second arg is a number (level) or race name
+            if args[1].isdigit():
+                # It's a level, pick random race
+                level = int(args[1])
+                if level < 1 or level > 20:
+                    print_error("Level must be between 1 and 20")
+                    return
+            else:
+                # It's a race name
+                race_name = args[1].lower()
+
+        # Parse optional level argument
+        if len(args) >= 3:
+            try:
+                level = int(args[2])
+                if level < 1 or level > 20:
+                    print_error("Level must be between 1 and 20")
+                    return
+            except ValueError:
+                print_error("Level must be a number")
+                return
+
+        # Load data
+        races_data = self.game_state.data_loader.load_races()
+        classes_data = self.game_state.data_loader.load_classes()
+        items_data = self.game_state.data_loader.load_items()
+        skills_data = self.game_state.data_loader.load_skills()
+        spells_data = self.game_state.data_loader.load_spells()
+
+        # Validate class
+        if class_name not in classes_data:
+            print_error(f"Invalid class: {class_name}")
+            print_message(f"Available: {', '.join(classes_data.keys())}")
+            return
+
+        # Handle race - pick random if not specified
+        if race_name is None:
+            race_name = random.choice(list(races_data.keys()))
+            print_message(f"Randomly selected race: {race_name}")
+        elif race_name not in races_data:
+            print_error(f"Invalid race: {race_name}")
+            print_message(f"Available: {', '.join(races_data.keys())}")
+            return
+
+        # Get class and race data
+        class_data = classes_data[class_name]
+        race_data = races_data[race_name]
+
+        # Generate random name
+        name_prefixes = ["Brave", "Bold", "Mighty", "Swift", "Wise", "Dark", "Noble", "Silent"]
+        name_suffixes = ["blade", "heart", "shield", "storm", "wind", "fire", "shadow", "light"]
+        name = f"{random.choice(name_prefixes)}{random.choice(name_suffixes)}"
+
+        # Create character factory
+        factory = CharacterFactory(self.game_state.dice_roller)
+
+        # Roll ability scores
+        all_rolls = factory.roll_all_abilities(self.game_state.dice_roller)
+        scores = [score for score, _ in all_rolls]
+
+        # Auto-assign abilities based on class priorities
+        abilities = factory.auto_assign_abilities(scores, class_data)
+
+        # Apply racial bonuses
+        abilities = factory.apply_racial_bonuses(abilities, race_data)
+
+        # Create abilities object
+        abilities_obj = Abilities(
+            strength=abilities["strength"],
+            dexterity=abilities["dexterity"],
+            constitution=abilities["constitution"],
+            intelligence=abilities["intelligence"],
+            wisdom=abilities["wisdom"],
+            charisma=abilities["charisma"]
+        )
+
+        # Calculate HP for the level
+        con_modifier = factory.calculate_ability_modifier(abilities["constitution"])
+        hit_die = class_data.get("hit_die", "1d8")
+        max_hit_die = int(hit_die.split("d")[1])
+
+        # Level 1: max hit die + CON
+        hp = max_hit_die + con_modifier
+
+        # Levels 2+: roll hit dice (we'll use average)
+        for _ in range(1, level):
+            avg_roll = (max_hit_die + 1) // 2  # Average of hit die
+            hp += avg_roll + con_modifier
+
+        hp = max(1, hp)
+
+        # Calculate AC
+        starting_equipment = class_data.get("starting_equipment", [])
+        armor_id = None
+        for item_id in starting_equipment:
+            if item_id in items_data.get("armor", {}):
+                armor_id = item_id
+                break
+
+        armor_data = items_data["armor"].get(armor_id) if armor_id else None
+        ac = factory.calculate_ac(armor_data, abilities_obj.dex_mod)
+
+        # Auto-select skill proficiencies (take first N available)
+        skill_profs = class_data.get("skill_proficiencies", {})
+        num_skills = skill_profs.get("choose", 0)
+        available_skills = skill_profs.get("from", [])
+        skill_proficiencies = available_skills[:num_skills]
+
+        # Get expertise for rogues (first 2 skills)
+        expertise_skills = []
+        if class_name == "rogue" and skill_proficiencies:
+            expertise_skills = skill_proficiencies[:2]
+
+        # Get weapon and armor proficiencies
+        weapon_proficiencies = class_data.get("weapon_proficiencies", [])
+        armor_proficiencies = class_data.get("armor_proficiencies", [])
+
+        # Create character
+        try:
+            character_class_enum = CharacterClass[class_name.upper()]
+        except KeyError:
+            print_error(f"Class not found in CharacterClass enum: {class_name}")
+            return
+
+        character = Character(
+            name=name,
+            character_class=character_class_enum,
+            level=level,
+            abilities=abilities_obj,
+            max_hp=hp,
+            ac=ac,
+            xp=0,
+            skill_proficiencies=skill_proficiencies,
+            expertise_skills=expertise_skills,
+            weapon_proficiencies=weapon_proficiencies,
+            armor_proficiencies=armor_proficiencies
+        )
+
+        # Store race and saving throws
+        character.race = race_name
+        character.saving_throw_proficiencies = class_data.get("saving_throw_proficiencies", [])
+
+        # Initialize class resources and spellcasting
+        factory.initialize_class_resources(character, class_data, level)
+        factory.initialize_spellcasting(character, class_data, spells_data, interactive=False)
+
+        # Apply starting equipment
+        factory.apply_starting_equipment(character, class_data, items_data)
+
+        # Add to party
+        self.game_state.party.add_character(character)
+
+        print_status_message(
+            f"Added {name} (Level {level} {race_data['name']} {class_data['name']}) to party",
+            "success"
+        )
+        print_message(f"HP: {character.current_hp}/{character.max_hp}, AC: {character.ac}")
+
+    def cmd_remove_character(self, args: List[str]) -> None:
+        """Remove a character from the party."""
+        if not args:
+            print_error("Usage: /removecharacter <character_name>")
+            return
+
+        char_name = " ".join(args)
+        character = self._find_character(char_name)
+
+        if not character:
+            return
+
+        # Confirm removal
+        print_message(f"This will remove {character.name} from the party.")
+        confirm = input("Confirm? (y/n): ").strip().lower()
+
+        if confirm != "y":
+            print_status_message("Cancelled", "warning")
+            return
+
+        # Remove from party
+        self.game_state.party.remove_character(character)
+
+        print_status_message(f"Removed {character.name} from party", "success")
+
+    # =====================================================================
     # System Commands
     # =====================================================================
 
@@ -1235,6 +1446,12 @@ class DebugConsole:
         table.add_row(
             "Spells",
             "/learnspell, /forgetspell, /listspells"
+        )
+
+        # MEDIUM - Party Management
+        table.add_row(
+            "Party",
+            "/addcharacter, /removecharacter"
         )
 
         # System
