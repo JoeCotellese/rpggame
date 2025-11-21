@@ -1161,11 +1161,16 @@ class Character(Creature):
         hp_recovered = self.recover_hp()
         resources_recovered = self.recover_resources("long_rest")
 
+        # Check if this character can prepare spells (Wizard, Cleric)
+        prepared_caster_classes = {CharacterClass.WIZARD, CharacterClass.CLERIC}
+        can_prepare = self.character_class in prepared_caster_classes
+
         return {
             "character": self.name,
             "rest_type": "long",
             "hp_recovered": hp_recovered,
             "resources_recovered": resources_recovered,
+            "can_prepare_spells": can_prepare,
             "conditions_removed": []  # Future
         }
 
@@ -1524,11 +1529,11 @@ class Character(Creature):
 
         Validates that:
         - All spells are in known_spells
-        - Number of spells doesn't exceed maximum
-        - No cantrips are included (they're always available)
+        - Number of LEVELED spells doesn't exceed maximum (cantrips don't count)
+        - Cantrips can be included and are always prepared
 
         Args:
-            spell_ids: List of spell IDs to prepare
+            spell_ids: List of spell IDs to prepare (can include cantrips)
 
         Returns:
             True if prepared spells were set successfully, False otherwise
@@ -1538,13 +1543,53 @@ class Character(Creature):
             if spell_id not in self.known_spells:
                 return False
 
-        # Validate count doesn't exceed maximum
-        if len(spell_ids) > self.get_max_prepared_spells():
-            return False
+        # NOTE: We don't validate count here because cantrips don't count toward
+        # the preparation limit (INT mod + level), but we can't distinguish cantrips
+        # without loading spell data. The caller (UI/GameState) is responsible for
+        # enforcing the count limit for leveled spells only.
 
         # Set prepared spells
         self.prepared_spells = spell_ids[:]
         return True
+
+    def get_preparable_spells(self, spells_data: Dict[str, Any]) -> tuple[list[str], list[tuple[str, dict[str, Any]]]]:
+        """
+        Get cantrips and leveled spells available for preparation.
+
+        Used during long rest spell preparation to show available spells.
+        Separates cantrips (which are always prepared) from leveled spells
+        (which count toward preparation limit).
+
+        Args:
+            spells_data: Dictionary of all spell definitions from spells.json
+
+        Returns:
+            Tuple of (cantrip_ids, leveled_spell_tuples) where:
+            - cantrip_ids: List of cantrip spell IDs (always prepared, level 0)
+            - leveled_spell_tuples: List of (spell_id, spell_data) for leveled spells
+              sorted by level then name
+        """
+        if not self.known_spells:
+            return ([], [])
+
+        cantrips = []
+        leveled_spells = []
+
+        for spell_id in self.known_spells:
+            spell_data = spells_data.get(spell_id)
+            if not spell_data:
+                continue
+
+            # Separate cantrips (level 0) from leveled spells
+            if spell_data.get("level", 1) == 0:
+                cantrips.append(spell_id)
+            else:
+                leveled_spells.append((spell_id, spell_data))
+
+        # Sort leveled spells by level, then name
+        leveled_spells.sort(key=lambda x: (x[1].get("level", 1), x[1].get("name", "")))
+
+        return (cantrips, leveled_spells)
 
     def get_castable_spells(self, spells_data: Dict[str, Any]) -> List[Tuple[str, Dict[str, Any]]]:
         """

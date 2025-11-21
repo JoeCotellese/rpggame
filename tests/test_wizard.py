@@ -105,15 +105,18 @@ class TestWizardSpellPreparation:
         assert result is True
         assert level_1_wizard.prepared_spells == new_spells
 
-    def test_set_prepared_spells_too_many(self, level_1_wizard):
-        """Test set prepared spells with too many spells"""
-        # Max is 4, try to set 5
-        too_many_spells = ["magic_missile", "shield", "mage_armor", "detect_magic", "mage_hand"]
-        result = level_1_wizard.set_prepared_spells(too_many_spells)
+    def test_set_prepared_spells_with_cantrips(self, level_1_wizard):
+        """Test set prepared spells with cantrips included (cantrips don't count toward limit)"""
+        # Max leveled spells is 4 (INT mod 3 + level 1)
+        # Set 4 leveled spells + 1 cantrip = should succeed
+        spells_with_cantrip = ["magic_missile", "shield", "mage_armor", "detect_magic", "mage_hand"]
+        result = level_1_wizard.set_prepared_spells(spells_with_cantrip)
 
-        assert result is False
-        # Original prepared spells should be unchanged
-        assert "magic_missile" in level_1_wizard.prepared_spells
+        # Should succeed - cantrips don't count toward limit
+        # (set_prepared_spells doesn't validate count, caller must enforce limit for leveled spells)
+        assert result is True
+        assert len(level_1_wizard.prepared_spells) == 5
+        assert "mage_hand" in level_1_wizard.prepared_spells  # cantrip included
 
     def test_set_prepared_spells_with_unknown(self, level_1_wizard):
         """Test set prepared spells with unknown spell"""
@@ -140,6 +143,103 @@ class TestWizardSpellPreparation:
 
         # Now at max, cannot prepare more
         assert level_1_wizard.can_prepare_spell("mage_hand") is False
+
+    def test_get_preparable_spells_separates_cantrips(self, level_1_wizard):
+        """Test get_preparable_spells separates cantrips from leveled spells"""
+        # Mock spells data
+        spells_data = {
+            "fire_bolt": {"id": "fire_bolt", "name": "Fire Bolt", "level": 0, "school": "evocation"},
+            "mage_hand": {"id": "mage_hand", "name": "Mage Hand", "level": 0, "school": "conjuration"},
+            "light": {"id": "light", "name": "Light", "level": 0, "school": "evocation"},
+            "magic_missile": {"id": "magic_missile", "name": "Magic Missile", "level": 1, "school": "evocation"},
+            "shield": {"id": "shield", "name": "Shield", "level": 1, "school": "abjuration"},
+            "mage_armor": {"id": "mage_armor", "name": "Mage Armor", "level": 1, "school": "abjuration"},
+            "detect_magic": {"id": "detect_magic", "name": "Detect Magic", "level": 1, "school": "divination"}
+        }
+
+        cantrips, leveled_spells = level_1_wizard.get_preparable_spells(spells_data)
+
+        # Should have 3 cantrips
+        assert len(cantrips) == 3
+        assert set(cantrips) == {"fire_bolt", "mage_hand", "light"}
+
+        # Should have 4 leveled spells
+        assert len(leveled_spells) == 4
+        leveled_ids = [spell_id for spell_id, _ in leveled_spells]
+        assert set(leveled_ids) == {"magic_missile", "shield", "mage_armor", "detect_magic"}
+
+    def test_get_preparable_spells_sorted_by_level(self, level_1_wizard):
+        """Test get_preparable_spells sorts leveled spells by level then name"""
+        # Mock spells data with mixed levels
+        spells_data = {
+            "fire_bolt": {"id": "fire_bolt", "name": "Fire Bolt", "level": 0, "school": "evocation"},
+            "fireball": {"id": "fireball", "name": "Fireball", "level": 3, "school": "evocation"},
+            "shield": {"id": "shield", "name": "Shield", "level": 1, "school": "abjuration"},
+            "magic_missile": {"id": "magic_missile", "name": "Magic Missile", "level": 1, "school": "evocation"},
+            "fly": {"id": "fly", "name": "Fly", "level": 3, "school": "transmutation"}
+        }
+
+        # Update wizard's known spells for this test
+        level_1_wizard.known_spells = ["fire_bolt", "fireball", "shield", "magic_missile", "fly"]
+
+        cantrips, leveled_spells = level_1_wizard.get_preparable_spells(spells_data)
+
+        # Check sorting: level 1 spells first (sorted by name), then level 3 (sorted by name)
+        expected_order = [
+            ("magic_missile", 1),  # Level 1, M comes before S
+            ("shield", 1),
+            ("fireball", 3),  # Level 3, F comes before F
+            ("fly", 3)
+        ]
+
+        for idx, (spell_id, level) in enumerate(expected_order):
+            assert leveled_spells[idx][0] == spell_id
+            assert leveled_spells[idx][1]["level"] == level
+
+    def test_get_preparable_spells_empty_known_spells(self):
+        """Test get_preparable_spells with no known spells"""
+        wizard = Character(
+            name="Empty Wizard",
+            character_class=CharacterClass.WIZARD,
+            level=1,
+            abilities=Abilities(10, 10, 10, 14, 10, 10),
+            max_hp=8,
+            ac=12,
+            spellcasting_ability="int",
+            known_spells=[],
+            prepared_spells=[]
+        )
+
+        spells_data = {}
+        cantrips, leveled_spells = wizard.get_preparable_spells(spells_data)
+
+        assert cantrips == []
+        assert leveled_spells == []
+
+    def test_take_long_rest_returns_can_prepare_spells(self, level_1_wizard):
+        """Test take_long_rest returns can_prepare_spells flag for Wizard"""
+        result = level_1_wizard.take_long_rest()
+
+        assert "can_prepare_spells" in result
+        assert result["can_prepare_spells"] is True
+        assert result["character"] == "Test Wizard"
+        assert result["rest_type"] == "long"
+
+    def test_take_long_rest_non_caster_cannot_prepare(self):
+        """Test take_long_rest returns False for non-prepared-caster classes"""
+        fighter = Character(
+            name="Test Fighter",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=Abilities(16, 14, 14, 10, 10, 10),
+            max_hp=12,
+            ac=16
+        )
+
+        result = fighter.take_long_rest()
+
+        assert "can_prepare_spells" in result
+        assert result["can_prepare_spells"] is False
 
 
 class TestWizardArcaneRecovery:

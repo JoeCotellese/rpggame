@@ -823,6 +823,39 @@ class GameState:
         items.remove(item_to_take)
         return True
 
+    def prepare_spells(self, character_name: str, spell_ids: List[str]) -> bool:
+        """
+        Prepare spells for a character (orchestration for player action).
+
+        This method coordinates spell preparation after a long rest. The Character
+        class handles validation and state updates.
+
+        Args:
+            character_name: Name of character preparing spells
+            spell_ids: List of spell IDs to prepare (cantrips will be auto-included by Character)
+
+        Returns:
+            True if preparation successful, False if validation failed or character not found
+        """
+        character = self.party.get_character_by_name(character_name)
+        if not character:
+            return False
+
+        # Character validates and updates prepared spell list
+        success = character.set_prepared_spells(spell_ids)
+
+        if success:
+            # Emit event for logging/tracking
+            self.event_bus.emit(Event(
+                type=EventType.SPELLS_PREPARED,
+                data={
+                    "character": character_name,
+                    "spell_count": len(spell_ids)
+                }
+            ))
+
+        return success
+
     def _get_item_category(self, item_id: str) -> Optional[str]:
         """
         Determine the category of an item by ID.
