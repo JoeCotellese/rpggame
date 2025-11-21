@@ -474,13 +474,18 @@ class TestGetCastableSpells:
     """Test Character.get_castable_spells() method."""
 
     def test_wizard_shows_prepared_spells_only(self, wizard_abilities):
-        """Wizard should only see prepared spells, not all known spells."""
+        """Wizard should only see prepared spells, not all known spells.
+
+        In D&D 5E, wizards must prepare spells from their spellbook each day.
+        Cantrips are always prepared once known.
+        """
         wizard = Character("Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12)
 
         # Set up spellcasting
         wizard.spellcasting_ability = "intelligence"
         wizard.known_spells = ["fire_bolt", "ray_of_frost", "magic_missile", "shield", "mage_armor"]
-        wizard.prepared_spells = ["magic_missile", "shield"]  # Only 2 prepared
+        # Cantrips (fire_bolt) + prepared leveled spells
+        wizard.prepared_spells = ["fire_bolt", "magic_missile", "shield"]
 
         # Mock spells data
         spells_data = {
@@ -495,11 +500,11 @@ class TestGetCastableSpells:
         castable_ids = [spell_id for spell_id, _ in castable]
 
         # Should only show prepared spells that are combat-relevant
-        assert "magic_missile" in castable_ids  # Has damage
-        assert "shield" in castable_ids  # Is a reaction
-        assert "mage_armor" not in castable_ids  # Not prepared
-        assert "fire_bolt" not in castable_ids  # Known but not prepared (cantrips should be in known AND prepared)
-        assert "ray_of_frost" not in castable_ids  # Known but not prepared
+        assert "fire_bolt" in castable_ids  # Cantrip - always prepared once known
+        assert "magic_missile" in castable_ids  # Prepared and has damage
+        assert "shield" in castable_ids  # Prepared and is a reaction
+        assert "ray_of_frost" not in castable_ids  # Known cantrip but not in prepared list
+        assert "mage_armor" not in castable_ids  # Known but not prepared
 
     def test_includes_attack_spells(self, wizard_abilities):
         """Should include spells with attack_type."""
@@ -590,12 +595,16 @@ class TestGetCastableSpells:
 
         assert levels == [0, 1, 2, 3]  # Sorted by level
 
-    def test_falls_back_to_known_spells(self, wizard_abilities):
-        """If prepared_spells is empty, should use known_spells (for sorcerers/bards)."""
+    def test_wizard_with_empty_prepared_spells(self, wizard_abilities):
+        """Wizard with empty prepared_spells should show no spells.
+
+        Prepared casters (Wizard, Cleric) with no prepared spells cannot cast
+        any leveled spells or cantrips until they prepare them.
+        """
         wizard = Character("Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12)
         wizard.spellcasting_ability = "intelligence"
         wizard.known_spells = ["fire_bolt", "magic_missile"]
-        wizard.prepared_spells = []  # Empty
+        wizard.prepared_spells = []  # Empty - hasn't prepared anything
 
         spells_data = {
             "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack"},
@@ -603,7 +612,7 @@ class TestGetCastableSpells:
         }
 
         castable = wizard.get_castable_spells(spells_data)
-        assert len(castable) == 2
+        assert len(castable) == 0  # No spells prepared means nothing castable
 
     def test_cantrips_always_show_in_prepared_spells(self, wizard_abilities):
         """Cantrips should show if they're in prepared_spells."""
@@ -626,3 +635,64 @@ class TestGetCastableSpells:
         assert "ray_of_frost" in castable_ids
         assert "magic_missile" in castable_ids
         assert len(castable) == 3
+
+    def test_wizard_with_none_prepared_spells(self, wizard_abilities):
+        """Wizard with None prepared_spells should handle gracefully."""
+        wizard = Character("Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12)
+        wizard.spellcasting_ability = "intelligence"
+        wizard.known_spells = ["fire_bolt", "magic_missile"]
+        wizard.prepared_spells = None  # Not [], but None
+
+        spells_data = {
+            "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack"},
+            "magic_missile": {"name": "Magic Missile", "level": 1, "damage": {"dice": "1d4+1"}},
+        }
+
+        castable = wizard.get_castable_spells(spells_data)
+        assert len(castable) == 0  # Should return empty list, not crash
+
+    def test_cleric_uses_prepared_spells(self, wizard_abilities):
+        """Cleric should use prepared_spells like Wizard (prepared caster)."""
+        cleric = Character("Healer", CharacterClass.CLERIC, level=1, abilities=wizard_abilities, max_hp=10, ac=16)
+        cleric.spellcasting_ability = "wisdom"
+        cleric.known_spells = ["sacred_flame", "cure_wounds", "bless", "shield_of_faith"]
+        cleric.prepared_spells = ["sacred_flame", "cure_wounds"]  # Only 2 prepared
+
+        spells_data = {
+            "sacred_flame": {"name": "Sacred Flame", "level": 0, "saving_throw_type": "dexterity", "damage": {"dice": "1d8"}},
+            "cure_wounds": {"name": "Cure Wounds", "level": 1, "damage": {"dice": "1d8"}},  # Healing is damage for filtering
+            "bless": {"name": "Bless", "level": 1},  # No combat properties
+            "shield_of_faith": {"name": "Shield of Faith", "level": 1},  # No combat properties
+        }
+
+        castable = cleric.get_castable_spells(spells_data)
+        castable_ids = [spell_id for spell_id, _ in castable]
+
+        # Should only show prepared combat-relevant spells
+        assert "sacred_flame" in castable_ids
+        assert "cure_wounds" in castable_ids
+        assert "bless" not in castable_ids  # Not prepared
+        assert "shield_of_faith" not in castable_ids  # Not prepared
+
+    def test_non_caster_uses_known_spells(self, wizard_abilities):
+        """Non-caster classes (Fighter, Rogue) should use known_spells if they have any.
+
+        This is for edge cases like Eldritch Knight or Arcane Trickster subclasses.
+        """
+        fighter = Character("Warrior", CharacterClass.FIGHTER, level=3, abilities=wizard_abilities, max_hp=30, ac=18)
+        fighter.spellcasting_ability = "intelligence"
+        fighter.known_spells = ["fire_bolt", "shield"]  # Eldritch Knight knows these
+        fighter.prepared_spells = None  # Fighters don't prepare spells
+
+        spells_data = {
+            "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack"},
+            "shield": {"name": "Shield", "level": 1, "casting_time": "1 reaction"},
+        }
+
+        castable = fighter.get_castable_spells(spells_data)
+        castable_ids = [spell_id for spell_id, _ in castable]
+
+        # Should use known_spells for non-prepared caster classes
+        assert "fire_bolt" in castable_ids
+        assert "shield" in castable_ids
+        assert len(castable) == 2

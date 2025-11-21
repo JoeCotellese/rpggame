@@ -1566,10 +1566,16 @@ class Character(Creature):
             - UI should indicate when spell slots are unavailable
             - Excludes out-of-combat rituals and non-combat utility spells
         """
-        # Determine which spell list to use
-        # Wizards and clerics use prepared_spells
-        # Sorcerers and bards use known_spells directly
-        spell_list = self.prepared_spells if self.prepared_spells else self.known_spells
+        # Determine which spell list to use based on class
+        # Prepared casters (Wizard, Cleric) use prepared_spells
+        # Known casters (future: Sorcerer, Bard, Warlock, Ranger) use known_spells directly
+        prepared_caster_classes = {CharacterClass.WIZARD, CharacterClass.CLERIC}
+
+        if self.character_class in prepared_caster_classes:
+            spell_list = self.prepared_spells if self.prepared_spells else []
+        else:
+            # Known casters or non-casters
+            spell_list = self.known_spells if self.known_spells else []
 
         castable = []
         for spell_id in spell_list:
@@ -1582,7 +1588,6 @@ class Character(Creature):
             # 2. Has a saving throw (AoE, debuff, etc.)
             # 3. Has damage (even if no attack/save, like Magic Missile)
             # 4. Is a reaction spell (Shield, Counterspell, etc.)
-            # 5. Has specific combat utility effects
 
             has_attack = spell_data.get("attack_type") is not None
             has_save = spell_data.get("saving_throw_type") is not None
