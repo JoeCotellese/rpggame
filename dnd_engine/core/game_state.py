@@ -1004,6 +1004,9 @@ class GameState:
         # Handle utility spells (Light, Detect Magic, etc.) with duration tracking
         else:
             # Determine target (default to caster if not specified)
+            # This is a simplification: spells like Shield apply to caster,
+            # while spells like Light might target an object. For MVP, we assume
+            # the caster is a reasonable default target for tracking purposes.
             if not target_name:
                 target_name = caster_name
 

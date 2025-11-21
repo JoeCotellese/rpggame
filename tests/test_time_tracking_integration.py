@@ -187,6 +187,7 @@ class TestCombatTimeAdvancement:
             game_state.initiative_tracker.next_turn()
 
         # Time should advance by 0.1 minutes per round
+        # Using tolerance check due to floating point arithmetic (0.1 * 3 may not equal exactly 0.3)
         expected_time = initial_time + (rounds * 0.1)
         assert abs(game_state.time_manager.elapsed_minutes - expected_time) < 0.01
 

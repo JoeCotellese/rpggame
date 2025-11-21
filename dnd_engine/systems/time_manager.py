@@ -2,9 +2,15 @@
 # ABOUTME: Handles duration parsing, active effect tracking, and automatic expiration
 
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from enum import Enum
 import re
+import logging
+
+if TYPE_CHECKING:
+    from dnd_engine.utils.events import EventBus
+
+logger = logging.getLogger(__name__)
 
 
 class EffectType(str, Enum):
@@ -178,7 +184,7 @@ class TimeManager:
     over time. Emits events when time advances and effects expire.
     """
 
-    def __init__(self, event_bus=None):
+    def __init__(self, event_bus: Optional["EventBus"] = None) -> None:
         """
         Initialize the TimeManager.
 
@@ -213,13 +219,15 @@ class TimeManager:
         Advance game time and process effect expirations.
 
         Args:
-            minutes: Number of minutes to advance
+            minutes: Number of minutes to advance (must be positive)
             reason: Reason for time advancement (for events)
 
         Returns:
             List of effects that expired during this advancement
         """
         if minutes <= 0:
+            if minutes < 0:
+                logger.warning(f"Attempted to advance time by negative amount: {minutes} minutes (reason: {reason})")
             return []
 
         old_elapsed = self.elapsed_minutes
@@ -279,11 +287,20 @@ class TimeManager:
         """
         Add a new timed effect to track.
 
+        If an effect with the same source and target already exists, it will be
+        replaced with the new effect. This allows recasting the same spell on the
+        same target to refresh its duration.
+
+        Examples:
+            - Casting "Light" on Torch1, then "Light" on Torch1 again -> replaces
+            - Casting "Light" on Torch1, then "Light" on Torch2 -> both active
+            - Casting "Bless" on Fighter, then "Bless" on Fighter -> replaces
+
         Args:
             effect: The effect to add
         """
         # Check if target already has this effect from same source
-        # If so, replace it with the new one
+        # If so, replace it with the new one (recasting refreshes duration)
         self.active_effects = [
             e for e in self.active_effects
             if not (e.target_name == effect.target_name and e.source == effect.source)
