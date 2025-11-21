@@ -1658,10 +1658,11 @@ class GameState:
         # Apply special effects on hit
         special_effects = []
         if attack_result.hit:
-            # Alchemist's Fire: ongoing fire damage
-            if "alchemist" in item_id.lower() or "alchemist" in item_name.lower():
-                target.add_condition("on_fire")
-                special_effects.append("on_fire")
+            # Apply condition if item has applies_condition field (e.g., Alchemist's Fire → on_fire)
+            applies_condition = used_item_data.get("applies_condition")
+            if applies_condition:
+                target.add_condition(applies_condition)
+                special_effects.append(applies_condition)
 
         # Emit item used event
         self.event_bus.emit(Event(
