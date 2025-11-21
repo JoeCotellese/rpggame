@@ -6,6 +6,7 @@
     "room1": {
       "name": "Test Room 1",
       "description": "A simple test room",
+      "lighting": "bright",
       "exits": {},
       "enemies": [],
       "items": [],

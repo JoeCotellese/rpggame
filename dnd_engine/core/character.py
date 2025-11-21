@@ -108,6 +108,9 @@ class Character(Creature):
         self.death_save_failures: int = 0
         self.stabilized: bool = False
 
+        # Darkvision range in feet (0 if no darkvision)
+        self.darkvision_range: int = 0
+
     @property
     def proficiency_bonus(self) -> int:
         """

@@ -122,6 +122,39 @@ class GameState:
         """
         return self.dungeon["rooms"][self.current_room_id]
 
+    def get_effective_lighting(self, character: "Character") -> str:
+        """
+        Calculate the effective lighting level for a character in the current room.
+
+        Takes into account:
+        - Base room lighting
+        - Temporary lighting effects (Light spell, torches)
+        - Character's darkvision
+
+        Args:
+            character: Character to calculate lighting for
+
+        Returns:
+            "bright", "dim", or "dark" - the effective lighting level
+        """
+        room = self.get_current_room()
+        base_lighting = room.get("lighting", "bright")
+
+        # Check for temporary lighting effects (Light spell, etc.)
+        # Look for active lighting effects in the time manager
+        from dnd_engine.systems.time_manager import EffectType
+        for effect in self.time_manager.active_effects:
+            if effect.effect_type == EffectType.SPELL and effect.source.lower() == "light":
+                # Light spell provides bright light
+                return "bright"
+
+        # If room is dark and character has darkvision, treat as dim
+        if base_lighting == "dark" and character.darkvision_range > 0:
+            return "dim"
+
+        # Otherwise, return base room lighting
+        return base_lighting
+
     def get_available_actions(self) -> List[str]:
         """
         Get list of available actions in the current state.
@@ -471,8 +504,49 @@ class GameState:
             dc = check["dc"]
             action = check.get("action", f"examine {direction} exit")
 
+            # Apply lighting penalties for sight-based checks
+            disadvantage = False
+            if skill == "perception":
+                lighting = self.get_effective_lighting(character)
+                if lighting == "dim":
+                    disadvantage = True
+                elif lighting == "dark":
+                    # In complete darkness, sight-based Perception checks auto-fail
+                    check_result = {
+                        "skill": skill,
+                        "dc": dc,
+                        "roll": 0,
+                        "modifier": 0,
+                        "total": 0,
+                        "success": False
+                    }
+                    # Emit skill check event
+                    self.event_bus.emit(Event(
+                        type=EventType.SKILL_CHECK,
+                        data={
+                            "character": character.name,
+                            "skill": skill,
+                            "dc": dc,
+                            "roll": 0,
+                            "modifier": 0,
+                            "total": 0,
+                            "success": False,
+                            "action": action,
+                            "success_text": None,
+                            "failure_text": "You can't see anything in the complete darkness"
+                        }
+                    ))
+                    results.append({
+                        "skill": skill,
+                        "dc": dc,
+                        "action": action,
+                        "success": False,
+                        "check_result": check_result
+                    })
+                    continue
+
             # Make skill check
-            check_result = character.make_skill_check(skill, dc, skills_data)
+            check_result = character.make_skill_check(skill, dc, skills_data, disadvantage=disadvantage)
 
             # Emit skill check event
             self.event_bus.emit(Event(
@@ -573,8 +647,48 @@ class GameState:
             skill = check["skill"]
             dc = check["dc"]
 
+            # Apply lighting penalties for sight-based checks
+            disadvantage = False
+            if skill == "perception":
+                lighting = self.get_effective_lighting(character)
+                if lighting == "dim":
+                    disadvantage = True
+                elif lighting == "dark":
+                    # In complete darkness, sight-based Perception checks auto-fail
+                    check_result = {
+                        "skill": skill,
+                        "dc": dc,
+                        "roll": 0,
+                        "modifier": 0,
+                        "total": 0,
+                        "success": False
+                    }
+                    # Emit skill check event
+                    self.event_bus.emit(Event(
+                        type=EventType.SKILL_CHECK,
+                        data={
+                            "character": character.name,
+                            "skill": skill,
+                            "dc": dc,
+                            "roll": 0,
+                            "modifier": 0,
+                            "total": 0,
+                            "success": False,
+                            "action": f"examine {object_name}",
+                            "success_text": None,
+                            "failure_text": "You can't see anything in the complete darkness"
+                        }
+                    ))
+                    results.append({
+                        "skill": skill,
+                        "dc": dc,
+                        "success": False,
+                        "check_result": check_result
+                    })
+                    continue
+
             # Make skill check
-            check_result = character.make_skill_check(skill, dc, skills_data)
+            check_result = character.make_skill_check(skill, dc, skills_data, disadvantage=disadvantage)
 
             # Emit skill check event
             self.event_bus.emit(Event(
@@ -1220,6 +1334,14 @@ class GameState:
                 # Calculate passive Perception: 10 + Perception modifier
                 perception_mod = character.get_skill_modifier("perception", skills_data)
                 passive_perception = 10 + perception_mod
+
+                # Apply lighting penalties (disadvantage = -5 for passive checks)
+                lighting = self.get_effective_lighting(character)
+                if lighting == "dim":
+                    passive_perception -= 5
+                elif lighting == "dark":
+                    # In complete darkness, automatic failure for sight-based checks
+                    passive_perception = 0
 
                 success = passive_perception >= dc
 
