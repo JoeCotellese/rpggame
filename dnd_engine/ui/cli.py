@@ -121,12 +121,18 @@ class CLI:
         # Try to get enhanced description from LLM
         enhanced_desc = None
         if self.llm_enhancer:
+            # Load full monster data for creature-aware prompts
+            monsters_data = self.game_state.data_loader.load_monsters()
+            party_size = len(self.game_state.party.characters)
+
             room_data = {
                 "id": room.get("id", room_name.lower().replace(" ", "_")),
                 "name": room_name,
                 "description": basic_desc,
                 "monsters": monster_names,  # Include monster info for LLM
-                "combat_starting": combat_starting  # Flag for combat initiation narrative
+                "combat_starting": combat_starting,  # Flag for combat initiation narrative
+                "monsters_data": monsters_data,  # Full monster definitions for creature-aware prompts
+                "party_size": party_size  # Party size for combat context
             }
             with console.status("", spinner="dots"):
                 enhanced_desc = self.llm_enhancer.get_room_description_sync(room_data, timeout=3.0)

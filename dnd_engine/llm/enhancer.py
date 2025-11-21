@@ -158,15 +158,29 @@ class LLMEnhancer:
             return
 
         room_data = event.data
-        cache_key = f"room_{room_data.get('id', 'unknown')}"
         combat_starting = room_data.get('combat_starting', False)
+        monsters = room_data.get('monsters', [])
+        monsters_data = room_data.get('monsters_data')
+        party_size = room_data.get('party_size', 1)
+
+        # Build cache key that includes monster presence to avoid stale descriptions
+        # after combat ends (e.g., "room_laboratory" vs "room_laboratory_combat_2_goblins")
+        monster_suffix = ""
+        if monsters:
+            monster_suffix = f"_combat_{len(monsters)}_monsters"
+        cache_key = f"room_{room_data.get('id', 'unknown')}{monster_suffix}"
 
         # Check cache
         if self.cache is not None and cache_key in self.cache:
             enhanced = self.cache[cache_key]
         else:
             # Generate enhancement with timing
-            prompt = build_room_description_prompt(room_data, combat_starting=combat_starting)
+            prompt = build_room_description_prompt(
+                room_data,
+                combat_starting=combat_starting,
+                monsters_data=monsters_data,
+                party_size=party_size
+            )
             start_time = time.time()
             enhanced = await self.provider.generate(prompt)
             latency_ms = (time.time() - start_time) * 1000
@@ -415,13 +429,27 @@ class LLMEnhancer:
         if not self.provider:
             return None
 
+        combat_starting = room_data.get('combat_starting', False)
+        monsters = room_data.get('monsters', [])
+        monsters_data = room_data.get('monsters_data')
+        party_size = room_data.get('party_size', 1)
+
+        # Build cache key that includes monster presence to avoid stale descriptions
+        # after combat ends (e.g., "room_laboratory" vs "room_laboratory_combat_2_goblins")
+        monster_suffix = ""
+        if monsters:
+            monster_suffix = f"_combat_{len(monsters)}_monsters"
+        cache_key = f"room_{room_data.get('id', 'unknown')}{monster_suffix}"
+
         # Check cache first
-        cache_key = f"room_{room_data.get('id', 'unknown')}"
         if self.cache and cache_key in self.cache:
             return self.cache[cache_key]
-
-        combat_starting = room_data.get('combat_starting', False)
-        prompt = build_room_description_prompt(room_data, combat_starting=combat_starting)
+        prompt = build_room_description_prompt(
+            room_data,
+            combat_starting=combat_starting,
+            monsters_data=monsters_data,
+            party_size=party_size
+        )
 
         async def generate():
             start_time = time.time()
