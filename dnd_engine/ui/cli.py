@@ -118,22 +118,23 @@ class CLI:
         # Combat starts if there are enemies and we're not already in combat
         combat_starting = bool(enemy_ids) and not self.game_state.in_combat
 
+        # Calculate effective lighting for each party member
+        # (used for both LLM enhancement and UI display)
+        party_lighting = []
+        for char in self.game_state.party.characters:
+            lighting = self.game_state.get_effective_lighting(char)
+            party_lighting.append({
+                "character": char.name,
+                "lighting": lighting,
+                "has_darkvision": char.darkvision_range > 0
+            })
+
         # Try to get enhanced description from LLM
         enhanced_desc = None
         if self.llm_enhancer:
             # Load full monster data for creature-aware prompts
             monsters_data = self.game_state.data_loader.load_monsters()
             party_size = len(self.game_state.party.characters)
-
-            # Calculate effective lighting for the party leader (first character)
-            party_lighting = []
-            for char in self.game_state.party.characters:
-                lighting = self.game_state.get_effective_lighting(char)
-                party_lighting.append({
-                    "character": char.name,
-                    "lighting": lighting,
-                    "has_darkvision": char.darkvision_range > 0
-                })
 
             room_data = {
                 "id": room.get("id", room_name.lower().replace(" ", "_")),
