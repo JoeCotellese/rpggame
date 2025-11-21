@@ -659,8 +659,8 @@ class TestPartyManagementCommands:
 
         initial_count = len(party.characters)
 
-        # Try level > 20
-        console.cmd_add_character(["wizard", "elf", "25"])
+        # Try level > 20 (use valid race so it tests level validation)
+        console.cmd_add_character(["wizard", "high_elf", "25"])
 
         # Should not add character
         assert len(party.characters) == initial_count

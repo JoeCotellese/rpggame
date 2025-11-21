@@ -1164,11 +1164,13 @@ class DebugConsole:
 
     def cmd_add_character(self, args: List[str]) -> None:
         """Add a new character to the party with specified class, optional race and level."""
-        if len(args) < 1:
-            # Load data to show actual available options
-            classes_data = self.game_state.data_loader.load_classes()
-            races_data = self.game_state.data_loader.load_races()
+        # Load data once at the start
+        races_data = self.game_state.data_loader.load_races()
+        classes_data = self.game_state.data_loader.load_classes()
+        items_data = self.game_state.data_loader.load_items()
+        spells_data = self.game_state.data_loader.load_spells()
 
+        if len(args) < 1:
             print_error("Usage: /addcharacter <class> [race] [level]")
             print_message("Examples:")
             print_message("  /addcharacter wizard            # random race, level 1")
@@ -1205,13 +1207,6 @@ class DebugConsole:
             except ValueError:
                 print_error("Level must be a number")
                 return
-
-        # Load data
-        races_data = self.game_state.data_loader.load_races()
-        classes_data = self.game_state.data_loader.load_classes()
-        items_data = self.game_state.data_loader.load_items()
-        skills_data = self.game_state.data_loader.load_skills()
-        spells_data = self.game_state.data_loader.load_spells()
 
         # Validate class
         if class_name not in classes_data:
@@ -1260,20 +1255,9 @@ class DebugConsole:
             charisma=abilities["charisma"]
         )
 
-        # Calculate HP for the level
+        # Calculate HP for level 1 using factory method
         con_modifier = factory.calculate_ability_modifier(abilities["constitution"])
-        hit_die = class_data.get("hit_die", "1d8")
-        max_hit_die = int(hit_die.split("d")[1])
-
-        # Level 1: max hit die + CON
-        hp = max_hit_die + con_modifier
-
-        # Levels 2+: roll hit dice (we'll use average)
-        for _ in range(1, level):
-            avg_roll = (max_hit_die + 1) // 2  # Average of hit die
-            hp += avg_roll + con_modifier
-
-        hp = max(1, hp)
+        hp = factory.calculate_hp(class_data, con_modifier, level=1)
 
         # Calculate AC
         starting_equipment = class_data.get("starting_equipment", [])
@@ -1311,7 +1295,7 @@ class DebugConsole:
         character = Character(
             name=name,
             character_class=character_class_enum,
-            level=level,
+            level=1,  # Start at level 1, will level up below
             abilities=abilities_obj,
             max_hp=hp,
             ac=ac,
@@ -1326,7 +1310,12 @@ class DebugConsole:
         character.race = race_name
         character.saving_throw_proficiencies = class_data.get("saving_throw_proficiencies", [])
 
-        # Initialize class resources and spellcasting
+        # Level up character to target level (uses actual dice roller)
+        for _ in range(1, level):
+            character.level += 1
+            character._increase_hp(self.game_state.data_loader)
+
+        # Initialize class resources and spellcasting for final level
         factory.initialize_class_resources(character, class_data, level)
         factory.initialize_spellcasting(character, class_data, spells_data, interactive=False)
 
