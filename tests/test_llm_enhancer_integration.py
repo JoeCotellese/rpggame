@@ -408,3 +408,111 @@ class TestLLMEnhancer:
         assert mock_provider.last_prompt is not None
         assert "hostile" not in mock_provider.last_prompt
         assert "combat begins" not in mock_provider.last_prompt.lower()
+
+    @pytest.mark.asyncio
+    async def test_enhancer_creature_aware_prompts(self) -> None:
+        """Test that creature-aware prompts include monster type, size, and alignment."""
+        from dnd_engine.llm.enhancer import LLMEnhancer
+
+        mock_provider = MockLLMProvider(
+            response="The skeletal guardians turn toward you with mechanical precision, "
+            "raising their rusted weapons as they begin their relentless advance."
+        )
+        event_bus = EventBus()
+        enhancer = LLMEnhancer(mock_provider, event_bus)
+
+        # Mock monster data (structure from monsters.json)
+        monsters_data = {
+            "skeleton": {
+                "name": "Skeleton",
+                "type": "undead",
+                "size": "medium",
+                "alignment": "lawful evil",
+                "ac": 13,
+                "hp_average": 13
+            },
+            "goblin": {
+                "name": "Goblin",
+                "type": "humanoid (goblinoid)",
+                "size": "small",
+                "alignment": "neutral evil",
+                "ac": 15,
+                "hp_average": 7
+            },
+            "wolf": {
+                "name": "Wolf",
+                "type": "beast",
+                "size": "medium",
+                "alignment": "unaligned",
+                "ac": 13,
+                "hp_average": 11
+            }
+        }
+
+        # Test with undead creatures
+        room_data = {
+            "id": "crypt",
+            "name": "Ancient Crypt",
+            "description": "Two skeletal warriors stand guard.",
+            "monsters": ["Skeleton", "Skeleton"],
+            "combat_starting": True,
+            "monsters_data": monsters_data,
+            "party_size": 4
+        }
+        description = enhancer.get_room_description_sync(room_data, timeout=3.0)
+
+        # Verify enhancement
+        assert description is not None
+
+        # Verify the prompt includes creature-aware behavior guidance
+        assert mock_provider.last_prompt is not None
+        prompt = mock_provider.last_prompt
+
+        # Should include party size context
+        assert "4 adventurers" in prompt or "Party size: 4" in prompt
+
+        # Should include creature behavior guidance for undead
+        assert "Undead" in prompt
+        assert "mechanical" in prompt.lower() or "relentless" in prompt.lower()
+
+        # Test with humanoid creatures
+        room_data = {
+            "id": "guard_post",
+            "name": "Guard Post",
+            "description": "Two goblins stand watch.",
+            "monsters": ["Goblin", "Goblin"],
+            "combat_starting": True,
+            "monsters_data": monsters_data,
+            "party_size": 2
+        }
+        description = enhancer.get_room_description_sync(room_data, timeout=3.0)
+
+        # Verify enhancement
+        assert description is not None
+
+        # Verify the prompt includes creature-aware behavior guidance for humanoids
+        prompt = mock_provider.last_prompt
+        assert "2 adventurers" in prompt or "Party size: 2" in prompt
+        assert "Humanoid" in prompt
+        assert "tactical" in prompt.lower() or "weapon" in prompt.lower()
+
+        # Test with beast creatures
+        room_data = {
+            "id": "den",
+            "name": "Wolf Den",
+            "description": "A wolf guards its territory.",
+            "monsters": ["Wolf"],
+            "combat_starting": True,
+            "monsters_data": monsters_data,
+            "party_size": 1
+        }
+        description = enhancer.get_room_description_sync(room_data, timeout=3.0)
+
+        # Verify enhancement
+        assert description is not None
+
+        # Verify the prompt includes creature-aware behavior guidance for beasts
+        prompt = mock_provider.last_prompt
+        assert "1 adventurer" in prompt or "Party size: 1" in prompt
+        assert "Beast" in prompt
+        assert "feral" in prompt.lower() or "snarl" in prompt.lower() or "prowl" in prompt.lower()

@@ -4,13 +4,20 @@
 from typing import Any
 
 
-def build_room_description_prompt(room_data: dict[str, Any], combat_starting: bool = False) -> str:
+def build_room_description_prompt(
+    room_data: dict[str, Any],
+    combat_starting: bool = False,
+    monsters_data: dict[str, Any] | None = None,
+    party_size: int = 1,
+) -> str:
     """
     Build prompt for room description enhancement.
 
     Args:
         room_data: Room info (name, description, exits, contents, monsters)
         combat_starting: If True, include combat initiation narrative in description
+        monsters_data: Full monster definitions from monsters.json
+        party_size: Number of party members for combat context
 
     Returns:
         Formatted prompt for LLM
@@ -44,11 +51,61 @@ def build_room_description_prompt(room_data: dict[str, Any], combat_starting: bo
                 monster_list = ", ".join(monster_parts[:-1]) + f", and {monster_parts[-1]}"
                 monster_context = f"\nPresent in the room: {monster_list} (hostile)"
 
+    # Build creature-aware combat instruction
+    creature_behavior_guide = ""
+    if combat_starting and monster_context and monsters_data:
+        # Extract creature details for narrative guidance
+        creature_types = []
+        for monster_name in monsters:
+            monster_key = monster_name.lower().replace(" ", "_")
+            if monster_key in monsters_data:
+                m = monsters_data[monster_key]
+                creature_type = m.get("type", "creature")
+                size = m.get("size", "medium")
+                alignment = m.get("alignment", "neutral")
+                creature_types.append({
+                    "name": monster_name,
+                    "type": creature_type,
+                    "size": size,
+                    "alignment": alignment,
+                })
+
+        # Build behavior guidance based on creature types
+        if creature_types:
+            type_examples = []
+            seen_types = set()
+            for c in creature_types:
+                ctype = c["type"].split("(")[0].strip()  # Handle "humanoid (goblinoid)"
+                if ctype not in seen_types:
+                    seen_types.add(ctype)
+                    if "undead" in ctype.lower():
+                        type_examples.append(
+                            f"- Undead: mechanical precision, relentless advance, emotionless determination"
+                        )
+                    elif "beast" in ctype.lower():
+                        type_examples.append(
+                            f"- Beasts: snarling, prowling, feral aggression, instinctive pack behavior"
+                        )
+                    elif "humanoid" in ctype.lower():
+                        type_examples.append(
+                            f"- Humanoids: tactical positioning, drawing weapons, battle cries, coordinated movements"
+                        )
+
+            if type_examples:
+                creature_behavior_guide = (
+                    f"\n\nCreature behavior guide:\n" + "\n".join(type_examples)
+                )
+
     # Build instruction based on whether combat is starting
     if combat_starting and monster_context:
-        instruction = """Add vivid sensory details (sights, sounds, smells) in 2-3 sentences. Make it immersive but concise.
+        party_context = (
+            f"Party size: {party_size} adventurer{'s' if party_size != 1 else ''}\n"
+        )
+        instruction = f"""Add vivid sensory details (sights, sounds, smells) in 2-3 sentences. Make it immersive but concise.
 
-IMPORTANT: This is the moment combat begins. Naturally transition from describing the room into the combat initiation - describe how the enemies react to the party's presence, their threatening stance or aggressive movement toward the party, and the immediate tension as battle is about to erupt. Make it feel like a seamless escalation from scene-setting to action. Do NOT use phrases like "combat begins" - show it through the enemies' actions and the rising tension."""
+IMPORTANT: This is the moment combat begins. Naturally transition from describing the room into the combat initiation - describe how the enemies react to the party's presence using behavior appropriate to their nature. Show their threatening stance or aggressive movement toward the party, and the immediate tension as battle is about to erupt. Make it feel like a seamless escalation from scene-setting to action. Do NOT use phrases like "combat begins" - show it through the enemies' actions and the rising tension.
+
+{party_context}{creature_behavior_guide}"""
     elif monster_context:
         instruction = " Acknowledge the presence of hostile creatures naturally in your description - describe their stance, readiness, or threatening demeanor."
     else:

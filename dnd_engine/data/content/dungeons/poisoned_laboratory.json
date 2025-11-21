@@ -57,7 +57,7 @@
     },
     "laboratory": {
       "name": "Main Laboratory",
-      "description": "The heart of the alchemist's workshop. Bubbling cauldrons, distillation equipment, and mysterious glowing liquids cover every surface. A sickly green gas seeps from cracked flasks on the northern workbench. Two animated skeletons guard the northern passage - failed experiments that still move.",
+      "description": "The heart of the alchemist's workshop. Bubbling cauldrons, distillation equipment, and mysterious glowing liquids cover every surface. A sickly green gas seeps from cracked flasks on the northern workbench. Two goblin scavengers lurk among the bubbling equipment, drawn by the smell of alchemical reagents.",
       "exits": {
         "west": "storage",
         "north": "sanctum"
@@ -87,7 +87,7 @@
     },
     "furnace_room": {
       "name": "Furnace Chamber",
-      "description": "A massive furnace roars in the center of this sweltering room, used to heat alchemical reactions. The heat is intense. A large dire wolf, its fur singed and eyes glowing red, guards a pile of treasure near the furnace. Its breath smells of sulfur.",
+      "description": "A massive furnace roars in the center of this sweltering room, used to heat alchemical reactions. The heat is intense. A large wolf, its fur singed and eyes glowing red, lies near the furnace beside a pile of treasure. The beast's breath carries the acrid smell of sulfur.",
       "exits": {
         "east": "storage"
       },
@@ -122,7 +122,7 @@
     },
     "sanctum": {
       "name": "The Mad Alchemist's Sanctum",
-      "description": "The alchemist's private laboratory, filled with his most dangerous experiments. The air crackles with volatile energy. Archibald the Mad, a twisted figure in stained robes, cackles as he throws vials of alchemist's fire in your direction. His workbench is covered in scrolls and potions - the fruits of his insane research.",
+      "description": "The alchemist's private laboratory, filled with his most dangerous experiments. The air crackles with volatile energy. Archibald the Mad, a twisted figure in stained robes, stands at his workbench surrounded by volatile vials and bubbling concoctions. His bloodshot eyes gleam with madness as he mutters incomprehensibly over his work.",
       "exits": {
         "south": "laboratory"
       },
