@@ -9,6 +9,7 @@ from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.combat import CombatEngine, AttackResult
 from dnd_engine.systems.initiative import InitiativeTracker
 from dnd_engine.systems.action_economy import ActionType
+from dnd_engine.systems.time_manager import TimeManager, ActiveEffect, EffectType, parse_duration_to_minutes
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.utils.events import EventBus, Event, EventType
 
@@ -78,6 +79,9 @@ class GameState:
         self.event_bus = event_bus or EventBus()
         self.data_loader = data_loader or DataLoader()
         self.dice_roller = dice_roller or DiceRoller()
+
+        # Time tracking system
+        self.time_manager = TimeManager(event_bus=self.event_bus)
 
         # Load dungeon
         self.dungeon_name = dungeon_name  # Store filename for saving
@@ -182,6 +186,9 @@ class GameState:
 
         # Check for passive perception features on room entry
         self._check_passive_perception()
+
+        # Advance time for movement (10 minutes per room)
+        self.time_manager.advance_time(10, reason="room_movement")
 
         # Check for enemies and start combat if needed (unless explicitly disabled)
         if check_for_enemies:
@@ -674,6 +681,9 @@ class GameState:
             # Mark room as searched regardless of result
             room["searched"] = True
 
+            # Advance time for searching (10 minutes)
+            self.time_manager.advance_time(10, reason="search_room")
+
             # Emit skill check event
             self.event_bus.emit(Event(
                 type=EventType.SKILL_CHECK,
@@ -713,6 +723,10 @@ class GameState:
         else:
             # No skill check required - automatic success (backwards compatibility)
             room["searched"] = True
+
+            # Advance time for searching (10 minutes)
+            self.time_manager.advance_time(10, reason="search_room")
+
             return {
                 "success": True,
                 "items": room.get("items", []),
@@ -958,6 +972,14 @@ class GameState:
             if spell_level > 0:
                 caster.use_spell_slot(spell_level)
 
+            # Create active effect if spell has duration
+            effect = self._create_spell_effect(spell_data, caster_name, target_name)
+            if effect:
+                # If this is a concentration spell, break concentration on any previous spell
+                if effect.concentration:
+                    self.time_manager.remove_concentration_effects(caster_name)
+                self.time_manager.add_effect(effect)
+
             # Emit event
             self.event_bus.emit(Event(
                 type=EventType.SPELL_CAST,
@@ -979,13 +1001,23 @@ class GameState:
                 "spell_level": spell_level
             }
 
-        # Handle utility spells (Light, Detect Magic, etc.)
-        # For now, just provide flavor text and consume spell slot
-        # Future: could track duration, buffs, etc.
+        # Handle utility spells (Light, Detect Magic, etc.) with duration tracking
         else:
+            # Determine target (default to caster if not specified)
+            if not target_name:
+                target_name = caster_name
+
             # Consume spell slot for non-cantrips
             if spell_level > 0:
                 caster.use_spell_slot(spell_level)
+
+            # Create active effect if spell has duration
+            effect = self._create_spell_effect(spell_data, caster_name, target_name)
+            if effect:
+                # If this is a concentration spell, break concentration on any previous spell
+                if effect.concentration:
+                    self.time_manager.remove_concentration_effects(caster_name)
+                self.time_manager.add_effect(effect)
 
             # Emit event
             self.event_bus.emit(Event(
@@ -993,7 +1025,8 @@ class GameState:
                 data={
                     "caster": caster_name,
                     "spell": spell_name,
-                    "spell_level": spell_level
+                    "spell_level": spell_level,
+                    "target": target_name
                 }
             ))
 
@@ -1005,8 +1038,54 @@ class GameState:
                 "message": f"{caster_name} cast {spell_name}",
                 "spell_name": spell_name,
                 "description": description,
-                "spell_level": spell_level
+                "spell_level": spell_level,
+                "target": target_name,
+                "has_duration": effect is not None
             }
+
+    def _create_spell_effect(
+        self,
+        spell_data: Dict[str, Any],
+        caster_name: str,
+        target_name: str
+    ) -> Optional[ActiveEffect]:
+        """
+        Create an ActiveEffect from spell data if the spell has a duration.
+
+        Args:
+            spell_data: Spell data dictionary
+            caster_name: Name of the caster
+            target_name: Name of the target
+
+        Returns:
+            ActiveEffect if spell has duration, None otherwise
+        """
+        duration_value = spell_data.get("duration_value")
+        if not duration_value:
+            return None
+
+        # Parse duration to minutes
+        duration_minutes = parse_duration_to_minutes(duration_value)
+        if not duration_minutes:
+            return None
+
+        # Create effect
+        spell_name = spell_data.get("name", "Unknown Spell")
+        concentration = spell_data.get("concentration", False)
+        description = spell_data.get("description", "")
+
+        effect = ActiveEffect(
+            effect_type=EffectType.SPELL,
+            source=spell_name,
+            duration_minutes=duration_minutes,
+            remaining_minutes=duration_minutes,
+            target_name=target_name,
+            description=description,
+            concentration=concentration,
+            caster_name=caster_name if concentration else None
+        )
+
+        return effect
 
     def _get_item_category(self, item_id: str) -> Optional[str]:
         """
@@ -1161,7 +1240,7 @@ class GameState:
     def _start_combat(self) -> None:
         """Initialize combat with current enemies."""
         self.in_combat = True
-        self.initiative_tracker = InitiativeTracker(self.dice_roller)
+        self.initiative_tracker = InitiativeTracker(self.dice_roller, self.time_manager)
 
         # Add all living party members to initiative
         for character in self.party.get_living_members():
