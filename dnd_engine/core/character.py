@@ -1648,6 +1648,65 @@ class Character(Creature):
 
         return castable
 
+    def get_out_of_combat_spells(self, spells_data: Dict[str, Any]) -> List[Tuple[str, Dict[str, Any]]]:
+        """
+        Get all spells the character can cast outside of combat.
+
+        Returns spells from prepared_spells (or known_spells for non-prepared casters)
+        that are appropriate for exploration/out-of-combat use. Includes healing spells,
+        utility spells, ritual spells, and buff spells.
+
+        Args:
+            spells_data: Dictionary of all spell definitions from spells.json
+
+        Returns:
+            List of (spell_id, spell_data) tuples for out-of-combat spells
+            Sorted by level (cantrips first, then by spell level)
+
+        Notes:
+            - Does not filter by available spell slots (cantrips always available)
+            - UI should indicate when spell slots are unavailable
+            - Excludes pure combat spells (attack/damage only with no other utility)
+        """
+        # Determine which spell list to use based on class
+        prepared_caster_classes = {CharacterClass.WIZARD, CharacterClass.CLERIC}
+
+        if self.character_class in prepared_caster_classes:
+            spell_list = self.prepared_spells if self.prepared_spells else []
+        else:
+            # Known casters or non-casters
+            spell_list = self.known_spells if self.known_spells else []
+
+        out_of_combat = []
+        for spell_id in spell_list:
+            spell_data = spells_data.get(spell_id)
+            if not spell_data:
+                continue
+
+            # Include spell if it has any of these out-of-combat properties:
+            # 1. Has healing (Cure Wounds, Healing Word, etc.)
+            # 2. Is a ritual spell (Detect Magic, Identify, etc.)
+            # 3. Has utility effects (Light, Mage Armor - any spell without attack/damage)
+            # 4. Has buffs (Bless, Shield of Faith - duration-based beneficial spells)
+
+            has_healing = spell_data.get("healing") is not None
+            is_ritual = spell_data.get("ritual") is True
+            has_attack = spell_data.get("attack_type") is not None
+            has_damage = spell_data.get("damage") is not None
+
+            # Utility spell: no attack and no damage (includes Light, Detect Magic, Mage Armor, etc.)
+            is_utility = not has_attack and not has_damage
+
+            # Include if it's useful outside combat
+            # (healing, ritual, or utility - basically anything except pure attack/damage spells)
+            if has_healing or is_ritual or is_utility:
+                out_of_combat.append((spell_id, spell_data))
+
+        # Sort by spell level (cantrips first, then by level)
+        out_of_combat.sort(key=lambda x: x[1].get("level", 0))
+
+        return out_of_combat
+
     def use_arcane_recovery(self, spell_slot_levels: Dict[int, int]) -> bool:
         """
         Use Arcane Recovery to restore spell slots.
