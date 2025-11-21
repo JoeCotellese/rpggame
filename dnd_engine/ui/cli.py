@@ -479,6 +479,10 @@ class CLI:
             self.handle_rest()
             return
 
+        if command in ["cast"]:
+            self.handle_cast_spell_exploration()
+            return
+
         if command in ["take", "get", "pickup"]:
             # Prompt for item selection with arrow keys
             item_to_take = self._prompt_item_to_take()
@@ -3516,6 +3520,173 @@ class CLI:
         else:
             print_status_message("Failed to prepare spells. Please try again.", "error")
 
+    def handle_cast_spell_exploration(self) -> None:
+        """
+        Handle spell casting during exploration mode.
+
+        Allows party members to cast healing and utility spells outside of combat.
+        Prompts for caster selection, spell selection, and target selection.
+        """
+        from dnd_engine.ui.rich_ui import print_section, print_message, print_status_message, print_error
+        import questionary
+
+        # 1. Select caster
+        caster = self._prompt_party_member_selection("Who will cast a spell?")
+        if not caster:
+            return  # User cancelled
+
+        # Check if character can cast spells
+        spells_data = self.game_state.data_loader.load_spells()
+        available_spells = caster.get_out_of_combat_spells(spells_data)
+
+        if not available_spells:
+            print_error(f"{caster.name} doesn't have any spells available for casting outside combat.")
+            return
+
+        # 2. Select spell
+        print_section(f"{caster.name}'s Available Spells")
+
+        # Build spell choices
+        spell_choices = []
+        for spell_id, spell_data in available_spells:
+            spell_name = spell_data.get("name", spell_id)
+            spell_level = spell_data.get("level", 0)
+
+            # Show slot information
+            if spell_level == 0:
+                slot_info = "[green](cantrip)[/green]"
+            else:
+                available_slots = caster.get_available_spell_slots(spell_level)
+                slot_info = f"[cyan](level {spell_level}, {available_slots} slots)[/cyan]"
+
+            # Show spell type (healing, ritual, utility)
+            spell_types = []
+            if spell_data.get("healing"):
+                healing_dice = spell_data["healing"].get("dice", "")
+                spell_types.append(f"healing: {healing_dice}")
+            if spell_data.get("ritual"):
+                spell_types.append("ritual")
+            if not spell_types:
+                spell_types.append("utility")
+
+            type_info = ", ".join(spell_types)
+            choice_text = f"{spell_name} {slot_info} - {type_info}"
+            spell_choices.append(questionary.Choice(title=choice_text, value=(spell_id, spell_data)))
+
+        spell_choices.append(questionary.Choice(title="Cancel", value=None))
+
+        try:
+            selected = questionary.select(
+                f"Select spell for {caster.name} to cast:",
+                choices=spell_choices,
+                use_arrow_keys=True
+            ).ask()
+
+            if not selected:
+                return  # User cancelled
+
+            spell_id, spell_data = selected
+        except (EOFError, KeyboardInterrupt):
+            return
+
+        # 3. Select target if needed (for healing spells)
+        target_name = None
+        if spell_data.get("healing"):
+            target = self._prompt_party_member_selection(
+                f"Who should {caster.name} heal with {spell_data.get('name')}?"
+            )
+            if not target:
+                return  # User cancelled
+            target_name = target.name
+
+        # 4. Cast the spell
+        result = self.game_state.cast_spell_exploration(
+            caster_name=caster.name,
+            spell_id=spell_id,
+            target_name=target_name
+        )
+
+        # 5. Display result
+        print_section("Spell Cast")
+
+        if result["success"]:
+            spell_name = result.get("spell_name", "spell")
+
+            if "healing_amount" in result:
+                # Healing spell
+                healing = result["healing_amount"]
+                target = result.get("target", "target")
+                print_status_message(
+                    f"✨ {caster.name} casts {spell_name} on {target}, healing {healing} HP!",
+                    "success"
+                )
+            else:
+                # Utility spell
+                print_status_message(f"✨ {caster.name} casts {spell_name}!", "success")
+                description = result.get("description", "")
+                if description:
+                    print_message(f"\n{description}")
+
+            # Show spell slot consumption
+            spell_level = result.get("spell_level", 0)
+            if spell_level > 0:
+                remaining_slots = caster.get_available_spell_slots(spell_level)
+                print_message(f"\nLevel {spell_level} spell slots remaining: {remaining_slots}")
+        else:
+            error_msg = result.get("error", "Failed to cast spell")
+            print_error(f"❌ {error_msg}")
+
+    def _prompt_party_member_selection(self, prompt_message: str) -> Optional[Character]:
+        """
+        Prompt user to select a party member.
+
+        Args:
+            prompt_message: Message to display in the prompt
+
+        Returns:
+            Selected Character or None if cancelled
+        """
+        import questionary
+
+        # Build choices for party members
+        choices = []
+        for character in self.game_state.party.characters:
+            if character.is_alive:
+                hp_pct = character.current_hp / character.max_hp if character.max_hp > 0 else 0
+
+                # HP indicator
+                if hp_pct >= 0.9:
+                    hp_indicator = "●●●"
+                elif hp_pct >= 0.5:
+                    hp_indicator = "●●○"
+                elif hp_pct > 0:
+                    hp_indicator = "●○○"
+                else:
+                    hp_indicator = "○○○"
+
+                choice_text = f"{character.name} (HP: {character.current_hp}/{character.max_hp} {hp_indicator})"
+                choices.append(questionary.Choice(title=choice_text, value=character))
+
+        if not choices:
+            from dnd_engine.ui.rich_ui import print_error
+            print_error("No party members available!")
+            return None
+
+        # Add cancel option
+        choices.append(questionary.Choice(title="Cancel", value=None))
+
+        # Get user selection
+        try:
+            result = questionary.select(
+                prompt_message,
+                choices=choices,
+                use_arrow_keys=True
+            ).ask()
+
+            return result
+        except (EOFError, KeyboardInterrupt):
+            return None
+
     def handle_reset(self, command: str) -> None:
         """
         Handle reset command to restart the campaign.
@@ -3601,6 +3772,7 @@ class CLI:
             ("use <item> [on <player>]", "Use consumable (e.g., 'use potion on 2')"),
             ("status", "Show your character status"),
             ("rest", "Take a short or long rest"),
+            ("cast", "Cast healing or utility spells outside combat"),
             ("save", "Create a named save"),
             ("qs / quicksave", "Quick-save"),
             ("help or ?", "Show this help message"),
