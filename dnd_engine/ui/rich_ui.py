@@ -296,10 +296,20 @@ def print_help_section(title: str, commands: List[tuple]) -> None:
 def print_section(title: str, content: str = "") -> None:
     """Print a formatted section with title and optional content.
 
+    When content is empty, prints a styled header without a box.
+    When content is provided, prints a full bordered panel.
+
     Args:
         title: Section title
         content: Optional section content
     """
+    if not content or not content.strip():
+        # Print styled header without box for empty sections
+        console.print(f"\n[bold cyan]{title}[/bold cyan]")
+        console.print("[cyan]" + "─" * min(len(title), 60) + "[/cyan]")
+        return
+
+    # Render full bordered panel when content exists
     panel = Panel(
         content,
         title=f"[bold cyan]{title}[/bold cyan]",

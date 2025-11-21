@@ -254,7 +254,11 @@ class MainMenuV2:
         """
         # Step 1: Select party from vault or create new
         console.print()
-        print_section("NEW GAME - SELECT PARTY")
+        print_section(
+            "NEW GAME - SELECT PARTY",
+            "Build your party by selecting 1-6 characters from your vault.\n"
+            "Press [bold]C[/bold] to create new characters on the fly."
+        )
 
         party_characters = self._select_party_from_vault()
 
