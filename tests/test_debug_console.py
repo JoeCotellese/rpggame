@@ -552,3 +552,259 @@ class TestExecuteCommand:
 
         # Should return False for non-debug commands
         assert result is False
+
+
+class TestPartyManagementCommands:
+    """Test party management commands (/addcharacter, /removecharacter)"""
+
+    def test_addcharacter_with_all_args(self):
+        """Test /addcharacter with class, race, and level specified"""
+        party = Party([])
+        game_state = GameState(party, "test_dungeon")
+        console = DebugConsole(game_state, enabled=True)
+
+        initial_count = len(party.characters)
+
+        # Add a wizard (use actual race ID from races.json)
+        console.cmd_add_character(["wizard", "high_elf", "3"])
+
+        # Should have one more character
+        assert len(party.characters) == initial_count + 1
+
+        # Check character properties
+        new_char = party.characters[-1]
+        assert new_char.character_class == CharacterClass.WIZARD
+        assert new_char.level == 3
+        assert new_char.race == "high_elf"
+        assert new_char.max_hp > 0
+        assert new_char.ac > 0
+
+    def test_addcharacter_with_class_and_race(self):
+        """Test /addcharacter with class and race (level defaults to 1)"""
+        party = Party([])
+        game_state = GameState(party, "test_dungeon")
+        console = DebugConsole(game_state, enabled=True)
+
+        console.cmd_add_character(["fighter", "mountain_dwarf"])
+
+        # Check character has level 1
+        new_char = party.characters[-1]
+        assert new_char.character_class == CharacterClass.FIGHTER
+        assert new_char.level == 1
+        assert new_char.race == "mountain_dwarf"
+
+    def test_addcharacter_with_class_only(self):
+        """Test /addcharacter with only class (race is random, level is 1)"""
+        party = Party([])
+        game_state = GameState(party, "test_dungeon")
+        console = DebugConsole(game_state, enabled=True)
+
+        console.cmd_add_character(["rogue"])
+
+        # Check character was created with level 1 and some race
+        new_char = party.characters[-1]
+        assert new_char.character_class == CharacterClass.ROGUE
+        assert new_char.level == 1
+        assert new_char.race is not None
+        assert len(new_char.race) > 0
+
+    def test_addcharacter_with_class_and_level(self):
+        """Test /addcharacter with class and level (race is random)"""
+        party = Party([])
+        game_state = GameState(party, "test_dungeon")
+        console = DebugConsole(game_state, enabled=True)
+
+        # When second arg is a number, it's the level (use valid class)
+        console.cmd_add_character(["fighter", "5"])
+
+        # Check character has correct level and random race
+        new_char = party.characters[-1]
+        assert new_char.character_class == CharacterClass.FIGHTER
+        assert new_char.level == 5
+        assert new_char.race is not None
+
+    def test_addcharacter_invalid_class(self, capsys):
+        """Test /addcharacter with invalid class"""
+        party = Party([])
+        game_state = GameState(party, "test_dungeon")
+        console = DebugConsole(game_state, enabled=True)
+
+        initial_count = len(party.characters)
+
+        # Try invalid class
+        console.cmd_add_character(["invalidclass", "elf"])
+
+        # Should not add character
+        assert len(party.characters) == initial_count
+
+    def test_addcharacter_invalid_race(self, capsys):
+        """Test /addcharacter with invalid race"""
+        party = Party([])
+        game_state = GameState(party, "test_dungeon")
+        console = DebugConsole(game_state, enabled=True)
+
+        initial_count = len(party.characters)
+
+        # Try invalid race
+        console.cmd_add_character(["wizard", "invalidrace"])
+
+        # Should not add character
+        assert len(party.characters) == initial_count
+
+    def test_addcharacter_invalid_level(self, capsys):
+        """Test /addcharacter with invalid level"""
+        party = Party([])
+        game_state = GameState(party, "test_dungeon")
+        console = DebugConsole(game_state, enabled=True)
+
+        initial_count = len(party.characters)
+
+        # Try level > 20 (use valid race so it tests level validation)
+        console.cmd_add_character(["wizard", "high_elf", "25"])
+
+        # Should not add character
+        assert len(party.characters) == initial_count
+
+    def test_addcharacter_no_args(self, capsys):
+        """Test /addcharacter with no arguments"""
+        party = Party([])
+        game_state = GameState(party, "test_dungeon")
+        console = DebugConsole(game_state, enabled=True)
+
+        initial_count = len(party.characters)
+
+        # Try with no args
+        console.cmd_add_character([])
+
+        # Should not add character
+        assert len(party.characters) == initial_count
+
+    def test_removecharacter(self, monkeypatch):
+        """Test /removecharacter command"""
+        # Create a character
+        abilities = Abilities(10, 10, 10, 10, 10, 10)
+        char = Character(
+            name="TestChar",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=abilities,
+            max_hp=10,
+            ac=10
+        )
+        party = Party([char])
+        game_state = GameState(party, "test_dungeon")
+        console = DebugConsole(game_state, enabled=True)
+
+        # Mock user confirmation
+        monkeypatch.setattr('builtins.input', lambda _: 'y')
+
+        # Remove the character
+        console.cmd_remove_character(["TestChar"])
+
+        # Should be removed
+        assert len(party.characters) == 0
+
+    def test_removecharacter_cancel(self, monkeypatch):
+        """Test /removecharacter command with cancellation"""
+        # Create a character
+        abilities = Abilities(10, 10, 10, 10, 10, 10)
+        char = Character(
+            name="TestChar",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=abilities,
+            max_hp=10,
+            ac=10
+        )
+        party = Party([char])
+        game_state = GameState(party, "test_dungeon")
+        console = DebugConsole(game_state, enabled=True)
+
+        # Mock user cancellation
+        monkeypatch.setattr('builtins.input', lambda _: 'n')
+
+        # Try to remove the character
+        console.cmd_remove_character(["TestChar"])
+
+        # Should NOT be removed
+        assert len(party.characters) == 1
+
+    def test_removecharacter_not_found(self, capsys):
+        """Test /removecharacter with character that doesn't exist"""
+        party = Party([])
+        game_state = GameState(party, "test_dungeon")
+        console = DebugConsole(game_state, enabled=True)
+
+        # Try to remove non-existent character
+        console.cmd_remove_character(["NonExistent"])
+
+        # Should do nothing (still 0 characters)
+        assert len(party.characters) == 0
+
+    def test_removecharacter_no_args(self, capsys):
+        """Test /removecharacter with no arguments"""
+        abilities = Abilities(10, 10, 10, 10, 10, 10)
+        char = Character(
+            name="TestChar",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=abilities,
+            max_hp=10,
+            ac=10
+        )
+        party = Party([char])
+        game_state = GameState(party, "test_dungeon")
+        console = DebugConsole(game_state, enabled=True)
+
+        initial_count = len(party.characters)
+
+        # Try with no args
+        console.cmd_remove_character([])
+
+        # Should not remove anything
+        assert len(party.characters) == initial_count
+
+    def test_addcharacter_initializes_spellcasting(self):
+        """Test that /addcharacter properly initializes spellcasting for spellcasters"""
+        party = Party([])
+        game_state = GameState(party, "test_dungeon")
+        console = DebugConsole(game_state, enabled=True)
+
+        # Add a wizard
+        console.cmd_add_character(["wizard", "human", "1"])
+
+        new_char = party.characters[-1]
+
+        # Wizard should have spellcasting ability set (uses "int" not "intelligence")
+        assert new_char.spellcasting_ability is not None
+        assert new_char.spellcasting_ability == "int"
+
+        # Should have known spells
+        assert len(new_char.known_spells) > 0
+
+    def test_addcharacter_has_equipment(self):
+        """Test that /addcharacter gives starting equipment"""
+        party = Party([])
+        game_state = GameState(party, "test_dungeon")
+        console = DebugConsole(game_state, enabled=True)
+
+        # Add a fighter
+        console.cmd_add_character(["fighter", "human", "1"])
+
+        new_char = party.characters[-1]
+
+        # Should have some inventory items
+        assert len(new_char.inventory.items) > 0
+
+    def test_command_registry_has_party_commands(self):
+        """Test that command registry includes party management commands"""
+        party = Party([])
+        game_state = GameState(party, "test_dungeon")
+        console = DebugConsole(game_state, enabled=True)
+
+        # Party management commands
+        assert "addcharacter" in console.commands
+        assert "removecharacter" in console.commands
+
+        # /create should NOT exist (we removed it)
+        assert "create" not in console.commands
