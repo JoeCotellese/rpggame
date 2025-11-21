@@ -10,6 +10,7 @@
     "graveyard_entrance": {
       "name": "Overgrown Graveyard",
       "description": "A rusted iron gate opens into a small graveyard. Ancient headstones lean at odd angles, covered in moss and ivy. At the center stands a stone mausoleum bearing the name 'DAVOS' in weathered letters. The heavy door hangs ajar, revealing darkness within. Two skeletal figures stand among the gravestones, ancient guardians of this cursed place.",
+      "lighting": "bright",
       "exits": {
         "down": "hall_of_the_dead"
       },
@@ -31,6 +32,7 @@
     "hall_of_the_dead": {
       "name": "Hall of the Dead",
       "description": "Dusty stone stairs descend into a large burial chamber. The walls are lined with plaques and sealed coffins bearing the names of deceased Davos family members - generations of the dead laid to rest in this silent hall. Cobwebs hang thick in the corners, though recent disturbance has cleared a path through them. Footprints in the dust lead deeper into the crypt. The air is cold and still, carrying the faint scent of decay.",
+      "lighting": "dark",
       "hidden_features": [
         {
           "type": "passive_perception",
@@ -53,6 +55,7 @@
     "antechamber": {
       "name": "Antechamber",
       "description": "This octagonal chamber serves as a central hub for the crypt. Doors of solid oak with iron reinforcements stand in each cardinal direction, their metal hinges spotted with rust. The stone floor here shows heavy foot traffic - many boots have passed through recently. A faint scraping sound echoes from somewhere nearby, like bone dragging across stone.",
+      "lighting": "dark",
       "exits": {
         "south": "hall_of_the_dead",
         "east": "eastern_crypt",
@@ -108,6 +111,7 @@
     "eastern_crypt": {
       "name": "Eastern Crypt",
       "description": "Two large stone coffins are embedded in the northern and southern walls of this burial chamber. Their lids have been pushed aside, revealing empty interiors lined with rotting cloth. Two skeletal guardians stand motionless in the center of the room, rusted short swords hanging from their bony hands.",
+      "lighting": "dark",
       "exits": {
         "west": "antechamber"
       },
@@ -129,6 +133,7 @@
     "northern_crypt": {
       "name": "Northern Crypt",
       "description": "This burial chamber mirrors its southern counterpart - coffins and memorial plaques line the granite walls, bearing dates that span centuries. Three skeletal warriors guard this section of the crypt, their bones yellowed with age and draped in tattered remnants of ancient armor.",
+      "lighting": "dark",
       "exits": {
         "south": "antechamber"
       },
@@ -151,6 +156,7 @@
     "southern_crypt": {
       "name": "Southern Crypt",
       "description": "More ancestral remains rest here, their names carved into brass plaques that have long since tarnished. The air grows colder, and a malevolent presence seems to permeate the chamber. Three skeletons stand among the coffins, their hollow eyes glowing with an unnatural light.",
+      "lighting": "dark",
       "exits": {
         "up": "antechamber"
       },
@@ -173,6 +179,7 @@
     "family_shrine": {
       "name": "Family Shrine - Chamber of Davos",
       "description": "A small stone dais rises against the western wall. Upon it rests an ornate coffin, clearly more elaborate than the others you've seen. The lid has been violently smashed inward, splinters of ancient wood scattered across the floor. This was the final resting place of Davos the cleric, whose divine power once sealed away a great evil. In the corner, hunched over a fresh corpse, a pale creature with elongated claws and needle-sharp teeth feeds on dead flesh. It wears the tattered robes of a cultist, its blood-streaked face twisted in hunger.",
+      "lighting": "dark",
       "examinable_objects": [
         {
           "id": "cultist_corpse",

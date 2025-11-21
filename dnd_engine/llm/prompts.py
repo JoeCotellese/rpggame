@@ -26,6 +26,10 @@ def build_room_description_prompt(
     room_type = room_data.get("name", "chamber")
     monsters = room_data.get("monsters", [])
 
+    # Extract lighting information
+    base_lighting = room_data.get("base_lighting", "bright")
+    party_lighting = room_data.get("party_lighting", [])
+
     # Build monster context if present
     monster_context = ""
     if monsters:
@@ -111,12 +115,48 @@ IMPORTANT: This is the moment combat begins. Naturally transition from describin
     else:
         instruction = ""
 
+    # Build lighting context for narrative
+    lighting_context = ""
+    if base_lighting == "dark":
+        # Check if anyone can see
+        can_see = []
+        cannot_see = []
+        for char_lighting in party_lighting:
+            if char_lighting["lighting"] == "bright":
+                can_see.append(f"{char_lighting['character']} (Light spell)")
+            elif char_lighting["lighting"] == "dim":
+                if char_lighting["has_darkvision"]:
+                    can_see.append(f"{char_lighting['character']} (darkvision - limited)")
+                else:
+                    cannot_see.append(char_lighting['character'])
+            else:  # dark
+                cannot_see.append(char_lighting['character'])
+
+        if can_see and cannot_see:
+            lighting_context = f"\n\nLighting: The room is pitch black. {', '.join(can_see)} can see, but {', '.join(cannot_see)} cannot see in the darkness. Emphasize the contrast between those who can perceive the environment and those who are blind."
+        elif not can_see:
+            lighting_context = f"\n\nLighting: The room is pitch black. The party cannot see anything - describe only non-visual sensory details (sounds, smells, textures, echoes, temperature). Emphasize the oppressive darkness and disorientation."
+        elif can_see:
+            darkvision_users = [c for c in can_see if "darkvision" in c]
+            light_users = [c for c in can_see if "Light spell" in c]
+            if darkvision_users and not light_users:
+                lighting_context = f"\n\nLighting: The room is pitch black, but {', '.join(darkvision_users)} see through the darkness with limited grayscale vision. Describe muted colors and shadows."
+            elif light_users:
+                lighting_context = f"\n\nLighting: {', '.join(light_users)} illuminate the darkness. Describe the contrast between lit and shadowed areas."
+
+    elif base_lighting == "dim":
+        lighting_context = "\n\nLighting: The room is dimly lit with shadows and limited visibility. Describe how shapes are unclear, colors are muted, and details are hard to make out. Create an atmosphere of uncertainty and gloom."
+
+    # If bright, no special lighting context needed
+
     prompt = f"""Enhance this D&D dungeon room description with atmospheric details:
 
 Room: {room_type}
-Basic description: {base_desc}{monster_context}
+Basic description: {base_desc}{monster_context}{lighting_context}
 
-Add vivid sensory details (sights, sounds, smells) in 2-3 sentences. Make it immersive but concise.{instruction}"""
+Add vivid sensory details (sights, sounds, smells) in 2-3 sentences. Make it immersive but concise.{instruction}
+
+IMPORTANT: If lighting context is provided above, you MUST incorporate it into your description. The lighting level dramatically affects what can be perceived and should be central to the atmosphere."""
 
     return prompt
 

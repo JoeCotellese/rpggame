@@ -24,7 +24,8 @@
     "speed": 25,
     "size": "Medium",
     "languages": ["Common", "Dwarvish"],
-    "traits": ["Darkvision", "Dwarven Resilience"]
+    "traits": ["Darkvision", "Dwarven Resilience"],
+    "darkvision_range": 60
   },
   "high_elf": {
     "name": "High Elf",
@@ -36,7 +37,8 @@
     "speed": 30,
     "size": "Medium",
     "languages": ["Common", "Elvish"],
-    "traits": ["Darkvision", "Fey Ancestry"]
+    "traits": ["Darkvision", "Fey Ancestry"],
+    "darkvision_range": 60
   },
   "halfling": {
     "name": "Halfling",

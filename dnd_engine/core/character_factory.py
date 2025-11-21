@@ -886,6 +886,9 @@ class CharacterFactory:
         # Store race (will add field to Character class)
         character.race = race_choice
 
+        # Set darkvision range from race data
+        character.darkvision_range = race_data.get("darkvision_range", 0)
+
         # Store saving throw proficiencies from class data
         character.saving_throw_proficiencies = class_data.get("saving_throw_proficiencies", [])
 

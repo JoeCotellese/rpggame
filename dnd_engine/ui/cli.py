@@ -118,6 +118,17 @@ class CLI:
         # Combat starts if there are enemies and we're not already in combat
         combat_starting = bool(enemy_ids) and not self.game_state.in_combat
 
+        # Calculate effective lighting for each party member
+        # (used for both LLM enhancement and UI display)
+        party_lighting = []
+        for char in self.game_state.party.characters:
+            lighting = self.game_state.get_effective_lighting(char)
+            party_lighting.append({
+                "character": char.name,
+                "lighting": lighting,
+                "has_darkvision": char.darkvision_range > 0
+            })
+
         # Try to get enhanced description from LLM
         enhanced_desc = None
         if self.llm_enhancer:
@@ -132,7 +143,9 @@ class CLI:
                 "monsters": monster_names,  # Include monster info for LLM
                 "combat_starting": combat_starting,  # Flag for combat initiation narrative
                 "monsters_data": monsters_data,  # Full monster definitions for creature-aware prompts
-                "party_size": party_size  # Party size for combat context
+                "party_size": party_size,  # Party size for combat context
+                "base_lighting": room.get("lighting", "bright"),  # Room's base lighting level
+                "party_lighting": party_lighting  # Effective lighting for each party member
             }
             with console.status("", spinner="dots"):
                 enhanced_desc = self.llm_enhancer.get_room_description_sync(room_data, timeout=3.0)
@@ -140,7 +153,25 @@ class CLI:
         # Use enhanced description if available, otherwise use basic
         room_text = enhanced_desc if enhanced_desc else basic_desc
 
-        print_room_description(room_name, room_text, exits)
+        # Add lighting indicator to room name based on best party lighting
+        # (if anyone can see bright, show bright; if anyone can see dim, show dim; else dark)
+        best_lighting = "dark"
+        for char_lighting in party_lighting:
+            if char_lighting["lighting"] == "bright":
+                best_lighting = "bright"
+                break
+            elif char_lighting["lighting"] == "dim":
+                best_lighting = "dim"
+
+        lighting_icons = {
+            "bright": "☀️",
+            "dim": "🌙",
+            "dark": "⚫"
+        }
+        lighting_icon = lighting_icons.get(best_lighting, "")
+        room_name_with_lighting = f"{room_name} {lighting_icon}"
+
+        print_room_description(room_name_with_lighting, room_text, exits)
 
     def display_player_status(self) -> None:
         """Display status for all party members."""
