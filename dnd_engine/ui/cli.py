@@ -483,6 +483,14 @@ class CLI:
             self.handle_cast_spell_exploration()
             return
 
+        if command in ["time"]:
+            self.handle_time()
+            return
+
+        if command in ["effects"]:
+            self.handle_effects()
+            return
+
         if command in ["take", "get", "pickup"]:
             # Prompt for item selection with arrow keys
             item_to_take = self._prompt_item_to_take()
@@ -3367,6 +3375,12 @@ class CLI:
         )
         self.game_state.event_bus.emit(event)
 
+        # Advance time for rest
+        if rest_type == "short":
+            self.game_state.time_manager.advance_time(60, reason="short_rest")  # 1 hour
+        else:
+            self.game_state.time_manager.advance_time(480, reason="long_rest")  # 8 hours
+
         # Display rest results
         self._display_rest_results(results, rest_type, rest_duration)
 
@@ -3757,6 +3771,42 @@ class CLI:
         except Exception as e:
             print_error(f"Failed to reset campaign: {e}")
 
+    def handle_time(self) -> None:
+        """Display the current game time."""
+        from dnd_engine.ui.printing import print_section, print_message
+
+        elapsed_time = self.game_state.time_manager.get_elapsed_time_display()
+        print_section("Game Time")
+        print_message(f"Time elapsed: {elapsed_time}")
+
+    def handle_effects(self) -> None:
+        """Display all active effects on party members."""
+        from dnd_engine.ui.printing import print_section, print_message, print_error
+
+        effects = self.game_state.time_manager.get_all_effects()
+
+        if not effects:
+            print_message("No active effects")
+            return
+
+        print_section("Active Effects")
+
+        # Group effects by target
+        effects_by_target = {}
+        for effect in effects:
+            if effect.target_name not in effects_by_target:
+                effects_by_target[effect.target_name] = []
+            effects_by_target[effect.target_name].append(effect)
+
+        # Display effects for each target
+        for target_name, target_effects in effects_by_target.items():
+            print_message(f"\n{target_name}:")
+            for effect in target_effects:
+                time_remaining = effect.get_time_remaining_display()
+                concentration_marker = " (Concentration)" if effect.concentration else ""
+                caster_info = f" from {effect.caster_name}" if effect.caster_name else ""
+                print_message(f"  • {effect.source}: {time_remaining}{concentration_marker}{caster_info}")
+
     def display_help_exploration(self) -> None:
         """Display help for exploration commands."""
         commands = [
@@ -3773,6 +3823,8 @@ class CLI:
             ("status", "Show your character status"),
             ("rest", "Take a short or long rest"),
             ("cast", "Cast healing or utility spells outside combat"),
+            ("time", "Show elapsed game time"),
+            ("effects", "Show active spell effects and their durations"),
             ("save", "Create a named save"),
             ("qs / quicksave", "Quick-save"),
             ("help or ?", "Show this help message"),

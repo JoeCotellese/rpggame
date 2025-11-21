@@ -72,6 +72,11 @@ class EventType(Enum):
     # Spellcasting events
     SPELL_CAST = "spell_cast"
 
+    # Time tracking events
+    TIME_ADVANCED = "time_advanced"
+    HOUR_PASSED = "hour_passed"
+    EFFECT_EXPIRED = "effect_expired"
+
 
 @dataclass
 class Event:

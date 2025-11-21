@@ -2,10 +2,13 @@
 # ABOUTME: Manages turn order, round counting, and combatant lifecycle
 
 from dataclasses import dataclass
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, TYPE_CHECKING
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.creature import Creature
 from dnd_engine.systems.action_economy import TurnState
+
+if TYPE_CHECKING:
+    from dnd_engine.systems.time_manager import TimeManager
 
 
 @dataclass
@@ -45,14 +48,16 @@ class InitiativeTracker:
     - Round increments when all combatants have acted
     """
 
-    def __init__(self, dice_roller: Optional[DiceRoller] = None):
+    def __init__(self, dice_roller: Optional[DiceRoller] = None, time_manager: Optional["TimeManager"] = None):
         """
         Initialize the initiative tracker.
 
         Args:
             dice_roller: DiceRoller instance (creates new one if not provided)
+            time_manager: TimeManager instance for tracking combat time (optional)
         """
         self.dice_roller = dice_roller if dice_roller is not None else DiceRoller()
+        self.time_manager = time_manager
         self.combatants: List[InitiativeEntry] = []
         self.current_turn_index: int = 0
         self.round_number: int = 0
@@ -173,6 +178,10 @@ class InitiativeTracker:
         if self.current_turn_index >= len(self.combatants):
             self.current_turn_index = 0
             self.round_number += 1
+
+            # Advance time for combat round (6 seconds = 0.1 minutes)
+            if self.time_manager:
+                self.time_manager.advance_time(0.1, reason="combat_round")
 
         # Reset actions for the new turn
         current = self.get_current_combatant()
