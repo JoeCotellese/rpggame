@@ -69,6 +69,9 @@ class EventType(Enum):
     LONG_REST = "long_rest"
     SPELLS_PREPARED = "spells_prepared"
 
+    # Spellcasting events
+    SPELL_CAST = "spell_cast"
+
 
 @dataclass
 class Event:
