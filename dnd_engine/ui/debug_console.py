@@ -1165,13 +1165,17 @@ class DebugConsole:
     def cmd_add_character(self, args: List[str]) -> None:
         """Add a new character to the party with specified class, optional race and level."""
         if len(args) < 1:
+            # Load data to show actual available options
+            classes_data = self.game_state.data_loader.load_classes()
+            races_data = self.game_state.data_loader.load_races()
+
             print_error("Usage: /addcharacter <class> [race] [level]")
             print_message("Examples:")
             print_message("  /addcharacter wizard            # random race, level 1")
-            print_message("  /addcharacter wizard elf        # specified race, level 1")
-            print_message("  /addcharacter wizard elf 3      # fully specified")
-            print_message("Available classes: fighter, wizard, rogue, cleric")
-            print_message("Available races: human, elf, dwarf, halfling")
+            print_message("  /addcharacter wizard high_elf   # specified race, level 1")
+            print_message("  /addcharacter wizard high_elf 3 # fully specified")
+            print_message(f"Available classes: {', '.join(sorted(classes_data.keys()))}")
+            print_message(f"Available races: {', '.join(sorted(races_data.keys()))}")
             return
 
         class_name = args[0].lower()
