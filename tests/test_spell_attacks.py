@@ -468,3 +468,139 @@ class TestSpellAttackEvents:
         assert event.data["attack_type"] == "spell"
         assert "damage_type" in event.data
         assert event.data["damage_type"] == "fire"
+
+
+class TestGetCastableSpells:
+    """Test Character.get_castable_spells() method."""
+
+    def test_wizard_shows_prepared_spells_only(self, wizard_abilities):
+        """Wizard should only see prepared spells, not all known spells."""
+        wizard = Character("Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12)
+
+        # Set up spellcasting
+        wizard.spellcasting_ability = "intelligence"
+        wizard.known_spells = ["fire_bolt", "ray_of_frost", "magic_missile", "shield", "mage_armor"]
+        wizard.prepared_spells = ["magic_missile", "shield"]  # Only 2 prepared
+
+        # Mock spells data
+        spells_data = {
+            "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack", "damage": {"dice": "1d10"}},
+            "ray_of_frost": {"name": "Ray of Frost", "level": 0, "attack_type": "ranged_spell_attack", "damage": {"dice": "1d8"}},
+            "magic_missile": {"name": "Magic Missile", "level": 1, "damage": {"dice": "1d4+1"}},
+            "shield": {"name": "Shield", "level": 1, "casting_time": "1 reaction"},
+            "mage_armor": {"name": "Mage Armor", "level": 1},  # No damage/attack/save/reaction
+        }
+
+        castable = wizard.get_castable_spells(spells_data)
+        castable_ids = [spell_id for spell_id, _ in castable]
+
+        # Should only show prepared spells that are combat-relevant
+        assert "magic_missile" in castable_ids  # Has damage
+        assert "shield" in castable_ids  # Is a reaction
+        assert "mage_armor" not in castable_ids  # Not prepared
+        assert "fire_bolt" not in castable_ids  # Known but not prepared (cantrips should be in known AND prepared)
+        assert "ray_of_frost" not in castable_ids  # Known but not prepared
+
+    def test_includes_attack_spells(self, wizard_abilities):
+        """Should include spells with attack_type."""
+        wizard = Character("Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12)
+        wizard.spellcasting_ability = "intelligence"
+        wizard.prepared_spells = ["fire_bolt", "scorching_ray"]
+
+        spells_data = {
+            "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack"},
+            "scorching_ray": {"name": "Scorching Ray", "level": 2, "attack_type": "ranged_spell_attack"},
+        }
+
+        castable = wizard.get_castable_spells(spells_data)
+        assert len(castable) == 2
+
+    def test_includes_saving_throw_spells(self, wizard_abilities):
+        """Should include spells with saving_throw_type."""
+        wizard = Character("Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12)
+        wizard.spellcasting_ability = "intelligence"
+        wizard.prepared_spells = ["burning_hands", "thunderwave"]
+
+        spells_data = {
+            "burning_hands": {"name": "Burning Hands", "level": 1, "saving_throw_type": "dexterity", "damage": {"dice": "3d6"}},
+            "thunderwave": {"name": "Thunderwave", "level": 1, "saving_throw_type": "constitution", "damage": {"dice": "2d8"}},
+        }
+
+        castable = wizard.get_castable_spells(spells_data)
+        assert len(castable) == 2
+
+    def test_includes_damage_spells_without_attack(self, wizard_abilities):
+        """Should include spells with damage even if no attack_type (like Magic Missile)."""
+        wizard = Character("Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12)
+        wizard.spellcasting_ability = "intelligence"
+        wizard.prepared_spells = ["magic_missile"]
+
+        spells_data = {
+            "magic_missile": {"name": "Magic Missile", "level": 1, "damage": {"dice": "1d4+1"}},
+        }
+
+        castable = wizard.get_castable_spells(spells_data)
+        assert len(castable) == 1
+        assert castable[0][0] == "magic_missile"
+
+    def test_includes_reaction_spells(self, wizard_abilities):
+        """Should include reaction spells like Shield."""
+        wizard = Character("Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12)
+        wizard.spellcasting_ability = "intelligence"
+        wizard.prepared_spells = ["shield", "counterspell"]
+
+        spells_data = {
+            "shield": {"name": "Shield", "level": 1, "casting_time": "1 reaction"},
+            "counterspell": {"name": "Counterspell", "level": 3, "casting_time": "1 reaction"},
+        }
+
+        castable = wizard.get_castable_spells(spells_data)
+        assert len(castable) == 2
+
+    def test_excludes_non_combat_spells(self, wizard_abilities):
+        """Should exclude non-combat utility spells."""
+        wizard = Character("Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12)
+        wizard.spellcasting_ability = "intelligence"
+        wizard.prepared_spells = ["mage_armor", "detect_magic", "identify"]
+
+        spells_data = {
+            "mage_armor": {"name": "Mage Armor", "level": 1},  # No combat properties
+            "detect_magic": {"name": "Detect Magic", "level": 1, "ritual": True},
+            "identify": {"name": "Identify", "level": 1, "ritual": True},
+        }
+
+        castable = wizard.get_castable_spells(spells_data)
+        assert len(castable) == 0
+
+    def test_sorted_by_spell_level(self, wizard_abilities):
+        """Should sort spells by level (cantrips first)."""
+        wizard = Character("Gandalf", CharacterClass.WIZARD, level=3, abilities=wizard_abilities, max_hp=24, ac=12)
+        wizard.spellcasting_ability = "intelligence"
+        wizard.prepared_spells = ["fireball", "magic_missile", "fire_bolt", "scorching_ray"]
+
+        spells_data = {
+            "fireball": {"name": "Fireball", "level": 3, "damage": {"dice": "8d6"}},
+            "magic_missile": {"name": "Magic Missile", "level": 1, "damage": {"dice": "1d4+1"}},
+            "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack"},
+            "scorching_ray": {"name": "Scorching Ray", "level": 2, "attack_type": "ranged_spell_attack"},
+        }
+
+        castable = wizard.get_castable_spells(spells_data)
+        levels = [spell_data["level"] for _, spell_data in castable]
+
+        assert levels == [0, 1, 2, 3]  # Sorted by level
+
+    def test_falls_back_to_known_spells(self, wizard_abilities):
+        """If prepared_spells is empty, should use known_spells (for sorcerers/bards)."""
+        wizard = Character("Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12)
+        wizard.spellcasting_ability = "intelligence"
+        wizard.known_spells = ["fire_bolt", "magic_missile"]
+        wizard.prepared_spells = []  # Empty
+
+        spells_data = {
+            "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack"},
+            "magic_missile": {"name": "Magic Missile", "level": 1, "damage": {"dice": "1d4+1"}},
+        }
+
+        castable = wizard.get_castable_spells(spells_data)
+        assert len(castable) == 2

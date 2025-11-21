@@ -2,7 +2,7 @@
 # ABOUTME: Adds class, level, XP, proficiency bonus, combat bonuses, and skill tracking
 
 from enum import Enum
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from dnd_engine.core.creature import Creature, Abilities
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.spell import Spell
@@ -1545,6 +1545,58 @@ class Character(Creature):
         # Set prepared spells
         self.prepared_spells = spell_ids[:]
         return True
+
+    def get_castable_spells(self, spells_data: Dict[str, Any]) -> List[Tuple[str, Dict[str, Any]]]:
+        """
+        Get all spells the character can cast in combat.
+
+        Returns spells from prepared_spells (or known_spells for non-prepared casters)
+        that are appropriate for combat use. Includes offensive spells, utility combat
+        spells, and reaction spells.
+
+        Args:
+            spells_data: Dictionary of all spell definitions from spells.json
+
+        Returns:
+            List of (spell_id, spell_data) tuples for castable spells
+            Sorted by level (cantrips first, then by spell level)
+
+        Notes:
+            - Does not filter by available spell slots (cantrips always available)
+            - UI should indicate when spell slots are unavailable
+            - Excludes out-of-combat rituals and non-combat utility spells
+        """
+        # Determine which spell list to use
+        # Wizards and clerics use prepared_spells
+        # Sorcerers and bards use known_spells directly
+        spell_list = self.prepared_spells if self.prepared_spells else self.known_spells
+
+        castable = []
+        for spell_id in spell_list:
+            spell_data = spells_data.get(spell_id)
+            if not spell_data:
+                continue
+
+            # Include spell if it has any of these combat-relevant properties:
+            # 1. Has an attack roll (spell attack)
+            # 2. Has a saving throw (AoE, debuff, etc.)
+            # 3. Has damage (even if no attack/save, like Magic Missile)
+            # 4. Is a reaction spell (Shield, Counterspell, etc.)
+            # 5. Has specific combat utility effects
+
+            has_attack = spell_data.get("attack_type") is not None
+            has_save = spell_data.get("saving_throw_type") is not None
+            has_damage = spell_data.get("damage") is not None
+            is_reaction = spell_data.get("casting_time") == "1 reaction"
+
+            # Include if combat-relevant
+            if has_attack or has_save or has_damage or is_reaction:
+                castable.append((spell_id, spell_data))
+
+        # Sort by spell level (cantrips first, then by level)
+        castable.sort(key=lambda x: x[1].get("level", 0))
+
+        return castable
 
     def use_arcane_recovery(self, spell_slot_levels: Dict[int, int]) -> bool:
         """
