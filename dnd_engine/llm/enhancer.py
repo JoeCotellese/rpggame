@@ -163,12 +163,24 @@ class LLMEnhancer:
         monsters_data = room_data.get('monsters_data')
         party_size = room_data.get('party_size', 1)
 
-        # Build cache key that includes monster presence to avoid stale descriptions
-        # after combat ends (e.g., "room_laboratory" vs "room_laboratory_combat_2_goblins")
+        # Build cache key that includes monster presence and lighting to avoid stale descriptions
+        # after combat ends or lighting changes
+        # Examples: "room_laboratory", "room_laboratory_combat_2_monsters", "room_laboratory_bright"
         monster_suffix = ""
         if monsters:
             monster_suffix = f"_combat_{len(monsters)}_monsters"
-        cache_key = f"room_{room_data.get('id', 'unknown')}{monster_suffix}"
+
+        # Include party lighting state in cache key (use best available lighting)
+        party_lighting = room_data.get('party_lighting', [])
+        lighting_state = "dark"
+        for char_lighting in party_lighting:
+            if char_lighting.get("lighting") == "bright":
+                lighting_state = "bright"
+                break
+            elif char_lighting.get("lighting") == "dim":
+                lighting_state = "dim"
+
+        cache_key = f"room_{room_data.get('id', 'unknown')}{monster_suffix}_{lighting_state}"
 
         # Check cache
         if self.cache is not None and cache_key in self.cache:
@@ -434,12 +446,24 @@ class LLMEnhancer:
         monsters_data = room_data.get('monsters_data')
         party_size = room_data.get('party_size', 1)
 
-        # Build cache key that includes monster presence to avoid stale descriptions
-        # after combat ends (e.g., "room_laboratory" vs "room_laboratory_combat_2_goblins")
+        # Build cache key that includes monster presence and lighting to avoid stale descriptions
+        # after combat ends or lighting changes
+        # Examples: "room_laboratory", "room_laboratory_combat_2_monsters", "room_laboratory_bright"
         monster_suffix = ""
         if monsters:
             monster_suffix = f"_combat_{len(monsters)}_monsters"
-        cache_key = f"room_{room_data.get('id', 'unknown')}{monster_suffix}"
+
+        # Include party lighting state in cache key (use best available lighting)
+        party_lighting = room_data.get('party_lighting', [])
+        lighting_state = "dark"
+        for char_lighting in party_lighting:
+            if char_lighting.get("lighting") == "bright":
+                lighting_state = "bright"
+                break
+            elif char_lighting.get("lighting") == "dim":
+                lighting_state = "dim"
+
+        cache_key = f"room_{room_data.get('id', 'unknown')}{monster_suffix}_{lighting_state}"
 
         # Check cache first
         if self.cache and cache_key in self.cache:

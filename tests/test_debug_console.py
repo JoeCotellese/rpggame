@@ -808,3 +808,144 @@ class TestPartyManagementCommands:
 
         # /create should NOT exist (we removed it)
         assert "create" not in console.commands
+
+
+class TestLLMToggleCommand:
+    """Test /disablellm command"""
+
+    def test_disablellm_without_cli(self, capsys):
+        """Test /disablellm when CLI is not provided"""
+        party = Party([])
+        game_state = GameState(party, "test_dungeon")
+        console = DebugConsole(game_state, enabled=True)
+
+        # Execute without CLI
+        console.cmd_disable_llm([])
+
+        # Should show error (check captured output would contain error)
+        # Since we don't have CLI, it should error
+
+    def test_disablellm_toggle_on(self):
+        """Test /disablellm switches to debug provider"""
+        from dnd_engine.llm.base import LLMProvider
+        from dnd_engine.llm.debug_provider import DebugProvider
+        from dnd_engine.llm.enhancer import LLMEnhancer
+        from dnd_engine.utils.events import EventBus
+
+        # Create a mock provider
+        class MockProvider(LLMProvider):
+            def __init__(self):
+                super().__init__("test", "test", 10.0, 150)
+
+            async def generate(self, prompt, temperature=0.7):
+                return "test response"
+
+            def get_provider_name(self):
+                return "Mock Provider"
+
+        # Create mock CLI with LLM enhancer
+        party = Party([])
+        game_state = GameState(party, "test_dungeon")
+        event_bus = EventBus()
+
+        original_provider = MockProvider()
+        llm_enhancer = LLMEnhancer(original_provider, event_bus)
+
+        # Add some cached data
+        llm_enhancer.cache["test_key"] = "test_value"
+        assert len(llm_enhancer.cache) == 1
+
+        # Create a minimal CLI mock
+        class MockCLI:
+            def __init__(self, llm_enhancer):
+                self.llm_enhancer = llm_enhancer
+
+        cli = MockCLI(llm_enhancer)
+        console = DebugConsole(game_state, enabled=True, cli=cli)
+
+        # Execute command to enable debug mode
+        console.cmd_disable_llm([])
+
+        # Should switch to DebugProvider
+        assert isinstance(cli.llm_enhancer.provider, DebugProvider)
+        assert console._llm_debug_mode is True
+        assert console._original_llm_provider == original_provider
+        # Cache should be cleared
+        assert len(llm_enhancer.cache) == 0
+
+    def test_disablellm_toggle_off(self):
+        """Test /disablellm restores original provider"""
+        from dnd_engine.llm.base import LLMProvider
+        from dnd_engine.llm.debug_provider import DebugProvider
+        from dnd_engine.llm.enhancer import LLMEnhancer
+        from dnd_engine.utils.events import EventBus
+
+        # Create a mock provider
+        class MockProvider(LLMProvider):
+            def __init__(self):
+                super().__init__("test", "test", 10.0, 150)
+
+            async def generate(self, prompt, temperature=0.7):
+                return "test response"
+
+            def get_provider_name(self):
+                return "Mock Provider"
+
+        # Create mock CLI with LLM enhancer
+        party = Party([])
+        game_state = GameState(party, "test_dungeon")
+        event_bus = EventBus()
+
+        original_provider = MockProvider()
+        llm_enhancer = LLMEnhancer(original_provider, event_bus)
+
+        # Create a minimal CLI mock
+        class MockCLI:
+            def __init__(self, llm_enhancer):
+                self.llm_enhancer = llm_enhancer
+
+        cli = MockCLI(llm_enhancer)
+        console = DebugConsole(game_state, enabled=True, cli=cli)
+
+        # Enable debug mode first
+        console.cmd_disable_llm([])
+        assert isinstance(cli.llm_enhancer.provider, DebugProvider)
+
+        # Add some cached debug data
+        llm_enhancer.cache["debug_key"] = "debug_value"
+        assert len(llm_enhancer.cache) == 1
+
+        # Toggle back to original
+        console.cmd_disable_llm([])
+
+        # Should restore original provider
+        assert cli.llm_enhancer.provider == original_provider
+        assert console._llm_debug_mode is False
+        # Cache should be cleared
+        assert len(llm_enhancer.cache) == 0
+
+    def test_disablellm_without_llm_enhancer(self, capsys):
+        """Test /disablellm when llm_enhancer is None"""
+        party = Party([])
+        game_state = GameState(party, "test_dungeon")
+
+        # Create a minimal CLI mock without llm_enhancer
+        class MockCLI:
+            def __init__(self):
+                self.llm_enhancer = None
+
+        cli = MockCLI()
+        console = DebugConsole(game_state, enabled=True, cli=cli)
+
+        # Execute command
+        console.cmd_disable_llm([])
+
+        # Should handle gracefully (no crash)
+
+    def test_command_registry_has_disablellm(self):
+        """Test that command registry includes disablellm"""
+        party = Party([])
+        game_state = GameState(party, "test_dungeon")
+        console = DebugConsole(game_state, enabled=True)
+
+        assert "disablellm" in console.commands

@@ -77,7 +77,7 @@ class CLI:
         self.combat_history: List[str] = []
 
         # Debug console for testing and development
-        self.debug_console = DebugConsole(game_state)
+        self.debug_console = DebugConsole(game_state, cli=self)
 
         # Subscribe to game events for display and auto-save
         self.game_state.event_bus.subscribe(EventType.COMBAT_START, self._on_combat_start)

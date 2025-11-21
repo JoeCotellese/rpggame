@@ -34,21 +34,27 @@ class DebugConsole:
     - LOW: Proficiencies, dice testing, UI toggles
     """
 
-    def __init__(self, game_state: GameState, enabled: bool = None):
+    def __init__(self, game_state: GameState, enabled: bool = None, cli=None):
         """
         Initialize the debug console.
 
         Args:
             game_state: The game state to manipulate
             enabled: Whether debug mode is enabled (defaults to DEBUG_MODE env var)
+            cli: Optional CLI instance for LLM provider switching
         """
         self.game_state = game_state
+        self.cli = cli
 
         # Check if debug mode is enabled via environment variable
         if enabled is None:
             enabled = os.getenv("DEBUG_MODE", "false").lower() in ["true", "1", "yes"]
 
         self.enabled = enabled
+
+        # Track original LLM provider for toggling
+        self._original_llm_provider = None
+        self._llm_debug_mode = False
 
         # Command registry: maps command names to handler methods
         self.commands: Dict[str, Any] = {
@@ -106,6 +112,7 @@ class DebugConsole:
             # System
             "help": self.cmd_help,
             "reset": self.cmd_reset,
+            "disablellm": self.cmd_disable_llm,
         }
 
         # God mode tracking (character name -> invulnerable)
@@ -1450,11 +1457,46 @@ class DebugConsole:
         # System
         table.add_row(
             "System",
-            "/help, /reset"
+            "/help, /reset, /disablellm"
         )
 
         console.print(table)
         print_message("\nUse '/help <command>' for detailed help on a specific command")
+
+    def cmd_disable_llm(self, args: List[str]) -> None:
+        """Toggle between debug LLM (shows prompts) and normal LLM."""
+        if not self.cli or not self.cli.llm_enhancer:
+            print_error("LLM enhancer not available")
+            return
+
+        from dnd_engine.llm.debug_provider import DebugProvider
+
+        # Toggle between debug mode and normal mode
+        if self._llm_debug_mode:
+            # Restore original provider
+            if self._original_llm_provider:
+                self.cli.llm_enhancer.provider = self._original_llm_provider
+                # Clear cache to prevent stale debug prompts from being shown
+                if self.cli.llm_enhancer.cache is not None:
+                    self.cli.llm_enhancer.cache.clear()
+                    print_message("LLM cache cleared")
+                provider_name = self._original_llm_provider.get_provider_name()
+                print_status_message(f"LLM restored to: {provider_name}", "success")
+            else:
+                print_status_message("LLM disabled (no original provider)", "info")
+                self.cli.llm_enhancer.provider = None
+            self._llm_debug_mode = False
+        else:
+            # Switch to debug provider
+            self._original_llm_provider = self.cli.llm_enhancer.provider
+            self.cli.llm_enhancer.provider = DebugProvider()
+            # Clear cache to prevent stale real responses from being shown
+            if self.cli.llm_enhancer.cache is not None:
+                self.cli.llm_enhancer.cache.clear()
+                print_message("LLM cache cleared")
+            print_status_message("LLM switched to debug mode (shows prompts)", "warning")
+            print_message("LLM will now display prompts instead of calling the API")
+            self._llm_debug_mode = True
 
     # =====================================================================
     # Helper Methods
