@@ -604,3 +604,25 @@ class TestGetCastableSpells:
 
         castable = wizard.get_castable_spells(spells_data)
         assert len(castable) == 2
+
+    def test_cantrips_always_show_in_prepared_spells(self, wizard_abilities):
+        """Cantrips should show if they're in prepared_spells."""
+        wizard = Character("Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12)
+        wizard.spellcasting_ability = "intelligence"
+        wizard.known_spells = ["fire_bolt", "ray_of_frost", "magic_missile"]
+        wizard.prepared_spells = ["fire_bolt", "ray_of_frost", "magic_missile"]  # Cantrips + 1st level
+
+        spells_data = {
+            "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack", "damage": {"dice": "1d10"}},
+            "ray_of_frost": {"name": "Ray of Frost", "level": 0, "attack_type": "ranged_spell_attack", "damage": {"dice": "1d8"}},
+            "magic_missile": {"name": "Magic Missile", "level": 1, "damage": {"dice": "1d4+1"}},
+        }
+
+        castable = wizard.get_castable_spells(spells_data)
+        castable_ids = [spell_id for spell_id, _ in castable]
+
+        # Should show all prepared spells including cantrips
+        assert "fire_bolt" in castable_ids
+        assert "ray_of_frost" in castable_ids
+        assert "magic_missile" in castable_ids
+        assert len(castable) == 3

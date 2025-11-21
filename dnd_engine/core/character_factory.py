@@ -558,13 +558,15 @@ class CharacterFactory:
                 )
 
             character.known_spells = selected_cantrips + selected_leveled_spells
-            character.prepared_spells = selected_leveled_spells[:]
+            # Cantrips are always prepared
+            character.prepared_spells = selected_cantrips + selected_leveled_spells
         else:
             # Non-interactive: just take first N spells
             cantrips = [s[0] for s in cantrip_list]
             leveled_spells = [s[0] for s in leveled_spell_list]
             character.known_spells = cantrips[:cantrips_known_count] + leveled_spells[:spells_known_count]
-            character.prepared_spells = leveled_spells[:spells_known_count]
+            # Cantrips are always prepared
+            character.prepared_spells = cantrips[:cantrips_known_count] + leveled_spells[:spells_known_count]
 
     @staticmethod
     def initialize_class_resources(
