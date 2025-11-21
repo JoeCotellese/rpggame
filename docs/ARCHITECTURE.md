@@ -624,6 +624,85 @@ All content in JSON for easy modification.
 - **Reliability**: Fallback if one provider is down
 - **Testing**: Debug provider shows prompts without API calls
 
+### 7. Narrative-First Spatial Design
+
+**Decision**: Use abstract room-based exploration with zone-level positioning, not grid-based coordinates.
+
+**Rationale**:
+- **Terminal UI Focus**: Text-based interface prioritizes narrative flow over tactical precision
+- **Immersion**: Players read descriptions and make choices, not track coordinates
+- **Accessibility**: Simpler mental model, easier to visualize without a map
+- **Development Velocity**: Significantly simpler to implement and maintain
+- **Story Over Tactics**: Game emphasizes investigation, atmosphere, and storytelling
+
+**Implementation Philosophy**:
+- **Exploration**: Room-to-room navigation (graph-based)
+- **Combat**: Abstract positioning (Near/Mid/Far zones) for range calculations
+- **Light & Vision**: Zone-based visibility (bright/dim/dark areas within rooms)
+- **Time**: Automatic passage during actions (movement, searching, resting)
+
+**What This Means**:
+- ✅ D&D mechanics respected (attack ranges, light radii, movement)
+- ✅ Tactical choices preserved (positioning, resources, timing)
+- ❌ No precise grid coordinates (no "move to X,Y")
+- ❌ No flanking bonuses or exact AOE placement
+- ❌ No diagonals or opportunity attack paths
+
+**Trade-offs**:
+- **Lose**: Full tactical combat simulation (like tabletop with miniatures)
+- **Gain**: Faster gameplay, clearer presentation, narrative immersion
+- **Worth It**: For a terminal-based narrative RPG, abstraction enhances experience
+
+**Impact on Systems**:
+- **Lighting (#124)**: Light sources affect room zones, not exact radii
+- **Time (#123)**: Automatic advancement during actions, not manual tracking
+- **Combat**: Range matters (30ft spell, 60ft darkvision) but via zones
+- **Dungeons**: Rooms with connections, not coordinate grids
+
+This constraint guides all spatial system design. When in doubt, choose the approach that preserves narrative flow over tactical precision.
+
+### 8. Extensible Time-Based Resource Management
+
+**Decision**: TimeManager uses a generic TimedEffect system that can track any resource that depletes over time.
+
+**Rationale**:
+- **Unified System**: One manager for all time-based depletion (light sources, spell durations, conditions, consumables)
+- **Future-Proof**: Can add new resource types without refactoring core system
+- **Consistent Behavior**: All time-based resources follow same expiration/notification patterns
+- **Event-Driven**: Expiration events work the same for all resource types
+
+**Extensible Design**:
+```python
+class TimedEffect:
+    effect_id: str
+    effect_type: str  # "spell", "condition", "light_source", "buff", "food", "ammo", etc.
+    start_time: int
+    duration_minutes: int
+    target: Optional[Character]
+    metadata: Dict[str, Any]  # Type-specific data
+```
+
+**Current Support** (Phase 1 - Epic #126):
+- ✅ Light sources (torches, lanterns) - 60-360 minute durations
+- ✅ Spell durations (*Bless*, *Light*, *Mage Armor*) - 1 minute to 8 hours
+- ✅ Conditions (Poisoned, Paralyzed) - Varies by source
+
+**Planned Extensions** (Post-Epic):
+- 🔮 Consumable buffs (potions with duration)
+- 🔮 Food/water tracking (days since last meal)
+- 🔮 Ammunition tracking (arrows per quiver)
+- 🔮 Tool durability (thieves' tools, healer's kit uses)
+- 🔮 Environmental effects (cold exposure, suffocation timer)
+
+**Implementation Philosophy**:
+- Start with MVP (light + spells + conditions)
+- Extend by adding new `effect_type` values
+- Metadata dict holds type-specific data
+- No refactoring needed to add new types
+
+**Why This Matters**:
+D&D has many time-based resources: torches burn out, spells expire, conditions fade, food spoils, tools break. A single system handles all of these consistently and efficiently.
+
 ---
 
 ## External Dependencies
