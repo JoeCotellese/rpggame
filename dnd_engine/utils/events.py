@@ -67,6 +67,7 @@ class EventType(Enum):
     # Rest system events
     SHORT_REST = "short_rest"
     LONG_REST = "long_rest"
+    SPELLS_PREPARED = "spells_prepared"
 
 
 @dataclass

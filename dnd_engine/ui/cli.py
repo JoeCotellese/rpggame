@@ -3360,6 +3360,14 @@ class CLI:
         # Display rest results
         self._display_rest_results(results, rest_type, rest_duration)
 
+        # After long rest, offer spell preparation to prepared casters
+        if rest_type == "long":
+            for result in results:
+                if result.get("can_prepare_spells"):
+                    character = self.game_state.party.get_character_by_name(result["character"])
+                    if character:
+                        self._offer_spell_preparation(character)
+
     def _display_rest_results(self, results: list, rest_type: str, rest_duration: str) -> None:
         """
         Display the results of a rest to the player.
@@ -3396,6 +3404,111 @@ class CLI:
             print_message("")
 
         print_status_message("The party is refreshed and ready to continue!", "success")
+
+    def _offer_spell_preparation(self, character: Character) -> None:
+        """
+        Offer spell preparation UI for prepared caster classes.
+
+        Allows player to review and change prepared spells after a long rest.
+        This is pure UI - displays spells, captures selections, calls GameState.
+
+        Args:
+            character: Character who can prepare spells (Wizard or Cleric)
+        """
+        from dnd_engine.ui.rich_ui import print_section, print_message, print_status_message
+
+        # Ask if player wants to change prepared spells
+        print_message("")
+        print_message(f"{character.name} can prepare spells.")
+        choice = input("Change prepared spells? (y/n): ").strip().lower()
+
+        if choice != 'y':
+            print_message("Keeping current spell selection.")
+            return
+
+        # Load spell data
+        spells_data = self.game_state.data_loader.load_spells()
+
+        # Get available spells
+        cantrips, leveled_spells = character.get_preparable_spells(spells_data)
+
+        # Calculate preparation limit
+        max_prepared = character.get_max_prepared_spells()
+
+        # Show current prepared spells (excluding cantrips)
+        current_prepared = [s for s in character.prepared_spells if s not in cantrips]
+
+        print_section(f"Spell Preparation - {character.name}")
+        print_message(f"You can prepare up to {max_prepared} spells (cantrips don't count).")
+        print_message("")
+        print_message("Cantrips (always prepared):")
+        for cantrip_id in cantrips:
+            cantrip = spells_data.get(cantrip_id, {})
+            print_message(f"  • {cantrip.get('name', cantrip_id)}")
+        print_message("")
+
+        if not leveled_spells:
+            print_status_message("No leveled spells available to prepare.", "warning")
+            return
+
+        print_message("Available Spells:")
+        for idx, (spell_id, spell_data) in enumerate(leveled_spells, 1):
+            spell_name = spell_data.get("name", spell_id)
+            spell_level = spell_data.get("level", "?")
+            school = spell_data.get("school", "")
+            prepared_mark = "✓" if spell_id in current_prepared else " "
+            print_message(f"  [{prepared_mark}] {idx}. {spell_name} (Level {spell_level}, {school})")
+
+        print_message("")
+        print_message("Enter spell numbers to prepare (comma-separated, e.g., '1,3,5')")
+        print_message(f"You can select up to {max_prepared} spells.")
+        print_message("Press Enter without typing to cancel.")
+        print_message("")
+
+        selection = input(f"Select spells (max {max_prepared}): ").strip()
+
+        if not selection:
+            print_message("Spell preparation cancelled.")
+            return
+
+        # Parse selection
+        try:
+            indices = [int(x.strip()) - 1 for x in selection.split(',')]
+        except ValueError:
+            print_status_message("Invalid input. Spell preparation cancelled.", "error")
+            return
+
+        # Validate indices
+        if any(i < 0 or i >= len(leveled_spells) for i in indices):
+            print_status_message("Invalid spell number. Spell preparation cancelled.", "error")
+            return
+
+        # Check count
+        if len(indices) > max_prepared:
+            print_status_message(
+                f"Too many spells selected ({len(indices)}/{max_prepared}). Preparation cancelled.",
+                "error"
+            )
+            return
+
+        # Get selected spell IDs (excluding duplicates)
+        selected_spell_ids = list(dict.fromkeys([leveled_spells[i][0] for i in indices]))
+
+        # Add cantrips to selection (they're always prepared)
+        final_spell_ids = cantrips + selected_spell_ids
+
+        # Call GameState to prepare spells (it validates and updates)
+        success = self.game_state.prepare_spells(character.name, final_spell_ids)
+
+        if success:
+            spell_names = [spells_data[sid].get("name", sid) for sid in selected_spell_ids]
+            print_status_message(
+                f"✓ Prepared {len(selected_spell_ids)} spell{'s' if len(selected_spell_ids) != 1 else ''}: "
+                f"{', '.join(spell_names)}",
+                "success"
+            )
+        else:
+            print_status_message("Failed to prepare spells. Please try again.", "error")
 
     def handle_reset(self, command: str) -> None:
         """
