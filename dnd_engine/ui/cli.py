@@ -1425,17 +1425,11 @@ class CLI:
         # Load spells data
         spells_data = self.game_state.data_loader.load_spells()
 
-        # Get available spells for this character (for now, use all spells of their class)
-        # In future, this should come from character's known spells
-        available_spells = []
-        for spell_id, spell_data in spells_data.items():
-            if caster.character_class.value in spell_data.get("classes", []):
-                # Only include attack spells
-                if spell_data.get("attack_type"):
-                    available_spells.append((spell_id, spell_data))
+        # Get castable spells from game engine (respects prepared/known spells)
+        available_spells = caster.get_castable_spells(spells_data)
 
         if not available_spells:
-            print_error(f"{caster.name} doesn't know any attack spells!")
+            print_error(f"{caster.name} doesn't have any combat spells prepared!")
             return
 
         # If no spell specified, show list and prompt for selection
