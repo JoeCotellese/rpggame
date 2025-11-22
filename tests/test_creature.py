@@ -371,8 +371,9 @@ class TestCreature:
 
             # Either still paralyzed (failed save) or removed (passed save - rare)
             if creature.has_condition("paralyzed"):
-                # Failed save - duration should decrement
-                assert creature.active_conditions["paralyzed"]["duration_remaining"] == initial_duration - 1
+                # Failed save - with repeat saves enabled, duration does NOT decrement
+                # The repeat save is the primary mechanism for ending the condition
+                assert creature.active_conditions["paralyzed"]["duration_remaining"] == initial_duration
 
     def test_conditions_backward_compatibility(self):
         """Test that conditions property returns set of condition names"""

@@ -3824,8 +3824,6 @@ class CLI:
         # Parse command for options
         parts = command.split()
         dungeon_name = None
-        reset_hp = True
-        reset_conditions = True
 
         # Check for --dungeon option
         if len(parts) > 1 and parts[1] == "--dungeon" and len(parts) > 2:
