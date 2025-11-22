@@ -117,32 +117,51 @@ IMPORTANT: This is the moment combat begins. Naturally transition from describin
 
     # Build lighting context for narrative
     lighting_context = ""
+    light_casters = room_data.get("light_casters", [])
+
     if base_lighting == "dark":
         # Check if anyone can see
-        can_see = []
+        can_see_bright = []
+        can_see_dim = []
         cannot_see = []
+
         for char_lighting in party_lighting:
             if char_lighting["lighting"] == "bright":
-                can_see.append(f"{char_lighting['character']} (Light spell)")
+                can_see_bright.append(char_lighting['character'])
             elif char_lighting["lighting"] == "dim":
                 if char_lighting["has_darkvision"]:
-                    can_see.append(f"{char_lighting['character']} (darkvision - limited)")
+                    can_see_dim.append(char_lighting['character'])
                 else:
                     cannot_see.append(char_lighting['character'])
             else:  # dark
                 cannot_see.append(char_lighting['character'])
 
-        if can_see and cannot_see:
-            lighting_context = f"\n\nLighting: The room is pitch black. {', '.join(can_see)} can see, but {', '.join(cannot_see)} cannot see in the darkness. Emphasize the contrast between those who can perceive the environment and those who are blind."
-        elif not can_see:
+        # Build natural language lighting description
+        if light_casters:
+            # Someone cast Light spell - mention them specifically
+            if len(light_casters) == 1:
+                light_source = f"{light_casters[0]}'s Light spell"
+            elif len(light_casters) == 2:
+                light_source = f"{light_casters[0]} and {light_casters[1]}'s Light spells"
+            else:
+                light_source = f"{', '.join(light_casters[:-1])}, and {light_casters[-1]}'s Light spells"
+
+            if cannot_see:
+                lighting_context = f"\n\nLighting: The room is pitch black, but {light_source} illuminates the area for the party. Describe the magical light cutting through the darkness."
+            else:
+                lighting_context = f"\n\nLighting: {light_source} pierces the darkness, revealing the chamber in bright magical light."
+        elif can_see_bright:
+            # Can see bright but no Light spell tracked - generic
+            lighting_context = f"\n\nLighting: Magical light illuminates the darkness."
+        elif can_see_dim and not cannot_see:
+            # Everyone has darkvision
+            lighting_context = f"\n\nLighting: The room is pitch black, but the party sees through the darkness with darkvision - limited grayscale vision. Describe muted colors and shadows."
+        elif can_see_dim and cannot_see:
+            # Mixed darkvision
+            lighting_context = f"\n\nLighting: The room is pitch black. {', '.join(can_see_dim)} see through the darkness with darkvision, but {', '.join(cannot_see)} are blind. Emphasize the contrast."
+        else:
+            # Nobody can see
             lighting_context = f"\n\nLighting: The room is pitch black. The party cannot see anything - describe only non-visual sensory details (sounds, smells, textures, echoes, temperature). Emphasize the oppressive darkness and disorientation."
-        elif can_see:
-            darkvision_users = [c for c in can_see if "darkvision" in c]
-            light_users = [c for c in can_see if "Light spell" in c]
-            if darkvision_users and not light_users:
-                lighting_context = f"\n\nLighting: The room is pitch black, but {', '.join(darkvision_users)} see through the darkness with limited grayscale vision. Describe muted colors and shadows."
-            elif light_users:
-                lighting_context = f"\n\nLighting: {', '.join(light_users)} illuminate the darkness. Describe the contrast between lit and shadowed areas."
 
     elif base_lighting == "dim":
         lighting_context = "\n\nLighting: The room is dimly lit with shadows and limited visibility. Describe how shapes are unclear, colors are muted, and details are hard to make out. Create an atmosphere of uncertainty and gloom."
