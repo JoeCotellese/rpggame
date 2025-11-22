@@ -158,7 +158,7 @@ class CLI:
                 "previous_room_id": self.game_state.previous_room_id  # Previous room for transition narrative
             }
             with console.status("", spinner="dots"):
-                enhanced_desc = self.llm_enhancer.get_room_description_sync(room_data, timeout=3.0)
+                enhanced_desc = self.llm_enhancer.get_room_description_sync(room_data, timeout=20.0)
 
         # Use enhanced description if available, otherwise use basic
         room_text = enhanced_desc if enhanced_desc else basic_desc
@@ -1396,7 +1396,7 @@ class CLI:
                         "combat_history": self.combat_history,
                         "battlefield_state": self._build_battlefield_state()
                     },
-                    timeout=3.0
+                    timeout=20.0
                 )
             if narrative:
                 self.display_narrative_panel(narrative)
@@ -1416,7 +1416,7 @@ class CLI:
                             "name": target.name,
                             "is_player": isinstance(target, Character)
                         },
-                        timeout=3.0
+                        timeout=20.0
                     )
                 if death_narrative:
                     self.display_narrative_panel(death_narrative)
@@ -1634,7 +1634,7 @@ class CLI:
                         "battlefield_state": self._build_battlefield_state(),
                         "is_spell": True
                     },
-                    timeout=3.0
+                    timeout=20.0
                 )
             if narrative:
                 self.display_narrative_panel(narrative)
@@ -1656,7 +1656,7 @@ class CLI:
                             "name": target.name,
                             "is_player": isinstance(target, Character)
                         },
-                        timeout=3.0
+                        timeout=20.0
                     )
                 if death_narrative:
                     self.display_narrative_panel(death_narrative)
@@ -2061,7 +2061,7 @@ class CLI:
                                 "combat_history": self.combat_history,
                                 "battlefield_state": self._build_battlefield_state()
                             },
-                            timeout=3.0
+                            timeout=20.0
                         )
                     if narrative:
                         self.display_narrative_panel(narrative)
@@ -2081,7 +2081,7 @@ class CLI:
                                     "name": target.name,
                                     "is_player": isinstance(target, Character)
                                 },
-                                timeout=3.0
+                                timeout=20.0
                             )
                         if death_narrative:
                             self.display_narrative_panel(death_narrative)
