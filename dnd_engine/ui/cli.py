@@ -145,7 +145,8 @@ class CLI:
                 "monsters_data": monsters_data,  # Full monster definitions for creature-aware prompts
                 "party_size": party_size,  # Party size for combat context
                 "base_lighting": room.get("lighting", "bright"),  # Room's base lighting level
-                "party_lighting": party_lighting  # Effective lighting for each party member
+                "party_lighting": party_lighting,  # Effective lighting for each party member
+                "previous_room_id": self.game_state.previous_room_id  # Previous room for transition narrative
             }
             with console.status("", spinner="dots"):
                 enhanced_desc = self.llm_enhancer.get_room_description_sync(room_data, timeout=3.0)

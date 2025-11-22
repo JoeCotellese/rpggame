@@ -163,12 +163,20 @@ class LLMEnhancer:
         monsters_data = room_data.get('monsters_data')
         party_size = room_data.get('party_size', 1)
 
-        # Build cache key that includes monster presence to avoid stale descriptions
-        # after combat ends (e.g., "room_laboratory" vs "room_laboratory_combat_2_goblins")
+        # Build cache key that includes monster presence and room transition state
+        # to avoid stale descriptions after combat ends or when re-examining a room
+        # Examples: "room_laboratory_entering", "room_laboratory_combat_2_monsters_looking"
         monster_suffix = ""
         if monsters:
             monster_suffix = f"_combat_{len(monsters)}_monsters"
-        cache_key = f"room_{room_data.get('id', 'unknown')}{monster_suffix}"
+
+        # Detect room transition
+        room_id = room_data.get('id', 'unknown')
+        previous_room_id = room_data.get('previous_room_id')
+        is_entering = previous_room_id != room_id if previous_room_id is not None else True
+        transition_suffix = "_entering" if is_entering else "_looking"
+
+        cache_key = f"room_{room_id}{monster_suffix}{transition_suffix}"
 
         # Check cache
         if self.cache is not None and cache_key in self.cache:
@@ -434,12 +442,20 @@ class LLMEnhancer:
         monsters_data = room_data.get('monsters_data')
         party_size = room_data.get('party_size', 1)
 
-        # Build cache key that includes monster presence to avoid stale descriptions
-        # after combat ends (e.g., "room_laboratory" vs "room_laboratory_combat_2_goblins")
+        # Build cache key that includes monster presence and room transition state
+        # to avoid stale descriptions after combat ends or when re-examining a room
+        # Examples: "room_laboratory_entering", "room_laboratory_combat_2_monsters_looking"
         monster_suffix = ""
         if monsters:
             monster_suffix = f"_combat_{len(monsters)}_monsters"
-        cache_key = f"room_{room_data.get('id', 'unknown')}{monster_suffix}"
+
+        # Detect room transition
+        room_id = room_data.get('id', 'unknown')
+        previous_room_id = room_data.get('previous_room_id')
+        is_entering = previous_room_id != room_id if previous_room_id is not None else True
+        transition_suffix = "_entering" if is_entering else "_looking"
+
+        cache_key = f"room_{room_id}{monster_suffix}{transition_suffix}"
 
         # Check cache first
         if self.cache and cache_key in self.cache:
