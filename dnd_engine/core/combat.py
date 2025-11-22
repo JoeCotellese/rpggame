@@ -3,7 +3,7 @@
 
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
-from dnd_engine.core.dice import DiceRoller, DiceRoll
+from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.creature import Creature
 from dnd_engine.utils.events import Event, EventType
 
@@ -93,7 +93,8 @@ class CombatEngine:
         advantage: bool = False,
         disadvantage: bool = False,
         apply_damage: bool = False,
-        event_bus = None
+        event_bus = None,
+        action: dict | None = None
     ) -> AttackResult:
         """
         Resolve a complete attack.
@@ -182,6 +183,15 @@ class CombatEngine:
                         defender.take_damage(damage + sneak_attack_damage)
                 else:
                     defender.take_damage(damage + sneak_attack_damage)
+
+            # Process saving throw effects (e.g., ghoul paralysis)
+            if action and "saving_throw" in action:
+                self._process_saving_throw_effect(
+                    action["saving_throw"],
+                    attacker,
+                    defender,
+                    event_bus
+                )
 
         return AttackResult(
             attacker_name=attacker.name,
@@ -342,6 +352,97 @@ class CombatEngine:
             "damage": damage,
             "damage_taken": damage_taken,
             "effect": effect_description
+        }
+
+    def _process_saving_throw_effect(
+        self,
+        saving_throw_data: dict,
+        attacker: Creature,
+        defender: Creature,
+        event_bus=None
+    ) -> dict | None:
+        """
+        Process saving throw effects from monster actions (e.g., ghoul paralysis).
+
+        Args:
+            saving_throw_data: The saving_throw dict from monster action
+            attacker: The attacking creature
+            defender: The defending creature
+            event_bus: Optional EventBus for emitting events
+
+        Returns:
+            Result dict with save_result and condition_applied, or None if not triggered
+        """
+        # Check trigger type
+        trigger = saving_throw_data.get("trigger")
+        if trigger != "on_hit":
+            # For now, only support on_hit triggers
+            # Future: start_of_turn, area_effect, etc.
+            return None
+
+        # Make the saving throw
+        ability = saving_throw_data.get("ability")
+        dc = saving_throw_data.get("dc")
+
+        if not ability or not dc:
+            return None
+
+        save_result = defender.make_saving_throw(
+            ability=ability,
+            dc=dc,
+            event_bus=event_bus
+        )
+
+        # Emit saving throw event
+        if event_bus:
+            event_bus.emit(Event(
+                type=EventType.SAVING_THROW,
+                data={
+                    "creature": defender.name,
+                    "ability": ability,
+                    "dc": dc,
+                    "result": save_result
+                }
+            ))
+
+        # Apply effect on failure
+        if not save_result["success"]:
+            on_fail = saving_throw_data.get("on_fail", {})
+            condition = on_fail.get("condition")
+
+            if condition:
+                # Apply condition with metadata
+                defender.apply_condition_with_metadata(
+                    condition=condition,
+                    duration_type=on_fail.get("duration_type", "permanent"),
+                    duration=on_fail.get("duration", 0),
+                    dc=dc,
+                    ability=ability,
+                    allow_repeat_save=on_fail.get("allow_repeat_save", False),
+                    repeat_timing=on_fail.get("repeat_timing", "end_of_turn")
+                )
+
+                # Emit condition applied event
+                if event_bus:
+                    event_bus.emit(Event(
+                        type=EventType.CONDITION_APPLIED,
+                        data={
+                            "creature": defender.name,
+                            "condition": condition,
+                            "source": attacker.name,
+                            "duration_type": on_fail.get("duration_type"),
+                            "duration": on_fail.get("duration")
+                        }
+                    ))
+
+                return {
+                    "save_result": save_result,
+                    "condition_applied": condition
+                }
+
+        return {
+            "save_result": save_result,
+            "condition_applied": None
         }
 
     def resolve_spell_attack(

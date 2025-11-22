@@ -22,7 +22,10 @@
       "stealth": 6
     },
     "senses": "darkvision 60 ft., passive Perception 9",
-    "languages": ["Common", "Goblin"],
+    "languages": [
+      "Common",
+      "Goblin"
+    ],
     "cr": "1/4",
     "xp": 50,
     "loot": {
@@ -79,7 +82,10 @@
       "stealth": 6
     },
     "senses": "darkvision 60 ft., passive Perception 9",
-    "languages": ["Common", "Goblin"],
+    "languages": [
+      "Common",
+      "Goblin"
+    ],
     "cr": "1",
     "xp": 200,
     "is_boss": true,
@@ -200,7 +206,9 @@
     },
     "skills": {},
     "senses": "passive Perception 10",
-    "languages": ["Common"],
+    "languages": [
+      "Common"
+    ],
     "cr": "1/8",
     "xp": 25,
     "loot": {
@@ -249,11 +257,20 @@
       "cha": 5
     },
     "skills": {},
-    "damage_vulnerabilities": ["bludgeoning"],
-    "damage_immunities": ["poison"],
-    "condition_immunities": ["exhaustion", "poisoned"],
+    "damage_vulnerabilities": [
+      "bludgeoning"
+    ],
+    "damage_immunities": [
+      "poison"
+    ],
+    "condition_immunities": [
+      "exhaustion",
+      "poisoned"
+    ],
     "senses": "darkvision 60 ft., passive Perception 9",
-    "languages": ["understands all languages it knew in life but can't speak"],
+    "languages": [
+      "understands all languages it knew in life but can't speak"
+    ],
     "cr": "1/4",
     "xp": 50,
     "loot": {
@@ -302,10 +319,18 @@
       "cha": 6
     },
     "skills": {},
-    "damage_immunities": ["poison"],
-    "condition_immunities": ["charmed", "exhaustion", "poisoned"],
+    "damage_immunities": [
+      "poison"
+    ],
+    "condition_immunities": [
+      "charmed",
+      "exhaustion",
+      "poisoned"
+    ],
     "senses": "darkvision 60 ft., passive Perception 10",
-    "languages": ["Common"],
+    "languages": [
+      "Common"
+    ],
     "cr": "1",
     "xp": 200,
     "loot": {
@@ -315,15 +340,6 @@
     "traits": [],
     "actions": [
       {
-        "name": "Bite",
-        "type": "melee-weapon-attack",
-        "attack_bonus": 2,
-        "reach": "5 ft.",
-        "damage": "2d6+2",
-        "damage_average": 9,
-        "damage_type": "piercing"
-      },
-      {
         "name": "Claws",
         "type": "melee-weapon-attack",
         "attack_bonus": 4,
@@ -332,7 +348,28 @@
         "damage_average": 7,
         "damage_type": "slashing",
         "special": "If the target is a creature other than an undead, it must succeed on a DC 10 Constitution saving throw or be paralyzed for 1 minute. The target can repeat the saving throw at the end of each of its turns, ending the effect on itself on a success.",
-        "notes": "Paralysis condition not yet fully implemented in combat system - will need saving throw mechanics"
+        "notes": "Paralysis saving throw now implemented via saving_throw field",
+        "saving_throw": {
+          "trigger": "on_hit",
+          "ability": "constitution",
+          "dc": 10,
+          "on_fail": {
+            "condition": "paralyzed",
+            "duration_type": "rounds",
+            "duration": 10,
+            "allow_repeat_save": true,
+            "repeat_timing": "end_of_turn"
+          }
+        }
+      },
+      {
+        "name": "Bite",
+        "type": "melee-weapon-attack",
+        "attack_bonus": 2,
+        "reach": "5 ft.",
+        "damage": "2d6+2",
+        "damage_average": 9,
+        "damage_type": "piercing"
       }
     ]
   }
