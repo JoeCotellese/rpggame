@@ -5,12 +5,10 @@ from typing import List, Optional, Dict, Any
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
-from rich.text import Text
 from rich.align import Align
-from rich.progress import Progress, BarColumn, TextColumn
 from rich.style import Style
 from rich import box
-from dnd_engine.utils.logging_config import init_logging, get_logging_config
+from dnd_engine.utils.logging_config import init_logging
 
 
 # Global console instance - initialized via init_console()
@@ -203,8 +201,24 @@ def create_combat_table(combatants: List[Dict[str, Any]]) -> Table:
                 status = "[red]DEFEATED[/red]"
                 color = "red"
         else:
-            status = "[green]ACTIVE[/green]"
-            color = "white"
+            # Check for incapacitating conditions
+            conditions = combatant.get("conditions", [])
+            incapacitating = ["paralyzed", "stunned", "unconscious", "petrified"]
+            active_incapacitating = [c for c in conditions if c in incapacitating]
+
+            if active_incapacitating:
+                # Show primary incapacitating condition
+                condition_name = active_incapacitating[0].upper()
+                status = f"[yellow]{condition_name}[/yellow]"
+                color = "yellow"
+            elif conditions:
+                # Show other conditions
+                condition_name = conditions[0].upper()
+                status = f"[cyan]{condition_name}[/cyan]"
+                color = "cyan"
+            else:
+                status = "[green]ACTIVE[/green]"
+                color = "white"
 
         name_style = "bold yellow" if combatant.get("is_player") else "white"
 

@@ -1,18 +1,14 @@
 # ABOUTME: Command-line interface for the D&D 5E terminal game
 # ABOUTME: Handles player input, displays game state, and manages the game loop
 
-import sys
 from typing import Optional, List, Dict, Any
-from dnd_engine.core.character import Character, CharacterClass
-from dnd_engine.core.creature import Abilities
+from dnd_engine.core.character import Character
 from dnd_engine.core.game_state import GameState
-from dnd_engine.core.combat import AttackResult
 from dnd_engine.core.dice import format_dice_with_modifier
-from dnd_engine.utils.events import EventBus, Event, EventType
+from dnd_engine.utils.events import Event, EventType
 from dnd_engine.systems.inventory import EquipmentSlot
 from dnd_engine.systems.condition_manager import ConditionManager
 from dnd_engine.ui.debug_console import DebugConsole
-from rich.status import Status
 from dnd_engine.ui.rich_ui import (
     console,
     create_party_status_table,
@@ -25,10 +21,7 @@ from dnd_engine.ui.rich_ui import (
     print_title,
     print_message,
     print_section,
-    print_list,
-    print_mechanics_panel,
-    print_narrative_loading,
-    print_narrative_panel
+    print_mechanics_panel
 )
 
 
@@ -239,6 +232,10 @@ class CLI:
                     "failures": entry.creature.death_save_failures,
                     "stabilized": entry.creature.stabilized
                 }
+
+            # Add conditions if present
+            if hasattr(entry.creature, 'active_conditions'):
+                combatant_data["conditions"] = list(entry.creature.active_conditions.keys())
 
             combatants.append(combatant_data)
 
@@ -2015,13 +2012,45 @@ class CLI:
                     self.game_state.initiative_tracker.next_turn()
                     continue
 
+                # Track conditions before attack
+                conditions_before = set(target.active_conditions.keys()) if hasattr(target, 'active_conditions') else set()
+
                 result = self.game_state.combat_engine.resolve_attack(
                     attacker=enemy,
                     defender=target,
                     attack_bonus=action["attack_bonus"],
                     damage_dice=action["damage"],
-                    apply_damage=True
+                    apply_damage=True,
+                    event_bus=self.game_state.event_bus,
+                    action=action  # Pass action data for saving throw processing
                 )
+
+                # Display saving throw results if triggered
+                if result.hit and "saving_throw" in action:
+                    save_data = action["saving_throw"]
+                    ability = save_data.get("ability", "constitution").title()
+                    dc = save_data.get("dc")
+
+                    # Check if condition was applied (save failed)
+                    if hasattr(target, 'active_conditions'):
+                        conditions_after = set(target.active_conditions.keys())
+                        new_conditions = conditions_after - conditions_before
+
+                        if new_conditions:
+                            # Failed save
+                            for condition in new_conditions:
+                                metadata = target.active_conditions.get(condition, {})
+                                duration = metadata.get('duration_remaining', 0)
+                                print_status_message(
+                                    f"💀 {target.name} fails {ability} save (DC {dc}) - {condition.upper()} for {duration} rounds!",
+                                    "error"
+                                )
+                        else:
+                            # Passed save
+                            print_status_message(
+                                f"✓ {target.name} succeeds on {ability} save (DC {dc})!",
+                                "success"
+                            )
 
                 # Get and display attack narrative FIRST (if hit)
                 if self.llm_enhancer and result.hit:
@@ -2405,9 +2434,6 @@ class CLI:
             Selected Character or None if cancelled
         """
         import questionary
-
-        # Get item range (default 5 feet for touch items)
-        item_range = item_data.get("range", 5)
 
         # Get all party members (including unconscious ones)
         # In D&D 5E combat, we assume all party members are within 5 feet (touch range)
@@ -3827,7 +3853,7 @@ class CLI:
 
     def handle_effects(self) -> None:
         """Display all active effects on party members."""
-        from dnd_engine.ui.printing import print_section, print_message, print_error
+        from dnd_engine.ui.printing import print_section, print_message
 
         effects = self.game_state.time_manager.get_all_effects()
 
@@ -3952,6 +3978,33 @@ class CLI:
                         self.game_state.initiative_tracker.next_turn()
                         # Check if combat is over
                         self.game_state._check_combat_end()
+                    elif not party_character.can_take_actions():
+                        # Character is incapacitated (paralyzed, stunned, etc.)
+                        # Show their condition and process end-of-turn effects
+                        conditions = list(party_character.active_conditions.keys())
+                        condition_names = ", ".join([c.upper() for c in conditions])
+                        print_status_message(
+                            f"{party_character.name} is {condition_names} and cannot act!",
+                            "warning"
+                        )
+
+                        # Process end-of-turn effects (repeat saves, duration countdown)
+                        results = party_character.process_end_of_turn_conditions(self.game_state.event_bus)
+                        for result in results:
+                            if result["type"] == "repeat_save_success":
+                                save_result = result["save_result"]
+                                print_status_message(
+                                    f"✓ {party_character.name} succeeds on {save_result['ability'].upper()} save - {result['condition'].upper()} removed!",
+                                    "success"
+                                )
+                            elif result["type"] == "duration_expired":
+                                print_status_message(
+                                    f"⏱ {result['condition'].upper()} on {party_character.name} has expired!",
+                                    "info"
+                                )
+
+                        # Advance turn
+                        self.game_state.initiative_tracker.next_turn()
                     else:
                         # Normal turn for conscious character
                         # Process turn-start effects (e.g., ongoing fire damage)

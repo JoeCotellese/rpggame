@@ -1,8 +1,7 @@
 # ABOUTME: Base Creature class representing any living entity in the game
 # ABOUTME: Handles HP, abilities, conditions, damage, and healing
 
-from dataclasses import dataclass, field
-from typing import Set
+from dataclasses import dataclass
 
 
 @dataclass
@@ -81,7 +80,9 @@ class Creature:
         self.current_hp = current_hp if current_hp is not None else max_hp
         self.ac = ac
         self.abilities = abilities
-        self.conditions: Set[str] = set()
+        # Condition tracking with metadata for duration and repeat saves
+        # Maps condition name -> metadata dict
+        self.active_conditions: dict[str, dict] = {}
 
     @property
     def is_alive(self) -> bool:
@@ -122,12 +123,47 @@ class Creature:
 
     def add_condition(self, condition: str) -> None:
         """
-        Add a condition to the creature (e.g., 'prone', 'stunned').
+        Add a basic condition to the creature (e.g., 'prone', 'stunned').
+        For conditions with duration/repeat saves, use apply_condition_with_metadata().
 
         Args:
             condition: Name of the condition to add
         """
-        self.conditions.add(condition.lower())
+        condition_name = condition.lower()
+        if condition_name not in self.active_conditions:
+            self.active_conditions[condition_name] = {}
+
+    def apply_condition_with_metadata(
+        self,
+        condition: str,
+        duration_type: str = "permanent",
+        duration: int = 0,
+        dc: int | None = None,
+        ability: str | None = None,
+        allow_repeat_save: bool = False,
+        repeat_timing: str = "end_of_turn"
+    ) -> None:
+        """
+        Apply a condition with full metadata for duration and repeat saves.
+
+        Args:
+            condition: Name of the condition (e.g., 'paralyzed', 'poisoned')
+            duration_type: Type of duration ('rounds', 'minutes', 'hours', 'permanent')
+            duration: Number of rounds/minutes/hours (ignored if permanent)
+            dc: Difficulty class for repeat saves
+            ability: Ability for repeat saves (e.g., 'constitution')
+            allow_repeat_save: Whether creature can attempt saves to end condition
+            repeat_timing: When repeat saves occur ('end_of_turn', 'start_of_turn')
+        """
+        condition_name = condition.lower()
+        self.active_conditions[condition_name] = {
+            "duration_type": duration_type,
+            "duration_remaining": duration,
+            "dc": dc,
+            "ability": ability,
+            "allow_repeat_save": allow_repeat_save,
+            "repeat_timing": repeat_timing
+        }
 
     def remove_condition(self, condition: str) -> None:
         """
@@ -136,7 +172,8 @@ class Creature:
         Args:
             condition: Name of the condition to remove
         """
-        self.conditions.discard(condition.lower())
+        condition_name = condition.lower()
+        self.active_conditions.pop(condition_name, None)
 
     def has_condition(self, condition: str) -> bool:
         """
@@ -148,7 +185,72 @@ class Creature:
         Returns:
             True if the creature has the condition
         """
-        return condition.lower() in self.conditions
+        return condition.lower() in self.active_conditions
+
+    def can_take_actions(self) -> bool:
+        """
+        Check if creature can take actions (not incapacitated).
+
+        Incapacitating conditions: paralyzed, stunned, unconscious, petrified
+
+        Returns:
+            True if creature can act
+        """
+        incapacitating = ["paralyzed", "stunned", "unconscious", "petrified"]
+        return not any(cond in self.active_conditions for cond in incapacitating)
+
+    def process_end_of_turn_conditions(self, event_bus=None) -> list[dict]:
+        """
+        Process conditions at end of turn: duration countdown and repeat saves.
+
+        Args:
+            event_bus: Optional EventBus for emitting save events
+
+        Returns:
+            List of dicts describing save results and expired conditions
+        """
+        results = []
+
+        for condition_name, metadata in list(self.active_conditions.items()):
+            # Process repeat saves if allowed
+            if metadata.get("allow_repeat_save") and metadata.get("repeat_timing") == "end_of_turn":
+                if metadata.get("dc") and metadata.get("ability"):
+                    save_result = self.make_saving_throw(
+                        ability=metadata["ability"],
+                        dc=metadata["dc"],
+                        event_bus=event_bus
+                    )
+
+                    if save_result["success"]:
+                        self.remove_condition(condition_name)
+                        results.append({
+                            "type": "repeat_save_success",
+                            "condition": condition_name,
+                            "save_result": save_result
+                        })
+                        continue
+
+            # Decrement duration for round-based conditions
+            if metadata.get("duration_type") == "rounds":
+                metadata["duration_remaining"] = metadata.get("duration_remaining", 0) - 1
+                if metadata["duration_remaining"] <= 0:
+                    self.remove_condition(condition_name)
+                    results.append({
+                        "type": "duration_expired",
+                        "condition": condition_name
+                    })
+
+        return results
+
+    @property
+    def conditions(self) -> set[str]:
+        """
+        Backward compatibility: return set of active condition names.
+
+        Returns:
+            Set of condition names
+        """
+        return set(self.active_conditions.keys())
 
     def make_saving_throw(
         self,

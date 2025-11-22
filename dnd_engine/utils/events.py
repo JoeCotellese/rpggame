@@ -45,6 +45,7 @@ class EventType(Enum):
     ITEM_UNEQUIPPED = "item_unequipped"
     ITEM_USED = "item_used"
     GOLD_ACQUIRED = "gold_acquired"
+    CONDITION_APPLIED = "condition_applied"
     CONDITION_REMOVED = "condition_removed"
     BUFF_APPLIED = "buff_applied"
 

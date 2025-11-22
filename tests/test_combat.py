@@ -1,7 +1,6 @@
 # ABOUTME: Unit tests for the combat engine
 # ABOUTME: Tests attack resolution, damage calculation, critical hits, and combat outcomes
 
-import pytest
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.creature import Creature, Abilities
 from dnd_engine.core.combat import CombatEngine, AttackResult
@@ -193,7 +192,7 @@ class TestCombatEngine:
         """Test that attacks can be simulated without applying damage"""
         goblin_initial_hp = self.goblin.current_hp
 
-        result = self.engine.resolve_attack(
+        self.engine.resolve_attack(
             attacker=self.fighter,
             defender=self.goblin,
             attack_bonus=20,
@@ -326,3 +325,161 @@ class TestAttackResult:
         )
 
         assert result.total_attack == 17  # 12 + 5
+
+
+class TestSavingThrowEffects:
+    """Test saving throw processing in combat"""
+
+    def setup_method(self):
+        """Set up test fixtures"""
+        self.roller = DiceRoller(seed=42)
+        self.engine = CombatEngine(self.roller)
+
+        # Create test creatures
+        fighter_abilities = Abilities(
+            strength=16,
+            dexterity=14,
+            constitution=15,  # +2 CON modifier
+            intelligence=10,
+            wisdom=12,
+            charisma=8
+        )
+        self.fighter = Creature(
+            name="Fighter",
+            max_hp=20,
+            ac=16,
+            abilities=fighter_abilities
+        )
+
+        ghoul_abilities = Abilities(
+            strength=13,
+            dexterity=15,
+            constitution=10,
+            intelligence=7,
+            wisdom=10,
+            charisma=6
+        )
+        self.ghoul = Creature(
+            name="Ghoul",
+            max_hp=22,
+            ac=12,
+            abilities=ghoul_abilities
+        )
+
+    def test_saving_throw_triggers_on_hit(self):
+        """Test that saving throw is processed when attack hits"""
+        # Ghoul claws action with saving throw
+        action = {
+            "name": "Claws",
+            "attack_bonus": 4,
+            "damage": "2d4+2",
+            "saving_throw": {
+                "trigger": "on_hit",
+                "ability": "constitution",
+                "dc": 10,
+                "on_fail": {
+                    "condition": "paralyzed",
+                    "duration_type": "rounds",
+                    "duration": 10,
+                    "allow_repeat_save": True,
+                    "repeat_timing": "end_of_turn"
+                }
+            }
+        }
+
+        # Attack with high bonus to ensure hit
+        result = self.engine.resolve_attack(
+            attacker=self.ghoul,
+            defender=self.fighter,
+            attack_bonus=20,
+            damage_dice=action["damage"],
+            apply_damage=True,
+            action=action
+        )
+
+        # Should hit
+        assert result.hit is True
+
+        # Fighter should either be paralyzed (failed save) or not (passed save)
+        # We can't predict the exact outcome due to randomness, but we can check structure
+        if self.fighter.has_condition("paralyzed"):
+            # Failed save - should have condition with metadata
+            assert "paralyzed" in self.fighter.active_conditions
+            metadata = self.fighter.active_conditions["paralyzed"]
+            assert metadata["duration_type"] == "rounds"
+            assert metadata["duration_remaining"] == 10
+            assert metadata["dc"] == 10
+            assert metadata["ability"] == "constitution"
+            assert metadata["allow_repeat_save"] is True
+        else:
+            # Passed save - should not have condition
+            assert "paralyzed" not in self.fighter.active_conditions
+
+    def test_saving_throw_not_triggered_on_miss(self):
+        """Test that saving throw doesn't trigger when attack misses"""
+        action = {
+            "name": "Claws",
+            "attack_bonus": 4,
+            "damage": "2d4+2",
+            "saving_throw": {
+                "trigger": "on_hit",
+                "ability": "constitution",
+                "dc": 10,
+                "on_fail": {
+                    "condition": "paralyzed",
+                    "duration_type": "rounds",
+                    "duration": 10,
+                    "allow_repeat_save": True
+                }
+            }
+        }
+
+        # Attack with very low bonus to likely miss
+        result = self.engine.resolve_attack(
+            attacker=self.ghoul,
+            defender=self.fighter,
+            attack_bonus=-10,
+            damage_dice=action["damage"],
+            apply_damage=True,
+            action=action
+        )
+
+        # If missed, should not have paralysis regardless
+        if not result.hit:
+            assert not self.fighter.has_condition("paralyzed")
+
+    def test_process_saving_throw_effect_directly(self):
+        """Test _process_saving_throw_effect method directly"""
+        saving_throw_data = {
+            "trigger": "on_hit",
+            "ability": "constitution",
+            "dc": 10,
+            "on_fail": {
+                "condition": "paralyzed",
+                "duration_type": "rounds",
+                "duration": 10,
+                "allow_repeat_save": True,
+                "repeat_timing": "end_of_turn"
+            }
+        }
+
+        # Process the saving throw effect
+        result = self.engine._process_saving_throw_effect(
+            saving_throw_data,
+            self.ghoul,
+            self.fighter,
+            event_bus=None
+        )
+
+        # Should return a result dict
+        assert result is not None
+        assert "success" in result
+        assert "ability" in result
+        assert result["ability"] == "con"
+        assert result["dc"] == 10
+
+        # Check if condition was applied based on save result
+        if not result["success"]:
+            assert self.fighter.has_condition("paralyzed")
+        else:
+            assert not self.fighter.has_condition("paralyzed")

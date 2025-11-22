@@ -191,6 +191,206 @@ class TestCreature:
 
         creature.add_condition("prone")
         assert creature.has_condition("prone")
+
+    def test_apply_condition_with_metadata(self):
+        """Test applying conditions with duration and repeat save metadata"""
+        creature = Creature(
+            name="Fighter",
+            max_hp=20,
+            ac=16,
+            abilities=self.abilities
+        )
+
+        creature.apply_condition_with_metadata(
+            condition="paralyzed",
+            duration_type="rounds",
+            duration=10,
+            dc=10,
+            ability="constitution",
+            allow_repeat_save=True,
+            repeat_timing="end_of_turn"
+        )
+
+        assert creature.has_condition("paralyzed")
+        metadata = creature.active_conditions["paralyzed"]
+        assert metadata["duration_type"] == "rounds"
+        assert metadata["duration_remaining"] == 10
+        assert metadata["dc"] == 10
+        assert metadata["ability"] == "constitution"
+        assert metadata["allow_repeat_save"] is True
+        assert metadata["repeat_timing"] == "end_of_turn"
+
+    def test_can_take_actions_when_paralyzed(self):
+        """Test that paralyzed creatures cannot take actions"""
+        creature = Creature(
+            name="Fighter",
+            max_hp=20,
+            ac=16,
+            abilities=self.abilities
+        )
+
+        assert creature.can_take_actions() is True
+
+        creature.add_condition("paralyzed")
+        assert creature.can_take_actions() is False
+
+    def test_can_take_actions_with_various_conditions(self):
+        """Test incapacitating vs non-incapacitating conditions"""
+        creature = Creature(
+            name="Fighter",
+            max_hp=20,
+            ac=16,
+            abilities=self.abilities
+        )
+
+        # Non-incapacitating conditions
+        creature.add_condition("prone")
+        assert creature.can_take_actions() is True
+
+        creature.remove_condition("prone")
+        creature.add_condition("poisoned")
+        assert creature.can_take_actions() is True
+
+        # Incapacitating conditions
+        incapacitating = ["paralyzed", "stunned", "unconscious", "petrified"]
+        for condition in incapacitating:
+            creature.remove_condition("poisoned")
+            creature.add_condition(condition)
+            assert creature.can_take_actions() is False
+            creature.remove_condition(condition)
+
+    def test_process_end_of_turn_conditions_duration_countdown(self):
+        """Test that round-based conditions countdown each turn"""
+        creature = Creature(
+            name="Fighter",
+            max_hp=20,
+            ac=16,
+            abilities=self.abilities
+        )
+
+        creature.apply_condition_with_metadata(
+            condition="paralyzed",
+            duration_type="rounds",
+            duration=3,
+            dc=10,
+            ability="constitution",
+            allow_repeat_save=False
+        )
+
+        # After turn 1
+        results = creature.process_end_of_turn_conditions()
+        assert creature.has_condition("paralyzed")
+        assert creature.active_conditions["paralyzed"]["duration_remaining"] == 2
+
+        # After turn 2
+        results = creature.process_end_of_turn_conditions()
+        assert creature.has_condition("paralyzed")
+        assert creature.active_conditions["paralyzed"]["duration_remaining"] == 1
+
+        # After turn 3 - should expire
+        results = creature.process_end_of_turn_conditions()
+        assert not creature.has_condition("paralyzed")
+        assert len(results) == 1
+        assert results[0]["type"] == "duration_expired"
+        assert results[0]["condition"] == "paralyzed"
+
+    def test_process_end_of_turn_conditions_repeat_save_success(self):
+        """Test that successful repeat saves remove conditions"""
+        # Create creature with high CON (good chance to pass DC 10)
+        high_con_abilities = Abilities(
+            strength=10,
+            dexterity=10,
+            constitution=20,  # +5 modifier
+            intelligence=10,
+            wisdom=10,
+            charisma=10
+        )
+        creature = Creature(
+            name="Fighter",
+            max_hp=20,
+            ac=16,
+            abilities=high_con_abilities
+        )
+
+        creature.apply_condition_with_metadata(
+            condition="paralyzed",
+            duration_type="rounds",
+            duration=10,
+            dc=10,
+            ability="constitution",
+            allow_repeat_save=True,
+            repeat_timing="end_of_turn"
+        )
+
+        # Keep processing until save succeeds (high CON should eventually pass)
+        max_attempts = 50
+        for _ in range(max_attempts):
+            results = creature.process_end_of_turn_conditions()
+            if not creature.has_condition("paralyzed"):
+                # Found a successful save
+                assert len(results) > 0
+                assert results[0]["type"] == "repeat_save_success"
+                assert results[0]["condition"] == "paralyzed"
+                break
+        else:
+            # Should have succeeded within 50 attempts with +5 modifier
+            pytest.fail("Should have passed save within 50 attempts")
+
+    def test_process_end_of_turn_conditions_repeat_save_failure(self):
+        """Test that failed repeat saves keep condition active"""
+        # Create creature with low CON (poor chance to pass DC 20)
+        low_con_abilities = Abilities(
+            strength=10,
+            dexterity=10,
+            constitution=3,  # -4 modifier
+            intelligence=10,
+            wisdom=10,
+            charisma=10
+        )
+        creature = Creature(
+            name="Weakling",
+            max_hp=20,
+            ac=16,
+            abilities=low_con_abilities
+        )
+
+        creature.apply_condition_with_metadata(
+            condition="paralyzed",
+            duration_type="rounds",
+            duration=10,
+            dc=20,  # High DC
+            ability="constitution",
+            allow_repeat_save=True,
+            repeat_timing="end_of_turn"
+        )
+
+        # Process several turns - should stay paralyzed
+        for _ in range(5):
+            initial_duration = creature.active_conditions["paralyzed"]["duration_remaining"]
+            creature.process_end_of_turn_conditions()
+
+            # Either still paralyzed (failed save) or removed (passed save - rare)
+            if creature.has_condition("paralyzed"):
+                # Failed save - duration should decrement
+                assert creature.active_conditions["paralyzed"]["duration_remaining"] == initial_duration - 1
+
+    def test_conditions_backward_compatibility(self):
+        """Test that conditions property returns set of condition names"""
+        creature = Creature(
+            name="Fighter",
+            max_hp=20,
+            ac=16,
+            abilities=self.abilities
+        )
+
+        creature.add_condition("prone")
+        creature.add_condition("poisoned")
+
+        # Should be able to access as set via conditions property
+        assert isinstance(creature.conditions, set)
+        assert "prone" in creature.conditions
+        assert "poisoned" in creature.conditions
+        assert len(creature.conditions) == 2
         assert "prone" in creature.conditions
 
         creature.remove_condition("prone")
