@@ -768,8 +768,10 @@ class CLI:
         print_status_message(f"The door to the {direction} is locked.", "warning")
         console.print()
 
-        # Build unlock methods content
-        methods_content = []
+        # Build choices for questionary
+        import questionary
+
+        choices = []
         for idx, method in enumerate(unlock_methods):
             desc = method.get("description", "unknown method")
             if "skill" in method:
@@ -778,27 +780,31 @@ class CLI:
                 tool_req = ""
                 if "tool_proficiency" in method:
                     tool_req = f" + {method['tool_proficiency'].replace('_', ' ').title()}"
-                methods_content.append(f"  {idx + 1}. {desc.capitalize()} ({skill}{tool_req} DC {dc})")
+                choice_text = f"{desc.capitalize()} ({skill}{tool_req} DC {dc})"
             elif "requires_item" in method:
-                methods_content.append(f"  {idx + 1}. {desc.capitalize()} (requires {method['requires_item']})")
+                choice_text = f"{desc.capitalize()} (requires {method['requires_item']})"
+            else:
+                choice_text = desc.capitalize()
 
-        # Display unlock methods in box
-        print_section("Available unlock methods:", "\n".join(methods_content))
-        console.print()
+            choices.append(questionary.Choice(title=choice_text, value=idx))
+
+        # Add cancel option
+        choices.append(questionary.Choice(title="Cancel", value=None))
 
         # Prompt for method selection
         try:
-            method_input = input("Choose a method (number) or 'cancel': ").strip().lower()
-            if method_input == "cancel":
+            method_index = questionary.select(
+                "Choose an unlock method:",
+                choices=choices,
+                use_arrow_keys=True
+            ).ask()
+
+            if method_index is None:
+                print_status_message("Cancelled.", "warning")
                 return
 
-            method_index = int(method_input) - 1
-            if method_index < 0 or method_index >= len(unlock_methods):
-                print_error("Invalid method number.")
-                return
-
-        except ValueError:
-            print_error("Invalid input. Enter a number or 'cancel'.")
+        except (EOFError, KeyboardInterrupt):
+            print_status_message("Cancelled.", "warning")
             return
 
         method = unlock_methods[method_index]
@@ -853,6 +859,8 @@ class CLI:
         Returns:
             Selected Character or None if cancelled
         """
+        import questionary
+
         skill = method.get("skill", "")
         dc = method.get("dc", 0)
         tool_proficiency = method.get("tool_proficiency")
@@ -866,46 +874,59 @@ class CLI:
             header += f" + {tool_proficiency.replace('_', ' ').title()}"
         header += f" DC {dc}):"
 
-        # Build character list content
+        # Build character list with metadata for sorting
         living_chars = [c for c in self.game_state.party.characters if c.is_alive]
-        char_list_content = []
-        for idx, char in enumerate(living_chars, 1):
+        char_data = []
+        for char in living_chars:
             # Get skill modifier
             skill_mod = char.get_skill_modifier(skill, skills_data)
 
             # Check tool proficiency
+            has_tool_prof = False
             tool_prof_str = ""
             if tool_proficiency:
-                has_prof = hasattr(char, 'tool_proficiencies') and tool_proficiency in char.tool_proficiencies
-                if has_prof:
+                has_tool_prof = hasattr(char, 'tool_proficiencies') and tool_proficiency in char.tool_proficiencies
+                if has_tool_prof:
                     # Tool proficiency adds proficiency bonus
                     tool_bonus = char.proficiency_bonus if hasattr(char, 'proficiency_bonus') else 2
                     tool_prof_str = f", {tool_proficiency.replace('_', ' ').title()} +{tool_bonus}"
                 else:
                     tool_prof_str = f" (no {tool_proficiency.replace('_', ' ').title()})"
 
-            char_list_content.append(f"  {idx}. {char.name} - {skill.upper()} +{skill_mod}{tool_prof_str}")
+            char_data.append({
+                'character': char,
+                'skill_mod': skill_mod,
+                'has_tool_prof': has_tool_prof,
+                'display': f"{char.name} - {skill.upper()} +{skill_mod}{tool_prof_str}"
+            })
 
-        # Display in box
-        console.print()
-        print_section(header, "\n".join(char_list_content))
-        console.print()
+        # Sort by tool proficiency (desc) then skill modifier (desc)
+        char_data.sort(key=lambda x: (not x['has_tool_prof'], -x['skill_mod']))
+
+        # Build choices for questionary
+        choices = []
+        for data in char_data:
+            choices.append(questionary.Choice(title=data['display'], value=data['character']))
+
+        # Add cancel option
+        choices.append(questionary.Choice(title="Cancel", value=None))
 
         # Prompt for selection
         try:
-            char_input = input("Enter number or 'cancel': ").strip().lower()
-            if char_input == "cancel":
+            result = questionary.select(
+                header,
+                choices=choices,
+                use_arrow_keys=True
+            ).ask()
+
+            if result is None:
+                print_status_message("Cancelled.", "warning")
                 return None
 
-            char_index = int(char_input) - 1
-            if char_index < 0 or char_index >= len(living_chars):
-                print_error("Invalid character number.")
-                return None
+            return result
 
-            return living_chars[char_index]
-
-        except ValueError:
-            print_error("Invalid input. Enter a number or 'cancel'.")
+        except (EOFError, KeyboardInterrupt):
+            print_status_message("Cancelled.", "warning")
             return None
 
     def handle_search(self) -> None:
