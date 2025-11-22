@@ -771,6 +771,8 @@ class GameState:
             Dict with search result:
             - success: bool - Whether search succeeded
             - items: List[Dict] - Items found (if successful or already searched)
+            - visible_items: List[Dict] - Items that were already visible
+            - hidden_items: List[Dict] - Items that were found by searching
             - already_searched: bool - Whether room was already searched
             - check_result: Dict - Skill check result (if applicable)
         """
@@ -781,17 +783,26 @@ class GameState:
             return {
                 "success": False,
                 "items": [],
+                "visible_items": [],
+                "hidden_items": [],
                 "error": "This room cannot be searched"
             }
 
         # Check if already searched
         already_searched = room.get("searched", False)
 
+        # Separate visible and hidden items
+        all_items = room.get("items", [])
+        visible_items = [item for item in all_items if item.get("visible", False)]
+        hidden_items = [item for item in all_items if not item.get("visible", False)]
+
         # If already searched, return current items without requiring another check
         if already_searched:
             return {
                 "success": True,
                 "items": room.get("items", []),
+                "visible_items": visible_items,
+                "hidden_items": [],
                 "already_searched": True
             }
 
@@ -804,6 +815,8 @@ class GameState:
                 return {
                     "success": False,
                     "items": [],
+                    "visible_items": visible_items,
+                    "hidden_items": [],
                     "error": "Character required for search with skill check"
                 }
 
@@ -846,6 +859,8 @@ class GameState:
                 return {
                     "success": True,
                     "items": room.get("items", []),
+                    "visible_items": visible_items,
+                    "hidden_items": hidden_items,
                     "already_searched": False,
                     "check_result": check_result,
                     "success_text": check.get("on_success"),
@@ -854,7 +869,9 @@ class GameState:
             else:
                 return {
                     "success": False,
-                    "items": [],
+                    "items": visible_items,
+                    "visible_items": visible_items,
+                    "hidden_items": [],
                     "already_searched": False,
                     "check_result": check_result,
                     "success_text": None,
@@ -870,6 +887,8 @@ class GameState:
             return {
                 "success": True,
                 "items": room.get("items", []),
+                "visible_items": visible_items,
+                "hidden_items": hidden_items,
                 "already_searched": False
             }
 
@@ -878,8 +897,9 @@ class GameState:
         Get list of items available to pick up in the current room.
 
         Returns items if:
+        - Item is marked as visible=true, OR
         - Room has been searched and has items, OR
-        - Room is not searchable but has items (visible items)
+        - Room is not searchable but has items
 
         Returns:
             List of available items
@@ -887,10 +907,12 @@ class GameState:
         room = self.get_current_room()
         items = room.get("items", [])
 
-        # Items are available if room is searched or not searchable
+        # If room is searched or not searchable, all items are available
         if room.get("searched") or not room.get("searchable"):
             return items
-        return []
+
+        # Otherwise, only return visible items
+        return [item for item in items if item.get("visible", False)]
 
     def take_item(self, item_id: str, character: Character) -> bool:
         """
@@ -904,11 +926,13 @@ class GameState:
             True if item was successfully taken, False otherwise
         """
         room = self.get_current_room()
-        items = room.get("items", [])
 
-        # Find the item in the room
+        # Check if item is available (visible or room is searched)
+        available_items = self.get_available_items_in_room()
+
+        # Find the item in available items
         item_to_take = None
-        for item in items:
+        for item in available_items:
             if item["type"] == "gold" and item_id.lower() == "gold":
                 item_to_take = item
                 break
@@ -920,7 +944,7 @@ class GameState:
                 break
 
         if not item_to_take:
-            return False  # Item not found in room
+            return False  # Item not found or not available
 
         # Handle different item types
         if item_to_take["type"] == "currency":
@@ -974,7 +998,7 @@ class GameState:
             ))
 
         # Remove item from room
-        items.remove(item_to_take)
+        room.get("items", []).remove(item_to_take)
         return True
 
     def prepare_spells(self, character_name: str, spell_ids: List[str]) -> bool:

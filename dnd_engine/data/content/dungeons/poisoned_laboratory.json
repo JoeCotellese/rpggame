@@ -13,11 +13,13 @@
       "items": [
         {
           "type": "item",
-          "id": "alchemists_fire"
+          "id": "alchemists_fire",
+          "visible": true
         },
         {
           "type": "item",
-          "id": "acid_vial"
+          "id": "acid_vial",
+          "visible": true
         }
       ],
       "searched": false,
@@ -36,19 +38,23 @@
         {
           "type": "currency",
           "gold": 20,
-          "silver": 15
+          "silver": 15,
+          "visible": true
         },
         {
           "type": "item",
-          "id": "potion_of_healing"
+          "id": "potion_of_healing",
+          "visible": true
         },
         {
           "type": "item",
-          "id": "antitoxin"
+          "id": "antitoxin",
+          "visible": true
         },
         {
           "type": "item",
-          "id": "elixir_of_health"
+          "id": "elixir_of_health",
+          "visible": false
         }
       ],
       "searched": false,
@@ -66,15 +72,18 @@
       "items": [
         {
           "type": "currency",
-          "gold": 25
+          "gold": 25,
+          "visible": false
         },
         {
           "type": "item",
-          "id": "potion_of_healing"
+          "id": "potion_of_healing",
+          "visible": false
         },
         {
           "type": "item",
-          "id": "acid_vial"
+          "id": "acid_vial",
+          "visible": false
         }
       ],
       "searched": false,
@@ -96,19 +105,23 @@
         {
           "type": "currency",
           "gold": 30,
-          "silver": 20
+          "silver": 20,
+          "visible": true
         },
         {
           "type": "item",
-          "id": "potion_of_fire_resistance"
+          "id": "potion_of_fire_resistance",
+          "visible": true
         },
         {
           "type": "item",
-          "id": "potion_of_healing"
+          "id": "potion_of_healing",
+          "visible": true
         },
         {
           "type": "item",
-          "id": "alchemists_fire"
+          "id": "alchemists_fire",
+          "visible": false
         }
       ],
       "searched": false,
@@ -131,31 +144,38 @@
         {
           "type": "currency",
           "gold": 50,
-          "platinum": 2
+          "platinum": 2,
+          "visible": false
         },
         {
           "type": "item",
-          "id": "scroll_of_magic_missile"
+          "id": "scroll_of_magic_missile",
+          "visible": false
         },
         {
           "type": "item",
-          "id": "scroll_of_cure_wounds"
+          "id": "scroll_of_cure_wounds",
+          "visible": false
         },
         {
           "type": "item",
-          "id": "potion_of_greater_healing"
+          "id": "potion_of_greater_healing",
+          "visible": true
         },
         {
           "type": "item",
-          "id": "antitoxin"
+          "id": "antitoxin",
+          "visible": false
         },
         {
           "type": "item",
-          "id": "alchemists_fire"
+          "id": "alchemists_fire",
+          "visible": false
         },
         {
           "type": "item",
-          "id": "acid_vial"
+          "id": "acid_vial",
+          "visible": false
         }
       ],
       "searched": false,

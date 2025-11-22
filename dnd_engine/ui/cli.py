@@ -176,6 +176,29 @@ class CLI:
 
         print_room_description(room_name_with_lighting, room_text, exits)
 
+        # Show visible items in the room
+        visible_items = [item for item in room.get("items", []) if item.get("visible", False)]
+        if visible_items and not room.get("searched", False):
+            print_status_message("\nYou notice:", "info")
+            for item in visible_items:
+                if item["type"] == "gold":
+                    print_status_message(f"  • {item['amount']} gold pieces", "info")
+                elif item["type"] == "currency":
+                    currency_parts = []
+                    if item.get("gold", 0) > 0:
+                        currency_parts.append(f"{item['gold']} gold")
+                    if item.get("silver", 0) > 0:
+                        currency_parts.append(f"{item['silver']} silver")
+                    if item.get("copper", 0) > 0:
+                        currency_parts.append(f"{item['copper']} copper")
+                    if item.get("platinum", 0) > 0:
+                        currency_parts.append(f"{item['platinum']} platinum")
+                    print_status_message(f"  • {', '.join(currency_parts)}", "info")
+                else:
+                    item_name = item.get('id', 'an item').replace("_", " ").title()
+                    print_status_message(f"  • {item_name}", "info")
+            print_status_message("Use 'take <item>' or 'take all' to pick up items.", "info")
+
         # Mark room as displayed so subsequent "look" commands show "already in room" narrative
         self.game_state.mark_room_displayed()
 
@@ -533,18 +556,19 @@ class CLI:
             return
 
         if command in ["take", "get", "pickup"]:
-            # Prompt for item selection with arrow keys
-            item_to_take = self._prompt_item_to_take()
-            if item_to_take is None or item_to_take == "Cancel":
-                return  # User cancelled
+            # Prompt for multi-item selection with checkboxes
+            items_to_take = self._prompt_multi_items_to_take()
+            if not items_to_take:
+                return  # User cancelled or no items selected
 
-            # Determine item name based on type
-            if item_to_take["type"] in ["gold", "currency"]:
-                item_name = "currency"
-            else:
-                item_name = item_to_take.get("id", "")
-
-            self.handle_take(item_name)
+            # Take each selected item
+            for item_to_take in items_to_take:
+                # Determine item name based on type
+                if item_to_take["type"] in ["gold", "currency"]:
+                    item_name = "currency"
+                else:
+                    item_name = item_to_take.get("id", "")
+                self.handle_take(item_name)
             return
 
         if command.startswith("take ") or command.startswith("get ") or command.startswith("pickup "):
@@ -552,7 +576,11 @@ class CLI:
             parts = command.split(maxsplit=1)
             if len(parts) > 1:
                 item_name = parts[1]
-                self.handle_take(item_name)
+                # Handle "take all" command
+                if item_name.lower() in ["all", "everything"]:
+                    self.handle_take_all()
+                else:
+                    self.handle_take(item_name)
             else:
                 print_error("Specify an item to take. Example: 'take dagger'")
             return
@@ -930,6 +958,14 @@ class CLI:
         """Handle search command with optional skill checks."""
         room = self.game_state.get_current_room()
 
+        # Check for visible items first
+        visible_items = [item for item in room.get("items", []) if item.get("visible", False)]
+
+        # Show visible items without requiring search
+        if visible_items and not room.get("searched", False):
+            print_status_message("You can see the following items:", "info")
+            self._display_items_list(visible_items)
+
         # Check if room has search_checks
         has_skill_check = bool(room.get("search_checks"))
 
@@ -951,14 +987,19 @@ class CLI:
 
             # Success/failure and detailed results are displayed by event handler
             if result["success"]:
-                if result["items"]:
-                    print_status_message("\nItems found:", "success")
+                hidden_items = result.get("hidden_items", [])
+                if hidden_items:
+                    print_status_message("\nYou discover hidden items:", "success")
+                    self._display_items_list(hidden_items)
+                elif result["items"]:
+                    print_status_message("\nItems available:", "success")
                     self._display_items_list(result["items"])
                 else:
-                    print_status_message("The search was successful but nothing was found.", "info")
+                    print_status_message("The search was successful but nothing new was found.", "info")
             else:
                 # Failure message already shown by event handler
-                pass
+                if visible_items:
+                    print_status_message("You didn't find anything hidden, but visible items remain.", "info")
         else:
             # No skill check - automatic success (backward compatibility)
             result = self.game_state.search_room()
@@ -971,9 +1012,16 @@ class CLI:
                     print_status_message("You already searched this room and found nothing.", "info")
                 return
 
-            if result["success"] and result["items"]:
-                print_status_message("You search the room and find:", "success")
-                self._display_items_list(result["items"])
+            hidden_items = result.get("hidden_items", [])
+            if result["success"]:
+                if hidden_items:
+                    print_status_message("You search the room and discover hidden items:", "success")
+                    self._display_items_list(hidden_items)
+                elif result["items"]:
+                    print_status_message("You search the room. Items available:", "success")
+                    self._display_items_list(result["items"])
+                else:
+                    print_status_message("You find nothing of interest.", "info")
             else:
                 print_status_message("You find nothing of interest.", "info")
 
@@ -1152,21 +1200,42 @@ class CLI:
         # Normalize item name for matching
         item_name_lower = item_name.lower().replace("_", " ")
 
-        # Find matching item
+        # Find matching item with fuzzy matching support
         item_to_take = None
+        from difflib import SequenceMatcher
+
+        # First try exact match
         for item in available_items:
-            if item["type"] == "gold" and item_name_lower in ["gold", "gold pieces"]:
+            if item["type"] == "gold" and item_name_lower in ["gold", "gold pieces", "gp"]:
                 item_to_take = item
                 break
-            elif item["type"] == "currency" and item_name_lower in ["gold", "silver", "copper", "currency", "coins"]:
+            elif item["type"] == "currency" and item_name_lower in ["gold", "silver", "copper", "currency", "coins", "money"]:
                 item_to_take = item
                 break
             elif item["type"] == "item":
                 item_id = item.get("id", "")
-                # Match by ID or display name
-                if item_id.lower() == item_name_lower or item_id.lower().replace("_", " ") == item_name_lower:
+                # Match by ID or display name (exact match or contains)
+                if (item_id.lower() == item_name_lower or
+                    item_id.lower().replace("_", " ") == item_name_lower or
+                    item_name_lower in item_id.lower().replace("_", " ")):
                     item_to_take = item
                     break
+
+        # If no exact match, try fuzzy matching
+        if not item_to_take:
+            best_match = None
+            best_ratio = 0.6  # Minimum similarity threshold
+
+            for item in available_items:
+                if item["type"] == "item":
+                    item_id = item.get("id", "").lower().replace("_", " ")
+                    ratio = SequenceMatcher(None, item_name_lower, item_id).ratio()
+                    if ratio > best_ratio:
+                        best_ratio = ratio
+                        best_match = item
+
+            if best_match:
+                item_to_take = best_match
 
         if not item_to_take:
             print_error(f"'{item_name}' not found in this room.")
@@ -1258,6 +1327,139 @@ class CLI:
             print_status_message(f"{selected_character.name} picks up the {item_id}.", "success")
         else:
             print_error(f"Failed to pick up {item_id}.")
+
+    def handle_take_all(self) -> None:
+        """
+        Handle taking all items from the current room with intelligent distribution.
+        """
+        # Get available items in the room
+        available_items = self.game_state.get_available_items_in_room()
+
+        if not available_items:
+            room = self.game_state.get_current_room()
+            if room.get("searchable") and not room.get("searched"):
+                print_error("You haven't searched this room yet. Use 'search' first.")
+            else:
+                print_error("There are no items to take here.")
+            return
+
+        living_members = self.game_state.party.get_living_members()
+        if not living_members:
+            print_error("No living party members to take items!")
+            return
+
+        # Separate currency from regular items
+        currency_items = [item for item in available_items if item["type"] in ["gold", "currency"]]
+        regular_items = [item for item in available_items if item["type"] == "item"]
+
+        # Take all currency items (auto-distributed)
+        for item in currency_items:
+            self.game_state.take_item("currency", living_members[0])
+
+        if currency_items:
+            print_status_message(f"Collected all currency and split among the party.", "success")
+
+        # For regular items, use intelligent assignment
+        if regular_items:
+            for item in regular_items:
+                item_id = item.get("id", "unknown")
+
+                # Auto-assign to best character or prompt if ambiguous
+                assigned_character = self._auto_assign_item(item, living_members)
+
+                if assigned_character:
+                    success = self.game_state.take_item(item_id, assigned_character)
+                    if success:
+                        print_status_message(f"{assigned_character.name} picks up the {item_id}.", "success")
+                    else:
+                        print_error(f"Failed to pick up {item_id}.")
+
+    def _auto_assign_item(self, item: Dict[str, Any], living_members: List) -> Optional:
+        """
+        Intelligently assign an item to a character based on class and item type.
+
+        Args:
+            item: The item to assign
+            living_members: List of living party members
+
+        Returns:
+            The character to assign the item to, or None if cancelled
+        """
+        item_id = item.get("id", "")
+
+        # If only one character, auto-assign
+        if len(living_members) == 1:
+            return living_members[0]
+
+        # Load items data to get item type
+        from dnd_engine.core.data_loader import DataLoader
+        data_loader = DataLoader()
+        items_data = data_loader.load_items()
+
+        # Find item details
+        item_details = None
+        for category, category_items in items_data.items():
+            if item_id in category_items:
+                item_details = category_items[item_id]
+                break
+
+        # Intelligent assignment based on item type
+        best_matches = []
+
+        if item_details:
+            item_type = item_details.get("type", "").lower()
+
+            # Weapons: prefer martial classes
+            if "weapon" in item_type or category == "weapons":
+                for char in living_members:
+                    char_class = char.character_class.value.lower()
+                    if char_class in ["fighter", "barbarian", "ranger", "paladin"]:
+                        best_matches.append(char)
+
+            # Armor: prefer tank classes
+            elif "armor" in item_type or category == "armor":
+                for char in living_members:
+                    char_class = char.character_class.value.lower()
+                    if char_class in ["fighter", "paladin", "cleric"]:
+                        best_matches.append(char)
+
+            # Scrolls/wands: prefer casters
+            elif "scroll" in item_id or "wand" in item_id or "staff" in item_id:
+                for char in living_members:
+                    char_class = char.character_class.value.lower()
+                    if char_class in ["wizard", "sorcerer", "cleric", "druid"]:
+                        best_matches.append(char)
+
+            # Potions/consumables: distribute to anyone who needs them
+            elif "potion" in item_id or category == "consumables":
+                # Prefer characters with lower HP percentage
+                chars_by_hp = sorted(living_members, key=lambda c: c.current_hp / c.max_hp if c.max_hp > 0 else 0)
+                best_matches = chars_by_hp
+
+        # If we have clear best matches, auto-assign to first one
+        if len(best_matches) == 1:
+            return best_matches[0]
+
+        # If multiple good matches or no clear match, prompt user
+        import questionary
+
+        choices = []
+        for character in living_members:
+            choice_text = f"{character.name} ({character.character_class.value.title()})"
+            choices.append(questionary.Choice(title=choice_text, value=character))
+
+        choices.append(questionary.Choice(title="Skip this item", value=None))
+
+        try:
+            result = questionary.select(
+                f"Who should receive the {item_id}?",
+                choices=choices,
+                use_arrow_keys=True
+            ).ask()
+
+            return result
+        except (EOFError, KeyboardInterrupt):
+            return None
 
     def handle_attack(self, target_name: str) -> None:
         """Handle attack command during combat."""
@@ -2579,6 +2781,62 @@ class CLI:
             return result
         except (EOFError, KeyboardInterrupt):
             return None
+
+    def _prompt_multi_items_to_take(self) -> List[Dict[str, Any]]:
+        """
+        Prompt user to select multiple items to take from the current room.
+
+        Returns:
+            List of selected item dicts, or empty list if cancelled
+        """
+        import questionary
+
+        # Get available items in the room
+        available_items = self.game_state.get_available_items_in_room()
+
+        if not available_items:
+            room = self.game_state.get_current_room()
+            if room.get("searchable") and not room.get("searched"):
+                print_error("You haven't searched this room yet. Use 'search' first.")
+            else:
+                print_error("There are no items to take here.")
+            return []
+
+        # Build choices for questionary
+        choices = []
+        for item in available_items:
+            if item["type"] == "gold":
+                choice_text = f"Gold ({item['amount']} pieces)"
+                choices.append(questionary.Choice(title=choice_text, value=item))
+            elif item["type"] == "currency":
+                currency_parts = []
+                if item.get("gold", 0) > 0:
+                    currency_parts.append(f"{item['gold']} gold")
+                if item.get("silver", 0) > 0:
+                    currency_parts.append(f"{item['silver']} silver")
+                if item.get("copper", 0) > 0:
+                    currency_parts.append(f"{item['copper']} copper")
+                if item.get("platinum", 0) > 0:
+                    currency_parts.append(f"{item['platinum']} platinum")
+                choice_text = f"Currency ({', '.join(currency_parts)})"
+                choices.append(questionary.Choice(title=choice_text, value=item))
+            elif item["type"] == "item":
+                item_id = item.get("id", "unknown")
+                # Format item name nicely
+                display_name = item_id.replace("_", " ").title()
+                choices.append(questionary.Choice(title=display_name, value=item))
+
+        # Get user selection with arrow keys and space to select
+        try:
+            results = questionary.checkbox(
+                "Select items to take (space to select, enter to confirm):",
+                choices=choices,
+                use_arrow_keys=True
+            ).ask()
+
+            return results if results else []
+        except (EOFError, KeyboardInterrupt):
+            return []
 
     def _parse_item_and_player(self, parts: List[str]) -> tuple[str, Optional[str]]:
         """
