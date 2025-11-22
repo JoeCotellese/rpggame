@@ -123,6 +123,16 @@ class GameState:
         """
         return self.dungeon["rooms"][self.current_room_id]
 
+    def mark_room_displayed(self) -> None:
+        """
+        Mark current room as displayed for narrative transition tracking.
+
+        After displaying a room description, call this to update previous_room_id
+        so subsequent "look" commands show "already in room" narrative instead of
+        "entering room" narrative.
+        """
+        self.previous_room_id = self.current_room_id
+
     def get_effective_lighting(self, character: "Character") -> str:
         """
         Calculate the effective lighting level for a character in the current room.

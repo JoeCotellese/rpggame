@@ -174,6 +174,9 @@ class CLI:
 
         print_room_description(room_name_with_lighting, room_text, exits)
 
+        # Mark room as displayed so subsequent "look" commands show "already in room" narrative
+        self.game_state.mark_room_displayed()
+
     def display_player_status(self) -> None:
         """Display status for all party members."""
         # Convert party data to table format
