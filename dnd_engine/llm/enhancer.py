@@ -163,9 +163,9 @@ class LLMEnhancer:
         monsters_data = room_data.get('monsters_data')
         party_size = room_data.get('party_size', 1)
 
-        # Build cache key that includes monster presence and lighting to avoid stale descriptions
-        # after combat ends or lighting changes
-        # Examples: "room_laboratory", "room_laboratory_combat_2_monsters", "room_laboratory_bright"
+        # Build cache key that includes monster presence, lighting, and room transition state
+        # to avoid stale descriptions after combat ends, lighting changes, or when re-examining a room
+        # Examples: "room_laboratory_bright_entering", "room_laboratory_combat_2_monsters_dark_looking"
         monster_suffix = ""
         if monsters:
             monster_suffix = f"_combat_{len(monsters)}_monsters"
@@ -180,7 +180,13 @@ class LLMEnhancer:
             elif char_lighting.get("lighting") == "dim":
                 lighting_state = "dim"
 
-        cache_key = f"room_{room_data.get('id', 'unknown')}{monster_suffix}_{lighting_state}"
+        # Detect room transition
+        room_id = room_data.get('id', 'unknown')
+        previous_room_id = room_data.get('previous_room_id')
+        is_entering = previous_room_id != room_id if previous_room_id is not None else True
+        transition_suffix = "_entering" if is_entering else "_looking"
+
+        cache_key = f"room_{room_id}{monster_suffix}_{lighting_state}{transition_suffix}"
 
         # Check cache
         if self.cache is not None and cache_key in self.cache:
@@ -446,9 +452,9 @@ class LLMEnhancer:
         monsters_data = room_data.get('monsters_data')
         party_size = room_data.get('party_size', 1)
 
-        # Build cache key that includes monster presence and lighting to avoid stale descriptions
-        # after combat ends or lighting changes
-        # Examples: "room_laboratory", "room_laboratory_combat_2_monsters", "room_laboratory_bright"
+        # Build cache key that includes monster presence, lighting, and room transition state
+        # to avoid stale descriptions after combat ends, lighting changes, or when re-examining a room
+        # Examples: "room_laboratory_bright_entering", "room_laboratory_combat_2_monsters_dark_looking"
         monster_suffix = ""
         if monsters:
             monster_suffix = f"_combat_{len(monsters)}_monsters"
@@ -463,7 +469,13 @@ class LLMEnhancer:
             elif char_lighting.get("lighting") == "dim":
                 lighting_state = "dim"
 
-        cache_key = f"room_{room_data.get('id', 'unknown')}{monster_suffix}_{lighting_state}"
+        # Detect room transition
+        room_id = room_data.get('id', 'unknown')
+        previous_room_id = room_data.get('previous_room_id')
+        is_entering = previous_room_id != room_id if previous_room_id is not None else True
+        transition_suffix = "_entering" if is_entering else "_looking"
+
+        cache_key = f"room_{room_id}{monster_suffix}_{lighting_state}{transition_suffix}"
 
         # Check cache first
         if self.cache and cache_key in self.cache:

@@ -154,7 +154,8 @@ class CLI:
                 "party_size": party_size,  # Party size for combat context
                 "base_lighting": room.get("lighting", "bright"),  # Room's base lighting level
                 "party_lighting": party_lighting,  # Effective lighting for each party member
-                "light_casters": light_casters  # Characters who cast Light spells
+                "light_casters": light_casters,  # Characters who cast Light spells
+                "previous_room_id": self.game_state.previous_room_id  # Previous room for transition narrative
             }
             with console.status("", spinner="dots"):
                 enhanced_desc = self.llm_enhancer.get_room_description_sync(room_data, timeout=3.0)
@@ -181,6 +182,9 @@ class CLI:
         room_name_with_lighting = f"{room_name} {lighting_icon}"
 
         print_room_description(room_name_with_lighting, room_text, exits)
+
+        # Mark room as displayed so subsequent "look" commands show "already in room" narrative
+        self.game_state.mark_room_displayed()
 
     def display_player_status(self) -> None:
         """Display status for all party members."""

@@ -24,7 +24,12 @@ def build_room_description_prompt(
     """
     base_desc = room_data.get("description", "")
     room_type = room_data.get("name", "chamber")
+    room_id = room_data.get("id", room_type.lower().replace(" ", "_"))
     monsters = room_data.get("monsters", [])
+
+    # Detect room transition for narrative context
+    previous_room_id = room_data.get("previous_room_id")
+    is_entering = previous_room_id != room_id if previous_room_id is not None else True
 
     # Extract lighting information
     base_lighting = room_data.get("base_lighting", "bright")
@@ -168,10 +173,17 @@ IMPORTANT: This is the moment combat begins. Naturally transition from describin
 
     # If bright, no special lighting context needed
 
+    # Build transition narrative instruction
+    transition_instruction = ""
+    if is_entering:
+        transition_instruction = "\n\nNarrative Context: The party is ENTERING this room. Include a brief transition that describes their entrance (e.g., 'As you step through the doorway...' or 'Leaving the previous chamber behind...'). Make it feel like they're arriving for the first time."
+    else:
+        transition_instruction = "\n\nNarrative Context: The party is already IN this room, examining it more closely. Do NOT describe them entering or transitioning - they're already here. Focus on what they observe in the moment."
+
     prompt = f"""Enhance this D&D dungeon room description with atmospheric details:
 
 Room: {room_type}
-Basic description: {base_desc}{monster_context}{lighting_context}
+Basic description: {base_desc}{monster_context}{lighting_context}{transition_instruction}
 
 Add vivid sensory details (sights, sounds, smells) in 2-3 sentences. Make it immersive but concise.{instruction}
 

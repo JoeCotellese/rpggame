@@ -87,6 +87,7 @@ class GameState:
         self.dungeon_name = dungeon_name  # Store filename for saving
         self.dungeon = self.data_loader.load_dungeon(dungeon_name)
         self.current_room_id = self.dungeon["start_room"]
+        self.previous_room_id: Optional[str] = None  # Track room transitions for narrative
 
         # Combat state
         self.in_combat = False
@@ -121,6 +122,16 @@ class GameState:
             Dictionary containing room information
         """
         return self.dungeon["rooms"][self.current_room_id]
+
+    def mark_room_displayed(self) -> None:
+        """
+        Mark current room as displayed for narrative transition tracking.
+
+        After displaying a room description, call this to update previous_room_id
+        so subsequent "look" commands show "already in room" narrative instead of
+        "entering room" narrative.
+        """
+        self.previous_room_id = self.current_room_id
 
     def get_effective_lighting(self, character: "Character") -> str:
         """
@@ -266,6 +277,9 @@ class GameState:
             new_room_id = exit_info
         else:
             new_room_id = exit_info["destination"]
+
+        # Track previous room for narrative transitions
+        self.previous_room_id = self.current_room_id
 
         # Move to new room
         self.current_room_id = new_room_id
@@ -1636,6 +1650,7 @@ class GameState:
 
         # Reset navigation tracking
         self.last_entry_direction = None
+        self.previous_room_id = None
 
         # Clear action history
         self.action_history = []
