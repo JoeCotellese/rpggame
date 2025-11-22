@@ -54,7 +54,7 @@ def create_llm_provider(
             return None
 
         model = kwargs.get("model") or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-        timeout = float(os.getenv("LLM_TIMEOUT", "10"))
+        timeout = float(os.getenv("LLM_TIMEOUT", "20"))
         max_tokens = int(os.getenv("LLM_MAX_TOKENS", "150"))
 
         return OpenAIProvider(
@@ -75,7 +75,7 @@ def create_llm_provider(
             "ANTHROPIC_MODEL",
             "claude-3-5-haiku-20241022"
         )
-        timeout = float(os.getenv("LLM_TIMEOUT", "10"))
+        timeout = float(os.getenv("LLM_TIMEOUT", "20"))
         max_tokens = int(os.getenv("LLM_MAX_TOKENS", "150"))
 
         return AnthropicProvider(

@@ -82,7 +82,7 @@ class LLMEnhancer:
         if self._loop and not self._loop.is_closed():
             asyncio.run_coroutine_threadsafe(coro, self._loop)
 
-    def _run_sync(self, coro, timeout: float = 3.0) -> Optional[str]:
+    def _run_sync(self, coro, timeout: float = 20.0) -> Optional[str]:
         """
         Run a coroutine synchronously with timeout.
 
@@ -361,13 +361,13 @@ class LLMEnhancer:
 
     # Public synchronous API for blocking narrative generation
 
-    def get_combat_narrative_sync(self, action_data: Dict, timeout: float = 3.0) -> Optional[str]:
+    def get_combat_narrative_sync(self, action_data: Dict, timeout: float = 20.0) -> Optional[str]:
         """
         Generate combat narrative synchronously with timeout.
 
         Args:
             action_data: Combat action data (attacker, defender, hit, damage, etc.)
-            timeout: Timeout in seconds (default: 3.0)
+            timeout: Timeout in seconds (default: 20.0)
 
         Returns:
             Enhanced narrative or None on timeout/error
@@ -397,13 +397,13 @@ class LLMEnhancer:
 
         return self._run_sync(generate(), timeout=timeout)
 
-    def get_death_narrative_sync(self, character_data: Dict, timeout: float = 3.0) -> Optional[str]:
+    def get_death_narrative_sync(self, character_data: Dict, timeout: float = 20.0) -> Optional[str]:
         """
         Generate death narrative synchronously with timeout.
 
         Args:
             character_data: Character data (name, etc.)
-            timeout: Timeout in seconds (default: 3.0)
+            timeout: Timeout in seconds (default: 20.0)
 
         Returns:
             Enhanced narrative or None on timeout/error
@@ -433,13 +433,13 @@ class LLMEnhancer:
 
         return self._run_sync(generate(), timeout=timeout)
 
-    def get_room_description_sync(self, room_data: Dict, timeout: float = 3.0) -> Optional[str]:
+    def get_room_description_sync(self, room_data: Dict, timeout: float = 20.0) -> Optional[str]:
         """
         Generate room description enhancement synchronously with timeout.
 
         Args:
             room_data: Room data (name, description, id, etc.)
-            timeout: Timeout in seconds (default: 3.0)
+            timeout: Timeout in seconds (default: 20.0)
 
         Returns:
             Enhanced description or None on timeout/error
@@ -511,13 +511,13 @@ class LLMEnhancer:
 
         return self._run_sync(generate(), timeout=timeout)
 
-    def get_combat_start_narrative_sync(self, combat_data: Dict, timeout: float = 3.0) -> Optional[str]:
+    def get_combat_start_narrative_sync(self, combat_data: Dict, timeout: float = 20.0) -> Optional[str]:
         """
         Generate combat start narrative synchronously with timeout.
 
         Args:
             combat_data: Combat data (enemies, location, party_size, etc.)
-            timeout: Timeout in seconds (default: 3.0)
+            timeout: Timeout in seconds (default: 20.0)
 
         Returns:
             Enhanced narrative or None on timeout/error
