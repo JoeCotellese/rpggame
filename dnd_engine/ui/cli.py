@@ -1562,7 +1562,7 @@ class CLI:
                 print_error(f"No {ordinal}-level spell slots available!")
                 return
 
-        # Determine target based on spell properties
+        # Determine and select target based on spell properties
         range_ft = spell_data.get("range_ft", 0)
         has_healing = "healing" in spell_data
         has_damage = "damage" in spell_data
@@ -1575,36 +1575,22 @@ class CLI:
         # Healing or beneficial spells target allies
         elif has_healing:
             target = self._prompt_combat_ally_selection(spell_display_name, spell_data, caster)
-            if target is None or target == "Cancel":
-                # Refund spell slot if cancelled
-                if spell_level > 0:
-                    pool_name = f"spell_slots_level_{spell_level}"
-                    pool = caster.get_resource_pool(pool_name)
-                    if pool:
-                        pool.current += 1
-                return
         # Damage spells target enemies
         elif has_damage:
             target = self._prompt_enemy_selection()
-            if target is None or target == "Cancel":
-                # Refund spell slot if cancelled
-                if spell_level > 0:
-                    pool_name = f"spell_slots_level_{spell_level}"
-                    pool = caster.get_resource_pool(pool_name)
-                    if pool:
-                        pool.current += 1
-                return
         # Default to enemy targeting for unknown spell types
         else:
             target = self._prompt_enemy_selection()
-            if target is None or target == "Cancel":
-                # Refund spell slot if cancelled
-                if spell_level > 0:
-                    pool_name = f"spell_slots_level_{spell_level}"
-                    pool = caster.get_resource_pool(pool_name)
-                    if pool:
-                        pool.current += 1
-                return
+
+        # Handle target cancellation
+        if target is None or target == "Cancel":
+            # Refund spell slot if cancelled
+            if spell_level > 0:
+                pool_name = f"spell_slots_level_{spell_level}"
+                pool = caster.get_resource_pool(pool_name)
+                if pool:
+                    pool.current += 1
+            return
 
         # Consume the action
         if not turn_state.consume_action(ActionType.ACTION):
