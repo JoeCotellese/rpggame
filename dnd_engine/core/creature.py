@@ -228,7 +228,9 @@ class Creature:
                             "condition": condition_name,
                             "save_result": save_result
                         })
-                        continue
+                    # Skip duration processing for conditions with repeat saves
+                    # The repeat save is the primary mechanism for ending the condition
+                    continue
 
             # Decrement duration for round-based conditions
             if metadata.get("duration_type") == "rounds":
