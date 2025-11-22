@@ -3590,7 +3590,8 @@ class CLI:
 
         # 1. Select caster
         caster = self._prompt_party_member_selection("Who will cast a spell?")
-        if not caster:
+        # Handle both None and "Cancel" string (questionary may return either)
+        if not caster or isinstance(caster, str):
             return  # User cancelled
 
         # Check if character can cast spells
@@ -3653,7 +3654,8 @@ class CLI:
             target = self._prompt_party_member_selection(
                 f"Who should {caster.name} heal with {spell_data.get('name')}?"
             )
-            if not target:
+            # Handle both None and "Cancel" string (questionary may return either)
+            if not target or isinstance(target, str):
                 return  # User cancelled
             target_name = target.name
 
