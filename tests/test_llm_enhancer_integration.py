@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from dnd_engine.llm.base import LLMProvider
+from dnd_engine.llm.enhancer import LLMEnhancer
 from dnd_engine.utils.events import Event, EventBus, EventType
 
 
@@ -516,3 +517,57 @@ class TestLLMEnhancer:
         assert "1 adventurer" in prompt or "Party size: 1" in prompt
         assert "Beast" in prompt
         assert "feral" in prompt.lower() or "snarl" in prompt.lower() or "prowl" in prompt.lower()
+
+    def test_enhancer_lighting_cache_invalidation(self):
+        """Test that cache is invalidated when lighting changes"""
+        # Create mock provider that returns different responses
+        class TrackingProvider:
+            def __init__(self):
+                self.call_count = 0
+
+            async def generate(self, prompt, temperature=0.7):
+                self.call_count += 1
+                return f"Description {self.call_count}"
+
+            def get_provider_name(self):
+                return "Tracking Provider"
+
+        mock_provider = TrackingProvider()
+
+        # Create enhancer with cache enabled
+        event_bus = EventBus()
+        enhancer = LLMEnhancer(mock_provider, event_bus, enable_cache=True)
+
+        # Get description with dark lighting
+        room_data_dark = {
+            "id": "test_room",
+            "name": "Test Room",
+            "description": "A test room.",
+            "party_lighting": [{"lighting": "dark"}]
+        }
+
+        description1 = enhancer.get_room_description_sync(room_data_dark, timeout=3.0)
+        assert description1 == "Description 1"
+        assert mock_provider.call_count == 1
+
+        # Get same room again with dark lighting - should use cache
+        description2 = enhancer.get_room_description_sync(room_data_dark, timeout=3.0)
+        assert description2 == "Description 1"  # Same cached response
+        assert mock_provider.call_count == 1  # No new call
+
+        # Get same room with bright lighting - should NOT use cache
+        room_data_bright = {
+            "id": "test_room",
+            "name": "Test Room",
+            "description": "A test room.",
+            "party_lighting": [{"lighting": "bright"}]
+        }
+
+        description3 = enhancer.get_room_description_sync(room_data_bright, timeout=3.0)
+        assert description3 == "Description 2"  # New response
+        assert mock_provider.call_count == 2  # New call was made
+
+        # Get same room with bright lighting again - should use cache
+        description4 = enhancer.get_room_description_sync(room_data_bright, timeout=3.0)
+        assert description4 == "Description 2"  # Same cached response
+        assert mock_provider.call_count == 2  # No new call

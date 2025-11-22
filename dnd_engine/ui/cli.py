@@ -77,7 +77,7 @@ class CLI:
         self.combat_history: List[str] = []
 
         # Debug console for testing and development
-        self.debug_console = DebugConsole(game_state)
+        self.debug_console = DebugConsole(game_state, cli=self)
 
         # Subscribe to game events for display and auto-save
         self.game_state.event_bus.subscribe(EventType.COMBAT_START, self._on_combat_start)
@@ -120,6 +120,14 @@ class CLI:
 
         # Calculate effective lighting for each party member
         # (used for both LLM enhancement and UI display)
+        # Also track who actually cast Light spells for narrative purposes
+        from dnd_engine.systems.time_manager import EffectType
+        light_casters = []
+        for effect in self.game_state.time_manager.active_effects:
+            if effect.effect_type == EffectType.SPELL and effect.source.lower() == "light":
+                if effect.caster_name and effect.caster_name not in light_casters:
+                    light_casters.append(effect.caster_name)
+
         party_lighting = []
         for char in self.game_state.party.characters:
             lighting = self.game_state.get_effective_lighting(char)
@@ -146,6 +154,7 @@ class CLI:
                 "party_size": party_size,  # Party size for combat context
                 "base_lighting": room.get("lighting", "bright"),  # Room's base lighting level
                 "party_lighting": party_lighting,  # Effective lighting for each party member
+                "light_casters": light_casters,  # Characters who cast Light spells
                 "previous_room_id": self.game_state.previous_room_id  # Previous room for transition narrative
             }
             with console.status("", spinner="dots"):
