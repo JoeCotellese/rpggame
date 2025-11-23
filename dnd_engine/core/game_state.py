@@ -1573,6 +1573,7 @@ class GameState:
             self.event_bus.emit(Event(
                 type=EventType.SKILL_CHECK,
                 data={
+                    "character": character.name,
                     **check_result,
                     "action": f"stealth check (vs passive Perception {max_enemy_perception})"
                 }
