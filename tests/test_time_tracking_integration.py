@@ -70,7 +70,7 @@ def game_state(test_party):
     event_bus = EventBus()
     gs = GameState(
         party=test_party,
-        dungeon_name="test_dungeon.json",
+        dungeon_name="test_dungeon",
         event_bus=event_bus
     )
     return gs

@@ -1935,7 +1935,7 @@ class GameState:
         Removes conditions like poisoned, paralyzed, stunned, etc.
         """
         for character in self.party.characters:
-            character.conditions.clear()
+            character.active_conditions.clear()
 
     def use_combat_attack_item(
         self,
