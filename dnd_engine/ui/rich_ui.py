@@ -285,7 +285,8 @@ def print_room_description(title: str, description: str, exits: List[str]) -> No
         content,
         title=f"[bold]{title}[/bold]",
         style="cyan",
-        expand=False
+        expand=False,
+        padding=(1, 2)
     )
     console.print(panel)
 
