@@ -3547,6 +3547,10 @@ class CLI:
         remaining_actions = str(turn_state)
         print_status_message(f"Remaining this turn: {remaining_actions}", "info")
 
+        # Suggest ending turn if player wants to skip remaining actions
+        if turn_state.has_any_action():
+            print_status_message("Type 'done' or 'pass' to end your turn", "info")
+
         # Emit item used event
         self.game_state.event_bus.emit(Event(
             type=EventType.ITEM_USED,
@@ -3645,6 +3649,10 @@ class CLI:
         # Show remaining actions
         remaining_actions = str(turn_state)
         print_status_message(f"Remaining this turn: {remaining_actions}", "info")
+
+        # Suggest ending turn if player wants to skip remaining actions
+        if turn_state.has_any_action():
+            print_status_message("Type 'done' or 'pass' to end your turn", "info")
 
         # Emit item used event
         self.game_state.event_bus.emit(Event(
@@ -3830,6 +3838,10 @@ class CLI:
         # Show remaining actions
         remaining_actions = str(turn_state)
         print_status_message(f"Remaining this turn: {remaining_actions}", "info")
+
+        # Suggest ending turn if player wants to skip remaining actions
+        if turn_state.has_any_action():
+            print_status_message("Type 'done' or 'pass' to end your turn", "info")
 
         # Emit item used event
         self.game_state.event_bus.emit(Event(
