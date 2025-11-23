@@ -252,7 +252,7 @@ class TestCreature:
         assert creature.can_take_actions() is True
 
         # Incapacitating conditions
-        incapacitating = ["paralyzed", "stunned", "unconscious", "petrified"]
+        incapacitating = ["paralyzed", "stunned", "unconscious", "petrified", "surprised"]
         for condition in incapacitating:
             creature.remove_condition("poisoned")
             creature.add_condition(condition)
@@ -374,6 +374,30 @@ class TestCreature:
                 # Failed save - with repeat saves enabled, duration does NOT decrement
                 # The repeat save is the primary mechanism for ending the condition
                 assert creature.active_conditions["paralyzed"]["duration_remaining"] == initial_duration
+
+    def test_process_end_of_turn_removes_surprised(self):
+        """Test that surprised condition is automatically removed at end of turn"""
+        creature = Creature(
+            name="Fighter",
+            max_hp=20,
+            ac=16,
+            abilities=self.abilities
+        )
+
+        # Add surprised condition
+        creature.add_condition("surprised")
+        assert creature.has_condition("surprised")
+        assert creature.can_take_actions() is False
+
+        # Process end of turn
+        results = creature.process_end_of_turn_conditions()
+
+        # Surprised should be removed
+        assert not creature.has_condition("surprised")
+        assert creature.can_take_actions() is True
+        assert len(results) == 1
+        assert results[0]["type"] == "condition_expired"
+        assert results[0]["condition"] == "surprised"
 
     def test_conditions_backward_compatibility(self):
         """Test that conditions property returns set of condition names"""

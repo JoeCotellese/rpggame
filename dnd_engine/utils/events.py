@@ -21,6 +21,7 @@ class EventType(Enum):
     COMBAT_START = "combat_start"
     COMBAT_END = "combat_end"
     COMBAT_FLED = "combat_fled"
+    SURPRISE_ROUND = "surprise_round"
     TURN_START = "turn_start"
     TURN_END = "turn_end"
     ATTACK_ROLL = "attack_roll"

@@ -419,6 +419,13 @@ class GameState:
                 if char.inventory.has_item(item_id):
                     # Unlock the door
                     exit_info["locked"] = False
+
+                    # Check if unlock method is loud - alert destination room
+                    if not method.get("silent", True):  # Default to silent if not specified
+                        destination_room = exit_info.get("destination")
+                        if destination_room:
+                            self.set_room_alerted(destination_room, f"loud unlock from {self.current_room_id}")
+
                     # Emit event
                     self.event_bus.emit(Event(
                         type=EventType.SKILL_CHECK,
@@ -478,6 +485,12 @@ class GameState:
             if check_result["success"]:
                 # Unlock the door
                 exit_info["locked"] = False
+
+                # Check if unlock method is loud - alert destination room
+                if not method.get("silent", True):  # Default to silent if not specified
+                    destination_room = exit_info.get("destination")
+                    if destination_room:
+                        self.set_room_alerted(destination_room, f"loud unlock from {self.current_room_id}")
 
             return {
                 "success": check_result["success"],
@@ -1484,25 +1497,151 @@ class GameState:
                     }
                 ))
 
+    def is_room_alerted(self, room_id: Optional[str] = None) -> bool:
+        """Check if a room's occupants are alerted to the party's presence."""
+        if room_id is None:
+            room_id = self.current_room_id
+
+        room = self.dungeon["rooms"].get(room_id)
+        if not room:
+            return False
+
+        # Initialize alert state if not present
+        if "alerted" not in room:
+            room["alerted"] = False
+
+        return room["alerted"]
+
+    def set_room_alerted(self, room_id: Optional[str] = None, alert_source: str = "unknown") -> None:
+        """Set a room's alert state to True."""
+        if room_id is None:
+            room_id = self.current_room_id
+
+        room = self.dungeon["rooms"].get(room_id)
+        if not room:
+            return
+
+        room["alerted"] = True
+        room["alert_source"] = alert_source
+
+    def _check_for_surprise(self) -> dict:
+        """
+        Check if either side is surprised in combat.
+
+        Uses group stealth check (all party members must succeed) vs enemy passive Perception.
+        Returns dict with party_surprised and enemies_surprised booleans.
+        """
+        # If room is alerted, no surprise is possible
+        if self.is_room_alerted():
+            return {"party_surprised": False, "enemies_surprised": False}
+
+        # Load skills data for stealth checks
+        skills_data = self.data_loader.load_skills()
+
+        # Get highest enemy passive Perception
+        monsters_data = self.data_loader.load_monsters()
+        max_enemy_perception = 0  # Start at 0, will take highest from actual enemies
+
+        for enemy in self.active_enemies:
+            # Find enemy's passive_perception from monster data
+            for monster_id, monster_data in monsters_data.items():
+                if monster_data["name"] == enemy.name:
+                    enemy_pp = monster_data.get("passive_perception", 10)
+                    max_enemy_perception = max(max_enemy_perception, enemy_pp)
+                    break
+
+        # Fallback if no passive_perception found
+        if max_enemy_perception == 0:
+            max_enemy_perception = 10
+
+        # Group stealth check - ALL party members must beat enemy passive Perception
+        party_hidden = True
+        stealth_results = []
+
+        for character in self.party.get_living_members():
+            # Make stealth check for this character
+            check_result = character.make_skill_check("stealth", max_enemy_perception, skills_data)
+            stealth_results.append(check_result)
+
+            # Display stealth check immediately
+            result_symbol = "✓" if check_result["success"] else "✗"
+            result_text = "SUCCESS" if check_result["success"] else "FAILURE"
+            print(f"🎲 {character.name} Stealth check (vs passive Perception {max_enemy_perception}): "
+                  f"rolled {check_result['roll']} + {check_result['modifier']} = {check_result['total']} - {result_symbol} {result_text}")
+
+            # Emit skill check event
+            self.event_bus.emit(Event(
+                type=EventType.SKILL_CHECK,
+                data={
+                    **check_result,
+                    "action": f"stealth check (vs passive Perception {max_enemy_perception})"
+                }
+            ))
+
+            # If ANY party member fails, entire party is detected
+            if not check_result["success"]:
+                party_hidden = False
+
+        # Determine surprise
+        enemies_surprised = party_hidden
+        party_surprised = False  # Future: ambush mechanics
+
+        # Display surprise result
+        if enemies_surprised:
+            print("⚡ SURPRISE ROUND! The enemies are caught off-guard!")
+        else:
+            print("⚠️  The enemies notice your approach - no surprise!")
+
+        return {
+            "party_surprised": party_surprised,
+            "enemies_surprised": enemies_surprised,
+            "stealth_results": stealth_results
+        }
+
     def _start_combat(self) -> None:
-        """Initialize combat with current enemies."""
+        """Initialize combat with current enemies, checking for surprise."""
         self.in_combat = True
         self.initiative_tracker = InitiativeTracker(self.dice_roller, self.time_manager)
+
+        # Check for surprise
+        surprise_result = self._check_for_surprise()
 
         # Add all living party members to initiative
         for character in self.party.get_living_members():
             self.initiative_tracker.add_combatant(character)
+            # Apply surprised condition if party is surprised
+            if surprise_result["party_surprised"]:
+                character.add_condition("surprised")
 
         # Add enemies to initiative
         for enemy in self.active_enemies:
             self.initiative_tracker.add_combatant(enemy)
+            # Apply surprised condition if enemies are surprised
+            if surprise_result["enemies_surprised"]:
+                enemy.add_condition("surprised")
+
+        # Emit surprise round event if either side is surprised
+        if surprise_result["enemies_surprised"] or surprise_result["party_surprised"]:
+            self.event_bus.emit(Event(
+                type=EventType.SURPRISE_ROUND,
+                data={
+                    "party_surprised": surprise_result["party_surprised"],
+                    "enemies_surprised": surprise_result["enemies_surprised"],
+                    "surprised_creatures": [
+                        e.name for e in self.active_enemies if surprise_result["enemies_surprised"]
+                    ] + [
+                        c.name for c in self.party.get_living_members() if surprise_result["party_surprised"]
+                    ]
+                }
+            ))
 
         # Emit combat start event
         self.event_bus.emit(Event(
             type=EventType.COMBAT_START,
             data={
                 "enemies": [e.name for e in self.active_enemies],
-                "party": [c.name for c in self.party.get_living_members()]
+                "party": [c.name for c in self.party.get_living_members()],
+                "surprise_round": surprise_result["enemies_surprised"] or surprise_result["party_surprised"]
             }
         ))
 
