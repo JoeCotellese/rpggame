@@ -1563,13 +1563,7 @@ class GameState:
             check_result = character.make_skill_check("stealth", max_enemy_perception, skills_data)
             stealth_results.append(check_result)
 
-            # Display stealth check immediately
-            result_symbol = "✓" if check_result["success"] else "✗"
-            result_text = "SUCCESS" if check_result["success"] else "FAILURE"
-            print(f"🎲 {character.name} Stealth check (vs passive Perception {max_enemy_perception}): "
-                  f"rolled {check_result['roll']} + {check_result['modifier']} = {check_result['total']} - {result_symbol} {result_text}")
-
-            # Emit skill check event
+            # Emit skill check event (UI will handle display)
             self.event_bus.emit(Event(
                 type=EventType.SKILL_CHECK,
                 data={
