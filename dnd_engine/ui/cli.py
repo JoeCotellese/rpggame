@@ -722,6 +722,10 @@ class CLI:
             self.handle_use_item_combat(item_id)
             return
 
+        if command in ["end turn", "end", "done", "pass", "skip"]:
+            self.handle_end_turn()
+            return
+
         # Provide helpful suggestions for unknown commands
         print_status_message("Unknown combat command.", "warning")
         living_enemies = []
@@ -2155,6 +2159,38 @@ class CLI:
 
             # Display new room
             self.display_room()
+
+    def handle_end_turn(self) -> None:
+        """Handle end turn command during combat."""
+        if not self.game_state.in_combat:
+            print_error("You're not in combat!")
+            return
+
+        # Verify it's a player character's turn
+        if not self.game_state.initiative_tracker:
+            print_error("No initiative tracker!")
+            return
+
+        current = self.game_state.initiative_tracker.get_current_combatant()
+        if not current:
+            print_error("No current combatant!")
+            return
+
+        # Check if current combatant is a party member
+        if current.creature not in self.game_state.party.characters:
+            print_error("It's not a party member's turn!")
+            return
+
+        # End the turn
+        print_status_message(f"{current.creature.name} ends their turn.", "info")
+        self.game_state.initiative_tracker.next_turn()
+
+        # Check if combat is over
+        self.game_state._check_combat_end()
+
+        if self.game_state.in_combat:
+            # Process enemy turns
+            self.process_enemy_turns()
 
     def process_death_save_turn(self, character: Character) -> None:
         """
@@ -4383,6 +4419,7 @@ class CLI:
             ("cast <spell>", "Cast a spell (e.g., 'cast magic missile')"),
             ("use <item>", "Use a consumable item (e.g., 'use potion') - costs an action"),
             ("stabilize <ally>", "Stabilize an unconscious ally (Medicine DC 10)"),
+            ("end turn / done / pass", "End your turn and skip remaining actions"),
             ("flee / run / escape", "Flee from combat (enemies get opportunity attacks)"),
             ("status", "Show combat status"),
             ("help or ?", "Show this help message"),
