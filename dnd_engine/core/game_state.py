@@ -1210,6 +1210,78 @@ class GameState:
                 "has_duration": effect is not None
             }
 
+    def get_concentration_spell(self, character_name: str) -> Optional[str]:
+        """
+        Get the spell a character is currently concentrating on.
+
+        Args:
+            character_name: Name of the character
+
+        Returns:
+            Spell name if concentrating, None otherwise
+        """
+        for effect in self.time_manager.active_effects:
+            if effect.concentration and effect.caster_name == character_name:
+                return effect.source  # source contains the spell name
+        return None
+
+    def check_concentration_from_damage(self, character_name: str, damage: int) -> dict:
+        """
+        Check if damage breaks a character's concentration on a spell.
+
+        Args:
+            character_name: Name of the character who took damage
+            damage: Amount of damage taken
+
+        Returns:
+            dict with keys:
+                - was_concentrating: bool - whether character was concentrating
+                - concentration_broken: bool - whether concentration was broken
+                - spell_name: str | None - name of spell that was being concentrated on
+                - dc: int | None - DC of the concentration check
+                - save_result: dict | None - result of the saving throw
+        """
+        # Check if character is concentrating
+        spell_name = self.get_concentration_spell(character_name)
+        if not spell_name:
+            return {
+                "was_concentrating": False,
+                "concentration_broken": False,
+                "spell_name": None,
+                "dc": None,
+                "save_result": None
+            }
+
+        # Find the character
+        character = self.party.get_character_by_name(character_name)
+        if not character:
+            # Maybe it's an enemy? For now, only handle party members
+            return {
+                "was_concentrating": True,
+                "concentration_broken": False,
+                "spell_name": spell_name,
+                "dc": None,
+                "save_result": None
+            }
+
+        # Calculate DC: max(10, damage // 2)
+        dc = max(10, damage // 2)
+
+        # Make Constitution saving throw
+        save_result = character.make_saving_throw("constitution", dc)
+
+        # If failed, break concentration
+        if not save_result["success"]:
+            self.time_manager.remove_concentration_effects(character_name)
+
+        return {
+            "was_concentrating": True,
+            "concentration_broken": not save_result["success"],
+            "spell_name": spell_name,
+            "dc": dc,
+            "save_result": save_result
+        }
+
     def _create_spell_effect(
         self,
         spell_data: Dict[str, Any],
@@ -1579,6 +1651,17 @@ class GameState:
                                     "opportunity_attack": True
                                 }
                             ))
+
+                            # Check concentration if target took damage
+                            if result.damage > 0:
+                                concentration_result = self.check_concentration_from_damage(
+                                    target.name,
+                                    result.damage
+                                )
+                                if concentration_result["concentration_broken"]:
+                                    # Store result for later display
+                                    result.concentration_broken = True
+                                    result.broken_spell = concentration_result["spell_name"]
 
                         # Track casualties
                         if not target.is_alive:

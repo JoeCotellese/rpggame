@@ -220,6 +220,11 @@ def create_combat_table(combatants: List[Dict[str, Any]]) -> Table:
                 status = "[green]ACTIVE[/green]"
                 color = "white"
 
+            # Add concentration info if present
+            concentration = combatant.get("concentration")
+            if concentration:
+                status += f"\n[magenta]🎯 {concentration}[/magenta]"
+
         name_style = "bold yellow" if combatant.get("is_player") else "white"
 
         table.add_row(

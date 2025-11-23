@@ -260,6 +260,12 @@ class CLI:
             if hasattr(entry.creature, 'active_conditions'):
                 combatant_data["conditions"] = list(entry.creature.active_conditions.keys())
 
+            # Add concentration information for players
+            if is_player:
+                concentration_spell = self.game_state.get_concentration_spell(entry.creature.name)
+                if concentration_spell:
+                    combatant_data["concentration"] = concentration_spell
+
             combatants.append(combatant_data)
 
         table = create_combat_table(combatants)
@@ -1587,6 +1593,21 @@ class CLI:
             apply_damage=True
         )
 
+        # Check concentration if target was hit and took damage
+        if result.hit and result.damage > 0 and isinstance(target, Character):
+            concentration_result = self.game_state.check_concentration_from_damage(
+                target.name,
+                result.damage
+            )
+            if concentration_result["concentration_broken"]:
+                spell_name = concentration_result["spell_name"]
+                save_result = concentration_result["save_result"]
+                dc = concentration_result["dc"]
+                console.print(
+                    f"[yellow]💫 {target.name}'s concentration on {spell_name} is broken! "
+                    f"(CON save: {save_result['total']} vs DC {dc})[/yellow]"
+                )
+
         # NEW FLOW: Narrative → Mechanics → Death Narrative → Death Message
 
         # 1. Get and display attack narrative FIRST (if hit)
@@ -1868,6 +1889,39 @@ class CLI:
             apply_damage=True,
             event_bus=self.game_state.event_bus
         )
+
+        # Check concentration if target was hit and took damage
+        if result.hit and result.damage > 0 and isinstance(target, Character):
+            concentration_result = self.game_state.check_concentration_from_damage(
+                target.name,
+                result.damage
+            )
+            if concentration_result["concentration_broken"]:
+                spell_name = concentration_result["spell_name"]
+                save_result = concentration_result["save_result"]
+                dc = concentration_result["dc"]
+                console.print(
+                    f"[yellow]💫 {target.name}'s concentration on {spell_name} is broken! "
+                    f"(CON save: {save_result['total']} vs DC {dc})[/yellow]"
+                )
+
+        # Handle concentration for caster's new spell
+        if spell_data.get("concentration", False):
+            # Check if caster is already concentrating
+            previous_spell = self.game_state.get_concentration_spell(caster.name)
+            if previous_spell:
+                console.print(
+                    f"[yellow]💫 {caster.name} stops concentrating on {previous_spell}[/yellow]"
+                )
+                self.game_state.time_manager.remove_concentration_effects(caster.name)
+
+            # Add new concentration effect
+            effect = self.game_state._create_spell_effect(spell_data, caster.name, target.name)
+            if effect:
+                self.game_state.time_manager.add_effect(effect)
+                console.print(
+                    f"[cyan]🎯 {caster.name} begins concentrating on {spell_display_name}[/cyan]"
+                )
 
         # Display narrative if available
         if self.llm_enhancer and result.hit:
@@ -2292,6 +2346,21 @@ class CLI:
                     event_bus=self.game_state.event_bus,
                     action=action  # Pass action data for saving throw processing
                 )
+
+                # Check concentration if target was hit and took damage
+                if result.hit and result.damage > 0:
+                    concentration_result = self.game_state.check_concentration_from_damage(
+                        target.name,
+                        result.damage
+                    )
+                    if concentration_result["concentration_broken"]:
+                        spell_name = concentration_result["spell_name"]
+                        save_result = concentration_result["save_result"]
+                        dc = concentration_result["dc"]
+                        console.print(
+                            f"[yellow]💫 {target.name}'s concentration on {spell_name} is broken! "
+                            f"(CON save: {save_result['total']} vs DC {dc})[/yellow]"
+                        )
 
                 # Display saving throw results if triggered
                 if result.hit and "saving_throw" in action:
@@ -3993,7 +4062,7 @@ class CLI:
                 use_arrow_keys=True
             ).ask()
 
-            if not selected:
+            if not selected or selected == "Cancel":
                 return  # User cancelled
 
             spell_id, spell_data = selected
@@ -4169,16 +4238,12 @@ class CLI:
 
     def handle_time(self) -> None:
         """Display the current game time."""
-        from dnd_engine.ui.printing import print_section, print_message
-
         elapsed_time = self.game_state.time_manager.get_elapsed_time_display()
         print_section("Game Time")
         print_message(f"Time elapsed: {elapsed_time}")
 
     def handle_effects(self) -> None:
         """Display all active effects on party members."""
-        from dnd_engine.ui.printing import print_section, print_message
-
         effects = self.game_state.time_manager.get_all_effects()
 
         if not effects:
