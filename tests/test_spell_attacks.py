@@ -409,7 +409,8 @@ class TestSpellAttackResolution:
 
         if result.hit:
             assert goblin.current_hp < initial_hp
-            assert goblin.current_hp == initial_hp - result.damage
+            # HP is clamped at 0, cannot go negative
+            assert goblin.current_hp == max(0, initial_hp - result.damage)
 
     def test_spell_attack_without_spell_attack_bonus_raises_error(self, goblin, fire_bolt_spell):
         """Test casting spell from non-caster raises error."""
