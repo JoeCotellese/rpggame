@@ -4077,6 +4077,9 @@ class CLI:
             hp_recovered = result["hp_recovered"]
             resources = result["resources_recovered"]
 
+            # Get the character to check their current HP status
+            character = self.game_state.party.get_character_by_name(char_name)
+
             print_message(f"{char_name}:")
 
             if hp_recovered > 0:
@@ -4088,7 +4091,11 @@ class CLI:
                 print_message(f"  ⚡ Recovered: {', '.join(formatted_resources)}")
 
             if hp_recovered == 0 and not resources:
-                print_message(f"  Already at full health and resources")
+                # Check if character is at 0 HP (unconscious)
+                if character and character.current_hp == 0:
+                    print_message(f"  ⚠️  Still unconscious (0 HP)")
+                else:
+                    print_message(f"  Already at full health and resources")
 
             print_message("")
 
