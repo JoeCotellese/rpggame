@@ -189,14 +189,14 @@ class Creature:
 
     def can_take_actions(self) -> bool:
         """
-        Check if creature can take actions (not incapacitated).
+        Check if creature can take actions (not incapacitated or surprised).
 
-        Incapacitating conditions: paralyzed, stunned, unconscious, petrified
+        Incapacitating conditions: paralyzed, stunned, unconscious, petrified, surprised
 
         Returns:
             True if creature can act
         """
-        incapacitating = ["paralyzed", "stunned", "unconscious", "petrified"]
+        incapacitating = ["paralyzed", "stunned", "unconscious", "petrified", "surprised"]
         return not any(cond in self.active_conditions for cond in incapacitating)
 
     def process_end_of_turn_conditions(self, event_bus=None) -> list[dict]:
@@ -210,6 +210,14 @@ class Creature:
             List of dicts describing save results and expired conditions
         """
         results = []
+
+        # Surprised condition always ends at end of turn
+        if "surprised" in self.active_conditions:
+            self.remove_condition("surprised")
+            results.append({
+                "type": "condition_expired",
+                "condition": "surprised"
+            })
 
         for condition_name, metadata in list(self.active_conditions.items()):
             # Process repeat saves if allowed

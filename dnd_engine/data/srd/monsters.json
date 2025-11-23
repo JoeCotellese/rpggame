@@ -22,6 +22,7 @@
       "stealth": 6
     },
     "senses": "darkvision 60 ft., passive Perception 9",
+    "passive_perception": 9,
     "languages": [
       "Common",
       "Goblin"
@@ -82,6 +83,7 @@
       "stealth": 6
     },
     "senses": "darkvision 60 ft., passive Perception 9",
+    "passive_perception": 9,
     "languages": [
       "Common",
       "Goblin"
@@ -156,6 +158,7 @@
       "stealth": 4
     },
     "senses": "passive Perception 13",
+    "passive_perception": 13,
     "languages": [],
     "cr": "1/4",
     "xp": 50,
@@ -206,6 +209,7 @@
     },
     "skills": {},
     "senses": "passive Perception 10",
+    "passive_perception": 10,
     "languages": [
       "Common"
     ],
@@ -268,6 +272,7 @@
       "poisoned"
     ],
     "senses": "darkvision 60 ft., passive Perception 9",
+    "passive_perception": 9,
     "languages": [
       "understands all languages it knew in life but can't speak"
     ],
@@ -328,6 +333,7 @@
       "poisoned"
     ],
     "senses": "darkvision 60 ft., passive Perception 10",
+    "passive_perception": 10,
     "languages": [
       "Common"
     ],

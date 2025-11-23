@@ -27,11 +27,30 @@
     },
     "storage": {
       "name": "Alchemical Storage",
-      "description": "Shelves line the walls, filled with labeled bottles and ingredients. A large iron door to the east is marked with a skull symbol. The western passage leads to what sounds like hissing steam.",
+      "description": "Shelves line the walls, filled with labeled bottles and ingredients. A large iron door to the east is marked with a skull symbol. The western passage leads to what sounds like hissing steam. To the northwest, a reinforced wooden door bars entry to what appears to be a specimen chamber.",
       "exits": {
         "south": "entrance",
         "east": "laboratory",
-        "west": "furnace_room"
+        "west": "furnace_room",
+        "northwest": {
+          "destination": "specimen_chamber",
+          "locked": true,
+          "unlock_methods": [
+            {
+              "skill": "sleight_of_hand",
+              "tool_proficiency": "thieves_tools",
+              "dc": 12,
+              "description": "pick the lock",
+              "silent": true
+            },
+            {
+              "skill": "athletics",
+              "dc": 12,
+              "description": "break down the door",
+              "silent": false
+            }
+          ]
+        }
       },
       "enemies": [],
       "items": [
@@ -181,6 +200,29 @@
       "searched": false,
       "searchable": true,
       "boss_room": true
+    },
+    "specimen_chamber": {
+      "name": "Specimen Preservation Chamber",
+      "description": "A cold room lined with glass tanks containing preserved creatures floating in murky alchemical solutions. Ice crystals cover the walls from some failed refrigeration experiment. A skeleton warrior, animated by residual alchemical energies, stands guard among the specimen jars, its bones clicking softly as it patrols.",
+      "exits": {
+        "southeast": "storage"
+      },
+      "enemies": ["skeleton"],
+      "items": [
+        {
+          "type": "currency",
+          "gold": 15,
+          "silver": 25,
+          "visible": false
+        },
+        {
+          "type": "item",
+          "id": "potion_of_healing",
+          "visible": false
+        }
+      ],
+      "searched": false,
+      "searchable": true
     }
   }
 }

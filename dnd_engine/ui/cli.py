@@ -2294,6 +2294,16 @@ class CLI:
                 self.game_state.initiative_tracker.next_turn()
                 continue
 
+            # Check if enemy can act (not incapacitated or surprised)
+            if not enemy.can_take_actions():
+                conditions = [c.upper() for c in enemy.conditions]
+                condition_text = ", ".join(conditions)
+                print_status_message(f"⚠️  {enemy.name} is {condition_text} and cannot act this turn!", "warning")
+                # Process end-of-turn conditions (will remove surprised, etc.)
+                enemy.process_end_of_turn_conditions(self.game_state.event_bus)
+                self.game_state.initiative_tracker.next_turn()
+                continue
+
             # Enemy AI: Check if should attempt to remove conditions
             if self._should_enemy_attempt_condition_removal(enemy):
                 # Enemy attempts to remove condition instead of attacking
@@ -2453,6 +2463,16 @@ class CLI:
                             self.display_narrative_panel(death_narrative)
 
                     print_status_message(f"{target.name} has fallen!", "warning")
+
+            # Process end-of-turn conditions (repeat saves, duration countdown, remove surprised)
+            results = enemy.process_end_of_turn_conditions(self.game_state.event_bus)
+            for result in results:
+                if result["type"] == "condition_expired":
+                    if result["condition"] != "surprised":  # Don't announce surprised expiry
+                        print_status_message(
+                            f"⏱ {result['condition'].upper()} on {enemy.name} has expired!",
+                            "info"
+                        )
 
             # Next turn
             self.game_state.initiative_tracker.next_turn()
@@ -4402,6 +4422,23 @@ class CLI:
                         # Check if character died from turn-start effects
                         if not party_character.is_alive:
                             print_error(f"{party_character.name} has died from turn-start effects!")
+                            self.game_state.initiative_tracker.next_turn()
+                            continue
+
+                        # Check if character can act (not incapacitated or surprised)
+                        if not party_character.can_take_actions():
+                            conditions = [c.upper() for c in party_character.conditions]
+                            condition_text = ", ".join(conditions)
+                            print_status_message(f"⚠️  {party_character.name} is {condition_text} and cannot act this turn!", "warning")
+                            # Process end-of-turn conditions (will remove surprised, etc.)
+                            results = party_character.process_end_of_turn_conditions(self.game_state.event_bus)
+                            for result in results:
+                                if result["type"] == "condition_expired":
+                                    if result["condition"] != "surprised":  # Don't announce surprised expiry
+                                        print_status_message(
+                                            f"⏱ {result['condition'].upper()} on {party_character.name} has expired!",
+                                            "info"
+                                        )
                             self.game_state.initiative_tracker.next_turn()
                             continue
 
