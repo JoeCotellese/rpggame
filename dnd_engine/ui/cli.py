@@ -3102,34 +3102,48 @@ class CLI:
         # Last part is not a player identifier, treat entire string as item name
         return " ".join(parts), None
 
-    def _get_target_player(self, player_identifier: Optional[str]) -> Optional[Character]:
+    def _get_target_player(self, player_identifier: Optional[str], allow_unconscious: bool = False) -> Optional[Character]:
         """
         Get a target player from an identifier (number or name).
 
         Args:
             player_identifier: Optional player identifier (1-based index or character name)
+            allow_unconscious: If True, allow unconscious (but not dead) characters as valid targets
 
         Returns:
             The matching character, or None if not found or if identifier is invalid
         """
-        living_members = self.game_state.party.get_living_members()
-        if not living_members:
+        # Choose the appropriate member list based on whether unconscious targets are allowed
+        if allow_unconscious:
+            members = self.game_state.party.get_targetable_members()
+        else:
+            members = self.game_state.party.get_living_members()
+
+        if not members:
             return None
 
-        # If no identifier, return first living member (backward compatibility)
+        # If no identifier, return first member (backward compatibility)
         if not player_identifier:
-            return living_members[0]
+            return members[0]
 
         # Try to parse as a number (1-based index)
         try:
             index = int(player_identifier) - 1  # Convert to 0-based index
             if 0 <= index < len(self.game_state.party.characters):
                 character = self.game_state.party.characters[index]
-                if character.is_alive:
-                    return character
+                # Check if character is valid based on allow_unconscious flag
+                if allow_unconscious:
+                    if not character.is_dead:
+                        return character
+                    else:
+                        print_error(f"Player {player_identifier} is dead and cannot be targeted!")
+                        return None
                 else:
-                    print_error(f"Player {player_identifier} is not alive!")
-                    return None
+                    if character.is_alive:
+                        return character
+                    else:
+                        print_error(f"Player {player_identifier} is not alive!")
+                        return None
             else:
                 print_error(f"Invalid player number: {player_identifier}. Valid range: 1-{len(self.game_state.party.characters)}")
                 return None
@@ -3138,12 +3152,15 @@ class CLI:
             pass
 
         # Try to match by name (case-insensitive)
-        for character in living_members:
+        for character in members:
             if character.name.lower() == player_identifier.lower():
                 return character
 
         # No match found
-        print_error(f"No living player found with identifier: {player_identifier}")
+        if allow_unconscious:
+            print_error(f"No targetable player found with identifier: {player_identifier}")
+        else:
+            print_error(f"No living player found with identifier: {player_identifier}")
         return None
 
     def display_inventory(self, filter_arg: Optional[str] = None) -> None:
@@ -3429,69 +3446,45 @@ class CLI:
 
     def handle_use_item(self, item_id: str, player_identifier: Optional[str] = None) -> None:
         """
-        Handle using a consumable item for a specific party member (legacy method).
+        Handle using a consumable item on a target character.
+
+        This method supports using items on any targetable party member (including unconscious allies).
+        It searches all living party members' inventories for the item and uses it on the target.
 
         Args:
             item_id: The item to use (ID or name)
-            player_identifier: Optional player identifier (1-based index or character name)
+            player_identifier: Optional player identifier for target (1-based index or character name)
         """
-        from dnd_engine.systems.item_effects import apply_item_effect
-
-        character = self._get_target_player(player_identifier)
-        if not character:
-            if not self.game_state.party.get_living_members():
-                print_error("No living party members to use items!")
-            return
-
-        inventory = character.inventory
         items_data = self.game_state.data_loader.load_items()
 
-        # Find the item in consumables
-        target_item = None
-        consumables = inventory.get_items_by_category("consumables")
+        # Get target character (allow unconscious but not dead)
+        target = self._get_target_player(player_identifier, allow_unconscious=True)
+        if not target:
+            if not self.game_state.party.get_targetable_members():
+                print_error("No party members can be targeted!")
+            return
 
-        for inv_item in consumables:
-            item_data = items_data["consumables"].get(inv_item.item_id, {})
-            if inv_item.item_id == item_id or item_data.get("name", "").lower() == item_id.lower():
-                target_item = inv_item.item_id
+        # Search all living party members' inventories for the item
+        owner = None
+        target_item_id = None
+
+        for char in self.game_state.party.get_living_members():
+            consumables = char.inventory.get_items_by_category("consumables")
+            for inv_item in consumables:
+                item_data = items_data["consumables"].get(inv_item.item_id, {})
+                if inv_item.item_id == item_id or item_data.get("name", "").lower() == item_id.lower():
+                    owner = char
+                    target_item_id = inv_item.item_id
+                    break
+            if owner:
                 break
 
-        if not target_item:
-            print_error(f"{character.name} doesn't have a consumable '{item_id}' in inventory.")
+        if not owner or not target_item_id:
+            print_error(f"No party member has a consumable '{item_id}' in inventory.")
             return
 
-        # Use the item from inventory (removes it)
-        success, item_info = inventory.use_item(target_item, items_data)
-
-        if not success:
-            print_error(f"Failed to use {item_id}")
-            return
-
-        item_name = item_info.get("name", target_item)
-
-        # Apply the item's effect
-        result = apply_item_effect(
-            item_info=item_info,
-            target=character,
-            dice_roller=self.game_state.dice_roller,
-            event_bus=self.game_state.event_bus
-        )
-
-        # Display the result
-        print_status_message(f"{character.name} uses {item_name}", "info")
-        print_message(result.message)
-
-        # Emit item used event
-        self.game_state.event_bus.emit(Event(
-            type=EventType.ITEM_USED,
-            data={
-                "character": character.name,
-                "item_id": target_item,
-                "item_name": item_name,
-                "effect_type": result.effect_type,
-                "success": result.success
-            }
-        ))
+        # Use the item via the direct handler
+        self.handle_use_item_direct(target_item_id, target, owner)
 
     def handle_use_item_combat_direct(self, item_id: str, item_data: Dict[str, Any], character: Character) -> None:
         """
