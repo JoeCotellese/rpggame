@@ -22,6 +22,7 @@ class TestEndTurnCommand:
         game_state.party = Mock()
         game_state.active_enemies = []
         game_state.event_bus = Mock()
+        game_state.dice_roller = Mock()
         return game_state
 
     @pytest.fixture
@@ -163,6 +164,7 @@ class TestEndTurnIntegration:
     def test_end_turn_in_help_text(self):
         """Test that end turn command appears in combat help"""
         mock_game_state = Mock(spec=GameState)
+        mock_game_state.dice_roller = Mock()
         mock_campaign_manager = Mock()
         cli = CLI(
             game_state=mock_game_state,
@@ -238,7 +240,7 @@ class TestEndTurnIntegration:
         ]
 
         # Mock apply_item_effect
-        with patch('dnd_engine.ui.cli.apply_item_effect') as mock_apply:
+        with patch('dnd_engine.systems.item_effects.apply_item_effect') as mock_apply:
             mock_result = Mock()
             mock_result.message = "You heal 6 HP"
             mock_result.effect_type = "healing"
