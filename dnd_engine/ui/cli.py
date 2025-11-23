@@ -717,9 +717,74 @@ class CLI:
                     self.handle_use_item_combat_with_target(item_id, item_data, character, target)
                 return
 
-            # Use item during combat (old syntax still works)
-            item_id = parts[0]
-            self.handle_use_item_combat(item_id)
+            # Parse item and optional target from command
+            # Supports: "use potion", "use potion Tim", "use potion on Tim"
+            item_id, player_id = self._parse_command_with_target(parts)
+
+            if not item_id:
+                print_error("Specify an item to use.")
+                return
+
+            # Get current combatant
+            if not self.game_state.in_combat or not self.game_state.initiative_tracker:
+                print_error("Not in combat!")
+                return
+
+            current = self.game_state.initiative_tracker.get_current_combatant()
+            if not current:
+                print_error("No current combatant!")
+                return
+
+            # Check if current combatant is a party member
+            if current.creature not in self.game_state.party.characters:
+                print_error("It's not a party member's turn!")
+                return
+
+            character = current.creature
+            items_data = self.game_state.data_loader.load_items()
+
+            # Search for the item in the character's inventory
+            consumables = character.inventory.get_items_by_category("consumables")
+            found_item = None
+            found_item_data = None
+
+            for inv_item in consumables:
+                item_data = items_data["consumables"].get(inv_item.item_id, {})
+                if inv_item.item_id == item_id or item_data.get("name", "").lower() == item_id.lower():
+                    found_item = inv_item.item_id
+                    found_item_data = item_data
+                    break
+
+            if not found_item or not found_item_data:
+                print_error(f"{character.name} doesn't have a consumable '{item_id}' in inventory.")
+                return
+
+            # Determine target based on item type and player specification
+            target_type = found_item_data.get("target_type", "self")
+
+            if player_id:
+                # Player specified a target - validate it
+                if target_type == "enemy":
+                    print_error(f"{found_item_data.get('name', found_item)} must target an enemy. Use the enemy name or number.")
+                    return
+
+                # Parse the target (allow unconscious for healing items)
+                target = self._get_target_player(player_id, allow_unconscious=True)
+                if not target:
+                    return
+
+                # Use item on specified target
+                self.handle_use_item_combat_with_target(found_item, found_item_data, character, target)
+            elif target_type == "enemy":
+                # Item requires enemy target but none specified
+                print_error(f"{found_item_data.get('name', found_item)} requires an enemy target. Specify the target (e.g., 'use {item_id} skeleton 1')")
+                return
+            elif target_type == "any":
+                # Item can target anyone but no target specified - default to self
+                self.handle_use_item_combat_with_target(found_item, found_item_data, character, character)
+            else:
+                # Self-target only
+                self.handle_use_item_combat_with_target(found_item, found_item_data, character, character)
             return
 
         if command in ["end turn", "end", "done", "pass", "skip"]:
