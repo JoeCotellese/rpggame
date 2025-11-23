@@ -6,7 +6,7 @@ from unittest.mock import Mock, MagicMock, patch
 from dnd_engine.ui.cli import CLI
 from dnd_engine.core.game_state import GameState
 from dnd_engine.core.character import Character
-from dnd_engine.systems.initiative import InitiativeTracker, Combatant
+from dnd_engine.systems.initiative import InitiativeTracker, InitiativeEntry
 from dnd_engine.core.creature import Creature, Abilities
 
 
@@ -44,7 +44,7 @@ class TestEndTurnCommand:
     def test_end_turn_command_variants(self, cli, mock_game_state, mock_character):
         """Test that all end turn command variants work"""
         # Setup: create a combatant for the current turn
-        combatant = Mock(spec=Combatant)
+        combatant = Mock(spec=InitiativeEntry)
         combatant.creature = mock_character
         mock_game_state.initiative_tracker.get_current_combatant.return_value = combatant
         mock_game_state.party.characters = [mock_character]
@@ -69,7 +69,7 @@ class TestEndTurnCommand:
     def test_end_turn_advances_to_enemy_turns(self, cli, mock_game_state, mock_character):
         """Test that ending turn processes enemy turns"""
         # Setup
-        combatant = Mock(spec=Combatant)
+        combatant = Mock(spec=InitiativeEntry)
         combatant.creature = mock_character
         mock_game_state.initiative_tracker.get_current_combatant.return_value = combatant
         mock_game_state.party.characters = [mock_character]
@@ -113,7 +113,7 @@ class TestEndTurnCommand:
         # Setup: enemy turn
         enemy = Mock(spec=Creature)
         enemy.name = "Goblin"
-        combatant = Mock(spec=Combatant)
+        combatant = Mock(spec=InitiativeEntry)
         combatant.creature = enemy
         mock_game_state.initiative_tracker.get_current_combatant.return_value = combatant
         mock_game_state.party.characters = [mock_character]  # Enemy not in party
@@ -127,7 +127,7 @@ class TestEndTurnCommand:
 
     def test_end_turn_shows_message(self, cli, mock_game_state, mock_character):
         """Test that ending turn shows appropriate message"""
-        combatant = Mock(spec=Combatant)
+        combatant = Mock(spec=InitiativeEntry)
         combatant.creature = mock_character
         mock_game_state.initiative_tracker.get_current_combatant.return_value = combatant
         mock_game_state.party.characters = [mock_character]
@@ -139,7 +139,7 @@ class TestEndTurnCommand:
 
     def test_end_turn_stops_if_combat_ends(self, cli, mock_game_state, mock_character):
         """Test that enemy turns are not processed if combat ends"""
-        combatant = Mock(spec=Combatant)
+        combatant = Mock(spec=InitiativeEntry)
         combatant.creature = mock_character
         mock_game_state.initiative_tracker.get_current_combatant.return_value = combatant
         mock_game_state.party.characters = [mock_character]
