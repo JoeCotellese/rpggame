@@ -1880,15 +1880,60 @@ class CLI:
                 details=f"spell={spell_data.get('name')}, target={target.name}"
             )
 
-        # Perform spell attack
-        result = self.game_state.combat_engine.resolve_spell_attack(
-            caster=caster,
-            target=target,
-            spell=spell_data,
-            spellcasting_ability=spellcasting_ability,
-            apply_damage=True,
-            event_bus=self.game_state.event_bus
-        )
+        # Route spell based on type: attack, save, or buff/utility
+        has_attack = spell_data.get("attack_type") is not None
+        has_save = spell_data.get("saving_throw") is not None
+        save_result = None  # Track save result for display
+
+        if has_attack:
+            # Attack spells (Fire Bolt, Scorching Ray, etc.)
+            result = self.game_state.combat_engine.resolve_spell_attack(
+                caster=caster,
+                target=target,
+                spell=spell_data,
+                spellcasting_ability=spellcasting_ability,
+                apply_damage=True,
+                event_bus=self.game_state.event_bus
+            )
+        elif has_save:
+            # Saving throw spells (Fireball, Hold Person, etc.)
+            save_result = self.game_state.combat_engine.resolve_spell_save(
+                caster=caster,
+                targets=[target],
+                spell=spell_data,
+                apply_damage=True,
+                event_bus=self.game_state.event_bus
+            )
+            # Convert save result to AttackResult-like structure for compatibility
+            from dnd_engine.core.combat import AttackResult
+            target_result = save_result["targets"][0] if save_result["targets"] else {}
+            result = AttackResult(
+                attacker_name=caster.name,
+                defender_name=target.name,
+                attack_roll=0,
+                attack_bonus=0,
+                attack_total=0,
+                target_ac=target.ac,
+                hit=not target_result.get("success", True),  # Failed save = hit
+                damage=target_result.get("damage", 0),
+                damage_type=spell_data.get("damage", {}).get("damage_type", ""),
+                critical_hit=False
+            )
+        else:
+            # Buff/utility spells (Shield, Mage Armor, etc.) - no attack or save
+            from dnd_engine.core.combat import AttackResult
+            result = AttackResult(
+                attacker_name=caster.name,
+                defender_name=target.name,
+                attack_roll=0,
+                attack_bonus=0,
+                attack_total=0,
+                target_ac=target.ac,
+                hit=True,  # Buff spells always "succeed"
+                damage=0,
+                damage_type="",
+                critical_hit=False
+            )
 
         # Check concentration if target was hit and took damage
         if result.hit and result.damage > 0 and isinstance(target, Character):
@@ -1964,7 +2009,17 @@ class CLI:
         # Display mechanics
         spell_display_name = spell_data.get("name", spell_id)
         console.print(f"[magenta]✨ {caster.name} casts {spell_display_name}![/magenta]")
-        console.print(f"[cyan]⚔️  {str(result)}[/cyan]")
+
+        # Only show attack/save mechanics for spells that have them
+        if has_attack or (has_save and result.damage > 0):
+            console.print(f"[cyan]⚔️  {str(result)}[/cyan]")
+        elif has_save:
+            # For save spells with no damage, show save result
+            target_result = save_result["targets"][0] if save_result["targets"] else {}
+            save_text = "SUCCESS" if target_result.get("success") else "FAILURE"
+            save_ability = spell_data.get("saving_throw", {}).get("ability", "").upper()
+            console.print(f"[cyan]🎲 {target.name} {save_ability} save: {save_text}[/cyan]")
+        # For buff spells, no mechanics display needed - just the cast message
 
         # If target died, show death narrative
         if not target.is_alive:
