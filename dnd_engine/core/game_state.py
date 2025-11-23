@@ -1647,51 +1647,65 @@ class GameState:
             if not enemy.is_alive and self.initiative_tracker:
                 self.initiative_tracker.remove_combatant(enemy)
 
-        # Check if combat is over (all enemies dead OR party wiped)
+        # Check if combat is over
         if self.initiative_tracker:
             all_enemies_dead = all(not enemy.is_alive for enemy in self.active_enemies)
             party_wiped = self.party.is_wiped()
 
-            if all_enemies_dead or party_wiped:
+            # Check if all party members are unconscious (unable to act)
+            all_party_unconscious = all(
+                char.is_unconscious or char.is_dead
+                for char in self.party.characters
+            )
+
+            if all_enemies_dead or party_wiped or all_party_unconscious:
                 self._end_combat()
 
     def _end_combat(self) -> None:
         """End combat and perform cleanup."""
-        # Calculate XP from defeated enemies
+        # Determine if party won or lost
+        all_enemies_dead = all(not enemy.is_alive for enemy in self.active_enemies)
+        victory = all_enemies_dead
+
         total_xp = 0
-        monsters = self.data_loader.load_monsters()
 
-        for enemy in self.active_enemies:
-            if not enemy.is_alive:
-                # Find enemy XP value
-                for monster_id, monster_data in monsters.items():
-                    if monster_data["name"] == enemy.name:
-                        total_xp += monster_data.get("xp", 0)
-                        break
+        # Only award XP on victory
+        if victory:
+            # Calculate XP from defeated enemies
+            monsters = self.data_loader.load_monsters()
 
-        # Award XP to all party members (split evenly)
-        if total_xp > 0 and len(self.party.characters) > 0:
-            xp_per_character = total_xp // len(self.party.characters)
-            for character in self.party.characters:
-                character.gain_xp(xp_per_character)
+            for enemy in self.active_enemies:
+                if not enemy.is_alive:
+                    # Find enemy XP value
+                    for monster_id, monster_data in monsters.items():
+                        if monster_data["name"] == enemy.name:
+                            total_xp += monster_data.get("xp", 0)
+                            break
 
-                # Check for level-up (can level up multiple times if enough XP)
-                while character.check_for_level_up(self.data_loader, self.event_bus):
-                    pass  # Level-up event already emitted by check_for_level_up
+            # Award XP to all party members (split evenly)
+            if total_xp > 0 and len(self.party.characters) > 0:
+                xp_per_character = total_xp // len(self.party.characters)
+                for character in self.party.characters:
+                    character.gain_xp(xp_per_character)
+
+                    # Check for level-up (can level up multiple times if enough XP)
+                    while character.check_for_level_up(self.data_loader, self.event_bus):
+                        pass  # Level-up event already emitted by check_for_level_up
 
         # Clear combat state
         self.in_combat = False
         self.initiative_tracker = None
 
-        # Remove defeated enemies from room
+        # Remove defeated enemies from room only on victory
         room = self.get_current_room()
-        room["enemies"] = []
+        if victory:
+            room["enemies"] = []
 
         # Emit combat end event
         self.event_bus.emit(Event(
             type=EventType.COMBAT_END,
             data={
-                "victory": True,
+                "victory": victory,
                 "xp_gained": total_xp,
                 "xp_per_character": total_xp // len(self.party.characters) if len(self.party.characters) > 0 else 0
             }

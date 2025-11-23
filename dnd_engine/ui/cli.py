@@ -4505,8 +4505,16 @@ class CLI:
                 if is_party_turn:
                     # Check if character is unconscious and needs death save
                     if party_character.is_unconscious:
-                        self.process_death_save_turn(party_character)
-                        # Advance turn after death save
+                        # Stabilized characters skip their turn (no death saves needed)
+                        if party_character.stabilized:
+                            print_status_message(
+                                f"{party_character.name} is unconscious but stabilized (no action needed).",
+                                "info"
+                            )
+                        else:
+                            # Unstabilized unconscious character makes death save
+                            self.process_death_save_turn(party_character)
+                        # Advance turn after death save or stabilized skip
                         self.game_state.initiative_tracker.next_turn()
                         # Check if combat is over
                         self.game_state._check_combat_end()
@@ -4625,19 +4633,29 @@ class CLI:
         # Clear enemy numbers when combat ends
         self.enemy_numbers.clear()
 
+        victory = event.data.get("victory", True)
         total_xp = event.data.get("xp_gained", 0)
         xp_per_char = event.data.get("xp_per_character", 0)
-        print_status_message(
-            f"Victory! Party gained {total_xp} XP ({xp_per_char} XP per character)",
-            "success"
-        )
+
+        if victory:
+            print_status_message(
+                f"Victory! Party gained {total_xp} XP ({xp_per_char} XP per character)",
+                "success"
+            )
+        else:
+            print_error("Defeat! All party members have fallen unconscious.")
+            print_status_message(
+                "The enemies remain in the room. Consider healing and regrouping before attempting combat again.",
+                "warning"
+            )
 
         # Log combat end
         from dnd_engine.utils.logging_config import get_logging_config
         logging_config = get_logging_config()
         if logging_config:
+            result = "Victory" if victory else "Defeat"
             logging_config.log_combat_event(
-                f"Combat ended - Total XP: {total_xp}, XP per character: {xp_per_char}"
+                f"Combat ended - {result} - Total XP: {total_xp}, XP per character: {xp_per_char}"
             )
 
         # Reset combat status flag
