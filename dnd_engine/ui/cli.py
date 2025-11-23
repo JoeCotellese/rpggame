@@ -1783,14 +1783,14 @@ class CLI:
                 # Scale cantrip damage for display
                 if spell_level == 0:
                     damage_dice = caster.scale_cantrip_damage(damage_dice)
-                    slot_info = "[green](cantrip)[/green]"
+                    slot_info = "(cantrip)"
                 else:
                     available_slots = caster.get_available_spell_slots(spell_level)
                     ordinal = caster._level_to_ordinal(spell_level)
                     if available_slots > 0:
-                        slot_info = f"[green]({ordinal}, {available_slots} slots)[/green]"
+                        slot_info = f"({ordinal}, {available_slots} slots)"
                     else:
-                        slot_info = f"[red]({ordinal}, no slots)[/red]"
+                        slot_info = f"({ordinal}, no slots)"
 
                 spell_choices.append(f"{spell_display_name} - {damage_dice} {damage_type} {slot_info}")
 
