@@ -438,3 +438,110 @@ class TestLongRest:
         assert character_for_long_rest.current_hp == 20
         assert character_for_long_rest.resource_pools["spell_slots"].current == 3
         assert result["hp_recovered"] == 10
+
+
+class TestUnconsciousCharacterRest:
+    """Test rest behavior for unconscious (0 HP) characters"""
+
+    @pytest.fixture
+    def unconscious_character(self):
+        """Create an unconscious character at 0 HP"""
+        abilities = Abilities(
+            strength=10,
+            dexterity=14,
+            constitution=12,
+            intelligence=14,
+            wisdom=10,
+            charisma=10
+        )
+        character = Character(
+            name="Unconscious Wizard",
+            character_class=CharacterClass.WIZARD,
+            level=1,
+            abilities=abilities,
+            max_hp=8,
+            ac=12,
+            current_hp=0  # Unconscious
+        )
+
+        # Add a short rest resource
+        arcane_recovery = ResourcePool(
+            name="arcane_recovery",
+            current=0,
+            maximum=1,
+            recovery_type="short_rest"
+        )
+        character.add_resource_pool(arcane_recovery)
+
+        return character
+
+    def test_short_rest_with_unconscious_character_reports_zero_hp(self, unconscious_character):
+        """Test that short rest correctly reports unconscious character at 0 HP"""
+        result = unconscious_character.take_short_rest()
+
+        # Character should still be at 0 HP (short rest doesn't heal HP in MVP)
+        assert unconscious_character.current_hp == 0
+        assert result["hp_recovered"] == 0
+        assert result["character"] == "Unconscious Wizard"
+        assert result["rest_type"] == "short"
+
+    def test_short_rest_unconscious_character_recovers_resources(self, unconscious_character):
+        """Test that unconscious character still recovers resources on short rest"""
+        result = unconscious_character.take_short_rest()
+
+        # Resources should still be recovered even at 0 HP
+        assert "arcane_recovery" in result["resources_recovered"]
+        assert unconscious_character.resource_pools["arcane_recovery"].current == 1
+
+    def test_long_rest_heals_unconscious_character(self, unconscious_character):
+        """Test that long rest heals unconscious character to full HP"""
+        result = unconscious_character.take_long_rest()
+
+        # Long rest should restore all HP
+        assert unconscious_character.current_hp == 8
+        assert unconscious_character.current_hp == unconscious_character.max_hp
+        assert result["hp_recovered"] == 8
+        assert result["character"] == "Unconscious Wizard"
+
+    def test_character_at_zero_hp_is_distinguishable_from_full_hp(self):
+        """Test that we can distinguish between 0 HP and full HP characters"""
+        abilities = Abilities(
+            strength=10,
+            dexterity=14,
+            constitution=12,
+            intelligence=14,
+            wisdom=10,
+            charisma=10
+        )
+
+        # Character at 0 HP
+        unconscious = Character(
+            name="Unconscious",
+            character_class=CharacterClass.WIZARD,
+            level=1,
+            abilities=abilities,
+            max_hp=8,
+            ac=12,
+            current_hp=0
+        )
+
+        # Character at full HP
+        healthy = Character(
+            name="Healthy",
+            character_class=CharacterClass.WIZARD,
+            level=1,
+            abilities=abilities,
+            max_hp=8,
+            ac=12,
+            current_hp=8
+        )
+
+        # Test short rest results
+        unconscious_result = unconscious.take_short_rest()
+        healthy_result = healthy.take_short_rest()
+
+        # Both should report 0 hp_recovered, but we should be able to check current_hp
+        assert unconscious_result["hp_recovered"] == 0
+        assert healthy_result["hp_recovered"] == 0
+        assert unconscious.current_hp == 0  # Still unconscious
+        assert healthy.current_hp == 8  # Still healthy
