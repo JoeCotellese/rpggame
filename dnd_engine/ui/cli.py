@@ -990,10 +990,10 @@ class CLI:
                 hidden_items = result.get("hidden_items", [])
                 if hidden_items:
                     print_status_message("\nYou discover hidden items:", "success")
-                    self._display_items_list(hidden_items)
+                    self._prompt_and_take_items()
                 elif result["items"]:
                     print_status_message("\nItems available:", "success")
-                    self._display_items_list(result["items"])
+                    self._prompt_and_take_items()
                 else:
                     print_status_message("The search was successful but nothing new was found.", "info")
             else:
@@ -1016,17 +1016,22 @@ class CLI:
             if result["success"]:
                 if hidden_items:
                     print_status_message("You search the room and discover hidden items:", "success")
-                    self._display_items_list(hidden_items)
+                    self._prompt_and_take_items()
                 elif result["items"]:
                     print_status_message("You search the room. Items available:", "success")
-                    self._display_items_list(result["items"])
+                    self._prompt_and_take_items()
                 else:
                     print_status_message("You find nothing of interest.", "info")
             else:
                 print_status_message("You find nothing of interest.", "info")
 
-    def _display_items_list(self, items: list) -> None:
-        """Helper to display a list of items."""
+    def _display_items_list(self, items: list, show_take_hint: bool = True) -> None:
+        """Helper to display a list of items.
+
+        Args:
+            items: List of items to display
+            show_take_hint: Whether to show the "Use 'take <item>'" hint
+        """
         for item in items:
             if item["type"] == "gold":
                 print_status_message(f"  • {item['amount']} gold pieces", "info")
@@ -1041,7 +1046,28 @@ class CLI:
                 print_status_message(f"  • {', '.join(currency_parts)}", "info")
             else:
                 print_status_message(f"  • {item.get('id', 'an item')}", "info")
-        print_status_message("\nUse 'take <item>' to pick up items", "info")
+        if show_take_hint:
+            print_status_message("\nUse 'take <item>' to pick up items", "info")
+
+    def _prompt_and_take_items(self) -> None:
+        """Prompt user to select items to take using multi-select interface."""
+        try:
+            # Show multi-select menu directly
+            items_to_take = self._prompt_multi_items_to_take()
+            if not items_to_take:
+                return  # User cancelled or no items selected
+
+            # Take each selected item
+            for item_to_take in items_to_take:
+                # Determine item name based on type
+                if item_to_take["type"] in ["gold", "currency"]:
+                    item_name = "currency"
+                else:
+                    item_name = item_to_take.get("id", "")
+                self.handle_take(item_name)
+
+        except (EOFError, KeyboardInterrupt):
+            print_status_message("\nCancelled.", "warning")
 
     def handle_examine_menu(self) -> None:
         """Show what can be examined in the current room."""
@@ -2827,11 +2853,13 @@ class CLI:
                 choices.append(questionary.Choice(title=display_name, value=item))
 
         # Get user selection with arrow keys and space to select
+        # Note: Use Ctrl+C to cancel without taking items
         try:
             results = questionary.checkbox(
-                "Select items to take (space to select, enter to confirm):",
+                "Select items to take:",
                 choices=choices,
-                use_arrow_keys=True
+                use_arrow_keys=True,
+                instruction="(space=select, enter=confirm, ctrl+c=cancel)"
             ).ask()
 
             return results if results else []
