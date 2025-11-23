@@ -1916,27 +1916,46 @@ class CLI:
                 defender_name=target.name,
                 attack_roll=0,
                 attack_bonus=0,
-                attack_total=0,
                 target_ac=target.ac,
                 hit=not target_result.get("success", True),  # Failed save = hit
                 damage=target_result.get("damage", 0),
-                damage_type=spell_data.get("damage", {}).get("damage_type", ""),
-                critical_hit=False
+                critical_hit=False,
+                advantage=False,
+                disadvantage=False
             )
         else:
-            # Buff/utility spells (Shield, Mage Armor, etc.) - no attack or save
+            # Auto-hit spells (Magic Missile) or buff/utility spells (Shield, Mage Armor, etc.)
             from dnd_engine.core.combat import AttackResult
+
+            # Check if spell has damage (auto-hit damage spell like Magic Missile)
+            damage = 0
+            damage_data = spell_data.get("damage", {})
+            if damage_data and "dice" in damage_data:
+                # Auto-hit spell with damage - roll and apply damage
+                damage_dice = damage_data.get("dice", "1d6")
+                damage_roll = self.game_state.dice_roller.roll(damage_dice)
+                damage = damage_roll.total
+
+                # Apply damage to target
+                if hasattr(target, 'take_damage'):
+                    import inspect
+                    sig = inspect.signature(target.take_damage)
+                    if 'event_bus' in sig.parameters:
+                        target.take_damage(damage, event_bus=self.game_state.event_bus)
+                    else:
+                        target.take_damage(damage)
+
             result = AttackResult(
                 attacker_name=caster.name,
                 defender_name=target.name,
                 attack_roll=0,
                 attack_bonus=0,
-                attack_total=0,
                 target_ac=target.ac,
-                hit=True,  # Buff spells always "succeed"
-                damage=0,
-                damage_type="",
-                critical_hit=False
+                hit=True,  # Auto-hit or buff spells always "succeed"
+                damage=damage,
+                critical_hit=False,
+                advantage=False,
+                disadvantage=False
             )
 
         # Check concentration if target was hit and took damage
