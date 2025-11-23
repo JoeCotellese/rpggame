@@ -441,7 +441,8 @@ class SaveSlotManager:
         for room_id, room_data in dungeon.get("rooms", {}).items():
             room_states[room_id] = {
                 "searched": room_data.get("searched", False),
-                "enemies": room_data.get("enemies", [])
+                "enemies": room_data.get("enemies", []),
+                "items": room_data.get("items", [])
             }
 
         return room_states
@@ -479,6 +480,7 @@ class SaveSlotManager:
             if room_id in game_state.dungeon["rooms"]:
                 game_state.dungeon["rooms"][room_id]["searched"] = room_state.get("searched", False)
                 game_state.dungeon["rooms"][room_id]["enemies"] = room_state.get("enemies", [])
+                game_state.dungeon["rooms"][room_id]["items"] = room_state.get("items", [])
 
         # Restore current position
         game_state.current_room_id = gs_data["current_room_id"]
