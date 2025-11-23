@@ -165,6 +165,7 @@ class TestEndTurnIntegration:
         """Test that end turn command appears in combat help"""
         mock_game_state = Mock(spec=GameState)
         mock_game_state.dice_roller = Mock()
+        mock_game_state.event_bus = Mock()
         mock_campaign_manager = Mock()
         cli = CLI(
             game_state=mock_game_state,
@@ -213,10 +214,11 @@ class TestEndTurnIntegration:
         character.name = "TestCharacter"
         character.inventory = Mock()
 
-        # Create turn state with actions remaining
+        # Create turn state with action available (will be consumed by potion use)
+        # After using the potion, bonus action should still be available
         turn_state = TurnState()
-        turn_state.action_available = False  # Action used
-        turn_state.bonus_action_available = True  # Bonus action still available
+        turn_state.action_available = True  # Action available for potion
+        turn_state.bonus_action_available = True  # Bonus action will remain after potion use
 
         # Setup initiative tracker
         combatant = Mock()
