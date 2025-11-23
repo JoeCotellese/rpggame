@@ -1424,7 +1424,7 @@ class CLI:
             return living_members[0]
 
         # Load items data to get item type
-        from dnd_engine.core.data_loader import DataLoader
+        from dnd_engine.rules.loader import DataLoader
         data_loader = DataLoader()
         items_data = data_loader.load_items()
 
