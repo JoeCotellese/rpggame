@@ -340,4 +340,5 @@ class TestCastSpellExploration:
         assert event.data["caster"] == "Brother Marcus"
         assert event.data["spell"] == "Light"
         assert event.data["spell_level"] == 0
-        assert "target" not in event.data  # Utility spells don't have targets
+        # Utility spells without explicit target default to caster as target
+        assert event.data["target"] == "Brother Marcus"

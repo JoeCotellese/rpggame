@@ -35,11 +35,14 @@ class TestEndTurnCommand:
     @pytest.fixture
     def cli(self, mock_game_state):
         """Create a CLI instance with mocked game state"""
-        with patch('dnd_engine.ui.cli.GameState', return_value=mock_game_state):
-            cli_instance = CLI()
-            cli_instance.game_state = mock_game_state
-            cli_instance.running = True
-            return cli_instance
+        mock_campaign_manager = Mock()
+        cli_instance = CLI(
+            game_state=mock_game_state,
+            campaign_manager=mock_campaign_manager,
+            campaign_name="test_campaign"
+        )
+        cli_instance.running = True
+        return cli_instance
 
     def test_end_turn_command_variants(self, cli, mock_game_state, mock_character):
         """Test that all end turn command variants work"""
@@ -159,23 +162,28 @@ class TestEndTurnIntegration:
 
     def test_end_turn_in_help_text(self):
         """Test that end turn command appears in combat help"""
-        with patch('dnd_engine.ui.cli.GameState'):
-            cli = CLI()
+        mock_game_state = Mock(spec=GameState)
+        mock_campaign_manager = Mock()
+        cli = CLI(
+            game_state=mock_game_state,
+            campaign_manager=mock_campaign_manager,
+            campaign_name="test_campaign"
+        )
 
-            # Capture help output
-            with patch('dnd_engine.ui.cli.print_help_section') as mock_help:
-                cli.display_help_combat()
+        # Capture help output
+        with patch('dnd_engine.ui.cli.print_help_section') as mock_help:
+            cli.display_help_combat()
 
-                # Verify help was called
-                assert mock_help.called
+            # Verify help was called
+            assert mock_help.called
 
-                # Get the commands list that was passed
-                call_args = mock_help.call_args
-                commands = call_args[0][1]  # Second argument is the commands list
+            # Get the commands list that was passed
+            call_args = mock_help.call_args
+            commands = call_args[0][1]  # Second argument is the commands list
 
-                # Verify end turn command is in the list
-                command_texts = [cmd[0] for cmd in commands]
-                assert any("end turn" in cmd or "done" in cmd or "pass" in cmd for cmd in command_texts)
+            # Verify end turn command is in the list
+            command_texts = [cmd[0] for cmd in commands]
+            assert any("end turn" in cmd or "done" in cmd or "pass" in cmd for cmd in command_texts)
 
     def test_hint_shown_after_item_use(self):
         """Test that a helpful hint is shown after using an item with actions remaining"""
@@ -183,61 +191,66 @@ class TestEndTurnIntegration:
         from dnd_engine.systems.action_economy import TurnState
 
         # Create mocks
-        with patch('dnd_engine.ui.cli.GameState'):
-            cli = CLI()
-            cli.game_state = Mock()
-            cli.game_state.in_combat = True
-            cli.game_state.initiative_tracker = Mock()
-            cli.game_state.data_loader = Mock()
-            cli.game_state.dice_roller = Mock()
-            cli.game_state.event_bus = Mock()
-            cli.game_state.party = Mock()
+        mock_game_state = Mock()
+        mock_game_state.in_combat = True
+        mock_game_state.initiative_tracker = Mock()
+        mock_game_state.data_loader = Mock()
+        mock_game_state.dice_roller = Mock()
+        mock_game_state.event_bus = Mock()
+        mock_game_state.party = Mock()
 
-            # Create character with inventory
-            character = Mock()
-            character.name = "TestCharacter"
-            character.inventory = Mock()
+        mock_campaign_manager = Mock()
+        cli = CLI(
+            game_state=mock_game_state,
+            campaign_manager=mock_campaign_manager,
+            campaign_name="test_campaign"
+        )
 
-            # Create turn state with actions remaining
-            turn_state = TurnState()
-            turn_state.action_available = False  # Action used
-            turn_state.bonus_action_available = True  # Bonus action still available
+        # Create character with inventory
+        character = Mock()
+        character.name = "TestCharacter"
+        character.inventory = Mock()
 
-            # Setup initiative tracker
-            combatant = Mock()
-            combatant.creature = character
-            cli.game_state.initiative_tracker.get_current_combatant.return_value = combatant
-            cli.game_state.initiative_tracker.get_current_turn_state.return_value = turn_state
-            cli.game_state.party.characters = [character]
+        # Create turn state with actions remaining
+        turn_state = TurnState()
+        turn_state.action_available = False  # Action used
+        turn_state.bonus_action_available = True  # Bonus action still available
 
-            # Mock inventory and item data
-            item_data = {
-                "name": "Potion of Healing",
-                "action_required": "action",
-                "effect": {"type": "healing", "dice": "2d4+2"}
-            }
-            cli.game_state.data_loader.load_items.return_value = {
-                "consumables": {"potion_of_healing": item_data}
-            }
-            character.inventory.use_item.return_value = (True, item_data)
-            character.inventory.get_items_by_category.return_value = [
-                Mock(item_id="potion_of_healing")
-            ]
+        # Setup initiative tracker
+        combatant = Mock()
+        combatant.creature = character
+        cli.game_state.initiative_tracker.get_current_combatant.return_value = combatant
+        cli.game_state.initiative_tracker.get_current_turn_state.return_value = turn_state
+        cli.game_state.party.characters = [character]
 
-            # Mock apply_item_effect
-            with patch('dnd_engine.ui.cli.apply_item_effect') as mock_apply:
-                mock_result = Mock()
-                mock_result.message = "You heal 6 HP"
-                mock_result.effect_type = "healing"
-                mock_result.success = True
-                mock_apply.return_value = mock_result
+        # Mock inventory and item data
+        item_data = {
+            "name": "Potion of Healing",
+            "action_required": "action",
+            "effect": {"type": "healing", "dice": "2d4+2"}
+        }
+        cli.game_state.data_loader.load_items.return_value = {
+            "consumables": {"potion_of_healing": item_data}
+        }
+        character.inventory.use_item.return_value = (True, item_data)
+        character.inventory.get_items_by_category.return_value = [
+            Mock(item_id="potion_of_healing")
+        ]
 
-                # Track status messages
-                with patch('dnd_engine.ui.cli.print_status_message') as mock_status:
-                    cli.handle_use_item_combat("potion_of_healing")
+        # Mock apply_item_effect
+        with patch('dnd_engine.ui.cli.apply_item_effect') as mock_apply:
+            mock_result = Mock()
+            mock_result.message = "You heal 6 HP"
+            mock_result.effect_type = "healing"
+            mock_result.success = True
+            mock_apply.return_value = mock_result
 
-                    # Verify the hint was shown
-                    calls = [str(call) for call in mock_status.call_args_list]
-                    hint_shown = any("done" in str(call).lower() or "pass" in str(call).lower()
-                                     for call in calls)
-                    assert hint_shown, "Hint about ending turn should be shown after item use with actions remaining"
+            # Track status messages
+            with patch('dnd_engine.ui.cli.print_status_message') as mock_status:
+                cli.handle_use_item_combat("potion_of_healing")
+
+                # Verify the hint was shown
+                calls = [str(call) for call in mock_status.call_args_list]
+                hint_shown = any("done" in str(call).lower() or "pass" in str(call).lower()
+                                 for call in calls)
+                assert hint_shown, "Hint about ending turn should be shown after item use with actions remaining"

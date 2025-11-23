@@ -471,15 +471,19 @@ class TestSavingThrowEffects:
             event_bus=None
         )
 
-        # Should return a result dict
+        # Should return a result dict with save_result and condition_applied
         assert result is not None
-        assert "success" in result
-        assert "ability" in result
-        assert result["ability"] == "con"
-        assert result["dc"] == 10
+        assert "save_result" in result
+        assert "condition_applied" in result
+        assert "success" in result["save_result"]
+        assert "ability" in result["save_result"]
+        assert result["save_result"]["ability"] == "con"
+        assert result["save_result"]["dc"] == 10
 
         # Check if condition was applied based on save result
-        if not result["success"]:
+        if not result["save_result"]["success"]:
             assert self.fighter.has_condition("paralyzed")
+            assert result["condition_applied"] == "paralyzed"
         else:
             assert not self.fighter.has_condition("paralyzed")
+            assert result["condition_applied"] is None
