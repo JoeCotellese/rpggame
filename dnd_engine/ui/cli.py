@@ -8,6 +8,7 @@ from dnd_engine.core.dice import format_dice_with_modifier
 from dnd_engine.utils.events import Event, EventType
 from dnd_engine.systems.inventory import EquipmentSlot
 from dnd_engine.systems.condition_manager import ConditionManager
+from dnd_engine.systems.ai import EnemyAI
 from dnd_engine.ui.debug_console import DebugConsole
 from dnd_engine.ui.rich_ui import (
     console,
@@ -59,6 +60,9 @@ class CLI:
             dice_roller=game_state.dice_roller,
             event_bus=game_state.event_bus
         )
+
+        # Enemy AI for combat decisions
+        self.enemy_ai = EnemyAI()
 
         # Combat display management
         self.combat_status_shown = False
@@ -2401,11 +2405,7 @@ class CLI:
 
     def _should_enemy_attempt_condition_removal(self, enemy) -> bool:
         """
-        Simple AI to determine if an enemy should attempt to remove a condition.
-
-        Logic:
-        - If on fire and current_hp <= 4 (one more 1d4 could kill), attempt to extinguish
-        - Otherwise, attack normally
+        Determine if an enemy should attempt to remove a condition using AI logic.
 
         Args:
             enemy: The enemy creature
@@ -2418,31 +2418,29 @@ class CLI:
             if not self.condition_manager.can_attempt_early_removal(condition_id):
                 continue
 
-            # Simple AI for on_fire: attempt if low HP
-            if condition_id == "on_fire":
-                # If one more 1d4 damage could kill (HP <= 4), try to extinguish
-                if enemy.current_hp <= 4:
-                    print_status_message(
-                        f"🔥 {enemy.name} is on fire with low HP! Attempting to extinguish...",
-                        "info"
-                    )
+            # Use AI system to decide if condition should be removed
+            if condition_id == "on_fire" and self.enemy_ai.should_attempt_condition_removal(enemy):
+                print_status_message(
+                    f"🔥 {enemy.name} is on fire with low HP! Attempting to extinguish...",
+                    "info"
+                )
 
-                    # Attempt removal
-                    result = self.condition_manager.attempt_condition_removal(enemy, condition_id)
+                # Attempt removal
+                result = self.condition_manager.attempt_condition_removal(enemy, condition_id)
 
-                    if result:
-                        if result.success:
-                            print_status_message(result.message, "success")
-                        else:
-                            print_status_message(result.message, "warning")
+                if result:
+                    if result.success:
+                        print_status_message(result.message, "success")
+                    else:
+                        print_status_message(result.message, "warning")
 
-                    return True  # Turn was used
-                else:
-                    # Enemy chooses to ignore the flames and attack instead
-                    print_status_message(
-                        f"🔥 {enemy.name} is on fire ({enemy.current_hp}/{enemy.max_hp} HP) but chooses to press the attack rather than extinguish the flames!",
-                        "info"
-                    )
+                return True  # Turn was used
+            elif condition_id == "on_fire":
+                # Enemy chooses to ignore the flames and attack instead
+                print_status_message(
+                    f"🔥 {enemy.name} is on fire ({enemy.current_hp}/{enemy.max_hp} HP) but chooses to press the attack rather than extinguish the flames!",
+                    "info"
+                )
 
         return False  # No condition removal attempted
 
@@ -2493,7 +2491,7 @@ class CLI:
                 self.game_state.initiative_tracker.next_turn()
                 continue
 
-            # Choose target from living party members (lowest HP)
+            # Choose target from living party members using AI
             living_party = self.game_state.party.get_living_members()
             if not living_party:
                 # No conscious targets - check if combat should end (party defeated)
@@ -2504,7 +2502,7 @@ class CLI:
                 self.game_state.initiative_tracker.next_turn()
                 break
 
-            target = min(living_party, key=lambda c: c.current_hp)
+            target = self.enemy_ai.select_target(living_party)
 
             # Get monster data for attack
             monsters = self.game_state.data_loader.load_monsters()
