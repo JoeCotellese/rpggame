@@ -6,6 +6,7 @@ from dnd_engine.llm.prompts import (
     build_room_description_prompt,
     build_victory_prompt,
 )
+from dnd_engine.core.game_state import BattlefieldState, CombatantStatus
 
 
 class TestRoomDescriptionPrompt:
@@ -329,6 +330,84 @@ class TestCombatActionPrompt:
         assert "round 3" in prompt.lower()
         assert "ongoing battle" in prompt.lower()
         assert "Gimli" in prompt
+
+    def test_build_combat_action_with_battlefield_state(self) -> None:
+        """Test combat action prompt with BattlefieldState dataclass."""
+        # Create a BattlefieldState with party and enemy combatants
+        party_combatants = [
+            CombatantStatus(
+                name="Thorin",
+                display_name="Thorin",
+                current_hp=25,
+                max_hp=30,
+                is_alive=True,
+                conditions=[],
+                is_player=True,
+                ac=16
+            ),
+            CombatantStatus(
+                name="Bjorn",
+                display_name="Bjorn",
+                current_hp=15,
+                max_hp=28,
+                is_alive=True,
+                conditions=[],
+                is_player=True,
+                ac=14
+            )
+        ]
+
+        enemy_combatants = [
+            CombatantStatus(
+                name="Skeleton",
+                display_name="Skeleton 1",
+                current_hp=10,
+                max_hp=13,
+                is_alive=True,
+                conditions=[],
+                is_player=False,
+                ac=13
+            ),
+            CombatantStatus(
+                name="Skeleton",
+                display_name="Skeleton 2",
+                current_hp=8,
+                max_hp=13,
+                is_alive=True,
+                conditions=[],
+                is_player=False,
+                ac=13
+            )
+        ]
+
+        battlefield_state = BattlefieldState(
+            party_combatants=party_combatants,
+            enemy_combatants=enemy_combatants,
+            round_number=2,
+            current_turn="Thorin",
+            in_combat=True
+        )
+
+        action_data = {
+            "attacker": "Thorin",
+            "defender": "Skeleton 1",
+            "weapon": "battleaxe",
+            "damage": 7,
+            "hit": True,
+            "battlefield_state": battlefield_state
+        }
+
+        # This should not raise an AttributeError
+        prompt = build_combat_action_prompt(action_data)
+
+        # Verify the prompt was built successfully
+        assert "Thorin" in prompt
+        assert "Skeleton 1" in prompt or "Skeleton" in prompt
+        assert prompt is not None
+        assert len(prompt) > 0
+
+        # Verify battlefield context is included
+        assert "Battlefield:" in prompt or "25/30" in prompt or "10/13" in prompt
 
 
 class TestDeathPrompt:

@@ -245,12 +245,19 @@ def build_combat_action_prompt(action_data: dict[str, Any]) -> str:
     # Build battlefield state context
     battlefield_context = ""
     if battlefield_state:
-        party_hp = battlefield_state.get("party_hp", [])
-        enemy_hp = battlefield_state.get("enemy_hp", [])
+        # BattlefieldState is a dataclass, not a dict - access attributes directly
+        party_combatants = getattr(battlefield_state, "party_combatants", [])
+        enemy_combatants = getattr(battlefield_state, "enemy_combatants", [])
 
-        if party_hp or enemy_hp:
-            party_status = ", ".join([f"{name} {hp}/{max_hp}" for name, hp, max_hp in party_hp])
-            enemy_status = ", ".join([f"{name} {hp}/{max_hp}" for name, hp, max_hp in enemy_hp])
+        if party_combatants or enemy_combatants:
+            party_status = ", ".join([
+                f"{c.display_name} {c.current_hp}/{c.max_hp}"
+                for c in party_combatants if c.is_alive
+            ])
+            enemy_status = ", ".join([
+                f"{c.display_name} {c.current_hp}/{c.max_hp}"
+                for c in enemy_combatants if c.is_alive
+            ])
             battlefield_context = (
                 f"Battlefield: Party [{party_status}] | Enemies [{enemy_status}]\n\n"
             )
