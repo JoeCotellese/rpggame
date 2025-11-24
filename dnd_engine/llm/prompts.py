@@ -47,6 +47,7 @@ def build_room_description_prompt(
         else:
             # Group by type for readability
             from collections import Counter
+
             monster_counts = Counter(monsters)
             monster_parts = []
             for monster, count in monster_counts.items():
@@ -72,12 +73,14 @@ def build_room_description_prompt(
                 creature_type = m.get("type", "creature")
                 size = m.get("size", "medium")
                 alignment = m.get("alignment", "neutral")
-                creature_types.append({
-                    "name": monster_name,
-                    "type": creature_type,
-                    "size": size,
-                    "alignment": alignment,
-                })
+                creature_types.append(
+                    {
+                        "name": monster_name,
+                        "type": creature_type,
+                        "size": size,
+                        "alignment": alignment,
+                    }
+                )
 
         # Build behavior guidance based on creature types
         if creature_types:
@@ -89,27 +92,25 @@ def build_room_description_prompt(
                     seen_types.add(ctype)
                     if "undead" in ctype.lower():
                         type_examples.append(
-                            f"- Undead: mechanical precision, relentless advance, emotionless determination"
+                            "- Undead: mechanical precision, relentless advance, emotionless determination"
                         )
                     elif "beast" in ctype.lower():
                         type_examples.append(
-                            f"- Beasts: snarling, prowling, feral aggression, instinctive pack behavior"
+                            "- Beasts: snarling, prowling, feral aggression, instinctive pack behavior"
                         )
                     elif "humanoid" in ctype.lower():
                         type_examples.append(
-                            f"- Humanoids: tactical positioning, drawing weapons, battle cries, coordinated movements"
+                            "- Humanoids: tactical positioning, drawing weapons, battle cries, coordinated movements"
                         )
 
             if type_examples:
-                creature_behavior_guide = (
-                    f"\n\nCreature behavior guide:\n" + "\n".join(type_examples)
+                creature_behavior_guide = "\n\nCreature behavior guide:\n" + "\n".join(
+                    type_examples
                 )
 
     # Build instruction based on whether combat is starting
     if combat_starting and monster_context:
-        party_context = (
-            f"Party size: {party_size} adventurer{'s' if party_size != 1 else ''}\n"
-        )
+        party_context = f"Party size: {party_size} adventurer{'s' if party_size != 1 else ''}\n"
         instruction = f"""Add vivid sensory details (sights, sounds, smells) in 2-3 sentences. Make it immersive but concise.
 
 IMPORTANT: This is the moment combat begins. Naturally transition from describing the room into the combat initiation - describe how the enemies react to the party's presence using behavior appropriate to their nature. Show their threatening stance or aggressive movement toward the party, and the immediate tension as battle is about to erupt. Make it feel like a seamless escalation from scene-setting to action. Do NOT use phrases like "combat begins" - show it through the enemies' actions and the rising tension.
@@ -132,14 +133,14 @@ IMPORTANT: This is the moment combat begins. Naturally transition from describin
 
         for char_lighting in party_lighting:
             if char_lighting["lighting"] == "bright":
-                can_see_bright.append(char_lighting['character'])
+                can_see_bright.append(char_lighting["character"])
             elif char_lighting["lighting"] == "dim":
                 if char_lighting["has_darkvision"]:
-                    can_see_dim.append(char_lighting['character'])
+                    can_see_dim.append(char_lighting["character"])
                 else:
-                    cannot_see.append(char_lighting['character'])
+                    cannot_see.append(char_lighting["character"])
             else:  # dark
-                cannot_see.append(char_lighting['character'])
+                cannot_see.append(char_lighting["character"])
 
         # Build natural language lighting description
         if light_casters:
@@ -149,7 +150,9 @@ IMPORTANT: This is the moment combat begins. Naturally transition from describin
             elif len(light_casters) == 2:
                 light_source = f"{light_casters[0]} and {light_casters[1]}'s Light spells"
             else:
-                light_source = f"{', '.join(light_casters[:-1])}, and {light_casters[-1]}'s Light spells"
+                light_source = (
+                    f"{', '.join(light_casters[:-1])}, and {light_casters[-1]}'s Light spells"
+                )
 
             if cannot_see:
                 lighting_context = f"\n\nLighting: The room is pitch black, but {light_source} illuminates the area for the party. Describe the magical light cutting through the darkness."
@@ -157,16 +160,16 @@ IMPORTANT: This is the moment combat begins. Naturally transition from describin
                 lighting_context = f"\n\nLighting: {light_source} pierces the darkness, revealing the chamber in bright magical light."
         elif can_see_bright:
             # Can see bright but no Light spell tracked - generic
-            lighting_context = f"\n\nLighting: Magical light illuminates the darkness."
+            lighting_context = "\n\nLighting: Magical light illuminates the darkness."
         elif can_see_dim and not cannot_see:
             # Everyone has darkvision
-            lighting_context = f"\n\nLighting: The room is pitch black, but the party sees through the darkness with darkvision - limited grayscale vision. Describe muted colors and shadows."
+            lighting_context = "\n\nLighting: The room is pitch black, but the party sees through the darkness with darkvision - limited grayscale vision. Describe muted colors and shadows."
         elif can_see_dim and cannot_see:
             # Mixed darkvision
             lighting_context = f"\n\nLighting: The room is pitch black. {', '.join(can_see_dim)} see through the darkness with darkvision, but {', '.join(cannot_see)} are blind. Emphasize the contrast."
         else:
             # Nobody can see
-            lighting_context = f"\n\nLighting: The room is pitch black. The party cannot see anything - describe only non-visual sensory details (sounds, smells, textures, echoes, temperature). Emphasize the oppressive darkness and disorientation."
+            lighting_context = "\n\nLighting: The room is pitch black. The party cannot see anything - describe only non-visual sensory details (sounds, smells, textures, echoes, temperature). Emphasize the oppressive darkness and disorientation."
 
     elif base_lighting == "dim":
         lighting_context = "\n\nLighting: The room is dimly lit with shadows and limited visibility. Describe how shapes are unclear, colors are muted, and details are hard to make out. Create an atmosphere of uncertainty and gloom."
@@ -250,14 +253,20 @@ def build_combat_action_prompt(action_data: dict[str, Any]) -> str:
         enemy_combatants = getattr(battlefield_state, "enemy_combatants", [])
 
         if party_combatants or enemy_combatants:
-            party_status = ", ".join([
-                f"{c.display_name} {c.current_hp}/{c.max_hp}"
-                for c in party_combatants if c.is_alive
-            ])
-            enemy_status = ", ".join([
-                f"{c.display_name} {c.current_hp}/{c.max_hp}"
-                for c in enemy_combatants if c.is_alive
-            ])
+            party_status = ", ".join(
+                [
+                    f"{c.display_name} {c.current_hp}/{c.max_hp}"
+                    for c in party_combatants
+                    if c.is_alive
+                ]
+            )
+            enemy_status = ", ".join(
+                [
+                    f"{c.display_name} {c.current_hp}/{c.max_hp}"
+                    for c in enemy_combatants
+                    if c.is_alive
+                ]
+            )
             battlefield_context = (
                 f"Battlefield: Party [{party_status}] | Enemies [{enemy_status}]\n\n"
             )
@@ -283,7 +292,7 @@ def build_combat_action_prompt(action_data: dict[str, Any]) -> str:
 Current Action: {attacker_desc} attacks {defender_desc} with a {weapon_desc}
 for {damage} damage.
 
-Describe the hit in 1-2 dramatic sentences. Focus on rich detail but maintain
+Describe the hit in a single dramatic sentence. Focus on rich detail but maintain
 brevity so the player isn't bogged down reading. Consider the battlefield state
 and recent action flow. Focus on the impact and visual details."""
     else:
@@ -292,7 +301,7 @@ and recent action flow. Focus on the impact and visual details."""
 {location_context}{round_context}{battlefield_context}{history_context}Current 
 Action: {attacker_desc} attacks {defender_desc} with a {weapon_desc} but misses.
 
-Describe the miss in 1-2 sentences. Focus on rich detail but maintain
+Describe the miss in a single sentence. Focus on rich detail but maintain
 brevity so the player isn't bogged down reading.
 Consider the battlefield state and recent action flow. Make it cinematic."""
 
