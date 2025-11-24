@@ -10,6 +10,8 @@ from dnd_engine.systems.inventory import EquipmentSlot
 from dnd_engine.systems.condition_manager import ConditionManager
 from dnd_engine.systems.ai import EnemyAI
 from dnd_engine.systems.combat_context import CombatContextBuilder
+from dnd_engine.systems.combat_middleware import CombatActionExecutor, ActionResult
+from dnd_engine.systems.action_economy import ActionType
 from dnd_engine.ui.debug_console import DebugConsole
 from dnd_engine.ui.rich_ui import (
     console,
@@ -67,6 +69,9 @@ class CLI:
 
         # Combat context builder for assembling narrative context
         self.context_builder = CombatContextBuilder(game_state.data_loader, game_state)
+
+        # Combat action executor for middleware-based action handling
+        self.action_executor = CombatActionExecutor(game_state)
 
         # Combat display management
         self.combat_status_shown = False
@@ -1583,11 +1588,7 @@ class CLI:
 
     def handle_attack(self, target_name: str) -> None:
         """Handle attack command during combat."""
-        if not self.game_state.in_combat:
-            print_error("You're not in_combat!")
-            return
-
-        # Check if it's a party member's turn
+        # Get current actor (must be a party member)
         current = self.game_state.initiative_tracker.get_current_combatant()
         attacker = None
         for character in self.game_state.party.characters:
@@ -1596,31 +1597,10 @@ class CLI:
                 break
 
         if not attacker:
-            # Show which party member's turn it is or if it's an enemy turn
-            enemy_turn = False
-            for enemy in self.game_state.active_enemies:
-                if current.creature == enemy:
-                    display_name = self._get_enemy_display_name(enemy)
-                    print_status_message(f"It's {display_name}'s turn, not a party member's!", "warning")
-                    enemy_turn = True
-                    break
-            if not enemy_turn:
-                print_status_message(f"It's not a valid combatant's turn!", "warning")
+            # Not a player turn - middleware will show error
             return
 
-        # Check action economy
-        from dnd_engine.systems.action_economy import ActionType
-        turn_state = self.game_state.initiative_tracker.get_current_turn_state()
-        if not turn_state:
-            print_error("Unable to get current turn state!")
-            return
-
-        if not turn_state.is_action_available(ActionType.ACTION):
-            print_error("You don't have an Action available this turn!")
-            print_status_message(f"Available: {turn_state}", "info")
-            return
-
-        # Find target using new numbering system
+        # Find target before executing through middleware
         target = self._find_enemy_by_target(target_name)
 
         if not target:
@@ -1635,20 +1615,44 @@ class CLI:
                 print_status_message(f"Available targets: {', '.join(living_enemies)}", "info")
             return
 
-        # Consume the action
-        if not turn_state.consume_action(ActionType.ACTION):
-            print_error("Failed to consume action!")
+        # Execute attack through middleware chain
+        context = self.action_executor.execute(
+            actor=attacker,
+            action_type=ActionType.ACTION,
+            action_name="attack",
+            action_handler=lambda ctx: self._execute_attack(target),
+            target=target.name
+        )
+
+        # Handle execution result
+        if context.result == ActionResult.FAILED:
+            print_error(context.error_message)
+            return
+        elif context.result == ActionResult.CANCELLED:
+            print_status_message("Attack cancelled", "warning")
             return
 
-        # Log player action
-        from dnd_engine.utils.logging_config import get_logging_config
-        logging_config = get_logging_config()
-        if logging_config:
-            logging_config.log_player_action(
-                character=attacker.name,
-                action="attack",
-                details=f"target={target.name}"
-            )
+        # Middleware handled validation/logging - now complete turn
+        # End player turn
+        self.game_state.initiative_tracker.next_turn()
+
+        # Check if combat is over
+        self.game_state._check_combat_end()
+
+        if self.game_state.in_combat:
+            # Process enemy turns
+            self.process_enemy_turns()
+
+    def _execute_attack(self, target) -> bool:
+        """
+        Execute the actual attack logic without boilerplate.
+
+        This is called by the middleware after all validation passes.
+        Returns True if action completed successfully.
+        """
+        # Get attacker from current turn (middleware already validated this)
+        current = self.game_state.initiative_tracker.get_current_combatant()
+        attacker = current.creature
 
         # Get equipped weapon and its properties
         equipped_weapon = attacker.inventory.get_equipped_item(EquipmentSlot.WEAPON)
@@ -1734,23 +1738,11 @@ class CLI:
             # 4. Display defeated message after death narrative
             print_status_message(f"{target.name} is defeated!", "success")
 
-        # End player turn
-        self.game_state.initiative_tracker.next_turn()
-
-        # Check if combat is over
-        self.game_state._check_combat_end()
-
-        if self.game_state.in_combat:
-            # Process enemy turns
-            self.process_enemy_turns()
+        return True
 
     def handle_cast_spell(self, spell_name: str) -> None:
         """Handle cast spell command during combat."""
-        if not self.game_state.in_combat:
-            print_error("You're not in combat!")
-            return
-
-        # Check if it's a party member's turn
+        # Get current actor (must be a party member)
         current = self.game_state.initiative_tracker.get_current_combatant()
         caster = None
         for character in self.game_state.party.characters:
@@ -1759,28 +1751,7 @@ class CLI:
                 break
 
         if not caster:
-            # Show whose turn it is
-            enemy_turn = False
-            for enemy in self.game_state.active_enemies:
-                if current.creature == enemy:
-                    display_name = self._get_enemy_display_name(enemy)
-                    print_status_message(f"It's {display_name}'s turn, not a party member's!", "warning")
-                    enemy_turn = True
-                    break
-            if not enemy_turn:
-                print_status_message(f"It's not a valid combatant's turn!", "warning")
-            return
-
-        # Check action economy
-        from dnd_engine.systems.action_economy import ActionType
-        turn_state = self.game_state.initiative_tracker.get_current_turn_state()
-        if not turn_state:
-            print_error("Unable to get current turn state!")
-            return
-
-        if not turn_state.is_action_available(ActionType.ACTION):
-            print_error("You don't have an Action available this turn!")
-            print_status_message(f"Available: {turn_state}", "info")
+            # Not a player turn
             return
 
         # Get spellcasting ability from class data
@@ -1863,10 +1834,10 @@ class CLI:
             print_error(f"Unknown spell: {spell_name}")
             return
 
-        # Check and consume spell slot for leveled spells
+        # Check spell slot availability BEFORE target selection
         spell_level = spell_data.get("level", 0)
         if spell_level > 0:
-            if not caster.use_spell_slot(spell_level):
+            if caster.get_available_spell_slots(spell_level) <= 0:
                 ordinal = caster._level_to_ordinal(spell_level)
                 print_error(f"No {ordinal}-level spell slots available!")
                 return
@@ -1891,36 +1862,68 @@ class CLI:
         else:
             target = self._prompt_enemy_selection()
 
-        # Handle target cancellation
+        # Handle target cancellation - nothing consumed yet so just return
         if target is None or target == "Cancel":
-            # Refund spell slot if cancelled
-            if spell_level > 0:
-                pool_name = f"spell_slots_level_{spell_level}"
-                pool = caster.get_resource_pool(pool_name)
-                if pool:
-                    pool.current += 1
             return
 
-        # Consume the action
-        if not turn_state.consume_action(ActionType.ACTION):
-            print_error("Failed to consume action!")
-            # Refund spell slot
-            if spell_level > 0:
-                pool_name = f"spell_slots_level_{spell_level}"
-                pool = caster.get_resource_pool(pool_name)
-                if pool:
-                    pool.current += 1
+        # NOW consume spell slot (will be auto-refunded by middleware if action fails)
+        resources_consumed = []
+        if spell_level > 0:
+            if not caster.use_spell_slot(spell_level):
+                ordinal = caster._level_to_ordinal(spell_level)
+                print_error(f"No {ordinal}-level spell slots available!")
+                return
+            # Track for auto-refund
+            resources_consumed.append((f"spell_slots_level_{spell_level}", 1))
+
+        # Execute spell through middleware chain with auto-refund tracking
+        context = self.action_executor.execute(
+            actor=caster,
+            action_type=ActionType.ACTION,
+            action_name="cast_spell",
+            action_handler=lambda ctx: self._execute_spell(
+                spell_data, spell_id, target, spellcasting_ability
+            ),
+            resources_consumed=resources_consumed,
+            spell=spell_data.get('name'),
+            target=target.name
+        )
+
+        # Handle execution result
+        if context.result == ActionResult.FAILED:
+            print_error(context.error_message)
+            return
+        elif context.result == ActionResult.CANCELLED:
+            print_status_message("Spell cancelled", "warning")
             return
 
-        # Log player action
-        from dnd_engine.utils.logging_config import get_logging_config
-        logging_config = get_logging_config()
-        if logging_config:
-            logging_config.log_player_action(
-                character=caster.name,
-                action="cast_spell",
-                details=f"spell={spell_data.get('name')}, target={target.name}"
-            )
+        # Middleware handled validation/logging - now complete turn
+        # End player turn
+        self.game_state.initiative_tracker.next_turn()
+
+        # Check if combat is over
+        self.game_state._check_combat_end()
+
+        if self.game_state.in_combat:
+            # Process enemy turns
+            self.process_enemy_turns()
+
+    def _execute_spell(
+        self,
+        spell_data: Dict[str, Any],
+        spell_id: str,
+        target,
+        spellcasting_ability: str
+    ) -> bool:
+        """
+        Execute the actual spell logic without boilerplate.
+
+        This is called by the middleware after all validation passes.
+        Returns True if action completed successfully.
+        """
+        # Get caster from current turn (middleware already validated this)
+        current = self.game_state.initiative_tracker.get_current_combatant()
+        caster = current.creature
 
         # Route spell based on type: attack, save, or buff/utility
         has_attack = spell_data.get("attack_type") is not None
@@ -2082,23 +2085,11 @@ class CLI:
 
             print_status_message(f"{target.name} is defeated!", "success")
 
-        # End player turn
-        self.game_state.initiative_tracker.next_turn()
-
-        # Check if combat is over
-        self.game_state._check_combat_end()
-
-        if self.game_state.in_combat:
-            # Process enemy turns
-            self.process_enemy_turns()
+        return True
 
     def handle_stabilize(self, target_name: str) -> None:
         """Handle stabilize command to help unconscious ally."""
-        if not self.game_state.in_combat:
-            print_error("You're not in combat!")
-            return
-
-        # Check if it's a party member's turn
+        # Get current actor (must be a party member)
         current = self.game_state.initiative_tracker.get_current_combatant()
         helper = None
         for character in self.game_state.party.characters:
@@ -2107,7 +2098,7 @@ class CLI:
                 break
 
         if not helper:
-            print_status_message("It's not your turn, or your character is unconscious!", "warning")
+            # Not a valid player turn
             return
 
         # Find target ally
@@ -2120,6 +2111,45 @@ class CLI:
         if not target:
             print_error(f"No unconscious ally named '{target_name}' found.")
             return
+
+        # Execute stabilize through middleware chain
+        context = self.action_executor.execute(
+            actor=helper,
+            action_type=ActionType.ACTION,
+            action_name="stabilize",
+            action_handler=lambda ctx: self._execute_stabilize(target),
+            target=target.name
+        )
+
+        # Handle execution result
+        if context.result == ActionResult.FAILED:
+            print_error(context.error_message)
+            return
+        elif context.result == ActionResult.CANCELLED:
+            print_status_message("Stabilize cancelled", "warning")
+            return
+
+        # Middleware handled validation/logging - now complete turn
+        # End player turn
+        self.game_state.initiative_tracker.next_turn()
+
+        # Check if combat is over
+        self.game_state._check_combat_end()
+
+        if self.game_state.in_combat:
+            # Process enemy turns
+            self.process_enemy_turns()
+
+    def _execute_stabilize(self, target: Character) -> bool:
+        """
+        Execute the actual stabilize logic without boilerplate.
+
+        This is called by the middleware after all validation passes.
+        Returns True if action completed successfully.
+        """
+        # Get helper from current turn (middleware already validated this)
+        current = self.game_state.initiative_tracker.get_current_combatant()
+        helper = current.creature
 
         print_section(f"{helper.name} attempts to stabilize {target.name}")
 
@@ -2154,15 +2184,7 @@ class CLI:
         else:
             print_error(f"Failed! {target.name} remains unstabilized.")
 
-        # Advance turn
-        self.game_state.initiative_tracker.next_turn()
-
-        # Check if combat is over
-        self.game_state._check_combat_end()
-
-        if self.game_state.in_combat:
-            # Process enemy turns
-            self.process_enemy_turns()
+        return True
 
     def handle_flee(self) -> None:
         """Handle flee command during combat."""
