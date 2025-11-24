@@ -6,6 +6,7 @@
     "school": "evocation",
     "casting_time": "1 action",
     "range_ft": 120,
+    "target_type": "enemy",
     "components": {
       "verbal": true,
       "somatic": true,
@@ -33,6 +34,7 @@
     "school": "evocation",
     "casting_time": "1 action",
     "range_ft": 60,
+    "target_type": "enemy",
     "components": {
       "verbal": true,
       "somatic": true,
@@ -60,6 +62,7 @@
     "school": "evocation",
     "casting_time": "1 action",
     "range_ft": 60,
+    "target_type": "enemy",
     "components": {
       "verbal": true,
       "somatic": true,
@@ -90,6 +93,7 @@
     "school": "evocation",
     "casting_time": "1 action",
     "range_ft": -1,
+    "target_type": "any",
     "components": {
       "verbal": true,
       "somatic": false,
@@ -112,6 +116,7 @@
     "school": "conjuration",
     "casting_time": "1 action",
     "range_ft": 30,
+    "target_type": "self",
     "components": {
       "verbal": true,
       "somatic": true,
@@ -133,6 +138,7 @@
     "school": "transmutation",
     "casting_time": "1 action",
     "range_ft": 10,
+    "target_type": "self",
     "components": {
       "verbal": true,
       "somatic": true,
@@ -154,6 +160,7 @@
     "school": "evocation",
     "casting_time": "1 action",
     "range_ft": 120,
+    "target_type": "enemy",
     "components": {
       "verbal": true,
       "somatic": true,
@@ -180,6 +187,7 @@
     "school": "evocation",
     "casting_time": "1 action",
     "range_ft": -1,
+    "target_type": "ally",
     "components": {
       "verbal": true,
       "somatic": true,
@@ -205,6 +213,7 @@
     "school": "abjuration",
     "casting_time": "1 reaction",
     "range_ft": 0,
+    "target_type": "self",
     "components": {
       "verbal": true,
       "somatic": true,
@@ -226,6 +235,7 @@
     "school": "evocation",
     "casting_time": "1 action",
     "range_ft": 0,
+    "target_type": "area",
     "components": {
       "verbal": true,
       "somatic": true,
@@ -257,6 +267,7 @@
     "school": "divination",
     "casting_time": "1 action",
     "range_ft": 0,
+    "target_type": "self",
     "components": {
       "verbal": true,
       "somatic": true,
@@ -278,6 +289,7 @@
     "school": "enchantment",
     "casting_time": "1 action",
     "range_ft": 90,
+    "target_type": "area",
     "components": {
       "verbal": true,
       "somatic": true,
@@ -302,6 +314,7 @@
     "school": "abjuration",
     "casting_time": "1 action",
     "range_ft": -1,
+    "target_type": "ally",
     "components": {
       "verbal": true,
       "somatic": true,
@@ -324,6 +337,7 @@
     "school": "divination",
     "casting_time": "1 minute",
     "range_ft": -1,
+    "target_type": "any",
     "components": {
       "verbal": true,
       "somatic": true,
@@ -345,6 +359,7 @@
     "school": "evocation",
     "casting_time": "1 action",
     "range_ft": 120,
+    "target_type": "enemy",
     "components": {
       "verbal": true,
       "somatic": true,
@@ -372,6 +387,7 @@
     "school": "enchantment",
     "casting_time": "1 action",
     "range_ft": 60,
+    "target_type": "enemy",
     "components": {
       "verbal": true,
       "somatic": true,
@@ -399,6 +415,7 @@
     "school": "evocation",
     "casting_time": "1 bonus action",
     "range_ft": 60,
+    "target_type": "enemy",
     "components": {
       "verbal": true,
       "somatic": true,
@@ -427,6 +444,7 @@
     "school": "conjuration",
     "casting_time": "1 bonus action",
     "range_ft": 0,
+    "target_type": "self",
     "components": {
       "verbal": true,
       "somatic": false,
@@ -447,6 +465,7 @@
     "school": "evocation",
     "casting_time": "1 action",
     "range_ft": 150,
+    "target_type": "area",
     "components": {
       "verbal": true,
       "somatic": true,
@@ -479,6 +498,7 @@
     "school": "abjuration",
     "casting_time": "1 reaction",
     "range_ft": 60,
+    "target_type": "enemy",
     "components": {
       "verbal": false,
       "somatic": true,
@@ -500,6 +520,7 @@
     "school": "evocation",
     "casting_time": "1 action",
     "range_ft": 0,
+    "target_type": "area",
     "components": {
       "verbal": true,
       "somatic": true,
@@ -532,6 +553,7 @@
     "school": "necromancy",
     "casting_time": "1 action",
     "range_ft": -1,
+    "target_type": "ally",
     "components": {
       "verbal": true,
       "somatic": true,

@@ -490,11 +490,11 @@ class TestGetCastableSpells:
 
         # Mock spells data
         spells_data = {
-            "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack", "damage": {"dice": "1d10"}},
-            "ray_of_frost": {"name": "Ray of Frost", "level": 0, "attack_type": "ranged_spell_attack", "damage": {"dice": "1d8"}},
-            "magic_missile": {"name": "Magic Missile", "level": 1, "damage": {"dice": "1d4+1"}},
-            "shield": {"name": "Shield", "level": 1, "casting_time": "1 reaction"},
-            "mage_armor": {"name": "Mage Armor", "level": 1},  # No damage/attack/save/reaction
+            "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack", "damage": {"dice": "1d10"}, "tags": ["combat", "damage"]},
+            "ray_of_frost": {"name": "Ray of Frost", "level": 0, "attack_type": "ranged_spell_attack", "damage": {"dice": "1d8"}, "tags": ["combat", "damage"]},
+            "magic_missile": {"name": "Magic Missile", "level": 1, "damage": {"dice": "1d4+1"}, "tags": ["combat", "damage"]},
+            "shield": {"name": "Shield", "level": 1, "casting_time": "1 reaction", "tags": ["combat", "defense", "reaction"]},
+            "mage_armor": {"name": "Mage Armor", "level": 1, "tags": ["utility"]},  # Non-combat
         }
 
         castable = wizard.get_castable_spells(spells_data)
@@ -514,8 +514,8 @@ class TestGetCastableSpells:
         wizard.prepared_spells = ["fire_bolt", "scorching_ray"]
 
         spells_data = {
-            "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack"},
-            "scorching_ray": {"name": "Scorching Ray", "level": 2, "attack_type": "ranged_spell_attack"},
+            "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack", "tags": ["combat"]},
+            "scorching_ray": {"name": "Scorching Ray", "level": 2, "attack_type": "ranged_spell_attack", "tags": ["combat"]},
         }
 
         castable = wizard.get_castable_spells(spells_data)
@@ -528,8 +528,8 @@ class TestGetCastableSpells:
         wizard.prepared_spells = ["burning_hands", "thunderwave"]
 
         spells_data = {
-            "burning_hands": {"name": "Burning Hands", "level": 1, "saving_throw_type": "dexterity", "damage": {"dice": "3d6"}},
-            "thunderwave": {"name": "Thunderwave", "level": 1, "saving_throw_type": "constitution", "damage": {"dice": "2d8"}},
+            "burning_hands": {"name": "Burning Hands", "level": 1, "saving_throw_type": "dexterity", "damage": {"dice": "3d6"}, "tags": ["combat"]},
+            "thunderwave": {"name": "Thunderwave", "level": 1, "saving_throw_type": "constitution", "damage": {"dice": "2d8"}, "tags": ["combat"]},
         }
 
         castable = wizard.get_castable_spells(spells_data)
@@ -542,7 +542,7 @@ class TestGetCastableSpells:
         wizard.prepared_spells = ["magic_missile"]
 
         spells_data = {
-            "magic_missile": {"name": "Magic Missile", "level": 1, "damage": {"dice": "1d4+1"}},
+            "magic_missile": {"name": "Magic Missile", "level": 1, "damage": {"dice": "1d4+1"}, "tags": ["combat"]},
         }
 
         castable = wizard.get_castable_spells(spells_data)
@@ -556,8 +556,8 @@ class TestGetCastableSpells:
         wizard.prepared_spells = ["shield", "counterspell"]
 
         spells_data = {
-            "shield": {"name": "Shield", "level": 1, "casting_time": "1 reaction"},
-            "counterspell": {"name": "Counterspell", "level": 3, "casting_time": "1 reaction"},
+            "shield": {"name": "Shield", "level": 1, "casting_time": "1 reaction", "tags": ["combat", "reaction"]},
+            "counterspell": {"name": "Counterspell", "level": 3, "casting_time": "1 reaction", "tags": ["combat", "reaction"]},
         }
 
         castable = wizard.get_castable_spells(spells_data)
@@ -585,10 +585,10 @@ class TestGetCastableSpells:
         wizard.prepared_spells = ["fireball", "magic_missile", "fire_bolt", "scorching_ray"]
 
         spells_data = {
-            "fireball": {"name": "Fireball", "level": 3, "damage": {"dice": "8d6"}},
-            "magic_missile": {"name": "Magic Missile", "level": 1, "damage": {"dice": "1d4+1"}},
-            "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack"},
-            "scorching_ray": {"name": "Scorching Ray", "level": 2, "attack_type": "ranged_spell_attack"},
+            "fireball": {"name": "Fireball", "level": 3, "damage": {"dice": "8d6"}, "tags": ["combat"]},
+            "magic_missile": {"name": "Magic Missile", "level": 1, "damage": {"dice": "1d4+1"}, "tags": ["combat"]},
+            "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack", "tags": ["combat"]},
+            "scorching_ray": {"name": "Scorching Ray", "level": 2, "attack_type": "ranged_spell_attack", "tags": ["combat"]},
         }
 
         castable = wizard.get_castable_spells(spells_data)
@@ -608,8 +608,8 @@ class TestGetCastableSpells:
         wizard.prepared_spells = []  # Empty - hasn't prepared anything
 
         spells_data = {
-            "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack"},
-            "magic_missile": {"name": "Magic Missile", "level": 1, "damage": {"dice": "1d4+1"}},
+            "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack", "tags": ["combat"]},
+            "magic_missile": {"name": "Magic Missile", "level": 1, "damage": {"dice": "1d4+1"}, "tags": ["combat"]},
         }
 
         castable = wizard.get_castable_spells(spells_data)
@@ -623,9 +623,9 @@ class TestGetCastableSpells:
         wizard.prepared_spells = ["fire_bolt", "ray_of_frost", "magic_missile"]  # Cantrips + 1st level
 
         spells_data = {
-            "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack", "damage": {"dice": "1d10"}},
-            "ray_of_frost": {"name": "Ray of Frost", "level": 0, "attack_type": "ranged_spell_attack", "damage": {"dice": "1d8"}},
-            "magic_missile": {"name": "Magic Missile", "level": 1, "damage": {"dice": "1d4+1"}},
+            "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack", "damage": {"dice": "1d10"}, "tags": ["combat"]},
+            "ray_of_frost": {"name": "Ray of Frost", "level": 0, "attack_type": "ranged_spell_attack", "damage": {"dice": "1d8"}, "tags": ["combat"]},
+            "magic_missile": {"name": "Magic Missile", "level": 1, "damage": {"dice": "1d4+1"}, "tags": ["combat"]},
         }
 
         castable = wizard.get_castable_spells(spells_data)
@@ -645,8 +645,8 @@ class TestGetCastableSpells:
         wizard.prepared_spells = None  # Not [], but None
 
         spells_data = {
-            "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack"},
-            "magic_missile": {"name": "Magic Missile", "level": 1, "damage": {"dice": "1d4+1"}},
+            "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack", "tags": ["combat"]},
+            "magic_missile": {"name": "Magic Missile", "level": 1, "damage": {"dice": "1d4+1"}, "tags": ["combat"]},
         }
 
         castable = wizard.get_castable_spells(spells_data)
@@ -660,10 +660,10 @@ class TestGetCastableSpells:
         cleric.prepared_spells = ["sacred_flame", "cure_wounds"]  # Only 2 prepared
 
         spells_data = {
-            "sacred_flame": {"name": "Sacred Flame", "level": 0, "saving_throw_type": "dexterity", "damage": {"dice": "1d8"}},
-            "cure_wounds": {"name": "Cure Wounds", "level": 1, "damage": {"dice": "1d8"}},  # Healing is damage for filtering
-            "bless": {"name": "Bless", "level": 1},  # No combat properties
-            "shield_of_faith": {"name": "Shield of Faith", "level": 1},  # No combat properties
+            "sacred_flame": {"name": "Sacred Flame", "level": 0, "saving_throw_type": "dexterity", "damage": {"dice": "1d8"}, "tags": ["combat"]},
+            "cure_wounds": {"name": "Cure Wounds", "level": 1, "damage": {"dice": "1d8"}, "tags": ["combat", "healing"]},
+            "bless": {"name": "Bless", "level": 1, "tags": ["utility"]},  # No combat tag
+            "shield_of_faith": {"name": "Shield of Faith", "level": 1, "tags": ["utility"]},  # No combat tag
         }
 
         castable = cleric.get_castable_spells(spells_data)
@@ -686,8 +686,8 @@ class TestGetCastableSpells:
         fighter.prepared_spells = None  # Fighters don't prepare spells
 
         spells_data = {
-            "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack"},
-            "shield": {"name": "Shield", "level": 1, "casting_time": "1 reaction"},
+            "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack", "tags": ["combat"]},
+            "shield": {"name": "Shield", "level": 1, "casting_time": "1 reaction", "tags": ["combat", "reaction"]},
         }
 
         castable = fighter.get_castable_spells(spells_data)

@@ -166,12 +166,37 @@ class DataLoader:
         """
         Load all spell definitions from JSON.
 
+        Validates that all spells have a valid target_type field.
+
         Returns:
             Dictionary mapping spell IDs to spell data
+
+        Raises:
+            ValueError: If any spell is missing target_type or has invalid target_type
         """
         spells_file = self.data_path / "srd" / "spells.json"
         with open(spells_file, 'r') as f:
-            return json.load(f)
+            spells = json.load(f)
+
+        # Validate target_type for all spells
+        valid_target_types = {"self", "ally", "enemy", "area", "any"}
+        errors = []
+
+        for spell_id, spell_data in spells.items():
+            target_type = spell_data.get("target_type")
+            if not target_type:
+                errors.append(f"Spell '{spell_id}' missing required 'target_type' field")
+            elif target_type not in valid_target_types:
+                errors.append(
+                    f"Spell '{spell_id}' has invalid target_type '{target_type}'. "
+                    f"Must be one of: {', '.join(sorted(valid_target_types))}"
+                )
+
+        if errors:
+            error_msg = "Spell validation errors:\n" + "\n".join(errors)
+            raise ValueError(error_msg)
+
+        return spells
 
     def get_spell(self, spell_id: str) -> Dict[str, Any]:
         """

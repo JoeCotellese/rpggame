@@ -203,7 +203,9 @@ class TestGetOutOfCombatSpells:
             "light": {
                 "name": "Light",
                 "level": 0,
-                "school": "evocation"
+                "school": "evocation",
+                "target_type": "any",
+                "tags": ["utility"]
             }
         }
 

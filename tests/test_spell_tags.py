@@ -53,42 +53,49 @@ def spells_data():
             "id": "fire_bolt",
             "name": "Fire Bolt",
             "level": 0,
+            "target_type": "enemy",
             "tags": ["combat", "damage"]
         },
         "light": {
             "id": "light",
             "name": "Light",
             "level": 0,
+            "target_type": "any",
             "tags": ["utility"]
         },
         "mage_hand": {
             "id": "mage_hand",
             "name": "Mage Hand",
             "level": 0,
+            "target_type": "self",
             "tags": ["utility"]
         },
         "magic_missile": {
             "id": "magic_missile",
             "name": "Magic Missile",
             "level": 1,
+            "target_type": "enemy",
             "tags": ["combat", "damage"]
         },
         "mage_armor": {
             "id": "mage_armor",
             "name": "Mage Armor",
             "level": 1,
+            "target_type": "ally",
             "tags": ["combat", "buff", "defense"]
         },
         "detect_magic": {
             "id": "detect_magic",
             "name": "Detect Magic",
             "level": 1,
+            "target_type": "self",
             "tags": ["utility", "ritual"]
         },
         "sleep": {
             "id": "sleep",
             "name": "Sleep",
             "level": 1,
+            "target_type": "area",
             "tags": ["combat", "control", "aoe"]
         }
     }
