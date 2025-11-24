@@ -1631,19 +1631,12 @@ class Character(Creature):
             if not spell_data:
                 continue
 
-            # Include spell if it has any of these combat-relevant properties:
-            # 1. Has an attack roll (spell attack)
-            # 2. Has a saving throw (AoE, debuff, etc.)
-            # 3. Has damage (even if no attack/save, like Magic Missile)
-            # 4. Is a reaction spell (Shield, Counterspell, etc.)
+            # Use tag-based filtering for combat spells
+            # Tags provide a clean, data-driven way to categorize spells
+            tags = spell_data.get("tags", [])
 
-            has_attack = spell_data.get("attack_type") is not None
-            has_save = spell_data.get("saving_throw_type") is not None
-            has_damage = spell_data.get("damage") is not None
-            is_reaction = spell_data.get("casting_time") == "1 reaction"
-
-            # Include if combat-relevant
-            if has_attack or has_save or has_damage or is_reaction:
+            # Include if spell has "combat" tag
+            if "combat" in tags:
                 castable.append((spell_id, spell_data))
 
         # Sort by spell level (cantrips first, then by level)
@@ -1686,23 +1679,16 @@ class Character(Creature):
             if not spell_data:
                 continue
 
-            # Include spell if it has any of these out-of-combat properties:
-            # 1. Has healing (Cure Wounds, Healing Word, etc.)
-            # 2. Is a ritual spell (Detect Magic, Identify, etc.)
-            # 3. Has utility effects (Light, Mage Armor - any spell without attack/damage)
-            # 4. Has buffs (Bless, Shield of Faith - duration-based beneficial spells)
+            # Use tag-based filtering for out-of-combat spells
+            # Include spells tagged with: utility, healing, ritual
+            # Also include combat spells that are useful outside combat (buff, healing)
+            tags = spell_data.get("tags", [])
 
-            has_healing = spell_data.get("healing") is not None
-            is_ritual = spell_data.get("ritual") is True
-            has_attack = spell_data.get("attack_type") is not None
-            has_damage = spell_data.get("damage") is not None
-
-            # Utility spell: no attack and no damage (includes Light, Detect Magic, Mage Armor, etc.)
-            is_utility = not has_attack and not has_damage
-
-            # Include if it's useful outside combat
-            # (healing, ritual, or utility - basically anything except pure attack/damage spells)
-            if has_healing or is_ritual or is_utility:
+            # Include if spell has utility tags OR is combat spell with utility aspects
+            if "utility" in tags or "healing" in tags or "ritual" in tags:
+                out_of_combat.append((spell_id, spell_data))
+            elif "buff" in tags:
+                # Include combat buffs (like Mage Armor) outside combat
                 out_of_combat.append((spell_id, spell_data))
 
         # Sort by spell level (cantrips first, then by level)

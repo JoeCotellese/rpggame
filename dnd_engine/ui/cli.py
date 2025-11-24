@@ -1684,9 +1684,9 @@ class CLI:
         )
 
         # Check concentration if target was hit and took damage
-        if result.hit and result.damage > 0 and isinstance(targets[0], Character):
+        if result.hit and result.damage > 0 and isinstance(target, Character):
             concentration_result = self.game_state.check_concentration_from_damage(
-                targets[0].name,
+                target.name,
                 result.damage
             )
             if concentration_result["concentration_broken"]:
@@ -1694,7 +1694,7 @@ class CLI:
                 save_result = concentration_result["save_result"]
                 dc = concentration_result["dc"]
                 console.print(
-                    f"[yellow]💫 {targets[0].name}'s concentration on {spell_name} is broken! "
+                    f"[yellow]💫 {target.name}'s concentration on {spell_name} is broken! "
                     f"(CON save: {save_result['total']} vs DC {dc})[/yellow]"
                 )
 
@@ -1736,7 +1736,7 @@ class CLI:
                     self.display_narrative_panel(death_narrative)
 
             # 4. Display defeated message after death narrative
-            print_status_message(f"{targets[0].name} is defeated!", "success")
+            print_status_message(f"{target.name} is defeated!", "success")
 
         return True
 
@@ -1801,7 +1801,22 @@ class CLI:
                     else:
                         slot_info = f"({ordinal}, no slots)"
 
-                spell_choices.append(f"{spell_display_name} - {damage_dice} {damage_type} {slot_info}")
+                # Build spell description based on available information
+                if damage_dice and damage_type:
+                    # Damage spell: show damage
+                    description = f"{damage_dice} {damage_type}"
+                else:
+                    # Non-damage spell: show tags or school
+                    tags = sdata.get("tags", [])
+                    if tags:
+                        # Show primary tag (skip "combat" as it's implied)
+                        non_combat_tags = [t for t in tags if t != "combat"]
+                        description = non_combat_tags[0] if non_combat_tags else "combat"
+                    else:
+                        # Fallback to school
+                        description = sdata.get("school", "spell")
+
+                spell_choices.append(f"{spell_display_name} - {description} {slot_info}")
 
             # Use questionary for selection
             from questionary import select
