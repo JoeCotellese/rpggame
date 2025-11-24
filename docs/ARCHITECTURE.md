@@ -1,7 +1,7 @@
 # D&D 5E Terminal Game - Architecture Documentation
 
-**Version:** 0.2.0
-**Last Updated:** 2025-11-18
+**Version:** 0.3.0
+**Last Updated:** 2025-11-24
 **Status:** Active Development (Beyond MVP)
 
 ---
@@ -46,12 +46,31 @@ A Python-based terminal game for running D&D 5E SRD adventures with LLM-enhanced
 └─────────────────┬───────────────────────────────┘
                   ↕
 ┌─────────────────────────────────────────────────┐
+│         Service Layer (NEW)                     │
+│   (services/combat_context.py)                  │
+│   - Combat context assembly                     │
+│   - Data aggregation from multiple sources      │
+│   - Attack/spell parameter building             │
+│   - Combatant rich context                      │
+└─────────────────┬───────────────────────────────┘
+                  ↕
+┌─────────────────────────────────────────────────┐
 │         LLM Enhancement Layer                   │
 │   (llm/enhancer.py, providers)                  │
 │   - Narrative generation                        │
 │   - Combat descriptions                         │
 │   - Room atmosphere                             │
 │   - Multi-provider support (OpenAI, Anthropic)  │
+└─────────────────┬───────────────────────────────┘
+                  ↕
+┌─────────────────────────────────────────────────┐
+│          Middleware Layer (NEW)                 │
+│   (systems/combat_middleware.py)                │
+│   - Action validation pipeline                  │
+│   - Turn validation                             │
+│   - Action economy checks                       │
+│   - Resource cleanup on failure                 │
+│   - Logging                                     │
 └─────────────────┬───────────────────────────────┘
                   ↕
 ┌─────────────────────────────────────────────────┐
@@ -71,6 +90,8 @@ A Python-based terminal game for running D&D 5E SRD adventures with LLM-enhanced
 │   - Initiative tracking                         │
 │   - Inventory & equipment                       │
 │   - Save/load game state                        │
+│   - Enemy AI system (systems/ai/)               │
+│   - Combat history & battlefield state          │
 └─────────────────┬───────────────────────────────┘
                   ↕
 ┌─────────────────────────────────────────────────┐
@@ -118,7 +139,13 @@ A Python-based terminal game for running D&D 5E SRD adventures with LLM-enhanced
 │   │   ├── resources.py     # Resource management (HP, spell slots)
 │   │   ├── action_economy.py     # Action/bonus action/reaction
 │   │   ├── item_effects.py  # Item usage effects
-│   │   └── condition_manager.py  # Status effects (stunned, prone, etc.)
+│   │   ├── condition_manager.py  # Status effects (stunned, prone, etc.)
+│   │   ├── combat_middleware.py  # Combat action validation pipeline (NEW)
+│   │   └── ai/              # Enemy AI system (NEW)
+│   │       ├── __init__.py
+│   │       ├── enemy_ai.py       # AI coordinator
+│   │       ├── targeting.py      # Target selection strategies
+│   │       └── condition_ai.py   # Condition management decisions
 │   │
 │   ├── rules/               # Rule loading and content generation
 │   │   ├── __init__.py
@@ -148,6 +175,10 @@ A Python-based terminal game for running D&D 5E SRD adventures with LLM-enhanced
 │   │   ├── debug_provider.py       # Debug/testing provider
 │   │   ├── enhancer.py      # Narrative enhancement coordinator
 │   │   └── prompts.py       # Prompt templates
+│   │
+│   ├── services/            # Service layer (NEW)
+│   │   ├── __init__.py
+│   │   └── combat_context.py     # Combat context assembly
 │   │
 │   ├── ui/                  # User interfaces
 │   │   ├── __init__.py
@@ -400,7 +431,155 @@ User interaction and display.
   - Panels and borders
   - Banner display
 
-### 6. Data Layer (`data/`)
+### 6. Service Layer (`services/`)
+
+**NEW**: Introduced to extract complex data assembly logic from UI layer.
+
+#### **Combat Context Service** (`combat_context.py`)
+- **Purpose**: Assemble rich context for combat actions from multiple data sources
+- **Implemented**: ✅ (Issue #175)
+- **Key Classes**:
+  ```python
+  @dataclass
+  class AttackParameters:
+      """Complete attack parameters for a combatant."""
+      attack_bonus: int
+      damage_dice: str
+      weapon_name: str
+      damage_type: str
+      is_unarmed: bool
+
+  @dataclass
+  class CombatantContext:
+      """Rich context about a combatant for narrative."""
+      name: str
+      display_name: str
+      race: str
+      armor_description: str
+      armor_type: str
+      is_player: bool
+
+  @dataclass
+  class AttackContext:
+      """Complete context for an attack action."""
+      attacker: CombatantContext
+      defender: CombatantContext
+      attack_params: AttackParameters
+      location: str
+      result: AttackResult
+  ```
+
+- **Key Methods**:
+  - `get_attack_parameters(attacker)`: Returns complete attack info (bonus, dice, weapon)
+  - `get_combatant_context(combatant)`: Returns rich context (race, armor, display name)
+  - `build_attack_context(attacker, defender, result)`: Assembles complete action context
+
+- **Benefits**:
+  - **DRY**: Context assembly logic in one place (was scattered across CLI)
+  - **Testability**: Can unit test context service independently
+  - **Reusability**: Other UIs get same rich context
+  - **Maintainability**: Easy to add new context fields
+  - **Performance**: Can add caching to service layer
+
+- **Usage Example**:
+  ```python
+  # In CLI
+  self.context_builder = CombatContextService(game_state)
+
+  # Get attack parameters (replaces 60+ lines of data queries)
+  attack_params = self.context_builder.get_attack_parameters(attacker)
+
+  # Build complete context for LLM
+  attack_context = self.context_builder.build_attack_context(
+      attacker, defender, result
+  )
+  narrative = llm.get_combat_narrative(attack_context.to_narrative_dict())
+  ```
+
+### 7. Middleware Layer (`systems/`)
+
+**NEW**: Introduced to eliminate boilerplate and enforce consistent action validation.
+
+#### **Combat Action Middleware** (`combat_middleware.py`)
+- **Purpose**: Execute combat actions through validation pipeline
+- **Implemented**: ✅ (Issue #176)
+- **Pattern**: Chain of Responsibility with middleware components
+
+- **Key Classes**:
+  ```python
+  @dataclass
+  class CombatActionContext:
+      """Context passed through middleware chain."""
+      game_state: GameState
+      actor: Character
+      action_type: ActionType
+      action_name: str
+      details: Dict[str, Any]
+      result: ActionResult  # SUCCESS, CANCELLED, FAILED
+      resources_consumed: List[Tuple[str, int]]  # Auto-refund on failure
+
+  class CombatMiddleware(ABC):
+      """Base class for combat action middleware."""
+      @abstractmethod
+      def process(self, context: CombatActionContext, next_middleware: Callable) -> bool:
+          pass
+  ```
+
+- **Middleware Components**:
+  1. **TurnValidationMiddleware**: Validates it's the actor's turn
+  2. **ActionEconomyMiddleware**: Validates and consumes action/bonus action
+  3. **LoggingMiddleware**: Logs all combat actions consistently
+  4. **ResourceCleanupMiddleware**: Auto-refunds resources on failure/cancellation
+
+- **CombatActionExecutor**:
+  ```python
+  class CombatActionExecutor:
+      """Executes combat actions through middleware chain."""
+      def execute(
+          self,
+          actor: Character,
+          action_type: ActionType,
+          action_name: str,
+          action_handler: Callable,
+          **details
+      ) -> CombatActionContext:
+          # Run through validation pipeline
+          # Execute action handler if all validations pass
+          # Auto-cleanup resources on failure
+  ```
+
+- **Benefits**:
+  - **DRY**: Validation logic in one place (was copy-pasted across 10+ methods)
+  - **Consistency**: All actions validated identically
+  - **Extensibility**: Add new middleware without touching handlers
+  - **Automatic Cleanup**: Resources refunded on failure without manual code
+  - **Testability**: Test middleware components independently
+  - **Correctness**: Impossible to forget validation steps
+
+- **Usage Example**:
+  ```python
+  # Before (50+ lines of boilerplate):
+  def handle_attack(self, target):
+      if not in_combat: return
+      if not is_turn: return
+      if not has_action: return
+      # ... manual resource tracking ...
+      # ... actual attack logic ...
+      # ... manual refunds on failure ...
+
+  # After (10-15 lines focused on logic):
+  def handle_attack(self, target):
+      context = self.action_executor.execute(
+          actor=attacker,
+          action_type=ActionType.ACTION,
+          action_name="attack",
+          action_handler=lambda ctx: self._execute_attack(ctx, target),
+          target=target.name
+      )
+      # Middleware handles all validation and cleanup
+  ```
+
+### 8. Data Layer (`data/`)
 
 All content in JSON for easy modification.
 
@@ -896,14 +1075,112 @@ pytest -v
 
 ---
 
+## Architecture Evolution
+
+### Recent Refactorings (November 2025)
+
+The architecture has undergone significant improvements to address technical debt and improve separation of concerns. These changes were documented in GitHub issues #173-176.
+
+#### Issue #173: Enemy AI System ✅ COMPLETED
+**Problem**: AI decision-making logic was embedded in the CLI layer.
+
+**Solution**: Created dedicated AI system in `dnd_engine/systems/ai/`:
+- **EnemyAI**: Main AI coordinator
+- **TargetingStrategy**: Pluggable targeting strategies (LowestHP, HighestThreat, Random)
+- **Condition AI**: Decisions about condition removal
+
+**Benefits**:
+- Testable independently of UI
+- Reusable across different UI implementations
+- Easy to add new AI behaviors
+- Clean separation: UI displays, AI decides
+
+#### Issue #174: Combat Infrastructure ✅ COMPLETED
+**Problem**: Combat infrastructure (enemy numbering, combat history, battlefield state) was in CLI.
+
+**Solution**: Moved to game engine core:
+- **Enemy Numbering**: Moved to InitiativeTracker/CombatEngine
+- **Combat History**: Added to GameState as structured events
+- **Battlefield State**: `get_battlefield_state()` API in CombatEngine
+
+**Benefits**:
+- Proper encapsulation of game state
+- Combat history persists in save files
+- Other UIs can access same infrastructure
+- Testable without UI
+
+#### Issue #175: Service Layer ✅ COMPLETED
+**Problem**: CLI manually assembled context from multiple data sources (60+ lines per action).
+
+**Solution**: Created `CombatContextService` in `dnd_engine/services/`:
+- `get_attack_parameters()`: Attack bonus, damage dice, weapon data
+- `get_combatant_context()`: Race, armor, display name
+- `build_attack_context()`: Complete context for narratives
+
+**Benefits**:
+- DRY: Context assembly in one place
+- UI reduced from 60+ lines to 2-3 lines per action
+- Easy to add new context fields
+- Testable independently
+
+#### Issue #176: Middleware Pattern ✅ COMPLETED
+**Problem**: Every combat action repeated 50+ lines of validation boilerplate.
+
+**Solution**: Created `CombatActionExecutor` with middleware pipeline:
+- **TurnValidationMiddleware**: Check whose turn it is
+- **ActionEconomyMiddleware**: Check and consume actions
+- **LoggingMiddleware**: Consistent action logging
+- **ResourceCleanupMiddleware**: Auto-refund resources on failure
+
+**Benefits**:
+- Eliminated boilerplate from all action handlers
+- Consistent validation across all actions
+- Automatic resource cleanup (no manual refund code)
+- Extensible: add new middleware without touching handlers
+- Impossible to forget validation steps
+
+### Architecture Principles Reinforced
+
+These refactorings strengthen the core architectural principles:
+
+1. **Separation of Concerns**:
+   - UI → Display and input
+   - Service Layer → Data assembly
+   - Game Engine → Mechanics and state
+   - Middleware → Validation and cross-cutting concerns
+
+2. **Testability**:
+   - Each layer can be tested independently
+   - Mock boundaries are clear
+   - No more UI-dependent game logic
+
+3. **Reusability**:
+   - Future web UI can reuse services, middleware, AI
+   - Combat context assembly is UI-agnostic
+   - Validation logic works for any UI
+
+4. **Maintainability**:
+   - Logic in appropriate layers
+   - Easy to find and modify
+   - No scattered duplicated code
+
+5. **Extensibility**:
+   - Add new middleware components
+   - Plug in new AI strategies
+   - Extend context with new fields
+
+---
+
 ## Future Considerations
 
 ### Technical Debt
 
 1. **Save/Load**: Currently basic JSON; could use versioning, compression
 2. **Procedural Generation**: Dungeon generator is simple; could be more sophisticated
-3. **AI Behavior**: Monster AI is basic (attack lowest HP); could use tactics
-4. **Multiplayer**: Architecture supports it, but not implemented
+3. ~~**AI Behavior**: Monster AI is basic (attack lowest HP); could use tactics~~ ✅ RESOLVED (Issue #173)
+4. ~~**Combat Boilerplate**: Validation repeated across handlers~~ ✅ RESOLVED (Issue #176)
+5. ~~**Context Assembly**: Data queries scattered in UI~~ ✅ RESOLVED (Issue #175)
+6. **Multiplayer**: Architecture supports it, but not implemented
 
 ### Planned Enhancements
 
@@ -963,4 +1240,4 @@ The system has evolved from MVP to a robust, feature-rich terminal game while ma
 
 ---
 
-*Last Updated: 2025-11-18 by Claude Code (Architecture Documentation Task)*
+*Last Updated: 2025-11-24 by Claude Code (Architecture Evolution Documentation)*
