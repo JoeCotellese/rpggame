@@ -176,7 +176,8 @@ def create_combat_table(combatants: List[Dict[str, Any]]) -> Table:
     """Create a styled table for combat display.
 
     Args:
-        combatants: List of dicts with {name, initiative, hp, max_hp, is_player}
+        combatants: List of dicts with {name, initiative, hp, max_hp, is_player,
+                   active_effects, conditions, death_saves, concentration}
 
     Returns:
         Formatted Rich Table
@@ -185,6 +186,7 @@ def create_combat_table(combatants: List[Dict[str, Any]]) -> Table:
     table.add_column("Combatant", style="bold")
     table.add_column("Initiative", justify="center")
     table.add_column("HP", justify="center")
+    table.add_column("Effects", style="dim", no_wrap=False)
     table.add_column("Status", justify="center")
 
     for combatant in combatants:
@@ -243,12 +245,26 @@ def create_combat_table(combatants: List[Dict[str, Any]]) -> Table:
             if concentration:
                 status += f"\n[magenta]🎯 {concentration}[/magenta]"
 
+        # Format active effects
+        active_effects = combatant.get("active_effects", [])
+        if active_effects:
+            effects_text = []
+            for effect in active_effects:
+                effect_name = effect.source
+                time_remaining = effect.get_time_remaining_display()
+                concentration_marker = " 🎯" if effect.concentration else ""
+                effects_text.append(f"[magenta]{effect_name}[/magenta] ({time_remaining}){concentration_marker}")
+            effects_display = "\n".join(effects_text)
+        else:
+            effects_display = "—"
+
         name_style = "bold yellow" if combatant.get("is_player") else "white"
 
         table.add_row(
             f"{prefix}[{name_style}]{combatant.get('name', 'Unknown')}[/{name_style}]",
             str(combatant.get("initiative", 0)),
             f"[{color}]{hp_text}[/{color}]",
+            effects_display,
             status
         )
 

@@ -276,6 +276,11 @@ class CLI:
                 if concentration_spell:
                     combatant_data["concentration"] = concentration_spell
 
+            # Add active effects for all combatants
+            active_effects = self.game_state.time_manager.get_effects_for_character(entry.creature.name)
+            if active_effects:
+                combatant_data["active_effects"] = active_effects
+
             combatants.append(combatant_data)
 
         table = create_combat_table(combatants)
@@ -2113,7 +2118,7 @@ class CLI:
                     f"(CON save: {save_result['total']} vs DC {dc})[/yellow]"
                 )
 
-        # Handle concentration for caster's new spell
+        # Handle spell effects (concentration and non-concentration buff spells)
         if spell_data.get("concentration", False):
             # Check if caster is already concentrating
             previous_spell = self.game_state.get_concentration_spell(caster.name)
@@ -2131,6 +2136,11 @@ class CLI:
                 console.print(
                     f"[cyan]🎯 {caster.name} begins concentrating on {spell_name}[/cyan]"
                 )
+        elif spell_data.get("effect"):
+            # Non-concentration buff spells (Mage Armor, etc.) also add effects
+            effect = self.game_state._create_spell_effect(spell_data, caster.name, targets[0].name)
+            if effect:
+                self.game_state.time_manager.add_effect(effect)
 
         # Display narrative if available
         if self.llm_enhancer and result.hit:
