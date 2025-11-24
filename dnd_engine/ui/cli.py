@@ -9,6 +9,7 @@ from dnd_engine.utils.events import Event, EventType
 from dnd_engine.systems.inventory import EquipmentSlot
 from dnd_engine.systems.condition_manager import ConditionManager
 from dnd_engine.systems.ai import EnemyAI
+from dnd_engine.systems.combat_context import CombatContextBuilder
 from dnd_engine.ui.debug_console import DebugConsole
 from dnd_engine.ui.rich_ui import (
     console,
@@ -63,6 +64,9 @@ class CLI:
 
         # Enemy AI for combat decisions
         self.enemy_ai = EnemyAI()
+
+        # Combat context builder for assembling narrative context
+        self.context_builder = CombatContextBuilder(game_state.data_loader, game_state)
 
         # Combat display management
         self.combat_status_shown = False
@@ -1694,57 +1698,14 @@ class CLI:
 
         # 1. Get and display attack narrative FIRST (if hit)
         if self.llm_enhancer and result.hit:
-            room = self.game_state.get_current_room()
-            location = room.get("name", "")
-
-            # Get weapon name and damage type
-            weapon_name = "weapon"
-            damage_type = ""
-            if equipped_weapon and weapon_data:
-                weapon_name = weapon_data.get("name", equipped_weapon)
-                damage_type = weapon_data.get("damage_type", "")
-
-            # Get attacker race
-            races_data = self.game_state.data_loader.load_races()
-            attacker_race_data = races_data.get(attacker.race, {})
-            attacker_race = attacker_race_data.get("name", "")
-
-            # Get defender armor type (for enemies, check monster data)
-            defender_armor = ""
-            if isinstance(target, Character):
-                # Target is player - get equipped armor
-                equipped_armor_id = target.inventory.get_equipped_item(EquipmentSlot.ARMOR)
-                if equipped_armor_id:
-                    armor_data = items_data.get("armor", {}).get(equipped_armor_id, {})
-                    armor_type = armor_data.get("armor_type", "")
-                    if armor_type:
-                        defender_armor = f"{armor_type} armor"
-            else:
-                # Target is enemy - try to get from monster data or AC source
-                monsters = self.game_state.data_loader.load_monsters()
-                for mid, mdata in monsters.items():
-                    if mdata["name"] == target.name:
-                        ac_source = mdata.get("ac_source", "")
-                        if ac_source:
-                            defender_armor = ac_source
-                        break
+            # Build complete attack context using service
+            attack_context = self.context_builder.build_attack_context(
+                attacker, target, result
+            )
 
             with console.status("", spinner="dots"):
                 narrative = self.llm_enhancer.get_combat_narrative_sync(
-                    action_data={
-                        "attacker": result.attacker_name,
-                        "defender": result.defender_name,
-                        "damage": result.damage,
-                        "critical": result.critical_hit,
-                        "hit": result.hit,
-                        "location": location,
-                        "weapon": weapon_name,
-                        "damage_type": damage_type,
-                        "attacker_race": attacker_race,
-                        "defender_armor": defender_armor,
-                        "combat_history": self._get_combat_history_for_llm(),
-                        "battlefield_state": self._build_battlefield_state()
-                    },
+                    action_data=attack_context,
                     timeout=20.0
                 )
             if narrative:
@@ -2070,34 +2031,18 @@ class CLI:
 
         # Display narrative if available
         if self.llm_enhancer and result.hit:
-            room = self.game_state.get_current_room()
-            location = room.get("name", "")
-
-            damage_info = spell_data.get("damage", {})
-            damage_type = damage_info.get("damage_type", "magical")
-
-            # Get caster race
-            races_data = self.game_state.data_loader.load_races()
-            caster_race_data = races_data.get(caster.race, {})
-            caster_race = caster_race_data.get("name", "")
+            # Build complete attack context using service with spell data
+            spell_action_data = {
+                "name": spell_data.get("name", "spell"),
+                "damage_type": spell_data.get("damage", {}).get("damage_type", "magical")
+            }
+            attack_context = self.context_builder.build_attack_context(
+                caster, target, result, action_data=spell_action_data, is_spell=True
+            )
 
             with console.status("", spinner="dots"):
                 narrative = self.llm_enhancer.get_combat_narrative_sync(
-                    action_data={
-                        "attacker": result.attacker_name,
-                        "defender": result.defender_name,
-                        "damage": result.damage,
-                        "critical": result.critical_hit,
-                        "hit": result.hit,
-                        "location": location,
-                        "weapon": spell_data.get("name", "spell"),
-                        "damage_type": damage_type,
-                        "attacker_race": caster_race,
-                        "defender_armor": "",
-                        "combat_history": self._get_combat_history_for_llm(),
-                        "battlefield_state": self._build_battlefield_state(),
-                        "is_spell": True
-                    },
+                    action_data=attack_context,
                     timeout=20.0
                 )
             if narrative:
@@ -2582,42 +2527,14 @@ class CLI:
 
                 # Get and display attack narrative FIRST (if hit)
                 if self.llm_enhancer and result.hit:
-                    room = self.game_state.get_current_room()
-                    location = room.get("name", "")
-
-                    # Get weapon name and damage type from action
-                    weapon_name = action.get("name", "weapon")
-                    damage_type = action.get("damage_type", "")
-
-                    # Get attacker type/race from monster data
-                    attacker_race = monster_data.get("type", "")
-
-                    # Get defender armor (target is always a player character here)
-                    defender_armor = ""
-                    items_data = self.game_state.data_loader.load_items()
-                    equipped_armor_id = target.inventory.get_equipped_item(EquipmentSlot.ARMOR)
-                    if equipped_armor_id:
-                        armor_data = items_data.get("armor", {}).get(equipped_armor_id, {})
-                        armor_type = armor_data.get("armor_type", "")
-                        if armor_type:
-                            defender_armor = f"{armor_type} armor"
+                    # Build complete attack context using service
+                    attack_context = self.context_builder.build_attack_context(
+                        enemy, target, result, action_data=action
+                    )
 
                     with console.status("", spinner="dots"):
                         narrative = self.llm_enhancer.get_combat_narrative_sync(
-                            action_data={
-                                "attacker": result.attacker_name,
-                                "defender": result.defender_name,
-                                "damage": result.damage,
-                                "critical": result.critical_hit,
-                                "hit": result.hit,
-                                "location": location,
-                                "weapon": weapon_name,
-                                "damage_type": damage_type,
-                                "attacker_race": attacker_race,
-                                "defender_armor": defender_armor,
-                                "combat_history": self._get_combat_history_for_llm(),
-                                "battlefield_state": self._build_battlefield_state()
-                            },
+                            action_data=attack_context,
                             timeout=20.0
                         )
                     if narrative:
