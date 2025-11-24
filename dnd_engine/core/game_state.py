@@ -1832,7 +1832,7 @@ class GameState:
                 current_hp=creature.current_hp,
                 max_hp=creature.max_hp,
                 is_alive=creature.is_alive,
-                conditions=list(creature.conditions.keys()) if hasattr(creature, 'conditions') else [],
+                conditions=list(creature.conditions) if hasattr(creature, 'conditions') else [],
                 is_player=creature in [c for c in self.party.characters],
                 ac=creature.ac
             )
