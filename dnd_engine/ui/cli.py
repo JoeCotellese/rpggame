@@ -214,14 +214,21 @@ class CLI:
         # Convert party data to table format
         party_data = []
         for char in self.game_state.party.characters:
+            # Get active effects for this character
+            active_effects = self.game_state.time_manager.get_effects_for_character(char.name)
+
+            # Get effective AC (includes modifiers from spells/effects)
+            effective_ac = self.game_state.get_effective_ac(char)
+
             party_data.append({
                 "name": char.name,
                 "class": char.character_class.value.capitalize(),
                 "level": char.level,
                 "hp": char.current_hp,
                 "max_hp": char.max_hp,
-                "ac": char.ac,
-                "xp": char.xp
+                "ac": effective_ac,
+                "xp": char.xp,
+                "active_effects": active_effects
             })
 
         table = create_party_status_table(party_data)
@@ -1680,7 +1687,8 @@ class CLI:
             defender=target,
             attack_bonus=attack_bonus,
             damage_dice=damage_dice,
-            apply_damage=True
+            apply_damage=True,
+            game_state=self.game_state
         )
 
         # Check concentration if target was hit and took damage
@@ -2594,7 +2602,8 @@ class CLI:
                     damage_dice=action["damage"],
                     apply_damage=True,
                     event_bus=self.game_state.event_bus,
-                    action=action  # Pass action data for saving throw processing
+                    action=action,  # Pass action data for saving throw processing
+                    game_state=self.game_state
                 )
 
                 # Check concentration if target was hit and took damage

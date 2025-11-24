@@ -23,16 +23,30 @@ class EffectType(str, Enum):
     DISEASE = "disease"
 
 
+class ModifierType(str, Enum):
+    """Types of stat modifiers that effects can apply."""
+    AC_SET_BASE = "ac_set_base"      # Set base AC (Mage Armor: 13 + DEX)
+    AC_BONUS = "ac_bonus"            # Add to AC (Shield: +5)
+    ATTACK_BONUS = "attack_bonus"    # Add to attack rolls (Bless: +1d4)
+    SAVE_BONUS = "save_bonus"        # Add to saves (Bless: +1d4)
+    SPEED_BONUS = "speed_bonus"      # Add to movement (Longstrider: +10)
+
+
 @dataclass
 class ActiveEffect:
     """
     Represents a timed effect active on a character.
 
+    Supports both time-based (minutes/hours) and round-based (combat) durations.
+    This allows short combat effects (Shield: 1 round) to work differently from
+    long exploration buffs (Mage Armor: 8 hours).
+
     Attributes:
         effect_type: Type of effect (spell, condition, buff, etc.)
         source: What created this effect (spell name, item name, etc.)
-        duration_minutes: Total duration in minutes
-        remaining_minutes: Minutes remaining before expiration
+        duration_type: How duration is tracked ("rounds", "minutes", "hours", "permanent")
+        duration_value: Total duration in the appropriate unit
+        remaining_value: Remaining duration before expiration
         target_name: Name of the character affected
         description: Human-readable description of the effect
         concentration: Whether this effect requires concentration
@@ -41,8 +55,9 @@ class ActiveEffect:
     """
     effect_type: EffectType
     source: str
-    duration_minutes: float
-    remaining_minutes: float
+    duration_type: str  # "rounds", "minutes", "hours", "permanent"
+    duration_value: float
+    remaining_value: float
     target_name: str
     description: str = ""
     concentration: bool = False
@@ -50,18 +65,21 @@ class ActiveEffect:
     effect_data: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
-        """Ensure remaining_minutes doesn't exceed duration."""
-        if self.remaining_minutes > self.duration_minutes:
-            self.remaining_minutes = self.duration_minutes
+        """Ensure remaining_value doesn't exceed duration."""
+        if self.remaining_value > self.duration_value:
+            self.remaining_value = self.duration_value
 
     @property
     def is_expired(self) -> bool:
         """Check if the effect has expired."""
-        return self.remaining_minutes <= 0
+        return self.remaining_value <= 0
 
     def advance_time(self, minutes: float) -> bool:
         """
-        Advance time and return True if effect expired.
+        Advance time-based duration and return True if effect expired.
+
+        Only affects effects with duration_type "minutes" or "hours".
+        Round-based effects are unaffected.
 
         Args:
             minutes: Number of minutes to advance
@@ -69,31 +87,119 @@ class ActiveEffect:
         Returns:
             True if effect expired, False otherwise
         """
-        self.remaining_minutes -= minutes
+        if self.duration_type == "minutes":
+            self.remaining_value -= minutes
+        elif self.duration_type == "hours":
+            self.remaining_value -= minutes / 60.0
+        # Round-based effects don't advance with time
+        return self.is_expired
+
+    def advance_rounds(self, rounds: int = 1) -> bool:
+        """
+        Advance round-based duration and return True if effect expired.
+
+        Only affects effects with duration_type "rounds".
+        Time-based effects are unaffected.
+
+        Args:
+            rounds: Number of combat rounds to advance
+
+        Returns:
+            True if effect expired, False otherwise
+        """
+        if self.duration_type == "rounds":
+            self.remaining_value -= rounds
+        # Time-based effects don't advance with rounds
         return self.is_expired
 
     def get_time_remaining_display(self) -> str:
         """Get a human-readable time remaining string."""
-        if self.remaining_minutes <= 0:
+        if self.remaining_value <= 0:
             return "Expired"
 
-        minutes = self.remaining_minutes
+        remaining = self.remaining_value
 
-        # Convert to appropriate unit
-        if minutes < 1:
-            seconds = int(minutes * 60)
-            return f"{seconds} seconds"
-        elif minutes < 60:
-            if minutes == int(minutes):
-                return f"{int(minutes)} minute{'s' if minutes != 1 else ''}"
+        # Format based on duration type
+        if self.duration_type == "rounds":
+            rounds = int(remaining)
+            if rounds == 1:
+                return "1 round"
             else:
-                return f"{minutes:.1f} minutes"
-        else:
-            hours = minutes / 60
+                return f"{rounds} rounds"
+        elif self.duration_type == "hours":
+            hours = remaining
             if hours == int(hours):
                 return f"{int(hours)} hour{'s' if hours != 1 else ''}"
             else:
                 return f"{hours:.1f} hours"
+        else:  # minutes
+            minutes = remaining
+            if minutes < 1:
+                seconds = int(minutes * 60)
+                return f"{seconds} seconds"
+            elif minutes < 60:
+                if minutes == int(minutes):
+                    return f"{int(minutes)} minute{'s' if minutes != 1 else ''}"
+                else:
+                    return f"{minutes:.1f} minutes"
+            else:
+                hours = minutes / 60
+                if hours == int(hours):
+                    return f"{int(hours)} hour{'s' if hours != 1 else ''}"
+                else:
+                    return f"{hours:.1f} hours"
+
+
+def parse_duration(duration_string: str) -> Optional[tuple[str, float]]:
+    """
+    Parse a duration string to (duration_type, duration_value).
+
+    Supports formats like:
+    - "1 round", "10 rounds" -> ("rounds", 10)
+    - "1 minute", "10 minutes" -> ("minutes", 10)
+    - "1 hour", "8 hours" -> ("hours", 8)
+    - "up to 1 hour" (extracts "1 hour")
+    - "Concentration, up to 1 minute" (extracts "1 minute")
+
+    Args:
+        duration_string: Duration string to parse
+
+    Returns:
+        Tuple of (duration_type, duration_value), or None if unparseable
+        duration_type: "rounds", "minutes", "hours"
+        duration_value: numeric value in that unit
+    """
+    if not duration_string:
+        return None
+
+    # Normalize string
+    duration_string = duration_string.lower().strip()
+
+    # Remove "up to", "concentration", commas
+    duration_string = re.sub(r'(up to|concentration|,)', '', duration_string).strip()
+
+    # Pattern: number + unit
+    pattern = r'(\d+(?:\.\d+)?)\s*(second|seconds|minute|minutes|min|hour|hours|hr|round|rounds)'
+    match = re.search(pattern, duration_string)
+
+    if not match:
+        return None
+
+    value = float(match.group(1))
+    unit = match.group(2)
+
+    # Determine duration type and convert value to appropriate unit
+    if unit in ['round', 'rounds']:
+        return ("rounds", value)
+    elif unit in ['second', 'seconds']:
+        # Convert seconds to minutes for consistency
+        return ("minutes", value / 60.0)
+    elif unit in ['minute', 'minutes', 'min']:
+        return ("minutes", value)
+    elif unit in ['hour', 'hours', 'hr']:
+        return ("hours", value)
+
+    return None
 
 
 def parse_duration_to_minutes(duration_string: str) -> Optional[float]:
@@ -280,6 +386,48 @@ class TimeManager:
                     "total_hours": new_hours
                 }
             ))
+
+        return expired_effects
+
+    def advance_round(self, rounds: int = 1) -> List[ActiveEffect]:
+        """
+        Advance combat rounds and process round-based effect expirations.
+
+        This is separate from advance_time() to handle effects that expire
+        based on combat rounds (like Shield: 1 round) vs exploration time
+        (like Mage Armor: 8 hours).
+
+        Args:
+            rounds: Number of combat rounds to advance
+
+        Returns:
+            List of effects that expired during this advancement
+        """
+        if rounds <= 0:
+            return []
+
+        # Track expired effects
+        expired_effects = []
+
+        # Advance all active round-based effects
+        for effect in self.active_effects[:]:  # Copy list to allow modification
+            if effect.advance_rounds(rounds):
+                expired_effects.append(effect)
+                self.active_effects.remove(effect)
+
+                # Emit effect expired event
+                if self.event_bus:
+                    from dnd_engine.utils.events import EventType, Event
+                    self.event_bus.emit(Event(
+                        EventType.EFFECT_EXPIRED,
+                        {
+                            "effect": effect,
+                            "target_name": effect.target_name,
+                            "source": effect.source,
+                            "effect_type": effect.effect_type.value,
+                            "reason": "round_ended"
+                        }
+                    ))
 
         return expired_effects
 

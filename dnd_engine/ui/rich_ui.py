@@ -82,7 +82,7 @@ def create_party_status_table(party_data: List[Dict[str, Any]]) -> Table:
 
     Args:
         party_data: List of dicts with character info
-                   {name, level, class, hp, max_hp, ac, xp}
+                   {name, level, class, hp, max_hp, ac, xp, active_effects}
 
     Returns:
         Formatted Rich Table
@@ -93,6 +93,7 @@ def create_party_status_table(party_data: List[Dict[str, Any]]) -> Table:
     table.add_column("Level", justify="center")
     table.add_column("HP", justify="center")
     table.add_column("AC", justify="center")
+    table.add_column("Active Effects", style="dim", no_wrap=False)
     table.add_column("XP", justify="right")
 
     for char in party_data:
@@ -113,12 +114,29 @@ def create_party_status_table(party_data: List[Dict[str, Any]]) -> Table:
 
         hp_text = f"[{hp_color}]{hp_symbol}{hp}/{max_hp}[/{hp_color}]"
 
+        # Format active effects
+        active_effects = char.get("active_effects", [])
+        if active_effects:
+            effects_text = []
+            for effect in active_effects:
+                # Build effect display: "Name (duration)"
+                effect_name = effect.source
+                time_remaining = effect.get_time_remaining_display()
+                concentration_marker = " 🎯" if effect.concentration else ""
+
+                effects_text.append(f"[magenta]{effect_name}[/magenta] ({time_remaining}){concentration_marker}")
+
+            effects_display = "\n".join(effects_text)
+        else:
+            effects_display = "—"
+
         table.add_row(
             f"[bold]{char.get('name', 'Unknown')}[/bold]",
             char.get("class", "—"),
             str(char.get("level", 0)),
             hp_text,
             str(char.get("ac", 0)),
+            effects_display,
             str(char.get("xp", 0))
         )
 

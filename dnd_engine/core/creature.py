@@ -78,7 +78,7 @@ class Creature:
         self.name = name
         self.max_hp = max_hp
         self.current_hp = current_hp if current_hp is not None else max_hp
-        self.ac = ac
+        self._base_ac = ac  # Store base AC (before modifiers from spells/effects)
         self.abilities = abilities
         # Condition tracking with metadata for duration and repeat saves
         # Maps condition name -> metadata dict
@@ -93,6 +93,21 @@ class Creature:
     def initiative_modifier(self) -> int:
         """Initiative modifier (uses Dexterity)"""
         return self.abilities.dex_mod
+
+    @property
+    def ac(self) -> int:
+        """
+        Base armor class (without spell modifiers).
+
+        For effective AC including active effects like Mage Armor or Shield,
+        use GameState.get_effective_ac(creature) instead.
+        """
+        return self._base_ac
+
+    @ac.setter
+    def ac(self, value: int) -> None:
+        """Set base armor class."""
+        self._base_ac = value
 
     def take_damage(self, amount: int) -> None:
         """
@@ -358,4 +373,4 @@ class Creature:
     def __str__(self) -> str:
         """String representation of the creature"""
         status = "alive" if self.is_alive else "dead"
-        return f"{self.name} (HP: {self.current_hp}/{self.max_hp}, AC: {self.ac}, {status})"
+        return f"{self.name} (HP: {self.current_hp}/{self.max_hp}, AC: {self._base_ac}, {status})"

@@ -99,16 +99,17 @@ class TestActiveEffect:
         effect = ActiveEffect(
             effect_type=EffectType.SPELL,
             source="Bless",
-            duration_minutes=10.0,
-            remaining_minutes=10.0,
+            duration_type="minutes",
+            duration_value=10.0,
+            remaining_value=10.0,
             target_name="Gandalf",
             description="Gain +1d4 to attacks and saves"
         )
 
         assert effect.effect_type == EffectType.SPELL
         assert effect.source == "Bless"
-        assert effect.duration_minutes == 10.0
-        assert effect.remaining_minutes == 10.0
+        assert effect.duration_value == 10.0
+        assert effect.remaining_value == 10.0
         assert effect.target_name == "Gandalf"
         assert not effect.is_expired
 
@@ -117,15 +118,16 @@ class TestActiveEffect:
         effect = ActiveEffect(
             effect_type=EffectType.SPELL,
             source="Shield",
-            duration_minutes=1.0,
-            remaining_minutes=0.5,
+            duration_type="minutes",
+            duration_value=1.0,
+            remaining_value=0.5,
             target_name="Aragorn"
         )
 
         # Advance time by 0.3 minutes - should not expire
         expired = effect.advance_time(0.3)
         assert not expired
-        assert effect.remaining_minutes == 0.2
+        assert abs(effect.remaining_value - 0.2) < 0.001
 
         # Advance time by 0.3 minutes - should expire
         expired = effect.advance_time(0.3)
@@ -137,8 +139,9 @@ class TestActiveEffect:
         effect = ActiveEffect(
             effect_type=EffectType.SPELL,
             source="Haste",
-            duration_minutes=10.0,
-            remaining_minutes=10.0,
+            duration_type="minutes",
+            duration_value=10.0,
+            remaining_value=10.0,
             target_name="Legolas",
             concentration=True,
             caster_name="Gandalf"
@@ -152,20 +155,23 @@ class TestActiveEffect:
         effect = ActiveEffect(
             effect_type=EffectType.SPELL,
             source="Light",
-            duration_minutes=60.0,
-            remaining_minutes=60.0,
+            duration_type="hours",
+            duration_value=1.0,
+            remaining_value=1.0,
             target_name="Frodo"
         )
 
         assert "hour" in effect.get_time_remaining_display()
 
-        effect.remaining_minutes = 1.0
+        effect.remaining_value = 0.5  # 30 minutes in hours
+        effect.duration_type = "minutes"
+        effect.remaining_value = 1.0
         assert "minute" in effect.get_time_remaining_display()
 
-        effect.remaining_minutes = 0.1
+        effect.remaining_value = 0.1
         assert "seconds" in effect.get_time_remaining_display()
 
-        effect.remaining_minutes = 0.0
+        effect.remaining_value = 0.0
         assert effect.get_time_remaining_display() == "Expired"
 
 
@@ -212,8 +218,9 @@ class TestTimeManager:
         effect = ActiveEffect(
             effect_type=EffectType.SPELL,
             source="Mage Armor",
-            duration_minutes=480.0,
-            remaining_minutes=480.0,
+            duration_type="hours",
+            duration_value=8.0,
+            remaining_value=8.0,
             target_name="Wizard"
         )
 
@@ -227,8 +234,9 @@ class TestTimeManager:
         effect = ActiveEffect(
             effect_type=EffectType.SPELL,
             source="Shield of Faith",
-            duration_minutes=10.0,
-            remaining_minutes=10.0,
+            duration_type="minutes",
+            duration_value=10.0,
+            remaining_value=10.0,
             target_name="Paladin"
         )
 
@@ -239,7 +247,7 @@ class TestTimeManager:
         expired = tm.advance_time(5.0)
         assert len(expired) == 0
         assert len(tm.active_effects) == 1
-        assert effect.remaining_minutes == 5.0
+        assert effect.remaining_value == 5.0
 
         # Advance time to expiration
         expired = tm.advance_time(5.0)
@@ -254,16 +262,18 @@ class TestTimeManager:
         effect1 = ActiveEffect(
             effect_type=EffectType.SPELL,
             source="Bless",
-            duration_minutes=10.0,
-            remaining_minutes=10.0,
+            duration_type="minutes",
+            duration_value=10.0,
+            remaining_value=10.0,
             target_name="Cleric"
         )
 
         effect2 = ActiveEffect(
             effect_type=EffectType.SPELL,
             source="Guidance",
-            duration_minutes=1.0,
-            remaining_minutes=1.0,
+            duration_type="minutes",
+            duration_value=1.0,
+            remaining_value=1.0,
             target_name="Cleric"
         )
 
@@ -284,16 +294,18 @@ class TestTimeManager:
         effect1 = ActiveEffect(
             effect_type=EffectType.SPELL,
             source="Light",
-            duration_minutes=60.0,
-            remaining_minutes=30.0,  # Half expired
+            duration_type="hours",
+            duration_value=1.0,
+            remaining_value=0.5,  # Half expired
             target_name="Torch"
         )
 
         effect2 = ActiveEffect(
             effect_type=EffectType.SPELL,
             source="Light",
-            duration_minutes=60.0,
-            remaining_minutes=60.0,  # Fresh cast
+            duration_type="hours",
+            duration_value=1.0,
+            remaining_value=1.0,  # Fresh cast
             target_name="Torch"
         )
 
@@ -303,7 +315,7 @@ class TestTimeManager:
         # Add same effect - should replace
         tm.add_effect(effect2)
         assert len(tm.active_effects) == 1
-        assert tm.active_effects[0].remaining_minutes == 60.0
+        assert tm.active_effects[0].remaining_value == 1.0
 
     def test_remove_effect(self):
         """Test removing a specific effect."""
@@ -311,8 +323,9 @@ class TestTimeManager:
         effect = ActiveEffect(
             effect_type=EffectType.SPELL,
             source="Detect Magic",
-            duration_minutes=10.0,
-            remaining_minutes=10.0,
+            duration_type="minutes",
+            duration_value=10.0,
+            remaining_value=10.0,
             target_name="Wizard"
         )
 
@@ -336,8 +349,9 @@ class TestTimeManager:
         effect1 = ActiveEffect(
             effect_type=EffectType.SPELL,
             source="Haste",
-            duration_minutes=10.0,
-            remaining_minutes=10.0,
+            duration_type="minutes",
+            duration_value=10.0,
+            remaining_value=10.0,
             target_name="Fighter",
             concentration=True,
             caster_name="Wizard"
@@ -346,8 +360,9 @@ class TestTimeManager:
         effect2 = ActiveEffect(
             effect_type=EffectType.SPELL,
             source="Fly",
-            duration_minutes=10.0,
-            remaining_minutes=10.0,
+            duration_type="minutes",
+            duration_value=10.0,
+            remaining_value=10.0,
             target_name="Rogue",
             concentration=True,
             caster_name="Wizard"
@@ -357,8 +372,9 @@ class TestTimeManager:
         effect3 = ActiveEffect(
             effect_type=EffectType.SPELL,
             source="Mage Armor",
-            duration_minutes=480.0,
-            remaining_minutes=480.0,
+            duration_type="hours",
+            duration_value=8.0,
+            remaining_value=8.0,
             target_name="Wizard",
             concentration=False
         )
@@ -383,24 +399,27 @@ class TestTimeManager:
         effect1 = ActiveEffect(
             effect_type=EffectType.SPELL,
             source="Bless",
-            duration_minutes=10.0,
-            remaining_minutes=10.0,
+            duration_type="minutes",
+            duration_value=10.0,
+            remaining_value=10.0,
             target_name="Fighter"
         )
 
         effect2 = ActiveEffect(
             effect_type=EffectType.SPELL,
             source="Shield of Faith",
-            duration_minutes=10.0,
-            remaining_minutes=10.0,
+            duration_type="minutes",
+            duration_value=10.0,
+            remaining_value=10.0,
             target_name="Fighter"
         )
 
         effect3 = ActiveEffect(
             effect_type=EffectType.SPELL,
             source="Bless",
-            duration_minutes=10.0,
-            remaining_minutes=10.0,
+            duration_type="minutes",
+            duration_value=10.0,
+            remaining_value=10.0,
             target_name="Cleric"
         )
 
@@ -425,8 +444,9 @@ class TestTimeManager:
             effect = ActiveEffect(
                 effect_type=EffectType.SPELL,
                 source=f"Spell{i}",
-                duration_minutes=10.0,
-                remaining_minutes=10.0,
+                duration_type="minutes",
+                duration_value=10.0,
+                remaining_value=10.0,
                 target_name="Target"
             )
             tm.add_effect(effect)
@@ -512,8 +532,9 @@ class TestTimeManagerEvents:
         effect = ActiveEffect(
             effect_type=EffectType.SPELL,
             source="Shield",
-            duration_minutes=1.0,
-            remaining_minutes=1.0,
+            duration_type="minutes",
+            duration_value=1.0,
+            remaining_value=1.0,
             target_name="Wizard"
         )
 
@@ -542,8 +563,9 @@ class TestTimeManagerEvents:
         effect = ActiveEffect(
             effect_type=EffectType.SPELL,
             source="Haste",
-            duration_minutes=10.0,
-            remaining_minutes=10.0,
+            duration_type="minutes",
+            duration_value=10.0,
+            remaining_value=10.0,
             target_name="Fighter",
             concentration=True,
             caster_name="Wizard"

@@ -23,9 +23,15 @@
     },
     "attack_type": "ranged",
     "higher_levels": "This spell's damage increases by 1d10 when you reach 5th level (2d10), 11th level (3d10), and 17th level (4d10).",
-    "classes": ["wizard", "sorcerer"],
+    "classes": [
+      "wizard",
+      "sorcerer"
+    ],
     "source": "D&D 5E SRD (CC BY 4.0)",
-    "tags": ["combat", "damage"]
+    "tags": [
+      "combat",
+      "damage"
+    ]
   },
   "ray_of_frost": {
     "id": "ray_of_frost",
@@ -51,9 +57,16 @@
     },
     "attack_type": "ranged",
     "higher_levels": "The spell's damage increases by 1d8 when you reach 5th level (2d8), 11th level (3d8), and 17th level (4d8).",
-    "classes": ["wizard", "sorcerer"],
+    "classes": [
+      "wizard",
+      "sorcerer"
+    ],
     "source": "D&D 5E SRD (CC BY 4.0)",
-    "tags": ["combat", "damage", "debuff"]
+    "tags": [
+      "combat",
+      "damage",
+      "debuff"
+    ]
   },
   "sacred_flame": {
     "id": "sacred_flame",
@@ -82,9 +95,14 @@
       "on_success": "none"
     },
     "higher_levels": "The spell's damage increases by 1d8 when you reach 5th level (2d8), 11th level (3d8), and 17th level (4d8).",
-    "classes": ["cleric"],
+    "classes": [
+      "cleric"
+    ],
     "source": "D&D 5E SRD (CC BY 4.0)",
-    "tags": ["combat", "damage"]
+    "tags": [
+      "combat",
+      "damage"
+    ]
   },
   "light": {
     "id": "light",
@@ -105,9 +123,15 @@
     "concentration": false,
     "ritual": false,
     "description": "You touch one object that is no larger than 10 feet in any dimension. Until the spell ends, the object sheds bright light in a 20-foot radius and dim light for an additional 20 feet. The light can be colored as you like. Completely covering the object with something opaque blocks the light. The spell ends if you cast it again or dismiss it as an action.",
-    "classes": ["wizard", "cleric", "sorcerer"],
+    "classes": [
+      "wizard",
+      "cleric",
+      "sorcerer"
+    ],
     "source": "D&D 5E SRD (CC BY 4.0)",
-    "tags": ["utility"]
+    "tags": [
+      "utility"
+    ]
   },
   "mage_hand": {
     "id": "mage_hand",
@@ -127,9 +151,14 @@
     "concentration": true,
     "ritual": false,
     "description": "A spectral, floating hand appears at a point you choose within range. The hand lasts for the duration or until you dismiss it as an action. The hand vanishes if it is ever more than 30 feet away from you or if you cast this spell again. You can use your action to control the hand. You can use the hand to manipulate an object, open an unlocked door or container, stow or retrieve an item from an open container, or pour the contents out of a vial. You can move the hand up to 30 feet each time you use it. The hand can't attack, activate magic items, or carry more than 10 pounds.",
-    "classes": ["wizard", "sorcerer"],
+    "classes": [
+      "wizard",
+      "sorcerer"
+    ],
     "source": "D&D 5E SRD (CC BY 4.0)",
-    "tags": ["utility"]
+    "tags": [
+      "utility"
+    ]
   },
   "prestidigitation": {
     "id": "prestidigitation",
@@ -149,9 +178,14 @@
     "concentration": false,
     "ritual": false,
     "description": "This spell is a minor magical trick that novice spellcasters use for practice. You create one of the following magical effects within range: You create an instantaneous, harmless sensory effect, such as a shower of sparks, a puff of wind, faint musical notes, or an odd odor. You instantaneously light or snuff out a candle, a torch, or a small campfire. You instantaneously clean or soil an object no larger than 1 cubic foot. You chill, warm, or flavor up to 1 cubic foot of nonliving material for 1 hour. You make a color, a small mark, or a symbol appear on an object or a surface for 1 hour. You create a nonmagical trinket or an illusory image that can fit in your hand and that lasts until the end of your next turn. If you cast this spell multiple times, you can have up to three of its non-instantaneous effects active at a time, and you can dismiss such an effect as an action.",
-    "classes": ["wizard", "sorcerer"],
+    "classes": [
+      "wizard",
+      "sorcerer"
+    ],
     "source": "D&D 5E SRD (CC BY 4.0)",
-    "tags": ["utility"]
+    "tags": [
+      "utility"
+    ]
   },
   "magic_missile": {
     "id": "magic_missile",
@@ -176,9 +210,15 @@
       "higher_levels": "When you cast this spell using a spell slot of 2nd level or higher, the spell creates one more dart for each slot level above 1st."
     },
     "higher_levels": "When you cast this spell using a spell slot of 2nd level or higher, the spell creates one more dart for each slot level above 1st.",
-    "classes": ["wizard", "sorcerer"],
+    "classes": [
+      "wizard",
+      "sorcerer"
+    ],
     "source": "D&D 5E SRD (CC BY 4.0)",
-    "tags": ["combat", "damage"]
+    "tags": [
+      "combat",
+      "damage"
+    ]
   },
   "cure_wounds": {
     "id": "cure_wounds",
@@ -202,9 +242,15 @@
       "higher_levels": "When you cast this spell using a spell slot of 2nd level or higher, the healing increases by 1d8 for each slot level above 1st."
     },
     "higher_levels": "When you cast this spell using a spell slot of 2nd level or higher, the healing increases by 1d8 for each slot level above 1st.",
-    "classes": ["cleric", "paladin"],
+    "classes": [
+      "cleric",
+      "paladin"
+    ],
     "source": "D&D 5E SRD (CC BY 4.0)",
-    "tags": ["combat", "healing"]
+    "tags": [
+      "combat",
+      "healing"
+    ]
   },
   "shield": {
     "id": "shield",
@@ -224,9 +270,21 @@
     "concentration": false,
     "ritual": false,
     "description": "An invisible barrier of magical force appears and protects you. Until the start of your next turn, you have a +5 bonus to AC, including against the triggering attack, and you take no damage from magic missile.",
-    "classes": ["wizard", "sorcerer"],
+    "classes": [
+      "wizard",
+      "sorcerer"
+    ],
     "source": "D&D 5E SRD (CC BY 4.0)",
-    "tags": ["combat", "defense", "reaction", "buff"]
+    "tags": [
+      "combat",
+      "defense",
+      "reaction",
+      "buff"
+    ],
+    "effect": {
+      "modifier_type": "ac_bonus",
+      "value": 5
+    }
   },
   "burning_hands": {
     "id": "burning_hands",
@@ -256,9 +314,16 @@
     },
     "area_of_effect": "15-foot cone",
     "higher_levels": "When you cast this spell using a spell slot of 2nd level or higher, the damage increases by 1d6 for each slot level above 1st.",
-    "classes": ["wizard", "sorcerer"],
+    "classes": [
+      "wizard",
+      "sorcerer"
+    ],
     "source": "D&D 5E SRD (CC BY 4.0)",
-    "tags": ["combat", "damage", "aoe"]
+    "tags": [
+      "combat",
+      "damage",
+      "aoe"
+    ]
   },
   "detect_magic": {
     "id": "detect_magic",
@@ -278,9 +343,16 @@
     "concentration": true,
     "ritual": true,
     "description": "For the duration, you sense the presence of magic within 30 feet of you. If you sense magic in this way, you can use your action to see a faint aura around any visible creature or object in the area that bears magic, and you learn its school of magic, if any. The spell can penetrate most barriers, but it is blocked by 1 foot of stone, 1 inch of common metal, a thin sheet of lead, or 3 feet of wood or dirt.",
-    "classes": ["wizard", "cleric", "sorcerer"],
+    "classes": [
+      "wizard",
+      "cleric",
+      "sorcerer"
+    ],
     "source": "D&D 5E SRD (CC BY 4.0)",
-    "tags": ["utility", "ritual"]
+    "tags": [
+      "utility",
+      "ritual"
+    ]
   },
   "sleep": {
     "id": "sleep",
@@ -303,9 +375,16 @@
     "description": "This spell sends creatures into a magical slumber. Roll 5d8; the total is how many hit points of creatures this spell can affect. Creatures within 20 feet of a point you choose within range are affected in ascending order of their current hit points (ignoring unconscious creatures). Starting with the creature that has the lowest current hit points, each creature affected by this spell falls unconscious until the spell ends, the sleeper takes damage, or someone uses an action to shake or slap the sleeper awake. Subtract each creature's hit points from the total before moving on to the creature with the next lowest hit points. A creature's hit points must be equal to or less than the remaining total for that creature to be affected.",
     "area_of_effect": "20-foot radius",
     "higher_levels": "When you cast this spell using a spell slot of 2nd level or higher, roll an additional 2d8 for each slot level above 1st.",
-    "classes": ["wizard", "sorcerer"],
+    "classes": [
+      "wizard",
+      "sorcerer"
+    ],
     "source": "D&D 5E SRD (CC BY 4.0)",
-    "tags": ["combat", "control", "aoe"]
+    "tags": [
+      "combat",
+      "control",
+      "aoe"
+    ]
   },
   "mage_armor": {
     "id": "mage_armor",
@@ -326,9 +405,20 @@
     "concentration": false,
     "ritual": false,
     "description": "You touch a willing creature who isn't wearing armor, and a protective magical force surrounds it until the spell ends. The target's base AC becomes 13 + its Dexterity modifier. The spell ends if the target dons armor or if you dismiss the spell as an action.",
-    "classes": ["wizard", "sorcerer"],
+    "classes": [
+      "wizard",
+      "sorcerer"
+    ],
     "source": "D&D 5E SRD (CC BY 4.0)",
-    "tags": ["combat", "buff", "defense"]
+    "tags": [
+      "combat",
+      "buff",
+      "defense"
+    ],
+    "effect": {
+      "modifier_type": "ac_set_base",
+      "formula": "13 + dex_mod"
+    }
   },
   "identify": {
     "id": "identify",
@@ -348,9 +438,14 @@
     "concentration": false,
     "ritual": true,
     "description": "You choose one object that you must touch throughout the casting of the spell. If it is a magic item or some other magic-imbued object, you learn its properties and how to use them, whether it requires attunement to use, and how many charges it has, if any. You learn whether any spells are affecting the item and what they are. If the item was created by a spell, you learn which spell created it.",
-    "classes": ["wizard"],
+    "classes": [
+      "wizard"
+    ],
     "source": "D&D 5E SRD (CC BY 4.0)",
-    "tags": ["utility", "ritual"]
+    "tags": [
+      "utility",
+      "ritual"
+    ]
   },
   "scorching_ray": {
     "id": "scorching_ray",
@@ -376,9 +471,15 @@
     },
     "attack_type": "ranged",
     "higher_levels": "When you cast this spell using a spell slot of 3rd level or higher, you create one additional ray for each slot level above 2nd.",
-    "classes": ["wizard", "sorcerer"],
+    "classes": [
+      "wizard",
+      "sorcerer"
+    ],
     "source": "D&D 5E SRD (CC BY 4.0)",
-    "tags": ["combat", "damage"]
+    "tags": [
+      "combat",
+      "damage"
+    ]
   },
   "hold_person": {
     "id": "hold_person",
@@ -404,9 +505,17 @@
       "on_success": "negates"
     },
     "higher_levels": "When you cast this spell using a spell slot of 3rd level or higher, you can target one additional humanoid for each slot level above 2nd. The humanoids must be within 30 feet of each other when you target them.",
-    "classes": ["wizard", "cleric", "sorcerer"],
+    "classes": [
+      "wizard",
+      "cleric",
+      "sorcerer"
+    ],
     "source": "D&D 5E SRD (CC BY 4.0)",
-    "tags": ["combat", "control", "debuff"]
+    "tags": [
+      "combat",
+      "control",
+      "debuff"
+    ]
   },
   "spiritual_weapon": {
     "id": "spiritual_weapon",
@@ -433,9 +542,14 @@
     },
     "attack_type": "melee",
     "higher_levels": "When you cast this spell using a spell slot of 3rd level or higher, the damage increases by 1d8 for every two slot levels above 2nd.",
-    "classes": ["cleric"],
+    "classes": [
+      "cleric"
+    ],
     "source": "D&D 5E SRD (CC BY 4.0)",
-    "tags": ["combat", "damage"]
+    "tags": [
+      "combat",
+      "damage"
+    ]
   },
   "misty_step": {
     "id": "misty_step",
@@ -454,9 +568,15 @@
     "concentration": false,
     "ritual": false,
     "description": "Briefly surrounded by silvery mist, you teleport up to 30 feet to an unoccupied space that you can see.",
-    "classes": ["wizard", "sorcerer"],
+    "classes": [
+      "wizard",
+      "sorcerer"
+    ],
     "source": "D&D 5E SRD (CC BY 4.0)",
-    "tags": ["combat", "utility"]
+    "tags": [
+      "combat",
+      "utility"
+    ]
   },
   "fireball": {
     "id": "fireball",
@@ -487,9 +607,16 @@
     },
     "area_of_effect": "20-foot radius sphere",
     "higher_levels": "When you cast this spell using a spell slot of 4th level or higher, the damage increases by 1d6 for each slot level above 3rd.",
-    "classes": ["wizard", "sorcerer"],
+    "classes": [
+      "wizard",
+      "sorcerer"
+    ],
     "source": "D&D 5E SRD (CC BY 4.0)",
-    "tags": ["combat", "damage", "aoe"]
+    "tags": [
+      "combat",
+      "damage",
+      "aoe"
+    ]
   },
   "counterspell": {
     "id": "counterspell",
@@ -509,9 +636,16 @@
     "ritual": false,
     "description": "You attempt to interrupt a creature in the process of casting a spell. If the creature is casting a spell of 3rd level or lower, its spell fails and has no effect. If it is casting a spell of 4th level or higher, make an ability check using your spellcasting ability. The DC equals 10 + the spell's level. On a success, the creature's spell fails and has no effect.",
     "higher_levels": "When you cast this spell using a spell slot of 4th level or higher, the interrupted spell has no effect if its level is less than or equal to the level of the spell slot you used.",
-    "classes": ["wizard", "sorcerer"],
+    "classes": [
+      "wizard",
+      "sorcerer"
+    ],
     "source": "D&D 5E SRD (CC BY 4.0)",
-    "tags": ["combat", "reaction", "control"]
+    "tags": [
+      "combat",
+      "reaction",
+      "control"
+    ]
   },
   "lightning_bolt": {
     "id": "lightning_bolt",
@@ -542,9 +676,16 @@
     },
     "area_of_effect": "100-foot line (5 feet wide)",
     "higher_levels": "When you cast this spell using a spell slot of 4th level or higher, the damage increases by 1d6 for each slot level above 3rd.",
-    "classes": ["wizard", "sorcerer"],
+    "classes": [
+      "wizard",
+      "sorcerer"
+    ],
     "source": "D&D 5E SRD (CC BY 4.0)",
-    "tags": ["combat", "damage", "aoe"]
+    "tags": [
+      "combat",
+      "damage",
+      "aoe"
+    ]
   },
   "revivify": {
     "id": "revivify",
@@ -566,8 +707,15 @@
     "concentration": false,
     "ritual": false,
     "description": "You touch a creature that has died within the last minute. That creature returns to life with 1 hit point. This spell can't return to life a creature that has died of old age, nor can it restore any missing body parts.",
-    "classes": ["cleric", "paladin"],
+    "classes": [
+      "cleric",
+      "paladin"
+    ],
     "source": "D&D 5E SRD (CC BY 4.0)",
-    "tags": ["combat", "utility", "healing"]
+    "tags": [
+      "combat",
+      "utility",
+      "healing"
+    ]
   }
 }

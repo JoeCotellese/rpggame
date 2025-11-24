@@ -170,7 +170,8 @@ class TestLightSpell:
         effect = active_effects[0]
         assert effect.effect_type == EffectType.SPELL
         assert effect.source == "Light"
-        assert effect.duration_minutes == 60  # 1 hour
+        assert effect.duration_type == "hours"
+        assert effect.duration_value == 1.0  # 1 hour
 
 
 class TestPerceptionPenalties:
