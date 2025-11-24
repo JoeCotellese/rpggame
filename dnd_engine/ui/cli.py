@@ -3,7 +3,7 @@
 
 from typing import Optional, List, Dict, Any
 from dnd_engine.core.character import Character
-from dnd_engine.core.game_state import GameState, CombatEvent
+from dnd_engine.core.game_state import GameState, CombatEvent, CombatSpellResult
 from dnd_engine.core.dice import format_dice_with_modifier
 from dnd_engine.utils.events import Event, EventType
 from dnd_engine.systems.inventory import EquipmentSlot
@@ -1953,7 +1953,7 @@ class CLI:
         spellcasting_ability: str
     ) -> bool:
         """
-        Execute the actual spell logic without boilerplate.
+        Execute spell by delegating to game engine and displaying results.
 
         This is called by the middleware after all validation passes.
         Returns True if action completed successfully.
@@ -1962,240 +1962,148 @@ class CLI:
         current = self.game_state.initiative_tracker.get_current_combatant()
         caster = current.creature
 
-        # Route spell based on type: attack, save, or buff/utility
-        has_attack = spell_data.get("attack_type") is not None
-        has_save = spell_data.get("saving_throw") is not None
-        target_type = spell_data.get("target_type")
-        save_result = None  # Track save result for display
+        # Delegate to game engine for all game logic
+        result = self.game_state.cast_spell_combat(
+            caster=caster,
+            spell_data=spell_data,
+            target=target,
+            spellcasting_ability=spellcasting_ability
+        )
 
-        # Determine targets based on target_type
-        if target_type == "area" and target is None:
-            # Area effect spell - target all living enemies
-            targets = [e for e in self.game_state.active_enemies if e.is_alive]
-            if not targets:
-                print_error("No enemies to target!")
-                return False
-        else:
-            # Single-target spell
-            targets = [target]
+        if not result.success:
+            print_error(result.error or "Spell failed")
+            return False
 
-        if has_attack:
-            # Attack spells (Fire Bolt, Scorching Ray, etc.)
-            # Note: area attack spells are rare, but would need special handling
-            result = self.game_state.combat_engine.resolve_spell_attack(
-                caster=caster,
-                target=targets[0],  # Use targets[0] since target might be None for area spells
-                spell=spell_data,
-                spellcasting_ability=spellcasting_ability,
-                apply_damage=True,
-                event_bus=self.game_state.event_bus
-            )
-        elif has_save:
-            # Saving throw spells (Burning Hands, Fireball, Hold Person, etc.)
-            save_result = self.game_state.combat_engine.resolve_spell_save(
-                caster=caster,
-                targets=targets,
-                spell=spell_data,
-                apply_damage=True,
-                event_bus=self.game_state.event_bus
+        # Display results (UI responsibility only)
+        self._display_spell_result(result, spell_data, caster)
+
+        return True
+
+    def _display_spell_result(
+        self,
+        result: CombatSpellResult,
+        spell_data: Dict[str, Any],
+        caster
+    ) -> None:
+        """Display spell casting results - pure presentation logic."""
+        # Display concentration break for caster if applicable
+        if result.broke_concentration:
+            console.print(
+                f"[yellow]💫 {result.caster_name} stops concentrating on "
+                f"{result.broke_concentration}[/yellow]"
             )
 
-            # For multi-target spells, display results for each target
-            # (Combat engine already determined how many targets based on spell properties)
-            if len(save_result["targets"]) > 1:
-                spell_name = spell_data.get("name", "spell")
-                console.print(f"[bold cyan]✨ {caster.name} casts {spell_name}![/bold cyan]")
-                for target_result in save_result["targets"]:
-                    target_name = target_result["name"]
-                    save_success = target_result.get("success", False)
-                    damage = target_result.get("damage", 0)
-                    save_total = target_result.get("total", 0)
-                    save_dc = save_result["save_dc"]
+        # Handle area effect display (multi-target save spells)
+        if result.is_area_effect and result.spell_type == "save":
+            console.print(f"[bold cyan]✨ {result.caster_name} casts {result.spell_name}![/bold cyan]")
+            for target_result in result.save_results:
+                target_name = target_result["name"]
+                save_success = target_result.get("success", False)
+                damage = target_result.get("damage", 0)
+                save_total = target_result.get("total", 0)
 
-                    save_status = "saved" if save_success else "failed"
-                    console.print(
-                        f"  [yellow]{target_name}[/yellow]: "
-                        f"DEX save {save_total} vs DC {save_dc} - {save_status.upper()} - {damage} damage"
+                save_status = "saved" if save_success else "failed"
+                save_ability = result.save_ability.upper() if result.save_ability else "DEX"
+                console.print(
+                    f"  [yellow]{target_name}[/yellow]: "
+                    f"{save_ability} save {save_total} vs DC {result.save_dc} - "
+                    f"{save_status.upper()} - {damage} damage"
+                )
+
+            # Display target concentration breaks for area spells
+            for conc_break in result.target_concentration_breaks:
+                console.print(
+                    f"    [yellow]💫 {conc_break['target']}'s concentration on "
+                    f"{conc_break['spell']} is broken![/yellow]"
+                )
+
+            # Display new concentration
+            if result.now_concentrating:
+                console.print(
+                    f"[cyan]🎯 {result.caster_name} begins concentrating on "
+                    f"{result.spell_name}[/cyan]"
+                )
+            return  # Early return for area effects
+
+        # Display target concentration breaks for single-target spells
+        for conc_break in result.target_concentration_breaks:
+            save_result = conc_break.get("save_result", {})
+            console.print(
+                f"[yellow]💫 {conc_break['target']}'s concentration on "
+                f"{conc_break['spell']} is broken! "
+                f"(CON save: {save_result.get('total', 0)} vs DC {conc_break.get('dc', 10)})[/yellow]"
+            )
+
+        # Display new concentration
+        if result.now_concentrating:
+            console.print(
+                f"[cyan]🎯 {result.caster_name} begins concentrating on "
+                f"{result.spell_name}[/cyan]"
+            )
+
+        # Display LLM narrative for attack spells that hit
+        if self.llm_enhancer and result.attack_result and result.attack_result.hit:
+            target_creature = self.game_state.active_enemies[0] if self.game_state.active_enemies else None
+            if target_creature:
+                spell_action_data = {
+                    "name": spell_data.get("name", "spell"),
+                    "damage_type": spell_data.get("damage", {}).get("damage_type", "magical")
+                }
+                attack_context = self.context_builder.build_attack_context(
+                    caster, target_creature, result.attack_result,
+                    action_data=spell_action_data, is_spell=True
+                )
+
+                with console.status("", spinner="dots"):
+                    narrative = self.llm_enhancer.get_combat_narrative_sync(
+                        action_data=attack_context,
+                        timeout=20.0
                     )
+                if narrative:
+                    self.display_narrative_panel(narrative)
 
-                    # Check concentration for each target that took damage
-                    if damage > 0:
-                        target_creature = next((e for e in targets if e.name == target_name), None)
-                        if target_creature and isinstance(target_creature, Character):
-                            concentration_result = self.game_state.check_concentration_from_damage(
-                                target_creature.name,
-                                damage
-                            )
-                            if concentration_result["concentration_broken"]:
-                                broken_spell = concentration_result["spell_name"]
-                                console.print(
-                                    f"    [yellow]💫 {target_name}'s concentration on {broken_spell} is broken![/yellow]"
-                                )
-
-                # Handle concentration for caster (area spells can be concentration too)
-                if spell_data.get("concentration", False):
-                    previous_spell = self.game_state.get_concentration_spell(caster.name)
-                    if previous_spell:
-                        console.print(
-                            f"[yellow]💫 {caster.name} stops concentrating on {previous_spell}[/yellow]"
-                        )
-                        self.game_state.time_manager.remove_concentration_effects(caster.name)
-
-                    # Area spells don't have a single target, so use first target or None
-                    target_name_for_effect = targets[0].name if targets else ""
-                    effect = self.game_state._create_spell_effect(spell_data, caster.name, target_name_for_effect)
-                    if effect:
-                        self.game_state.time_manager.add_effect(effect)
-                        console.print(
-                            f"[cyan]🎯 {caster.name} begins concentrating on {spell_name}[/cyan]"
-                        )
-
-                # Return early for area effects - no single result to process further
-                return True
-
-            # Convert save result to AttackResult-like structure for single-target compatibility
-            from dnd_engine.core.combat import AttackResult
-            target_result = save_result["targets"][0] if save_result["targets"] else {}
-            result = AttackResult(
-                attacker_name=caster.name,
-                defender_name=targets[0].name,
-                attack_roll=0,
-                attack_bonus=0,
-                target_ac=targets[0].ac,
-                hit=not target_result.get("success", True),  # Failed save = hit
-                damage=target_result.get("damage", 0),
-                critical_hit=False,
-                advantage=False,
-                disadvantage=False
-            )
-        else:
-            # Auto-hit spells (Magic Missile) or buff/utility spells (Shield, Mage Armor, etc.)
-            from dnd_engine.core.combat import AttackResult
-
-            # Check if spell has damage (auto-hit damage spell like Magic Missile)
-            damage = 0
-            damage_data = spell_data.get("damage", {})
-            if damage_data and "dice" in damage_data:
-                # Auto-hit spell with damage - roll and apply damage
-                damage_dice = damage_data.get("dice", "1d6")
-                damage_roll = self.game_state.dice_roller.roll(damage_dice)
-                damage = damage_roll.total
-
-                # Apply damage to targets[0]
-                if hasattr(targets[0], 'take_damage'):
-                    import inspect
-                    sig = inspect.signature(targets[0].take_damage)
-                    if 'event_bus' in sig.parameters:
-                        targets[0].take_damage(damage, event_bus=self.game_state.event_bus)
-                    else:
-                        targets[0].take_damage(damage)
-
-            result = AttackResult(
-                attacker_name=caster.name,
-                defender_name=targets[0].name,
-                attack_roll=0,
-                attack_bonus=0,
-                target_ac=targets[0].ac,
-                hit=True,  # Auto-hit or buff spells always "succeed"
-                damage=damage,
-                critical_hit=False,
-                advantage=False,
-                disadvantage=False
-            )
-
-        # Check concentration if target was hit and took damage
-        if result.hit and result.damage > 0 and isinstance(targets[0], Character):
-            concentration_result = self.game_state.check_concentration_from_damage(
-                targets[0].name,
-                result.damage
-            )
-            if concentration_result["concentration_broken"]:
-                spell_name = concentration_result["spell_name"]
-                save_result = concentration_result["save_result"]
-                dc = concentration_result["dc"]
-                console.print(
-                    f"[yellow]💫 {targets[0].name}'s concentration on {spell_name} is broken! "
-                    f"(CON save: {save_result['total']} vs DC {dc})[/yellow]"
-                )
-
-        # Handle spell effects (concentration and non-concentration buff spells)
-        if spell_data.get("concentration", False):
-            # Check if caster is already concentrating
-            previous_spell = self.game_state.get_concentration_spell(caster.name)
-            if previous_spell:
-                console.print(
-                    f"[yellow]💫 {caster.name} stops concentrating on {previous_spell}[/yellow]"
-                )
-                self.game_state.time_manager.remove_concentration_effects(caster.name)
-
-            # Add new concentration effect
-            effect = self.game_state._create_spell_effect(spell_data, caster.name, targets[0].name)
-            if effect:
-                self.game_state.time_manager.add_effect(effect)
-                spell_name = spell_data.get("name", "spell")
-                console.print(
-                    f"[cyan]🎯 {caster.name} begins concentrating on {spell_name}[/cyan]"
-                )
-        elif spell_data.get("effect"):
-            # Non-concentration buff spells (Mage Armor, etc.) also add effects
-            effect = self.game_state._create_spell_effect(spell_data, caster.name, targets[0].name)
-            if effect:
-                self.game_state.time_manager.add_effect(effect)
-
-        # Display narrative if available
-        if self.llm_enhancer and result.hit:
-            # Build complete attack context using service with spell data
-            spell_action_data = {
-                "name": spell_data.get("name", "spell"),
-                "damage_type": spell_data.get("damage", {}).get("damage_type", "magical")
-            }
-            attack_context = self.context_builder.build_attack_context(
-                caster, targets[0], result, action_data=spell_action_data, is_spell=True
-            )
-
-            with console.status("", spinner="dots"):
-                narrative = self.llm_enhancer.get_combat_narrative_sync(
-                    action_data=attack_context,
-                    timeout=20.0
-                )
-            if narrative:
-                self.display_narrative_panel(narrative)
-
-        # Record this action in combat history
-        self._record_combat_action(result)
+        # Record combat action for attack spells
+        if result.attack_result:
+            self._record_combat_action(result.attack_result)
 
         # Display mechanics
-        spell_display_name = spell_data.get("name", spell_id)
-        console.print(f"[magenta]✨ {caster.name} casts {spell_display_name}![/magenta]")
+        console.print(f"[magenta]✨ {result.caster_name} casts {result.spell_name}![/magenta]")
 
-        # Only show attack/save mechanics for spells that have them
-        if has_attack or (has_save and result.damage > 0):
-            console.print(f"[cyan]⚔️  {str(result)}[/cyan]")
-        elif has_save:
-            # For save spells with no damage, show save result
-            target_result = save_result["targets"][0] if save_result["targets"] else {}
+        # Show attack/save mechanics based on spell type
+        if result.spell_type == "attack" and result.attack_result:
+            console.print(f"[cyan]⚔️  {str(result.attack_result)}[/cyan]")
+        elif result.spell_type == "save" and result.total_damage > 0:
+            # Single-target save with damage
+            target_result = result.save_results[0] if result.save_results else {}
             save_text = "SUCCESS" if target_result.get("success") else "FAILURE"
-            save_ability = spell_data.get("saving_throw", {}).get("ability", "").upper()
-            console.print(f"[cyan]🎲 {targets[0].name} {save_ability} save: {save_text}[/cyan]")
+            save_ability = result.save_ability.upper() if result.save_ability else ""
+            console.print(
+                f"[cyan]🎲 {result.targets[0]} {save_ability} save: {save_text} - "
+                f"{result.total_damage} damage[/cyan]"
+            )
+        elif result.spell_type == "save":
+            # Save spell with no damage (debuff)
+            target_result = result.save_results[0] if result.save_results else {}
+            save_text = "SUCCESS" if target_result.get("success") else "FAILURE"
+            save_ability = result.save_ability.upper() if result.save_ability else ""
+            console.print(f"[cyan]🎲 {result.targets[0]} {save_ability} save: {save_text}[/cyan]")
         # For buff spells, no mechanics display needed - just the cast message
 
-        # If target died, show death narrative
-        if not targets[0].is_alive:
+        # Display death for killed targets
+        for killed in result.killed_targets:
             if self.llm_enhancer:
                 with console.status("", spinner="dots"):
                     death_narrative = self.llm_enhancer.get_death_narrative_sync(
                         character_data={
-                            "name": targets[0].name,
-                            "is_player": isinstance(targets[0], Character)
+                            "name": killed,
+                            "is_player": killed in [c.name for c in self.game_state.party.characters]
                         },
                         timeout=20.0
                     )
                 if death_narrative:
                     self.display_narrative_panel(death_narrative)
 
-            print_status_message(f"{targets[0].name} is defeated!", "success")
-
-        return True
+            print_status_message(f"{killed} is defeated!", "success")
 
     def handle_stabilize(self, target_name: str) -> None:
         """Handle stabilize command to help unconscious ally."""

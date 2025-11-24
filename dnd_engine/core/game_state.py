@@ -97,6 +97,47 @@ class CombatItemResult:
         self.error_message = error_message
 
 
+@dataclass
+class CombatSpellResult:
+    """
+    Result of casting a spell in combat.
+
+    Contains all information needed for UI display without requiring
+    the CLI to perform any game logic calculations.
+    """
+    success: bool
+    spell_name: str
+    caster_name: str
+    targets: List[str]
+    is_area_effect: bool
+    spell_type: str  # "attack", "save", "auto_hit", "buff"
+
+    # Attack results (spell_type == "attack")
+    attack_result: Optional[AttackResult] = None
+
+    # Save results (spell_type == "save")
+    save_results: Optional[List[Dict[str, Any]]] = None
+    save_dc: Optional[int] = None
+    save_ability: Optional[str] = None
+
+    # Damage (all damaging spell types)
+    total_damage: int = 0
+    damage_type: Optional[str] = None
+
+    # Concentration tracking
+    broke_concentration: Optional[str] = None  # Previous spell name if broken
+    now_concentrating: bool = False
+
+    # Target concentration breaks (from damage dealt)
+    target_concentration_breaks: List[Dict[str, Any]] = field(default_factory=list)
+
+    # Deaths
+    killed_targets: List[str] = field(default_factory=list)
+
+    # Error handling
+    error: Optional[str] = None
+
+
 class GameState:
     """
     Central game state manager.
@@ -1277,6 +1318,278 @@ class GameState:
                 "target": target_name,
                 "has_duration": effect is not None
             }
+
+    def cast_spell_combat(
+        self,
+        caster: Character,
+        spell_data: Dict[str, Any],
+        target: Optional[Creature],
+        spellcasting_ability: str
+    ) -> "CombatSpellResult":
+        """
+        Cast a spell during combat.
+
+        Handles spell resolution: routing by type, damage, effects, concentration.
+        Does NOT handle spell slots or action economy (caller responsibility).
+
+        Args:
+            caster: Character casting the spell
+            spell_data: Complete spell data dictionary
+            target: Target creature, or None for area effect spells
+            spellcasting_ability: Ability used for spellcasting (int/wis/cha)
+
+        Returns:
+            CombatSpellResult with all information needed for UI display
+        """
+        spell_name = spell_data.get("name", "Unknown Spell")
+        has_attack = spell_data.get("attack_type") is not None
+        has_save = spell_data.get("saving_throw") is not None
+        target_type = spell_data.get("target_type")
+
+        # Resolve targets based on target_type
+        if target_type == "area" and target is None:
+            targets = [e for e in self.active_enemies if e.is_alive]
+            if not targets:
+                return CombatSpellResult(
+                    success=False,
+                    spell_name=spell_name,
+                    caster_name=caster.name,
+                    targets=[],
+                    is_area_effect=True,
+                    spell_type="save",
+                    error="No enemies to target"
+                )
+            is_area = True
+        else:
+            targets = [target] if target else []
+            is_area = False
+
+        # Track concentration state BEFORE casting
+        broke_concentration = None
+        if spell_data.get("concentration", False):
+            previous_spell = self.get_concentration_spell(caster.name)
+            if previous_spell:
+                broke_concentration = previous_spell
+                self.time_manager.remove_concentration_effects(caster.name)
+
+        # Route by spell type
+        if has_attack:
+            return self._resolve_combat_attack_spell(
+                caster, targets[0], spell_data, spellcasting_ability,
+                spell_name, broke_concentration
+            )
+        elif has_save:
+            return self._resolve_combat_save_spell(
+                caster, targets, spell_data, spell_name,
+                is_area, broke_concentration
+            )
+        else:
+            return self._resolve_combat_auto_hit_spell(
+                caster, targets[0] if targets else None, spell_data,
+                spell_name, broke_concentration
+            )
+
+    def _resolve_combat_attack_spell(
+        self,
+        caster: Character,
+        target: Creature,
+        spell_data: Dict[str, Any],
+        spellcasting_ability: str,
+        spell_name: str,
+        broke_concentration: Optional[str]
+    ) -> "CombatSpellResult":
+        """Resolve attack spell via combat_engine.resolve_spell_attack()."""
+        # Delegate to existing combat engine method
+        result = self.combat_engine.resolve_spell_attack(
+            caster=caster,
+            target=target,
+            spell=spell_data,
+            spellcasting_ability=spellcasting_ability,
+            apply_damage=True,
+            event_bus=self.event_bus
+        )
+
+        # Check target concentration if damage was dealt
+        target_conc_breaks = []
+        if result.hit and result.damage > 0:
+            if isinstance(target, Character):
+                conc_result = self.check_concentration_from_damage(target.name, result.damage)
+                if conc_result["concentration_broken"]:
+                    target_conc_breaks.append({
+                        "target": target.name,
+                        "spell": conc_result["spell_name"],
+                        "dc": conc_result["dc"],
+                        "save_result": conc_result["save_result"]
+                    })
+
+        # Handle concentration for caster
+        now_concentrating = False
+        if spell_data.get("concentration", False):
+            effect = self._create_spell_effect(spell_data, caster.name, target.name)
+            if effect:
+                self.time_manager.add_effect(effect)
+                now_concentrating = True
+
+        killed = [target.name] if not target.is_alive else []
+
+        return CombatSpellResult(
+            success=True,
+            spell_name=spell_name,
+            caster_name=caster.name,
+            targets=[target.name],
+            is_area_effect=False,
+            spell_type="attack",
+            attack_result=result,
+            total_damage=result.damage,
+            damage_type=spell_data.get("damage", {}).get("damage_type"),
+            broke_concentration=broke_concentration,
+            now_concentrating=now_concentrating,
+            target_concentration_breaks=target_conc_breaks,
+            killed_targets=killed
+        )
+
+    def _resolve_combat_save_spell(
+        self,
+        caster: Character,
+        targets: List[Creature],
+        spell_data: Dict[str, Any],
+        spell_name: str,
+        is_area: bool,
+        broke_concentration: Optional[str]
+    ) -> "CombatSpellResult":
+        """Resolve saving throw spell via combat_engine.resolve_spell_save()."""
+        # Delegate to existing combat engine method
+        save_result = self.combat_engine.resolve_spell_save(
+            caster=caster,
+            targets=targets,
+            spell=spell_data,
+            apply_damage=True,
+            event_bus=self.event_bus
+        )
+
+        # Check concentration breaks for each target that took damage
+        target_conc_breaks = []
+        killed = []
+        total_damage = 0
+
+        for i, target_result in enumerate(save_result["targets"]):
+            damage = target_result.get("damage", 0)
+            total_damage += damage
+            target = targets[i]
+
+            if damage > 0 and isinstance(target, Character):
+                conc_result = self.check_concentration_from_damage(target.name, damage)
+                if conc_result["concentration_broken"]:
+                    target_conc_breaks.append({
+                        "target": target.name,
+                        "spell": conc_result["spell_name"],
+                        "dc": conc_result["dc"],
+                        "save_result": conc_result["save_result"]
+                    })
+
+            if not target.is_alive:
+                killed.append(target.name)
+
+        # Handle concentration for caster
+        now_concentrating = False
+        if spell_data.get("concentration", False):
+            effect_target = targets[0].name if targets else ""
+            effect = self._create_spell_effect(spell_data, caster.name, effect_target)
+            if effect:
+                self.time_manager.add_effect(effect)
+                now_concentrating = True
+
+        return CombatSpellResult(
+            success=True,
+            spell_name=spell_name,
+            caster_name=caster.name,
+            targets=[t.name for t in targets],
+            is_area_effect=is_area,
+            spell_type="save",
+            save_results=save_result["targets"],
+            save_dc=save_result["save_dc"],
+            save_ability=save_result["save_ability"],
+            total_damage=total_damage,
+            damage_type=spell_data.get("damage", {}).get("damage_type"),
+            broke_concentration=broke_concentration,
+            now_concentrating=now_concentrating,
+            target_concentration_breaks=target_conc_breaks,
+            killed_targets=killed
+        )
+
+    def _resolve_combat_auto_hit_spell(
+        self,
+        caster: Character,
+        target: Optional[Creature],
+        spell_data: Dict[str, Any],
+        spell_name: str,
+        broke_concentration: Optional[str]
+    ) -> "CombatSpellResult":
+        """Resolve auto-hit damage or buff spells."""
+        damage = 0
+        damage_data = spell_data.get("damage", {})
+        target_conc_breaks = []
+        killed = []
+        target_name = target.name if target else caster.name
+
+        # Roll and apply damage for auto-hit damage spells (Magic Missile)
+        if damage_data and "dice" in damage_data:
+            damage_dice = damage_data.get("dice", "1d6")
+            damage_roll = self.dice_roller.roll(damage_dice)
+            damage = damage_roll.total
+
+            # Apply damage if there's a target
+            if target and hasattr(target, 'take_damage'):
+                import inspect
+                sig = inspect.signature(target.take_damage)
+                if 'event_bus' in sig.parameters:
+                    target.take_damage(damage, event_bus=self.event_bus)
+                else:
+                    target.take_damage(damage)
+
+                # Check target concentration
+                if isinstance(target, Character):
+                    conc_result = self.check_concentration_from_damage(target.name, damage)
+                    if conc_result["concentration_broken"]:
+                        target_conc_breaks.append({
+                            "target": target.name,
+                            "spell": conc_result["spell_name"],
+                            "dc": conc_result["dc"],
+                            "save_result": conc_result["save_result"]
+                        })
+
+                if not target.is_alive:
+                    killed.append(target.name)
+
+        # Handle effects (concentration or non-concentration buffs)
+        now_concentrating = False
+        if spell_data.get("concentration", False):
+            effect = self._create_spell_effect(spell_data, caster.name, target_name)
+            if effect:
+                self.time_manager.add_effect(effect)
+                now_concentrating = True
+        elif spell_data.get("effect"):
+            # Non-concentration buff spells (Mage Armor, Shield, etc.)
+            effect = self._create_spell_effect(spell_data, caster.name, target_name)
+            if effect:
+                self.time_manager.add_effect(effect)
+
+        spell_type = "auto_hit" if damage > 0 else "buff"
+
+        return CombatSpellResult(
+            success=True,
+            spell_name=spell_name,
+            caster_name=caster.name,
+            targets=[target_name],
+            is_area_effect=False,
+            spell_type=spell_type,
+            total_damage=damage,
+            damage_type=damage_data.get("damage_type") if damage > 0 else None,
+            broke_concentration=broke_concentration,
+            now_concentrating=now_concentrating,
+            target_concentration_breaks=target_conc_breaks,
+            killed_targets=killed
+        )
 
     def get_concentration_spell(self, character_name: str) -> Optional[str]:
         """
