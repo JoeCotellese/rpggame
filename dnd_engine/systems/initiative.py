@@ -17,9 +17,12 @@ class InitiativeEntry:
     Represents a combatant in the initiative order.
 
     Combines a creature with their initiative roll for sorting and tracking.
+    Also includes display metadata like combat numbers for duplicate enemy names.
     """
     creature: Creature
     initiative_roll: int
+    combat_number: Optional[int] = None  # Assigned for enemies with duplicate names
+    display_name: Optional[str] = None  # Full display name (e.g., "Goblin 2")
 
     @property
     def initiative_total(self) -> int:
@@ -33,7 +36,8 @@ class InitiativeEntry:
 
     def __str__(self) -> str:
         """String representation of the initiative entry"""
-        return f"{self.creature.name}: {self.initiative_roll}+{self.creature.initiative_modifier}={self.initiative_total}"
+        name = self.display_name if self.display_name else self.creature.name
+        return f"{name}: {self.initiative_roll}+{self.creature.initiative_modifier}={self.initiative_total}"
 
 
 class InitiativeTracker:
@@ -221,6 +225,92 @@ class InitiativeTracker:
             ),
             reverse=True
         )
+
+    def assign_combat_numbers(self, player_creatures: List[Creature]) -> None:
+        """
+        Assign combat numbers to enemies with duplicate names.
+
+        Players don't get numbers - only enemies do. This creates display
+        names like "Goblin 1", "Goblin 2", etc.
+
+        Args:
+            player_creatures: List of player character creatures (won't get numbers)
+        """
+        # Track count per enemy name
+        name_counts: Dict[str, int] = {}
+        name_current: Dict[str, int] = {}
+
+        # First pass: count how many of each enemy name
+        for entry in self.combatants:
+            if entry.creature not in player_creatures:
+                name = entry.creature.name
+                name_counts[name] = name_counts.get(name, 0) + 1
+
+        # Second pass: assign numbers and display names
+        for entry in self.combatants:
+            if entry.creature in player_creatures:
+                # Player character - no number
+                entry.combat_number = None
+                entry.display_name = entry.creature.name
+            else:
+                # Enemy - assign number
+                name = entry.creature.name
+                name_current[name] = name_current.get(name, 0) + 1
+                entry.combat_number = name_current[name]
+                entry.display_name = f"{name} {entry.combat_number}"
+
+    def find_combatant_by_reference(
+        self,
+        ref: str,
+        player_creatures: Optional[List[Creature]] = None
+    ) -> Optional[InitiativeEntry]:
+        """
+        Find a combatant by various reference formats.
+
+        Supports:
+        - Pure number: "2" -> enemy with combat number 2
+        - Name with number: "goblin 2" -> enemy named "Goblin" with number 2
+        - Just name: "frodo" -> character named "Frodo"
+
+        Args:
+            ref: The reference string (case-insensitive)
+            player_creatures: Optional list of player creatures to help disambiguate
+
+        Returns:
+            The matching InitiativeEntry, or None if not found
+        """
+        ref = ref.strip().lower()
+
+        # Try to parse as pure number first
+        try:
+            num = int(ref)
+            for entry in self.combatants:
+                if entry.combat_number == num and entry.creature.is_alive:
+                    return entry
+            return None
+        except ValueError:
+            pass
+
+        # Try "name number" format (e.g., "goblin 2")
+        parts = ref.split()
+        if len(parts) >= 2:
+            try:
+                num = int(parts[-1])
+                name_part = " ".join(parts[:-1])
+                for entry in self.combatants:
+                    if (entry.combat_number == num and
+                        entry.creature.name.lower() == name_part and
+                        entry.creature.is_alive):
+                        return entry
+            except ValueError:
+                pass
+
+        # Try exact name match (for players or when there's only one enemy with that name)
+        for entry in self.combatants:
+            if entry.creature.name.lower() == ref and entry.creature.is_alive:
+                return entry
+
+        return None
 
     def __str__(self) -> str:
         """String representation of the initiative tracker"""

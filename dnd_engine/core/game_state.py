@@ -1,7 +1,9 @@
 # ABOUTME: Central game state manager coordinating all game systems
 # ABOUTME: Manages dungeon exploration, combat state, player actions, and game flow
 
+from dataclasses import dataclass, field
 from typing import Dict, List, Any, Optional
+import time
 from dnd_engine.core.character import Character
 from dnd_engine.core.party import Party
 from dnd_engine.core.creature import Creature
@@ -23,6 +25,56 @@ REVERSE_DIRECTIONS = {
     "up": "down",
     "down": "up"
 }
+
+
+@dataclass
+class CombatEvent:
+    """
+    Structured combat event for history tracking.
+
+    Records a single combat action with all relevant details for
+    narrative context, analytics, and replay functionality.
+    """
+    timestamp: float
+    event_type: str  # "attack", "spell", "miss", "death", "damage", "heal"
+    attacker: str
+    defender: Optional[str] = None
+    damage: int = 0
+    critical: bool = False
+    description: str = ""  # Human-readable summary
+    details: Dict[str, Any] = field(default_factory=dict)  # Additional event-specific data
+
+
+@dataclass
+class CombatantStatus:
+    """
+    Status snapshot of a single combatant in combat.
+
+    Used for battlefield state queries and LLM context.
+    """
+    name: str
+    display_name: str  # Includes combat number if applicable (e.g., "Goblin 2")
+    current_hp: int
+    max_hp: int
+    is_alive: bool
+    conditions: List[str]
+    is_player: bool
+    ac: int = 0  # Armor class
+
+
+@dataclass
+class BattlefieldState:
+    """
+    Complete snapshot of the battlefield state.
+
+    Provides a clean, structured view of combat state for
+    UI display, LLM context, analytics, etc.
+    """
+    party_combatants: List[CombatantStatus]
+    enemy_combatants: List[CombatantStatus]
+    round_number: int
+    current_turn: str  # Name of creature whose turn it is
+    in_combat: bool
 
 
 class CombatItemResult:
@@ -94,6 +146,8 @@ class GameState:
         self.initiative_tracker: Optional[InitiativeTracker] = None
         self.active_enemies: List[Creature] = []
         self.combat_engine = CombatEngine(self.dice_roller)
+        self.combat_history: List[CombatEvent] = []
+        self.max_combat_history_size = 50  # Configurable limit
 
         # Navigation tracking for flee mechanic
         self.last_entry_direction: Optional[str] = None
@@ -1701,6 +1755,9 @@ class GameState:
         if victory:
             room["enemies"] = []
 
+        # Clear combat history when combat ends
+        self.clear_combat_history()
+
         # Emit combat end event
         self.event_bus.emit(Event(
             type=EventType.COMBAT_END,
@@ -1710,6 +1767,88 @@ class GameState:
                 "xp_per_character": total_xp // len(self.party.characters) if len(self.party.characters) > 0 else 0
             }
         ))
+
+    def record_combat_event(self, event: CombatEvent) -> None:
+        """
+        Record a combat event in history with automatic trimming.
+
+        Args:
+            event: The CombatEvent to record
+        """
+        self.combat_history.append(event)
+        if len(self.combat_history) > self.max_combat_history_size:
+            self.combat_history = self.combat_history[-self.max_combat_history_size:]
+
+    def get_recent_combat_history(self, count: int = 12) -> List[CombatEvent]:
+        """
+        Get recent combat events for narrative context.
+
+        Args:
+            count: Number of recent events to return
+
+        Returns:
+            List of recent CombatEvent objects
+        """
+        return self.combat_history[-count:]
+
+    def clear_combat_history(self) -> None:
+        """Clear combat history (called when combat ends)."""
+        self.combat_history.clear()
+
+    def get_battlefield_state(self) -> BattlefieldState:
+        """
+        Get complete battlefield state snapshot.
+
+        Returns structured view of all combatants, their status,
+        and current combat state. Useful for UI display, LLM context,
+        and analytics.
+
+        Returns:
+            BattlefieldState with all current combat information
+        """
+        if not self.in_combat or not self.initiative_tracker:
+            # Return empty state if not in combat
+            return BattlefieldState(
+                party_combatants=[],
+                enemy_combatants=[],
+                round_number=0,
+                current_turn="",
+                in_combat=False
+            )
+
+        party_combatants = []
+        enemy_combatants = []
+
+        # Get current turn info
+        current = self.initiative_tracker.get_current_combatant()
+        current_turn = current.display_name if current and current.display_name else ""
+
+        # Build combatant status for each entry in initiative
+        for entry in self.initiative_tracker.get_all_combatants():
+            creature = entry.creature
+            status = CombatantStatus(
+                name=creature.name,
+                display_name=entry.display_name if entry.display_name else creature.name,
+                current_hp=creature.current_hp,
+                max_hp=creature.max_hp,
+                is_alive=creature.is_alive,
+                conditions=list(creature.conditions) if hasattr(creature, 'conditions') else [],
+                is_player=creature in [c for c in self.party.characters],
+                ac=creature.ac
+            )
+
+            if status.is_player:
+                party_combatants.append(status)
+            else:
+                enemy_combatants.append(status)
+
+        return BattlefieldState(
+            party_combatants=party_combatants,
+            enemy_combatants=enemy_combatants,
+            round_number=self.initiative_tracker.round_number,
+            current_turn=current_turn,
+            in_combat=True
+        )
 
     def flee_combat(self) -> Dict[str, Any]:
         """
@@ -1827,6 +1966,7 @@ class GameState:
         # Clear combat state (no XP awarded for fleeing)
         self.in_combat = False
         self.initiative_tracker = None
+        self.clear_combat_history()
 
         # Enemies remain in room (can encounter them again)
         # Do NOT clear enemies from room like in _end_combat
