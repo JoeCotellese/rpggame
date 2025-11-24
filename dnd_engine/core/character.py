@@ -1632,7 +1632,6 @@ class Character(Creature):
                 continue
 
             # Use tag-based filtering for combat spells
-            # Tags provide a clean, data-driven way to categorize spells
             tags = spell_data.get("tags", [])
 
             # Include if spell has "combat" tag
@@ -1679,16 +1678,19 @@ class Character(Creature):
             if not spell_data:
                 continue
 
-            # Use tag-based filtering for out-of-combat spells
-            # Include spells tagged with: utility, healing, ritual
-            # Also include combat spells that are useful outside combat (buff, healing)
+            # Use target_type for out-of-combat spell filtering
+            # Include self/ally targeting spells and utility spells, exclude pure combat spells
+            target_type = spell_data.get("target_type")
             tags = spell_data.get("tags", [])
 
-            # Include if spell has utility tags OR is combat spell with utility aspects
-            if "utility" in tags or "healing" in tags or "ritual" in tags:
+            # Include spells that can be cast outside combat:
+            # - Self or ally buffs (Mage Armor, Shield, Cure Wounds)
+            # - Utility spells (Detect Magic, Light, Identify)
+            # - Ritual spells
+            if target_type in ["self", "ally", "any"]:
                 out_of_combat.append((spell_id, spell_data))
-            elif "buff" in tags:
-                # Include combat buffs (like Mage Armor) outside combat
+            elif "utility" in tags or "ritual" in tags:
+                # Also include utility/ritual spells regardless of target_type
                 out_of_combat.append((spell_id, spell_data))
 
         # Sort by spell level (cantrips first, then by level)

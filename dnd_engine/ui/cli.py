@@ -1857,35 +1857,37 @@ class CLI:
                 print_error(f"No {ordinal}-level spell slots available!")
                 return
 
-        # Determine and select target based on spell properties
-        range_ft = spell_data.get("range_ft", 0)
-        has_healing = "healing" in spell_data
-        has_damage = "damage" in spell_data
-        has_area_effect = "area_of_effect" in spell_data
+        # Determine and select target based on spell target_type
+        target_type = spell_data.get("target_type")
         spell_display_name = spell_data.get("name", spell_id)
 
-        # Area effect spells (Burning Hands, Fireball, etc.) - no target selection needed
-        if has_area_effect:
-            # Will target all living enemies - no prompt needed
+        # Route targeting based on data-driven target_type field
+        if target_type == "area":
+            # Area effect spells - target all living enemies
             target = None  # Special marker for area effects
             print_status_message(f"{caster.name} casts {spell_display_name}!", "info")
-        # Self-targeting spells (Shield, Detect Magic) - range_ft 0 and no area effect
-        elif range_ft == 0:
+        elif target_type == "self":
+            # Self-only spells
             target = caster
             print_status_message(f"{caster.name} targets themselves with {spell_display_name}", "info")
-        # Healing or beneficial spells target allies
-        elif has_healing:
+        elif target_type == "ally":
+            # Allied target (including self)
             target = self._prompt_combat_ally_selection(spell_display_name, spell_data, caster)
-        # Damage spells target enemies
-        elif has_damage:
+        elif target_type == "enemy":
+            # Single enemy target
             target = self._prompt_enemy_selection()
-        # Default to enemy targeting for unknown spell types
+        elif target_type == "any":
+            # Any creature (rare - Light, Identify, etc.)
+            # For now, prompt ally selection (can be expanded later)
+            target = self._prompt_combat_ally_selection(spell_display_name, spell_data, caster)
         else:
+            # Fallback: missing target_type, default to enemy
+            print_error(f"Warning: Spell '{spell_display_name}' missing target_type, defaulting to enemy targeting")
             target = self._prompt_enemy_selection()
 
         # Handle target cancellation - nothing consumed yet so just return
         # Note: target=None is valid for area effects, so check for explicit "Cancel"
-        if target == "Cancel" or (target is None and not has_area_effect):
+        if target == "Cancel" or (target is None and target_type != "area"):
             return
 
         # NOW consume spell slot (will be auto-refunded by middleware if action fails)
@@ -1950,11 +1952,11 @@ class CLI:
         # Route spell based on type: attack, save, or buff/utility
         has_attack = spell_data.get("attack_type") is not None
         has_save = spell_data.get("saving_throw") is not None
-        has_area_effect = "area_of_effect" in spell_data
+        target_type = spell_data.get("target_type")
         save_result = None  # Track save result for display
 
-        # Determine targets for area effect spells
-        if has_area_effect and target is None:
+        # Determine targets based on target_type
+        if target_type == "area" and target is None:
             # Area effect spell - target all living enemies
             targets = [e for e in self.game_state.active_enemies if e.is_alive]
             if not targets:
@@ -4276,16 +4278,28 @@ class CLI:
         except (EOFError, KeyboardInterrupt):
             return
 
-        # 3. Select target if needed (for healing spells)
+        # 3. Select target if needed (based on target_type)
         target_name = None
-        if spell_data.get("healing"):
+        target_type = spell_data.get("target_type")
+
+        if target_type == "ally":
+            # Ally-targeting spells need a target selection
             target = self._prompt_party_member_selection(
-                f"Who should {caster.name} heal with {spell_data.get('name')}?"
+                f"Who should {caster.name} target with {spell_data.get('name')}?"
             )
             # Handle both None and "Cancel" string (questionary may return either)
             if not target or isinstance(target, str):
                 return  # User cancelled
             target_name = target.name
+        elif target_type == "any":
+            # "Any" target type - for now, treat like ally (can expand later for objects/items)
+            target = self._prompt_party_member_selection(
+                f"Who should {caster.name} target with {spell_data.get('name')}?"
+            )
+            if not target or isinstance(target, str):
+                return  # User cancelled
+            target_name = target.name
+        # Self and utility spells don't need target selection
 
         # 4. Cast the spell
         result = self.game_state.cast_spell_exploration(
