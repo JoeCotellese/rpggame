@@ -23,6 +23,7 @@ class TestEndTurnCommand:
         game_state.active_enemies = []
         game_state.event_bus = Mock()
         game_state.dice_roller = Mock()
+        game_state.data_loader = Mock()
         return game_state
 
     @pytest.fixture
@@ -166,6 +167,7 @@ class TestEndTurnIntegration:
         mock_game_state = Mock(spec=GameState)
         mock_game_state.dice_roller = Mock()
         mock_game_state.event_bus = Mock()
+        mock_game_state.data_loader = Mock()
         mock_campaign_manager = Mock()
         cli = CLI(
             game_state=mock_game_state,
