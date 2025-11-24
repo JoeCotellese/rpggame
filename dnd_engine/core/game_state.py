@@ -3,7 +3,7 @@
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Any, Optional
-import time
+import logging
 from dnd_engine.core.character import Character
 from dnd_engine.core.party import Party
 from dnd_engine.core.creature import Creature
@@ -11,10 +11,11 @@ from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.combat import CombatEngine, AttackResult
 from dnd_engine.systems.initiative import InitiativeTracker
 from dnd_engine.systems.action_economy import ActionType
-from dnd_engine.systems.time_manager import TimeManager, ActiveEffect, EffectType, parse_duration_to_minutes
+from dnd_engine.systems.time_manager import TimeManager, ActiveEffect, EffectType
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.utils.events import EventBus, Event, EventType
 
+logger = logging.getLogger(__name__)
 
 # Direction reversal mapping for fleeing combat
 REVERSE_DIRECTIONS = {
