@@ -216,7 +216,8 @@ class TestSpellDurationTracking:
                 bless_effect = next((e for e in effects if e.source == "Bless"), None)
                 if bless_effect:
                     assert bless_effect.effect_type == EffectType.SPELL
-                    assert bless_effect.duration_minutes == 1.0
+                    assert bless_effect.duration_type == "minutes"
+                    assert bless_effect.duration_value == 1.0
                     assert bless_effect.concentration
 
     def test_spell_effect_expires_with_time(self, game_state):
@@ -227,8 +228,9 @@ class TestSpellDurationTracking:
         effect = ActiveEffect(
             effect_type=EffectType.SPELL,
             source="Shield",
-            duration_minutes=1.0,
-            remaining_minutes=1.0,
+            duration_type="minutes",
+            duration_value=1.0,
+            remaining_value=1.0,
             target_name="TestWizard",
             concentration=False
         )
@@ -252,8 +254,9 @@ class TestSpellDurationTracking:
         effect = ActiveEffect(
             effect_type=EffectType.SPELL,
             source="Mage Armor",
-            duration_minutes=480.0,
-            remaining_minutes=480.0,
+            duration_type="minutes",
+            duration_value=480.0,
+            remaining_value=480.0,
             target_name="TestWizard",
             concentration=False
         )
@@ -267,7 +270,7 @@ class TestSpellDurationTracking:
         # Effect should still be active (100 minutes passed, 480 duration)
         effects = game_state.time_manager.get_effects_for_character("TestWizard")
         assert len(effects) == 1
-        assert effects[0].remaining_minutes == 380.0
+        assert effects[0].remaining_value == 380.0
 
 
 class TestConcentrationManagement:
@@ -283,8 +286,9 @@ class TestConcentrationManagement:
         effect1 = ActiveEffect(
             effect_type=EffectType.SPELL,
             source="Haste",
-            duration_minutes=10.0,
-            remaining_minutes=10.0,
+            duration_type="minutes",
+            duration_value=10.0,
+            remaining_value=10.0,
             target_name="TestCleric",
             concentration=True,
             caster_name=wizard
@@ -297,8 +301,9 @@ class TestConcentrationManagement:
         effect2 = ActiveEffect(
             effect_type=EffectType.SPELL,
             source="Fly",
-            duration_minutes=10.0,
-            remaining_minutes=10.0,
+            duration_type="minutes",
+            duration_value=10.0,
+            remaining_value=10.0,
             target_name="TestCleric",
             concentration=True,
             caster_name=wizard
@@ -323,8 +328,9 @@ class TestConcentrationManagement:
         effect1 = ActiveEffect(
             effect_type=EffectType.SPELL,
             source="Haste",
-            duration_minutes=10.0,
-            remaining_minutes=10.0,
+            duration_type="minutes",
+            duration_value=10.0,
+            remaining_value=10.0,
             target_name="TestCleric",
             concentration=True,
             caster_name=wizard
@@ -336,8 +342,9 @@ class TestConcentrationManagement:
         effect2 = ActiveEffect(
             effect_type=EffectType.SPELL,
             source="Mage Armor",
-            duration_minutes=480.0,
-            remaining_minutes=480.0,
+            duration_type="hours",
+            duration_value=8.0,
+            remaining_value=8.0,
             target_name=wizard,
             concentration=False
         )
@@ -397,8 +404,9 @@ class TestEventEmission:
         effect = ActiveEffect(
             effect_type=EffectType.SPELL,
             source="Shield",
-            duration_minutes=1.0,
-            remaining_minutes=1.0,
+            duration_type="minutes",
+            duration_value=1.0,
+            remaining_value=1.0,
             target_name="TestWizard"
         )
 

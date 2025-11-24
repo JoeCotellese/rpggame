@@ -3,7 +3,7 @@
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Any, Optional
-import time
+import logging
 from dnd_engine.core.character import Character
 from dnd_engine.core.party import Party
 from dnd_engine.core.creature import Creature
@@ -11,10 +11,11 @@ from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.combat import CombatEngine, AttackResult
 from dnd_engine.systems.initiative import InitiativeTracker
 from dnd_engine.systems.action_economy import ActionType
-from dnd_engine.systems.time_manager import TimeManager, ActiveEffect, EffectType, parse_duration_to_minutes
+from dnd_engine.systems.time_manager import TimeManager, ActiveEffect, EffectType
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.utils.events import EventBus, Event, EventType
 
+logger = logging.getLogger(__name__)
 
 # Direction reversal mapping for fleeing combat
 REVERSE_DIRECTIONS = {
@@ -1366,29 +1367,40 @@ class GameState:
         Returns:
             ActiveEffect if spell has duration, None otherwise
         """
-        duration_value = spell_data.get("duration_value")
-        if not duration_value:
+        from dnd_engine.systems.time_manager import parse_duration
+
+        duration_string = spell_data.get("duration_value")
+        if not duration_string:
             return None
 
-        # Parse duration to minutes
-        duration_minutes = parse_duration_to_minutes(duration_value)
-        if not duration_minutes:
+        # Parse duration to (type, value)
+        parsed = parse_duration(duration_string)
+        if not parsed:
             return None
+
+        duration_type, duration_value = parsed
 
         # Create effect
         spell_name = spell_data.get("name", "Unknown Spell")
         concentration = spell_data.get("concentration", False)
         description = spell_data.get("description", "")
 
+        # Extract effect modifiers if present
+        effect_data = {}
+        if "effect" in spell_data:
+            effect_data = spell_data["effect"].copy()
+
         effect = ActiveEffect(
             effect_type=EffectType.SPELL,
             source=spell_name,
-            duration_minutes=duration_minutes,
-            remaining_minutes=duration_minutes,
+            duration_type=duration_type,
+            duration_value=duration_value,
+            remaining_value=duration_value,
             target_name=target_name,
             description=description,
             concentration=concentration,
-            caster_name=caster_name if concentration else None
+            caster_name=caster_name if concentration else None,
+            effect_data=effect_data
         )
 
         return effect
@@ -1433,6 +1445,92 @@ class GameState:
 
         return desc
 
+    def get_effective_ac(self, creature: "Creature") -> int:
+        """
+        Calculate effective AC including base AC and active effect modifiers.
+
+        This is the single source of truth for AC calculations. It applies
+        modifiers from active effects (spells, items, conditions) in the correct order:
+        1. Base AC from armor/natural armor
+        2. AC set effects (Mage Armor, Barkskin) - only first applies
+        3. AC bonus effects (Shield, Haste) - all stack
+
+        Args:
+            creature: Creature to calculate AC for
+
+        Returns:
+            Effective AC after applying all modifiers
+        """
+        from dnd_engine.systems.time_manager import ModifierType
+
+        base_ac = creature._base_ac
+
+        # Query active effects for this creature
+        effects = self.time_manager.get_effects_for_character(creature.name)
+
+        # Apply AC modifiers in order
+        final_ac = base_ac
+        has_set_base = False
+
+        for effect in effects:
+            effect_data = effect.effect_data
+            if not effect_data:
+                continue
+
+            modifier_type = effect_data.get("modifier_type", "")
+
+            if modifier_type == ModifierType.AC_SET_BASE.value and not has_set_base:
+                # Only first ac_set_base applies (Mage Armor, Barkskin)
+                # These spells set a minimum AC or replace base calculation
+                formula = effect_data.get("formula", "")
+                if formula:
+                    final_ac = self._evaluate_ac_formula(formula, creature)
+                    has_set_base = True
+            elif modifier_type == ModifierType.AC_BONUS.value:
+                # Bonuses stack (Shield: +5, Haste: +2, etc.)
+                final_ac += effect_data.get("value", 0)
+
+        return final_ac
+
+    def _evaluate_ac_formula(self, formula: str, creature: "Creature") -> int:
+        """
+        Evaluate AC formula like '13 + dex_mod'.
+
+        Args:
+            formula: Formula string from spell data
+            creature: Creature to evaluate formula for
+
+        Returns:
+            Calculated AC value
+        """
+        # Parse formula - supports patterns like "13 + dex_mod", "10 + dex_mod + con_mod"
+        result = 0
+        formula = formula.lower().replace(" ", "")
+
+        # Split by + and process each part
+        parts = formula.split("+")
+        for part in parts:
+            part = part.strip()
+            if part.isdigit():
+                # Numeric constant
+                result += int(part)
+            elif part == "dex_mod":
+                result += creature.abilities.dex_mod
+            elif part == "con_mod":
+                result += creature.abilities.con_mod
+            elif part == "str_mod":
+                result += creature.abilities.str_mod
+            elif part == "int_mod":
+                result += creature.abilities.int_mod
+            elif part == "wis_mod":
+                result += creature.abilities.wis_mod
+            elif part == "cha_mod":
+                result += creature.abilities.cha_mod
+            else:
+                logger.warning(f"Unknown formula part: {part}")
+
+        return result
+
     def get_player_status(self) -> List[Dict[str, Any]]:
         """
         Get status for all party members.
@@ -1445,7 +1543,7 @@ class GameState:
                 "name": char.name,
                 "hp": char.current_hp,
                 "max_hp": char.max_hp,
-                "ac": char.ac,
+                "ac": char._base_ac,
                 "level": char.level,
                 "xp": char.xp,
                 "alive": char.is_alive
@@ -1923,7 +2021,8 @@ class GameState:
                             defender=target,
                             attack_bonus=action["attack_bonus"],
                             damage_dice=action["damage"],
-                            apply_damage=True
+                            apply_damage=True,
+                            game_state=self
                         )
                         opportunity_attacks.append(result)
 
@@ -2196,7 +2295,8 @@ class GameState:
             attack_bonus=attack_bonus,
             damage_dice=damage_dice,
             apply_damage=True,
-            event_bus=self.event_bus
+            event_bus=self.event_bus,
+            game_state=self
         )
 
         # Apply special effects on hit

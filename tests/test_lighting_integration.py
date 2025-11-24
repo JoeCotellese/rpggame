@@ -295,7 +295,8 @@ class TestCompleteWorkflow:
         active_effects = game_state.time_manager.active_effects
         assert len(active_effects) == 1
         assert active_effects[0].source == "Light"
-        assert active_effects[0].duration_minutes == 60
+        assert active_effects[0].duration_type == "hours"
+        assert active_effects[0].duration_value == 1.0  # 1 hour
 
         # Move to another room - Light effect should persist
         move_result = game_state.move("north")

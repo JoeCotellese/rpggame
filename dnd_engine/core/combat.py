@@ -94,7 +94,8 @@ class CombatEngine:
         disadvantage: bool = False,
         apply_damage: bool = False,
         event_bus = None,
-        action: dict | None = None
+        action: dict | None = None,
+        game_state = None
     ) -> AttackResult:
         """
         Resolve a complete attack.
@@ -134,9 +135,16 @@ class CombatEngine:
         critical_hit = attack_roll == 20
         critical_miss = attack_roll == 1
 
+        # Get effective AC (includes modifiers from spells/effects if game_state provided)
+        if game_state is not None:
+            defender_ac = game_state.get_effective_ac(defender)
+        else:
+            # Fallback to base AC if no game_state (e.g., in unit tests)
+            defender_ac = defender._base_ac
+
         # Determine hit/miss
         total_attack = attack_roll + attack_bonus
-        hit = total_attack >= defender.ac
+        hit = total_attack >= defender_ac
 
         # Natural 20 always hits, natural 1 always misses
         if critical_hit:
@@ -198,7 +206,7 @@ class CombatEngine:
             defender_name=defender.name,
             attack_roll=attack_roll,
             attack_bonus=attack_bonus,
-            target_ac=defender.ac,
+            target_ac=defender_ac,
             hit=hit,
             damage=damage,
             critical_hit=critical_hit,
@@ -528,7 +536,7 @@ class CombatEngine:
                     "attack_roll": result.attack_roll,
                     "attack_bonus": spell_attack_bonus,
                     "total": result.total_attack,
-                    "target_ac": target.ac,
+                    "target_ac": result.target_ac,
                     "hit": result.hit,
                     "critical_hit": result.critical_hit,
                     "damage": result.damage,

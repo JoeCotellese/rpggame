@@ -183,8 +183,11 @@ class InitiativeTracker:
             self.current_turn_index = 0
             self.round_number += 1
 
-            # Advance time for combat round (6 seconds = 0.1 minutes)
+            # Advance effects for combat round (6 seconds = 0.1 minutes)
             if self.time_manager:
+                # Advance round-based effects (Shield: 1 round)
+                self.time_manager.advance_round(1)
+                # Advance time-based effects (Mage Armor: 8 hours)
                 self.time_manager.advance_time(0.1, reason="combat_round")
 
         # Reset actions for the new turn
