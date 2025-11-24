@@ -3,7 +3,7 @@
 
 from typing import Optional, List, Dict, Any
 from dnd_engine.core.character import Character
-from dnd_engine.core.game_state import GameState
+from dnd_engine.core.game_state import GameState, CombatEvent
 from dnd_engine.core.dice import format_dice_with_modifier
 from dnd_engine.utils.events import Event, EventType
 from dnd_engine.systems.inventory import EquipmentSlot
@@ -232,12 +232,8 @@ class CLI:
         for entry in self.game_state.initiative_tracker.get_all_combatants():
             is_player = any(char == entry.creature for char in self.game_state.party.characters)
 
-            # Get numbered name for enemies
-            display_name = entry.creature.name
-            if not is_player:
-                enemy_number = self._get_enemy_number(entry.creature)
-                if enemy_number is not None:
-                    display_name = f"{entry.creature.name} {enemy_number}"
+            # Use display_name from InitiativeEntry (already has enemy numbers)
+            display_name = entry.display_name if entry.display_name else entry.creature.name
 
             combatant_data = {
                 "name": display_name,
@@ -316,17 +312,19 @@ class CLI:
         Returns:
             Dict with party_hp and enemy_hp lists
         """
+        # Use new GameState API for battlefield state
+        battlefield = self.game_state.get_battlefield_state()
+
         party_hp = [
-            (char.name, char.current_hp, char.max_hp)
-            for char in self.game_state.party.characters
+            (combatant.name, combatant.current_hp, combatant.max_hp)
+            for combatant in battlefield.party_combatants
         ]
 
-        enemy_hp = []
-        for enemy in self.game_state.active_enemies:
-            if enemy.is_alive:
-                enemy_num = self._get_enemy_number(enemy)
-                display_name = f"{enemy.name} {enemy_num}" if enemy_num else enemy.name
-                enemy_hp.append((display_name, enemy.current_hp, enemy.max_hp))
+        enemy_hp = [
+            (combatant.display_name, combatant.current_hp, combatant.max_hp)
+            for combatant in battlefield.enemy_combatants
+            if combatant.is_alive
+        ]
 
         return {
             "party_hp": party_hp,
@@ -340,17 +338,33 @@ class CLI:
         Args:
             result: AttackResult from combat engine
         """
+        import time
+
+        # Determine event type and description
         if result.hit:
+            event_type = "attack"
             if result.critical_hit:
-                action = f"{result.attacker_name} CRITICALLY hit {result.defender_name} for {result.damage} damage"
+                description = f"{result.attacker_name} CRITICALLY hit {result.defender_name} for {result.damage} damage"
             else:
-                action = f"{result.attacker_name} hit {result.defender_name} for {result.damage} damage"
+                description = f"{result.attacker_name} hit {result.defender_name} for {result.damage} damage"
         else:
-            action = f"{result.attacker_name} missed {result.defender_name}"
+            event_type = "miss"
+            description = f"{result.attacker_name} missed {result.defender_name}"
 
-        self.combat_history.append(action)
+        # Use new GameState API for recording combat events
+        event = CombatEvent(
+            timestamp=time.time(),
+            event_type=event_type,
+            attacker=result.attacker_name,
+            defender=result.defender_name,
+            damage=result.damage if result.hit else 0,
+            critical=result.critical_hit if result.hit else False,
+            description=description
+        )
+        self.game_state.record_combat_event(event)
 
-        # Keep only last 12 actions to prevent prompt bloat
+        # Also maintain local list for backwards compatibility during migration
+        self.combat_history.append(description)
         if len(self.combat_history) > 12:
             self.combat_history = self.combat_history[-12:]
 
@@ -2694,6 +2708,17 @@ class CLI:
         Returns:
             The matching enemy, or None if not found
         """
+        # Use new InitiativeTracker API for target lookup
+        if self.game_state.initiative_tracker:
+            player_creatures = [char for char in self.game_state.party.characters]
+            entry = self.game_state.initiative_tracker.find_combatant_by_reference(
+                target,
+                player_creatures=player_creatures
+            )
+            if entry and not entry.creature in player_creatures:
+                return entry.creature
+
+        # Fallback to old implementation for backwards compatibility during migration
         target = target.strip().lower()
 
         # Try to parse as pure number first
@@ -4665,15 +4690,28 @@ class CLI:
         # Clear combat history for new combat
         self.combat_history = []
 
-        # Assign numbers to enemies for this combat
+        # Use new InitiativeTracker API for assigning enemy numbers
+        if self.game_state.initiative_tracker:
+            player_creatures = [char for char in self.game_state.party.characters]
+            self.game_state.initiative_tracker.assign_combat_numbers(player_creatures)
+
+        # Also maintain old system for backwards compatibility during migration
         self._assign_enemy_numbers()
 
-        # Build numbered enemy list for display
+        # Build numbered enemy list for display using new display_name
         numbered_enemies = []
-        for enemy in self.game_state.active_enemies:
-            enemy_num = self._get_enemy_number(enemy)
-            display_name = f"{enemy.name} {enemy_num}" if enemy_num else enemy.name
-            numbered_enemies.append(display_name)
+        if self.game_state.initiative_tracker:
+            for entry in self.game_state.initiative_tracker.get_all_combatants():
+                is_player = any(char == entry.creature for char in self.game_state.party.characters)
+                if not is_player:
+                    display_name = entry.display_name if entry.display_name else entry.creature.name
+                    numbered_enemies.append(display_name)
+        else:
+            # Fallback if no initiative tracker
+            for enemy in self.game_state.active_enemies:
+                enemy_num = self._get_enemy_number(enemy)
+                display_name = f"{enemy.name} {enemy_num}" if enemy_num else enemy.name
+                numbered_enemies.append(display_name)
 
         # Display combat warning (no separate narrative - it's in room description)
         print_status_message(f"Combat begins! Enemies: {', '.join(numbered_enemies)}", "warning")
