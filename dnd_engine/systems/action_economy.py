@@ -1,8 +1,8 @@
 # ABOUTME: Action economy tracking for D&D 5E combat turns
 # ABOUTME: Manages available actions, bonus actions, and free object interactions per turn
 
-from enum import Enum
 from dataclasses import dataclass
+from enum import Enum
 
 
 class ActionType(Enum):

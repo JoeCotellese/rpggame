@@ -1,15 +1,16 @@
 # ABOUTME: Main CombatContextBuilder class for assembling combat action context
 # ABOUTME: Coordinates data gathering and builds complete LLM context dictionaries
 
-from typing import Dict, Any, Optional
+from typing import Any
+
 from dnd_engine.core.character import Character
-from dnd_engine.core.creature import Creature
 from dnd_engine.core.combat import AttackResult
+from dnd_engine.core.creature import Creature
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.systems.combat_context.assemblers import (
-    get_weapon_context,
     get_attacker_race,
     get_defender_armor,
+    get_weapon_context,
 )
 
 # Number of recent combat actions to include for LLM context
@@ -36,9 +37,9 @@ class CombatContextBuilder:
         self.data_loader = data_loader
         self.game_state = game_state
         # Cache for monster name -> monster data lookups (performance optimization)
-        self._monster_cache: Optional[Dict[str, Dict[str, Any]]] = None
+        self._monster_cache: dict[str, dict[str, Any]] | None = None
 
-    def get_monster_by_name(self, name: str) -> Dict[str, Any]:
+    def get_monster_by_name(self, name: str) -> dict[str, Any]:
         """
         Get monster data by name with caching for performance.
 
@@ -62,9 +63,9 @@ class CombatContextBuilder:
         attacker: Character | Creature,
         defender: Character | Creature,
         result: AttackResult,
-        action_data: Optional[Dict[str, Any]] = None,
+        action_data: dict[str, Any] | None = None,
         is_spell: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Build complete context dictionary for an attack action.
 

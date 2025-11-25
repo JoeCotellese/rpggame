@@ -8,13 +8,9 @@ Tests cover:
 - Event, dice, LLM, combat, and player action logging
 """
 
-import logging
-import tempfile
-from pathlib import Path
-from unittest.mock import patch, MagicMock
-import pytest
+from unittest.mock import patch
 
-from dnd_engine.utils.logging_config import LoggingConfig, init_logging, get_logging_config
+from dnd_engine.utils.logging_config import LoggingConfig, get_logging_config, init_logging
 
 
 class TestLoggingConfig:

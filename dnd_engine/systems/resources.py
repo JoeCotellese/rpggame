@@ -2,7 +2,6 @@
 # ABOUTME: Manages resources like spell slots, ki points, rage uses, and bardic inspiration
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -38,7 +37,7 @@ class ResourcePool:
             return True
         return False
 
-    def recover(self, amount: Optional[int] = None) -> int:
+    def recover(self, amount: int | None = None) -> int:
         """
         Recover resources. If amount is None, recover all.
 

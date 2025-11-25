@@ -4,14 +4,13 @@
 import json
 import uuid
 from pathlib import Path
-from datetime import datetime
+
 import pytest
 
-from dnd_engine.core.character_vault import CharacterVault, CharacterState, VAULT_VERSION
 from dnd_engine.core.character import Character, CharacterClass
+from dnd_engine.core.character_vault import VAULT_VERSION, CharacterState, CharacterVault
 from dnd_engine.core.creature import Abilities
-from dnd_engine.systems.inventory import Inventory, EquipmentSlot
-from dnd_engine.systems.currency import Currency
+from dnd_engine.systems.inventory import Inventory
 from dnd_engine.systems.resources import ResourcePool
 
 
@@ -131,7 +130,7 @@ class TestSaveCharacter:
         character_id = vault.save_character(sample_character)
 
         character_file = vault.vault_dir / f"{character_id}.json"
-        with open(character_file, 'r') as f:
+        with open(character_file) as f:
             data = json.load(f)
 
         assert data["metadata"]["state"] == CharacterState.AVAILABLE.value
@@ -146,7 +145,7 @@ class TestSaveCharacter:
         )
 
         character_file = vault.vault_dir / f"{character_id}.json"
-        with open(character_file, 'r') as f:
+        with open(character_file) as f:
             data = json.load(f)
 
         assert data["metadata"]["state"] == CharacterState.ACTIVE.value
@@ -171,7 +170,7 @@ class TestSaveCharacter:
         character_id = vault.save_character(sample_character)
 
         character_file = vault.vault_dir / f"{character_id}.json"
-        with open(character_file, 'r') as f:
+        with open(character_file) as f:
             data = json.load(f)
 
         # Check top-level structure
@@ -426,7 +425,7 @@ class TestExportCharacter:
 
         vault.export_character(character_id, export_path, strip_metadata=True)
 
-        with open(export_path, 'r') as f:
+        with open(export_path) as f:
             data = json.load(f)
 
         # Should have version and character, but not full metadata
@@ -442,7 +441,7 @@ class TestExportCharacter:
 
         vault.export_character(character_id, export_path, strip_metadata=False)
 
-        with open(export_path, 'r') as f:
+        with open(export_path) as f:
             data = json.load(f)
 
         # Should have full vault format
@@ -690,7 +689,7 @@ class TestUpdateCharacterState:
 
         # Get original timestamp
         character_file = temp_vault_dir / f"{character_id}.json"
-        with open(character_file, 'r') as f:
+        with open(character_file) as f:
             original_data = json.load(f)
         original_timestamp = original_data["metadata"]["last_modified"]
 
@@ -702,7 +701,7 @@ class TestUpdateCharacterState:
         vault.update_character_state(character_id, CharacterState.RETIRED)
 
         # Check new timestamp
-        with open(character_file, 'r') as f:
+        with open(character_file) as f:
             new_data = json.load(f)
         new_timestamp = new_data["metadata"]["last_modified"]
 

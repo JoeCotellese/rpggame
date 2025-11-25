@@ -1,11 +1,11 @@
 # ABOUTME: Event bus system for pub/sub messaging between game components
 # ABOUTME: Enables loose coupling between game engine, LLM enhancement, and UI layers
 
-from enum import Enum
-from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Any
 import logging
-
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +89,7 @@ class Event:
     other components (LLM enhancement, UI, logging, etc.).
     """
     type: EventType
-    data: Dict[str, Any] = field(default_factory=dict)
+    data: dict[str, Any] = field(default_factory=dict)
 
     def __str__(self) -> str:
         """String representation of the event"""
@@ -117,7 +117,7 @@ class EventBus:
     def __init__(self):
         """Initialize the event bus."""
         # Map of event type -> list of handler functions
-        self._subscribers: Dict[EventType, List[EventHandler]] = {}
+        self._subscribers: dict[EventType, list[EventHandler]] = {}
 
     def subscribe(self, event_type: EventType, handler: EventHandler) -> None:
         """

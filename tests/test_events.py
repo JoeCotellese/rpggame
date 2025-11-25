@@ -1,9 +1,7 @@
 # ABOUTME: Unit tests for the event bus system
 # ABOUTME: Tests pub/sub functionality, event types, and event handling
 
-import pytest
-from typing import List
-from dnd_engine.utils.events import EventBus, Event, EventType
+from dnd_engine.utils.events import Event, EventBus, EventType
 
 
 class TestEvent:
@@ -44,7 +42,7 @@ class TestEventBus:
     def setup_method(self):
         """Set up test fixtures"""
         self.bus = EventBus()
-        self.received_events: List[Event] = []
+        self.received_events: list[Event] = []
 
     def test_bus_creation(self):
         """Test creating an event bus"""

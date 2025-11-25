@@ -1,15 +1,14 @@
 # ABOUTME: Unit tests for spell dataclass and helper methods
 # ABOUTME: Tests spell properties, helper methods, and data validation
 
-import pytest
 from dnd_engine.core.spell import (
+    DurationType,
+    SavingThrow,
     Spell,
-    SpellSchool,
     SpellComponents,
     SpellDamage,
     SpellHealing,
-    SavingThrow,
-    DurationType,
+    SpellSchool,
 )
 
 

@@ -1,21 +1,21 @@
 # ABOUTME: Character creation factory for D&D 5E character generation
 # ABOUTME: Handles ability rolling, assignment, racial bonuses, and stat calculations
 
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Any
+
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.rules.loader import DataLoader
-from dnd_engine.systems.inventory import Inventory, EquipmentSlot
+from dnd_engine.systems.inventory import EquipmentSlot
 from dnd_engine.systems.resources import ResourcePool
 from dnd_engine.ui.rich_ui import (
-    print_section,
     print_choice_menu,
-    print_message,
-    print_status_message,
-    print_input_prompt,
     print_error,
-    console
+    print_input_prompt,
+    print_message,
+    print_section,
+    print_status_message,
 )
 
 
@@ -33,7 +33,7 @@ class CharacterFactory:
     - Interactive character creation flow
     """
 
-    def __init__(self, dice_roller: Optional[DiceRoller] = None):
+    def __init__(self, dice_roller: DiceRoller | None = None):
         """
         Initialize the character factory.
 
@@ -43,7 +43,7 @@ class CharacterFactory:
         self.dice_roller = dice_roller if dice_roller is not None else DiceRoller()
 
     @staticmethod
-    def roll_ability_score(dice_roller: DiceRoller) -> Tuple[int, List[int]]:
+    def roll_ability_score(dice_roller: DiceRoller) -> tuple[int, list[int]]:
         """
         Roll 4d6, drop lowest, return score and dice rolled.
 
@@ -66,7 +66,7 @@ class CharacterFactory:
         return score, dice
 
     @staticmethod
-    def roll_all_abilities(dice_roller: DiceRoller) -> List[Tuple[int, List[int]]]:
+    def roll_all_abilities(dice_roller: DiceRoller) -> list[tuple[int, list[int]]]:
         """
         Roll six ability scores.
 
@@ -80,9 +80,9 @@ class CharacterFactory:
 
     @staticmethod
     def auto_assign_abilities(
-        scores: List[int],
-        class_data: Dict[str, Any]
-    ) -> Dict[str, int]:
+        scores: list[int],
+        class_data: dict[str, Any]
+    ) -> dict[str, int]:
         """
         Auto-assign scores to abilities based on class priorities.
 
@@ -111,10 +111,10 @@ class CharacterFactory:
 
     @staticmethod
     def swap_abilities(
-        abilities: Dict[str, int],
+        abilities: dict[str, int],
         ability1: str,
         ability2: str
-    ) -> Dict[str, int]:
+    ) -> dict[str, int]:
         """
         Swap two ability scores.
 
@@ -144,9 +144,9 @@ class CharacterFactory:
 
     @staticmethod
     def apply_racial_bonuses(
-        abilities: Dict[str, int],
-        race_data: Dict[str, Any]
-    ) -> Dict[str, int]:
+        abilities: dict[str, int],
+        race_data: dict[str, Any]
+    ) -> dict[str, int]:
         """
         Apply racial ability score bonuses.
 
@@ -181,7 +181,7 @@ class CharacterFactory:
 
     @staticmethod
     def calculate_hp(
-        class_data: Dict[str, Any],
+        class_data: dict[str, Any],
         con_modifier: int,
         level: int = 1
     ) -> int:
@@ -207,7 +207,7 @@ class CharacterFactory:
 
     @staticmethod
     def calculate_ac(
-        equipped_armor: Optional[Dict[str, Any]],
+        equipped_armor: dict[str, Any] | None,
         dex_modifier: int
     ) -> int:
         """
@@ -237,9 +237,9 @@ class CharacterFactory:
 
     @staticmethod
     def select_skill_proficiencies(
-        class_data: Dict[str, Any],
-        skills_data: Dict[str, Any]
-    ) -> List[str]:
+        class_data: dict[str, Any],
+        skills_data: dict[str, Any]
+    ) -> list[str]:
         """
         Let player select skill proficiencies for their class.
 
@@ -300,9 +300,9 @@ class CharacterFactory:
 
     @staticmethod
     def select_expertise_skills(
-        skill_proficiencies: List[str],
-        skills_data: Dict[str, Any]
-    ) -> List[str]:
+        skill_proficiencies: list[str],
+        skills_data: dict[str, Any]
+    ) -> list[str]:
         """
         Let Rogue player select expertise skills from their proficiencies.
 
@@ -359,8 +359,8 @@ class CharacterFactory:
     @staticmethod
     def apply_starting_equipment(
         character: Character,
-        class_data: Dict[str, Any],
-        items_data: Dict[str, Any]
+        class_data: dict[str, Any],
+        items_data: dict[str, Any]
     ) -> None:
         """
         Add starting equipment to character inventory and equip.
@@ -406,9 +406,9 @@ class CharacterFactory:
     def select_spells(
         spell_type: str,
         num_to_choose: int,
-        available_spells: List[Tuple[str, Dict[str, Any]]],
-        spells_data: Dict[str, Any]
-    ) -> List[str]:
+        available_spells: list[tuple[str, dict[str, Any]]],
+        spells_data: dict[str, Any]
+    ) -> list[str]:
         """
         Let player select spells interactively.
 
@@ -474,8 +474,8 @@ class CharacterFactory:
     @staticmethod
     def initialize_spellcasting(
         character: Character,
-        class_data: Dict[str, Any],
-        spells_data: Dict[str, Any],
+        class_data: dict[str, Any],
+        spells_data: dict[str, Any],
         interactive: bool = True
     ) -> None:
         """
@@ -571,7 +571,7 @@ class CharacterFactory:
     @staticmethod
     def initialize_class_resources(
         character: Character,
-        class_data: Dict[str, Any],
+        class_data: dict[str, Any],
         level: int
     ) -> None:
         """

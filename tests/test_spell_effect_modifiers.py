@@ -2,12 +2,13 @@
 # ABOUTME: Validates that active effects from spells correctly modify character stats
 
 import pytest
+
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities
 from dnd_engine.core.game_state import GameState
 from dnd_engine.rules.loader import DataLoader
+from dnd_engine.systems.time_manager import ActiveEffect, EffectType, ModifierType
 from dnd_engine.utils.events import EventBus
-from dnd_engine.systems.time_manager import TimeManager, ActiveEffect, EffectType, ModifierType
 
 
 @pytest.fixture
@@ -35,8 +36,8 @@ def wizard():
 @pytest.fixture
 def game_state_with_wizard(wizard):
     """Create a GameState with a wizard"""
-    from dnd_engine.core.party import Party
     from dnd_engine.core.dice import DiceRoller
+    from dnd_engine.core.party import Party
 
     data_loader = DataLoader()
     event_bus = EventBus()

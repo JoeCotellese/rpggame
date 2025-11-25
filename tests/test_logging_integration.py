@@ -9,15 +9,12 @@ Tests cover:
 """
 
 import os
-import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
-import pytest
 
-from dnd_engine.ui.rich_ui import init_console, console
-from dnd_engine.utils.logging_config import get_logging_config
-from dnd_engine.utils.events import EventBus, Event, EventType
 from dnd_engine.core.dice import DiceRoller
+from dnd_engine.ui.rich_ui import console, init_console
+from dnd_engine.utils.events import Event, EventBus, EventType
+from dnd_engine.utils.logging_config import get_logging_config
 
 
 class TestDebugModeIntegration:

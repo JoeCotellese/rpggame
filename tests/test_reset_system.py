@@ -1,12 +1,11 @@
 # ABOUTME: Unit tests for the reset system
 # ABOUTME: Tests dungeon reset, party preservation, and campaign restart functionality
 
-import pytest
-from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.character import Character, CharacterClass
-from dnd_engine.core.party import Party
 from dnd_engine.core.creature import Abilities
+from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.game_state import GameState
+from dnd_engine.core.party import Party
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.utils.events import EventBus, EventType
 
@@ -204,7 +203,7 @@ class TestResetSystem:
 
     def test_reset_to_different_dungeon(self):
         """Test resetting to a different dungeon (with mocking)"""
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import patch
 
         original_dungeon = self.game_state.dungeon_name
 
@@ -235,7 +234,7 @@ class TestResetSystem:
 
     def test_reset_to_different_dungeon_preserves_party(self):
         """Test that switching dungeons preserves party data"""
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import patch
 
         self.character1.level = 5
         self.character1.xp = 500

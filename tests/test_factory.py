@@ -3,8 +3,6 @@
 import os
 from unittest.mock import patch
 
-import pytest
-
 from dnd_engine.llm.anthropic_provider import AnthropicProvider
 from dnd_engine.llm.debug_provider import DebugProvider
 from dnd_engine.llm.factory import create_llm_provider

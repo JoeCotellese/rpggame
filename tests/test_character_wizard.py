@@ -1,11 +1,13 @@
 """Unit tests for CharacterCreationWizard"""
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
-from dnd_engine.ui.character_wizard import CharacterCreationWizard, CreationPath
+
 from dnd_engine.core.character_factory import CharacterFactory
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.rules.loader import DataLoader
+from dnd_engine.ui.character_wizard import CharacterCreationWizard, CreationPath
 
 
 class TestCharacterCreationWizard:

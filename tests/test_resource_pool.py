@@ -1,7 +1,6 @@
 # ABOUTME: Unit tests for ResourcePool class
 # ABOUTME: Tests resource usage, recovery, and state checking mechanics
 
-import pytest
 from dnd_engine.systems.resources import ResourcePool
 
 

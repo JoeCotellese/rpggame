@@ -1,11 +1,11 @@
 # ABOUTME: Time tracking system for managing game time and timed effects
 # ABOUTME: Handles duration parsing, active effect tracking, and automatic expiration
 
-from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any, TYPE_CHECKING
-from enum import Enum
-import re
 import logging
+import re
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     from dnd_engine.utils.events import EventBus
@@ -61,8 +61,8 @@ class ActiveEffect:
     target_name: str
     description: str = ""
     concentration: bool = False
-    caster_name: Optional[str] = None
-    effect_data: Dict[str, Any] = field(default_factory=dict)
+    caster_name: str | None = None
+    effect_data: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         """Ensure remaining_value doesn't exceed duration."""
@@ -150,7 +150,7 @@ class ActiveEffect:
                     return f"{hours:.1f} hours"
 
 
-def parse_duration(duration_string: str) -> Optional[tuple[str, float]]:
+def parse_duration(duration_string: str) -> tuple[str, float] | None:
     """
     Parse a duration string to (duration_type, duration_value).
 
@@ -202,7 +202,7 @@ def parse_duration(duration_string: str) -> Optional[tuple[str, float]]:
     return None
 
 
-def parse_duration_to_minutes(duration_string: str) -> Optional[float]:
+def parse_duration_to_minutes(duration_string: str) -> float | None:
     """
     Parse a duration string to minutes.
 
@@ -299,7 +299,7 @@ class TimeManager:
         """
         self.event_bus = event_bus
         self.elapsed_minutes: float = 0.0
-        self.active_effects: List[ActiveEffect] = []
+        self.active_effects: list[ActiveEffect] = []
 
     def get_elapsed_time_display(self) -> str:
         """Get a human-readable display of elapsed game time."""
@@ -320,7 +320,7 @@ class TimeManager:
 
         return ", ".join(parts)
 
-    def advance_time(self, minutes: float, reason: str = "") -> List[ActiveEffect]:
+    def advance_time(self, minutes: float, reason: str = "") -> list[ActiveEffect]:
         """
         Advance game time and process effect expirations.
 
@@ -350,7 +350,7 @@ class TimeManager:
 
                 # Emit effect expired event
                 if self.event_bus:
-                    from dnd_engine.utils.events import EventType, Event
+                    from dnd_engine.utils.events import Event, EventType
                     self.event_bus.emit(Event(
                         EventType.EFFECT_EXPIRED,
                         {
@@ -363,7 +363,7 @@ class TimeManager:
 
         # Emit time advanced event
         if self.event_bus:
-            from dnd_engine.utils.events import EventType, Event
+            from dnd_engine.utils.events import Event, EventType
             self.event_bus.emit(Event(
                 EventType.TIME_ADVANCED,
                 {
@@ -377,7 +377,7 @@ class TimeManager:
         old_hours = int(old_elapsed // 60)
         new_hours = int(self.elapsed_minutes // 60)
         if new_hours > old_hours and self.event_bus:
-            from dnd_engine.utils.events import EventType, Event
+            from dnd_engine.utils.events import Event, EventType
             hours_passed = new_hours - old_hours
             self.event_bus.emit(Event(
                 EventType.HOUR_PASSED,
@@ -389,7 +389,7 @@ class TimeManager:
 
         return expired_effects
 
-    def advance_round(self, rounds: int = 1) -> List[ActiveEffect]:
+    def advance_round(self, rounds: int = 1) -> list[ActiveEffect]:
         """
         Advance combat rounds and process round-based effect expirations.
 
@@ -417,7 +417,7 @@ class TimeManager:
 
                 # Emit effect expired event
                 if self.event_bus:
-                    from dnd_engine.utils.events import EventType, Event
+                    from dnd_engine.utils.events import Event, EventType
                     self.event_bus.emit(Event(
                         EventType.EFFECT_EXPIRED,
                         {
@@ -456,7 +456,7 @@ class TimeManager:
 
         self.active_effects.append(effect)
 
-    def remove_effect(self, target_name: str, source: str) -> Optional[ActiveEffect]:
+    def remove_effect(self, target_name: str, source: str) -> ActiveEffect | None:
         """
         Remove a specific effect by target and source.
 
@@ -473,7 +473,7 @@ class TimeManager:
                 return effect
         return None
 
-    def remove_concentration_effects(self, caster_name: str) -> List[ActiveEffect]:
+    def remove_concentration_effects(self, caster_name: str) -> list[ActiveEffect]:
         """
         Remove all concentration effects from a specific caster.
 
@@ -491,7 +491,7 @@ class TimeManager:
 
                 # Emit effect expired event
                 if self.event_bus:
-                    from dnd_engine.utils.events import EventType, Event
+                    from dnd_engine.utils.events import Event, EventType
                     self.event_bus.emit(Event(
                         EventType.EFFECT_EXPIRED,
                         {
@@ -505,7 +505,7 @@ class TimeManager:
 
         return removed
 
-    def get_effects_for_character(self, character_name: str) -> List[ActiveEffect]:
+    def get_effects_for_character(self, character_name: str) -> list[ActiveEffect]:
         """
         Get all active effects for a specific character.
 
@@ -517,7 +517,7 @@ class TimeManager:
         """
         return [e for e in self.active_effects if e.target_name == character_name]
 
-    def get_all_effects(self) -> List[ActiveEffect]:
+    def get_all_effects(self) -> list[ActiveEffect]:
         """Get all active effects."""
         return self.active_effects.copy()
 

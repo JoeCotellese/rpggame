@@ -1,8 +1,7 @@
 """Integration tests for character creation flow"""
 
-import pytest
-from dnd_engine.core.character_factory import CharacterFactory
 from dnd_engine.core.character import CharacterClass
+from dnd_engine.core.character_factory import CharacterFactory
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.systems.inventory import EquipmentSlot
@@ -188,8 +187,8 @@ class TestCharacterCreationIntegration:
         factory = CharacterFactory(dice_roller=DiceRoller(seed=42))
 
         # Create character
-        from dnd_engine.core.creature import Abilities
         from dnd_engine.core.character import Character
+        from dnd_engine.core.creature import Abilities
 
         character = Character(
             name="Test Fighter",
@@ -236,8 +235,8 @@ class TestCharacterCreationIntegration:
         abilities = factory.apply_racial_bonuses(abilities, races_data["human"])
 
         # Calculate stats
-        from dnd_engine.core.creature import Abilities
         from dnd_engine.core.character import Character
+        from dnd_engine.core.creature import Abilities
 
         abilities_obj = Abilities(
             strength=abilities["strength"],

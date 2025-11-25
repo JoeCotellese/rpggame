@@ -1,10 +1,9 @@
 # ABOUTME: Unit tests for the initiative system
 # ABOUTME: Tests turn order tracking, round management, and combatant removal
 
-import pytest
+from dnd_engine.core.creature import Abilities, Creature
 from dnd_engine.core.dice import DiceRoller
-from dnd_engine.core.creature import Creature, Abilities
-from dnd_engine.systems.initiative import InitiativeTracker, InitiativeEntry
+from dnd_engine.systems.initiative import InitiativeEntry, InitiativeTracker
 
 
 class TestInitiativeTracker:

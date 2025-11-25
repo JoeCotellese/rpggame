@@ -2,10 +2,11 @@
 # ABOUTME: Tests inventory.use_item() and item effect application
 
 import pytest
-from dnd_engine.systems.inventory import Inventory
-from dnd_engine.systems.item_effects import apply_item_effect, ItemEffectResult
-from dnd_engine.core.creature import Creature, Abilities
+
+from dnd_engine.core.creature import Abilities, Creature
 from dnd_engine.core.dice import DiceRoller
+from dnd_engine.systems.inventory import Inventory
+from dnd_engine.systems.item_effects import apply_item_effect
 
 
 class TestInventoryUseItem:

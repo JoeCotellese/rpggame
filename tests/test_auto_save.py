@@ -1,17 +1,17 @@
 # ABOUTME: Unit tests for auto-save functionality
 # ABOUTME: Tests auto-save triggers, quick-save, and campaign integration
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
-from pathlib import Path
+from unittest.mock import Mock, patch
 
-from dnd_engine.ui.cli import CLI
-from dnd_engine.core.game_state import GameState
-from dnd_engine.core.party import Party
+import pytest
+
+from dnd_engine.core.campaign_manager import CampaignManager
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities
-from dnd_engine.core.campaign_manager import CampaignManager
-from dnd_engine.utils.events import EventBus, Event, EventType
+from dnd_engine.core.game_state import GameState
+from dnd_engine.core.party import Party
+from dnd_engine.ui.cli import CLI
+from dnd_engine.utils.events import Event, EventBus, EventType
 
 
 @pytest.fixture

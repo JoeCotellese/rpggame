@@ -1,9 +1,10 @@
 # ABOUTME: Inventory management system for player characters
 # ABOUTME: Handles item storage, equipping, usage, and currency tracking
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any, Tuple
+from dataclasses import dataclass
 from enum import Enum
+from typing import Any
+
 from dnd_engine.systems.currency import Currency
 
 
@@ -46,7 +47,7 @@ class Inventory:
     looked up from the data loader when needed.
     """
 
-    def __init__(self, max_items: Optional[int] = None):
+    def __init__(self, max_items: int | None = None):
         """
         Initialize inventory with optional capacity limit.
 
@@ -54,8 +55,8 @@ class Inventory:
             max_items: Maximum number of unique item types (None for unlimited)
         """
         self.max_items = max_items
-        self.items: Dict[str, InventoryItem] = {}  # item_id -> InventoryItem
-        self.equipped: Dict[EquipmentSlot, Optional[str]] = {
+        self.items: dict[str, InventoryItem] = {}  # item_id -> InventoryItem
+        self.equipped: dict[EquipmentSlot, str | None] = {
             EquipmentSlot.WEAPON: None,
             EquipmentSlot.ARMOR: None
         }
@@ -192,7 +193,7 @@ class Inventory:
         self.equipped[slot] = item_id
         return True
 
-    def unequip_item(self, slot: EquipmentSlot) -> Optional[str]:
+    def unequip_item(self, slot: EquipmentSlot) -> str | None:
         """
         Unequip an item from a slot.
 
@@ -206,7 +207,7 @@ class Inventory:
         self.equipped[slot] = None
         return item_id
 
-    def get_equipped_item(self, slot: EquipmentSlot) -> Optional[str]:
+    def get_equipped_item(self, slot: EquipmentSlot) -> str | None:
         """
         Get the item equipped in a slot.
 
@@ -310,7 +311,7 @@ class Inventory:
         """
         return self.currency.can_afford(Currency(gold=amount))
 
-    def get_all_items(self) -> List[InventoryItem]:
+    def get_all_items(self) -> list[InventoryItem]:
         """
         Get all items in inventory.
 
@@ -319,7 +320,7 @@ class Inventory:
         """
         return list(self.items.values())
 
-    def get_items_by_category(self, category: str) -> List[InventoryItem]:
+    def get_items_by_category(self, category: str) -> list[InventoryItem]:
         """
         Get all items of a specific category.
 
@@ -349,7 +350,7 @@ class Inventory:
         """
         return len(self.items)
 
-    def total_value(self, item_data: Dict[str, Dict[str, Any]]) -> int:
+    def total_value(self, item_data: dict[str, dict[str, Any]]) -> int:
         """
         Calculate total value of all items in inventory.
 
@@ -368,7 +369,7 @@ class Inventory:
 
         return total
 
-    def use_item(self, item_id: str, item_data: Dict[str, Dict[str, Any]]) -> Tuple[bool, Optional[Dict[str, Any]]]:
+    def use_item(self, item_id: str, item_data: dict[str, dict[str, Any]]) -> tuple[bool, dict[str, Any] | None]:
         """
         Use a consumable item from inventory.
 

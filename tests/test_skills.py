@@ -2,6 +2,7 @@
 # ABOUTME: Tests skill modifiers, skill checks, and proficiency mechanics
 
 import pytest
+
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities
 from dnd_engine.core.dice import DiceRoller

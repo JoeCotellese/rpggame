@@ -2,8 +2,9 @@
 # ABOUTME: Tests HP management, abilities, modifiers, damage, healing, and death
 
 import pytest
-from dnd_engine.core.creature import Creature, Abilities
+
 from dnd_engine.core.character import Character, CharacterClass
+from dnd_engine.core.creature import Abilities, Creature
 
 
 class TestAbilities:

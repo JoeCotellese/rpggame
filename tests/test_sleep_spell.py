@@ -1,12 +1,13 @@
 # ABOUTME: Unit tests for Sleep spell HP pool mechanics
 # ABOUTME: Tests resolve_spell_hp_pool in combat engine and routing in game_state
 
-import pytest
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from dnd_engine.core.combat import CombatEngine
-from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.creature import Creature
+from dnd_engine.core.dice import DiceRoller
 
 
 class TestResolveSpellHpPool:

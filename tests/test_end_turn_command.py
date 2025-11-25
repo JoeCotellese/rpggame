@@ -1,13 +1,15 @@
 # ABOUTME: Unit tests for the end turn command in combat
 # ABOUTME: Tests that players can explicitly end their turn when actions remain
 
+from unittest.mock import Mock, patch
+
 import pytest
-from unittest.mock import Mock, MagicMock, patch
-from dnd_engine.ui.cli import CLI
-from dnd_engine.core.game_state import GameState
+
 from dnd_engine.core.character import Character
-from dnd_engine.systems.initiative import InitiativeTracker, InitiativeEntry
-from dnd_engine.core.creature import Creature, Abilities
+from dnd_engine.core.creature import Creature
+from dnd_engine.core.game_state import GameState
+from dnd_engine.systems.initiative import InitiativeEntry, InitiativeTracker
+from dnd_engine.ui.cli import CLI
 
 
 class TestEndTurnCommand:
@@ -192,7 +194,8 @@ class TestEndTurnIntegration:
 
     def test_hint_shown_after_item_use(self):
         """Test that a helpful hint is shown after using an item with actions remaining"""
-        from unittest.mock import Mock, patch, MagicMock
+        from unittest.mock import Mock, patch
+
         from dnd_engine.systems.action_economy import TurnState
 
         # Create mocks

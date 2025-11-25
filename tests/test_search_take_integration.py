@@ -1,15 +1,14 @@
 # ABOUTME: Integration tests for search and take command workflow
 # ABOUTME: Tests the complete flow of searching rooms and taking items with visible/hidden mechanics
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
-from io import StringIO
+from unittest.mock import Mock, patch
 
-from dnd_engine.ui.cli import CLI
-from dnd_engine.core.game_state import GameState
-from dnd_engine.core.party import Party
+import pytest
+
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities
+from dnd_engine.core.game_state import GameState
+from dnd_engine.core.party import Party
 from dnd_engine.utils.events import EventBus
 
 
@@ -304,7 +303,6 @@ class TestSearchTakeIntegration:
         game_state_multi_char.search_room()
 
         # Test partial match "sword" for "longsword"
-        from difflib import SequenceMatcher
 
         available = game_state_multi_char.get_available_items_in_room()
         search_term = "sword"

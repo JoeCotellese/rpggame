@@ -1,13 +1,14 @@
 # ABOUTME: Tests for CLI spellcasting ability lookup from class data
 # ABOUTME: Ensures spellcasting ability is correctly retrieved from nested spellcasting object
 
+from unittest.mock import Mock, patch
+
 import pytest
-from unittest.mock import Mock, MagicMock, patch
-from dnd_engine.ui.cli import CLI
+
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities
-from dnd_engine.core.game_state import GameState
 from dnd_engine.rules.loader import DataLoader
+from dnd_engine.ui.cli import CLI
 
 
 class TestCLISpellcastingAbilityLookup:

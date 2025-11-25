@@ -1,12 +1,11 @@
 """End-to-end tests for character creation system"""
 
-import pytest
-from dnd_engine.core.character_factory import CharacterFactory
 from dnd_engine.core.character import Character, CharacterClass
+from dnd_engine.core.character_factory import CharacterFactory
 from dnd_engine.core.creature import Abilities
-from dnd_engine.core.party import Party
-from dnd_engine.core.game_state import GameState
 from dnd_engine.core.dice import DiceRoller
+from dnd_engine.core.game_state import GameState
+from dnd_engine.core.party import Party
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.systems.inventory import EquipmentSlot
 from dnd_engine.utils.events import EventBus

@@ -2,6 +2,7 @@
 # ABOUTME: Tests spell preparation, Arcane Recovery, and wizard-specific mechanics
 
 import pytest
+
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities
 from dnd_engine.systems.resources import ResourcePool

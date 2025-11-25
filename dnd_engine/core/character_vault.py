@@ -3,16 +3,16 @@
 
 import json
 import uuid
-from pathlib import Path
-from typing import Dict, Any, List, Optional
-from datetime import datetime
 from dataclasses import asdict
+from datetime import datetime
 from enum import Enum
+from pathlib import Path
+from typing import Any
 
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities
-from dnd_engine.systems.inventory import Inventory, InventoryItem, EquipmentSlot
 from dnd_engine.systems.currency import Currency
+from dnd_engine.systems.inventory import EquipmentSlot, Inventory
 from dnd_engine.systems.resources import ResourcePool
 
 
@@ -39,7 +39,7 @@ class CharacterVault:
     - State tracking (active/available/retired)
     """
 
-    def __init__(self, vault_dir: Optional[Path] = None):
+    def __init__(self, vault_dir: Path | None = None):
         """
         Initialize character vault.
 
@@ -55,9 +55,9 @@ class CharacterVault:
     def save_character(
         self,
         character: Character,
-        character_id: Optional[str] = None,
+        character_id: str | None = None,
         state: CharacterState = CharacterState.AVAILABLE,
-        campaign_name: Optional[str] = None
+        campaign_name: str | None = None
     ) -> str:
         """
         Save a character to the vault.
@@ -126,7 +126,7 @@ class CharacterVault:
 
         # Read character file
         try:
-            with open(character_path, 'r', encoding='utf-8') as f:
+            with open(character_path, encoding='utf-8') as f:
                 character_data = json.load(f)
         except json.JSONDecodeError as e:
             raise ValueError(f"Corrupted character file: {e}")
@@ -142,7 +142,7 @@ class CharacterVault:
     def list_characters(
         self,
         include_retired: bool = False
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         List all characters in the vault.
 
@@ -156,7 +156,7 @@ class CharacterVault:
 
         for character_file in self.vault_dir.glob("*.json"):
             try:
-                with open(character_file, 'r', encoding='utf-8') as f:
+                with open(character_file, encoding='utf-8') as f:
                     character_data = json.load(f)
 
                 metadata = character_data.get("metadata", {})
@@ -213,7 +213,7 @@ class CharacterVault:
         if not character_path.exists():
             raise FileNotFoundError(f"Character not found: {character_id}")
 
-        with open(character_path, 'r', encoding='utf-8') as f:
+        with open(character_path, encoding='utf-8') as f:
             character_data = json.load(f)
 
         if strip_metadata:
@@ -238,7 +238,7 @@ class CharacterVault:
     def import_character(
         self,
         import_path: Path,
-        character_id: Optional[str] = None
+        character_id: str | None = None
     ) -> str:
         """
         Import a character from a file.
@@ -261,7 +261,7 @@ class CharacterVault:
 
         # Read import file
         try:
-            with open(import_path, 'r', encoding='utf-8') as f:
+            with open(import_path, encoding='utf-8') as f:
                 import_data = json.load(f)
         except json.JSONDecodeError as e:
             raise ValueError(f"Invalid import file: {e}")
@@ -281,7 +281,7 @@ class CharacterVault:
     def clone_character(
         self,
         character_id: str,
-        new_name: Optional[str] = None
+        new_name: str | None = None
     ) -> str:
         """
         Clone a character with a new UUID.
@@ -336,7 +336,7 @@ class CharacterVault:
         self,
         character_id: str,
         state: CharacterState,
-        campaign_name: Optional[str] = None
+        campaign_name: str | None = None
     ) -> None:
         """
         Update the state of a character.
@@ -356,7 +356,7 @@ class CharacterVault:
         if not character_path.exists():
             raise FileNotFoundError(f"Character not found: {character_id}")
 
-        with open(character_path, 'r', encoding='utf-8') as f:
+        with open(character_path, encoding='utf-8') as f:
             character_data = json.load(f)
 
         # Validate state consistency
@@ -379,8 +379,8 @@ class CharacterVault:
         character: Character,
         character_id: str,
         state: CharacterState,
-        campaign_name: Optional[str]
-    ) -> Dict[str, Any]:
+        campaign_name: str | None
+    ) -> dict[str, Any]:
         """
         Serialize a character to a dictionary with metadata.
 
@@ -429,7 +429,7 @@ class CharacterVault:
             }
         }
 
-    def _serialize_inventory(self, inventory: Inventory) -> Dict[str, Any]:
+    def _serialize_inventory(self, inventory: Inventory) -> dict[str, Any]:
         """
         Serialize inventory to a dictionary.
 
@@ -455,7 +455,7 @@ class CharacterVault:
             "currency": asdict(inventory.currency)
         }
 
-    def _serialize_resource_pools(self, character: Character) -> List[Dict[str, Any]]:
+    def _serialize_resource_pools(self, character: Character) -> list[dict[str, Any]]:
         """
         Serialize character resource pools to a list of dictionaries.
 
@@ -475,7 +475,7 @@ class CharacterVault:
             for pool in character.resource_pools.values()
         ]
 
-    def _deserialize_character(self, data: Dict[str, Any]) -> Character:
+    def _deserialize_character(self, data: dict[str, Any]) -> Character:
         """
         Deserialize character from data.
 
@@ -524,7 +524,7 @@ class CharacterVault:
 
         return character
 
-    def _deserialize_inventory(self, inv_data: Dict[str, Any]) -> Inventory:
+    def _deserialize_inventory(self, inv_data: dict[str, Any]) -> Inventory:
         """
         Deserialize inventory from data.
 
@@ -557,7 +557,7 @@ class CharacterVault:
 
         return inventory
 
-    def _validate_character_data(self, data: Dict[str, Any]) -> None:
+    def _validate_character_data(self, data: dict[str, Any]) -> None:
         """
         Validate character file structure.
 

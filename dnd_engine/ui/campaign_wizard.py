@@ -1,27 +1,23 @@
 # ABOUTME: Campaign creation wizard for new campaign setup
 # ABOUTME: Handles multi-step campaign creation with party building and dungeon selection
 
-from typing import Optional, List, Dict, Any
-from pathlib import Path
+
+from rich import box
+from rich.table import Table
 
 from dnd_engine.core.campaign_manager import CampaignManager
-from dnd_engine.core.character_vault import CharacterVault, CharacterState
 from dnd_engine.core.character_factory import CharacterFactory
-from dnd_engine.core.character import Character
+from dnd_engine.core.character_vault import CharacterState, CharacterVault
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.ui.character_wizard import CharacterCreationWizard
 from dnd_engine.ui.rich_ui import (
     console,
     print_banner,
+    print_choice_menu,
+    print_error,
     print_section,
     print_status_message,
-    print_error,
-    print_message,
-    print_choice_menu
 )
-from rich.table import Table
-from rich.panel import Panel
-from rich import box
 
 
 class CampaignCreationWizard:
@@ -38,10 +34,10 @@ class CampaignCreationWizard:
 
     def __init__(
         self,
-        campaign_manager: Optional[CampaignManager] = None,
-        character_vault: Optional[CharacterVault] = None,
-        character_factory: Optional[CharacterFactory] = None,
-        data_loader: Optional[DataLoader] = None
+        campaign_manager: CampaignManager | None = None,
+        character_vault: CharacterVault | None = None,
+        character_factory: CharacterFactory | None = None,
+        data_loader: DataLoader | None = None
     ):
         """
         Initialize the campaign creation wizard.
@@ -58,12 +54,12 @@ class CampaignCreationWizard:
         self.data_loader = data_loader or DataLoader()
 
         # Wizard state
-        self.campaign_name: Optional[str] = None
+        self.campaign_name: str | None = None
         self.starting_level: int = 1
-        self.party_character_ids: List[str] = []
-        self.dungeon_name: Optional[str] = None
+        self.party_character_ids: list[str] = []
+        self.dungeon_name: str | None = None
 
-    def run(self) -> Optional[str]:
+    def run(self) -> str | None:
         """
         Run the campaign creation wizard.
 
@@ -219,7 +215,7 @@ class CampaignCreationWizard:
     def _create_new_character(self) -> None:
         """Create a new character and add to party."""
         console.print()
-        print_status_message("Creating new character at level {}...".format(self.starting_level), "info")
+        print_status_message(f"Creating new character at level {self.starting_level}...", "info")
 
         # Launch new character creation wizard
         wizard = CharacterCreationWizard(

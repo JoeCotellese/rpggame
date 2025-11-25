@@ -1,13 +1,15 @@
 # ABOUTME: Integration tests for rest display UI in CLI
 # ABOUTME: Tests that unconscious characters are correctly reported in rest summaries
 
-import pytest
 from unittest.mock import Mock, patch
-from dnd_engine.ui.cli import CLI
+
+import pytest
+
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities
 from dnd_engine.core.party import Party
 from dnd_engine.systems.resources import ResourcePool
+from dnd_engine.ui.cli import CLI
 
 
 class TestRestDisplayIntegration:

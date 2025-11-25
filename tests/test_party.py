@@ -2,6 +2,7 @@
 # ABOUTME: Tests party membership, living members check, and character lookup
 
 import pytest
+
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities
 from dnd_engine.core.party import Party

@@ -1,14 +1,12 @@
 # ABOUTME: Integration tests for on_fire condition system
 # ABOUTME: Tests turn-start fire damage, player prompts, enemy AI, and extinguish mechanics
 
-import pytest
 from dnd_engine.core.character import Character, CharacterClass
-from dnd_engine.core.creature import Creature, Abilities
+from dnd_engine.core.creature import Abilities, Creature
+from dnd_engine.core.dice import DiceRoller
+from dnd_engine.systems.action_economy import ActionType
 from dnd_engine.systems.condition_manager import ConditionManager
 from dnd_engine.systems.initiative import InitiativeTracker
-from dnd_engine.systems.action_economy import ActionType
-from dnd_engine.core.dice import DiceRoller
-from dnd_engine.utils.events import EventBus
 
 
 class TestOnFireConditionIntegration:

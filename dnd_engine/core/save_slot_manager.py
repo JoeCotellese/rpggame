@@ -2,23 +2,22 @@
 # ABOUTME: Handles save/load operations, slot management, and game state persistence
 
 import json
-from pathlib import Path
-from typing import Optional, List, Dict, Any
-from datetime import datetime
 from dataclasses import asdict
+from datetime import datetime
+from pathlib import Path
+from typing import Any
 
-from dnd_engine.core.save_slot import SaveSlot
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities
-from dnd_engine.core.party import Party
+from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.game_state import GameState
-from dnd_engine.systems.inventory import Inventory, InventoryItem, EquipmentSlot
+from dnd_engine.core.party import Party
+from dnd_engine.core.save_slot import SaveSlot
+from dnd_engine.rules.loader import DataLoader
 from dnd_engine.systems.currency import Currency
+from dnd_engine.systems.inventory import EquipmentSlot, Inventory
 from dnd_engine.systems.resources import ResourcePool
 from dnd_engine.utils.events import EventBus
-from dnd_engine.rules.loader import DataLoader
-from dnd_engine.core.dice import DiceRoller
-
 
 # Current save file version
 SAVE_VERSION = "2.0.0"
@@ -37,7 +36,7 @@ class SaveSlotManager:
     - Handle auto-save integration
     """
 
-    def __init__(self, saves_dir: Optional[Path] = None):
+    def __init__(self, saves_dir: Path | None = None):
         """
         Initialize save slot manager.
 
@@ -81,7 +80,7 @@ class SaveSlotManager:
 
         return self.saves_dir / f"slot_{slot_number:02d}.json"
 
-    def list_slots(self) -> List[SaveSlot]:
+    def list_slots(self) -> list[SaveSlot]:
         """
         List all save slots with metadata.
 
@@ -100,7 +99,7 @@ class SaveSlotManager:
                     slots.append(empty_slot)
                     continue
 
-                with open(slot_path, 'r', encoding='utf-8') as f:
+                with open(slot_path, encoding='utf-8') as f:
                     slot_data = json.load(f)
 
                 # Extract metadata
@@ -134,7 +133,7 @@ class SaveSlotManager:
             return SaveSlot.create_empty(slot_number)
 
         try:
-            with open(slot_path, 'r', encoding='utf-8') as f:
+            with open(slot_path, encoding='utf-8') as f:
                 slot_data = json.load(f)
 
             metadata = slot_data.get("metadata", {})
@@ -194,9 +193,9 @@ class SaveSlotManager:
     def load_game(
         self,
         slot_number: int,
-        event_bus: Optional[EventBus] = None,
-        data_loader: Optional[DataLoader] = None,
-        dice_roller: Optional[DiceRoller] = None
+        event_bus: EventBus | None = None,
+        data_loader: DataLoader | None = None,
+        dice_roller: DiceRoller | None = None
     ) -> GameState:
         """
         Load game state from a specific slot.
@@ -221,7 +220,7 @@ class SaveSlotManager:
 
         # Read slot file
         try:
-            with open(slot_path, 'r', encoding='utf-8') as f:
+            with open(slot_path, encoding='utf-8') as f:
                 slot_data = json.load(f)
         except json.JSONDecodeError as e:
             raise ValueError(f"Corrupted slot file: {e}")
@@ -287,7 +286,7 @@ class SaveSlotManager:
         # Load full slot data and update metadata
         slot_path = self._get_slot_path(slot_number)
 
-        with open(slot_path, 'r', encoding='utf-8') as f:
+        with open(slot_path, encoding='utf-8') as f:
             slot_data = json.load(f)
 
         slot_data["metadata"]["custom_name"] = slot.custom_name
@@ -299,7 +298,7 @@ class SaveSlotManager:
         self,
         slot_number: int,
         slot: SaveSlot,
-        game_state: Optional[GameState]
+        game_state: GameState | None
     ) -> Path:
         """
         Save slot data and game state to disk.
@@ -383,7 +382,7 @@ class SaveSlotManager:
 
         return "Just Started"
 
-    def _serialize_character(self, character: Character) -> Dict[str, Any]:
+    def _serialize_character(self, character: Character) -> dict[str, Any]:
         """Serialize a character to a dictionary."""
         return {
             "name": character.name,
@@ -404,7 +403,7 @@ class SaveSlotManager:
             "prepared_spells": character.prepared_spells
         }
 
-    def _serialize_inventory(self, inventory: Inventory) -> Dict[str, Any]:
+    def _serialize_inventory(self, inventory: Inventory) -> dict[str, Any]:
         """Serialize inventory to a dictionary."""
         return {
             "items": [
@@ -422,7 +421,7 @@ class SaveSlotManager:
             "currency": asdict(inventory.currency)
         }
 
-    def _serialize_resource_pools(self, character: Character) -> List[Dict[str, Any]]:
+    def _serialize_resource_pools(self, character: Character) -> list[dict[str, Any]]:
         """Serialize character resource pools to a list of dictionaries."""
         return [
             {
@@ -434,7 +433,7 @@ class SaveSlotManager:
             for pool in character.resource_pools.values()
         ]
 
-    def _serialize_dungeon_state(self, dungeon: Dict[str, Any]) -> Dict[str, Any]:
+    def _serialize_dungeon_state(self, dungeon: dict[str, Any]) -> dict[str, Any]:
         """Serialize dungeon state (room modifications)."""
         room_states = {}
 
@@ -449,10 +448,10 @@ class SaveSlotManager:
 
     def _deserialize_game_state(
         self,
-        slot_data: Dict[str, Any],
-        event_bus: Optional[EventBus],
-        data_loader: Optional[DataLoader],
-        dice_roller: Optional[DiceRoller]
+        slot_data: dict[str, Any],
+        event_bus: EventBus | None,
+        data_loader: DataLoader | None,
+        dice_roller: DiceRoller | None
     ) -> GameState:
         """Deserialize game state from slot data."""
         # Create party from saved characters
@@ -493,7 +492,7 @@ class SaveSlotManager:
 
         return game_state
 
-    def _deserialize_character(self, char_data: Dict[str, Any]) -> Character:
+    def _deserialize_character(self, char_data: dict[str, Any]) -> Character:
         """Deserialize character from save data."""
         abilities = Abilities(**char_data["abilities"])
         inventory = self._deserialize_inventory(char_data["inventory"])
@@ -526,7 +525,7 @@ class SaveSlotManager:
 
         return character
 
-    def _deserialize_inventory(self, inv_data: Dict[str, Any]) -> Inventory:
+    def _deserialize_inventory(self, inv_data: dict[str, Any]) -> Inventory:
         """Deserialize inventory from save data."""
         inventory = Inventory()
 
@@ -551,7 +550,7 @@ class SaveSlotManager:
 
         return inventory
 
-    def _validate_slot_data(self, slot_data: Dict[str, Any]) -> None:
+    def _validate_slot_data(self, slot_data: dict[str, Any]) -> None:
         """
         Validate slot file structure.
 

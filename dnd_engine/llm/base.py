@@ -2,7 +2,6 @@
 # ABOUTME: Defines interface for text generation with timeout and error handling
 
 from abc import ABC, abstractmethod
-from typing import Optional
 
 
 class LLMProvider(ABC):
@@ -40,7 +39,7 @@ class LLMProvider(ABC):
         self,
         prompt: str,
         temperature: float = 0.7
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Generate text from prompt.
 

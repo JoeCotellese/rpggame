@@ -3,8 +3,7 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional, List, Dict, Any
-from pathlib import Path
+from typing import Any
 
 
 @dataclass
@@ -28,19 +27,19 @@ class SaveSlot:
     playtime_seconds: int = 0
     """Total playtime for this save (in seconds)"""
 
-    adventure_name: Optional[str] = None
+    adventure_name: str | None = None
     """Current adventure/dungeon name (e.g., 'Tomb of Horrors')"""
 
-    adventure_progress: Optional[str] = None
+    adventure_progress: str | None = None
     """Current progress description (e.g., 'Room 12')"""
 
-    party_composition: List[str] = field(default_factory=list)
+    party_composition: list[str] = field(default_factory=list)
     """List of character names in the party"""
 
-    party_levels: List[int] = field(default_factory=list)
+    party_levels: list[int] = field(default_factory=list)
     """List of character levels (parallel to party_composition)"""
 
-    custom_name: Optional[str] = None
+    custom_name: str | None = None
     """User-provided custom name (overrides auto-generated name)"""
 
     save_version: str = "2.0.0"
@@ -186,7 +185,7 @@ class SaveSlot:
         """
         return self.adventure_name is None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """
         Convert save slot to dictionary for JSON serialization.
 
@@ -207,7 +206,7 @@ class SaveSlot:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "SaveSlot":
+    def from_dict(cls, data: dict[str, Any]) -> "SaveSlot":
         """
         Create save slot from dictionary (loaded from JSON).
 

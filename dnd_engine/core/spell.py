@@ -2,7 +2,6 @@
 # ABOUTME: Handles spell metadata, casting mechanics, and effects
 
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any
 from enum import Enum
 
 
@@ -53,8 +52,8 @@ class SpellComponents:
     verbal: bool = False
     somatic: bool = False
     material: bool = False
-    material_description: Optional[str] = None
-    material_cost: Optional[int] = None
+    material_description: str | None = None
+    material_cost: int | None = None
     material_consumed: bool = False
 
 
@@ -63,14 +62,14 @@ class SpellDamage:
     """Damage information for a spell."""
     dice: str  # e.g., "1d6", "2d8+5"
     damage_type: str  # e.g., "fire", "cold", "radiant"
-    higher_levels: Optional[str] = None  # e.g., "1d6 per slot level above 1st"
+    higher_levels: str | None = None  # e.g., "1d6 per slot level above 1st"
 
 
 @dataclass
 class SpellHealing:
     """Healing information for a spell."""
     dice: str  # e.g., "1d8", "2d4+2"
-    higher_levels: Optional[str] = None
+    higher_levels: str | None = None
 
 
 @dataclass
@@ -118,16 +117,16 @@ class Spell:
     description: str
 
     # Optional attributes
-    duration_value: Optional[str] = None
+    duration_value: str | None = None
     concentration: bool = False
     ritual: bool = False
-    damage: Optional[SpellDamage] = None
-    healing: Optional[SpellHealing] = None
-    saving_throw: Optional[SavingThrow] = None
-    attack_type: Optional[str] = None  # "melee" or "ranged"
-    area_of_effect: Optional[str] = None
-    higher_levels: Optional[str] = None
-    classes: List[str] = field(default_factory=list)
+    damage: SpellDamage | None = None
+    healing: SpellHealing | None = None
+    saving_throw: SavingThrow | None = None
+    attack_type: str | None = None  # "melee" or "ranged"
+    area_of_effect: str | None = None
+    higher_levels: str | None = None
+    classes: list[str] = field(default_factory=list)
     source: str = "D&D 5E SRD (CC BY 4.0)"
 
     def is_cantrip(self) -> bool:

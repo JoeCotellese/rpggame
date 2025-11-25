@@ -2,9 +2,10 @@
 # ABOUTME: Tests spell slot tracking, casting, and spellcasting modifiers
 
 import pytest
+
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities
-from dnd_engine.core.spell import Spell, SpellSchool, SpellComponents, DurationType
+from dnd_engine.core.spell import DurationType, Spell, SpellComponents, SpellSchool
 from dnd_engine.systems.resources import ResourcePool
 
 

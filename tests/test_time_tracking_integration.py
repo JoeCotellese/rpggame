@@ -10,11 +10,12 @@ Tests cover:
 """
 
 import pytest
+
+from dnd_engine.core.character import Abilities, Character, CharacterClass
 from dnd_engine.core.game_state import GameState
 from dnd_engine.core.party import Party
-from dnd_engine.core.character import Character, CharacterClass, Abilities
-from dnd_engine.utils.events import EventBus, EventType
 from dnd_engine.systems.time_manager import EffectType
+from dnd_engine.utils.events import EventBus, EventType
 
 
 @pytest.fixture

@@ -2,9 +2,10 @@
 # ABOUTME: Handles attack rolls, critical hits, damage calculation, and applying damage to creatures
 
 from dataclasses import dataclass
-from typing import Dict, Any, Optional
-from dnd_engine.core.dice import DiceRoller
+from typing import Any
+
 from dnd_engine.core.creature import Creature
+from dnd_engine.core.dice import DiceRoller
 from dnd_engine.utils.events import Event, EventType
 
 
@@ -27,7 +28,7 @@ class AttackResult:
     advantage: bool
     disadvantage: bool
     sneak_attack_damage: int = 0  # Additional damage from sneak attack
-    sneak_attack_dice: Optional[str] = None  # Sneak attack dice notation (e.g., "2d6")
+    sneak_attack_dice: str | None = None  # Sneak attack dice notation (e.g., "2d6")
 
     @property
     def total_attack(self) -> int:
@@ -275,10 +276,10 @@ class CombatEngine:
         target: Creature,
         save_ability: str,
         dc: int,
-        effect: Dict[str, Any],
+        effect: dict[str, Any],
         apply_damage: bool = False,
         event_bus=None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Resolve an effect that requires a saving throw.
 
@@ -330,7 +331,7 @@ class CombatEngine:
             if effect.get("negate_on_success", False):
                 # Success completely negates the effect
                 damage_taken = 0
-                effect_description = f"Success! The effect is completely negated."
+                effect_description = "Success! The effect is completely negated."
             elif effect.get("half_on_success", False):
                 # Success halves the damage
                 damage_taken = damage // 2
@@ -457,7 +458,7 @@ class CombatEngine:
         self,
         caster: Creature,
         target: Creature,
-        spell: Dict[str, Any],
+        spell: dict[str, Any],
         spellcasting_ability: str,
         advantage: bool = False,
         disadvantage: bool = False,
@@ -553,10 +554,10 @@ class CombatEngine:
         caster,
         targets: list,
         spell,
-        upcast_level: Optional[int] = None,
+        upcast_level: int | None = None,
         apply_damage: bool = False,
         event_bus=None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Resolve a spell that requires saving throws.
 
@@ -771,9 +772,9 @@ class CombatEngine:
         caster,
         targets: list,
         spell,
-        upcast_level: Optional[int] = None,
+        upcast_level: int | None = None,
         event_bus=None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Resolve a spell that affects creatures based on an HP pool.
 

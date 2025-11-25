@@ -1,7 +1,6 @@
 # ABOUTME: Debug LLM provider that returns the prompt text instead of calling an API
 # ABOUTME: Useful for inspecting exactly what prompts are being sent to the LLM
 
-from typing import Optional
 
 from .base import LLMProvider
 
@@ -37,7 +36,7 @@ class DebugProvider(LLMProvider):
         self,
         prompt: str,
         temperature: float = 0.7
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Return the prompt text for inspection.
 

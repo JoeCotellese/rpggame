@@ -2,6 +2,7 @@
 # ABOUTME: Tests conversion rates, change-making, consolidation, and operations
 
 import pytest
+
 from dnd_engine.systems.currency import Currency
 
 

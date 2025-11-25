@@ -1,7 +1,7 @@
 # Unit tests for Campaign data model
 
-import pytest
 from datetime import datetime, timedelta
+
 from dnd_engine.core.campaign import Campaign, SaveSlotMetadata
 
 

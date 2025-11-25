@@ -1,14 +1,14 @@
 # ABOUTME: Main enemy AI controller for combat behavior decisions.
 # ABOUTME: Handles condition removal decisions and target selection for enemy creatures.
 
-from typing import List, Optional
-from dnd_engine.systems.ai.targeting import TargetingStrategy, LowestHPStrategy
+
+from dnd_engine.systems.ai.targeting import LowestHPStrategy, TargetingStrategy
 
 
 class EnemyAI:
     """Handles AI decisions for enemy creatures during combat."""
 
-    def __init__(self, targeting_strategy: Optional[TargetingStrategy] = None):
+    def __init__(self, targeting_strategy: TargetingStrategy | None = None):
         """
         Initialize the enemy AI.
 
@@ -40,7 +40,7 @@ class EnemyAI:
 
         return False
 
-    def select_target(self, available_targets: List) -> object:
+    def select_target(self, available_targets: list) -> object:
         """
         Select a target from available targets using the configured strategy.
 

@@ -1,32 +1,33 @@
 # ABOUTME: Command-line interface for the D&D 5E terminal game
 # ABOUTME: Handles player input, displays game state, and manages the game loop
 
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Any, Optional
+
 from dnd_engine.core.character import Character, CharacterClass
-from dnd_engine.core.game_state import GameState, CombatEvent, CombatSpellResult
 from dnd_engine.core.dice import format_dice_with_modifier
-from dnd_engine.utils.events import Event, EventType
-from dnd_engine.systems.inventory import EquipmentSlot
-from dnd_engine.systems.condition_manager import ConditionManager
+from dnd_engine.core.game_state import CombatEvent, CombatSpellResult, GameState
+from dnd_engine.systems.action_economy import ActionType
 from dnd_engine.systems.ai import EnemyAI
 from dnd_engine.systems.combat_context import CombatContextBuilder
-from dnd_engine.systems.combat_middleware import CombatActionExecutor, ActionResult
-from dnd_engine.systems.action_economy import ActionType
+from dnd_engine.systems.combat_middleware import ActionResult, CombatActionExecutor
+from dnd_engine.systems.condition_manager import ConditionManager
+from dnd_engine.systems.inventory import EquipmentSlot
 from dnd_engine.ui.debug_console import DebugConsole
 from dnd_engine.ui.rich_ui import (
     console,
-    create_party_status_table,
-    create_inventory_table,
     create_combat_table,
-    print_status_message,
+    create_inventory_table,
+    create_party_status_table,
     print_error,
-    print_room_description,
     print_help_section,
-    print_title,
+    print_mechanics_panel,
     print_message,
+    print_room_description,
     print_section,
-    print_mechanics_panel
+    print_status_message,
+    print_title,
 )
+from dnd_engine.utils.events import Event, EventType
 
 
 class CLI:
@@ -339,7 +340,7 @@ class CLI:
             ))
         # No display for enemy turns - the action will print itself
 
-    def _build_battlefield_state(self) -> Dict[str, Any]:
+    def _build_battlefield_state(self) -> dict[str, Any]:
         """
         Build current battlefield state for LLM context.
 
@@ -397,7 +398,7 @@ class CLI:
         )
         self.game_state.record_combat_event(event)
 
-    def _get_combat_history_for_llm(self) -> List[str]:
+    def _get_combat_history_for_llm(self) -> list[str]:
         """
         Get combat history formatted for LLM context.
 
@@ -433,10 +434,11 @@ class CLI:
             Player's command as a string
         """
         try:
-            from prompt_toolkit import prompt
-            from prompt_toolkit.history import FileHistory
-            from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
             from pathlib import Path
+
+            from prompt_toolkit import prompt
+            from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
+            from prompt_toolkit.history import FileHistory
 
             # Store history in user's home directory
             history_file = Path.home() / ".dnd_game_history"
@@ -1011,9 +1013,9 @@ class CLI:
                         f"{character.name} attempts to {method['description']}\n"
                         f"d20: {roll} + {modifier} = {total} vs DC {dc}"
                     )
-                print_error(f"Failed! The door remains locked. You can try again.")
+                print_error("Failed! The door remains locked. You can try again.")
 
-    def _prompt_character_for_unlock(self, method: dict) -> Optional[Character]:
+    def _prompt_character_for_unlock(self, method: dict) -> Character | None:
         """
         Prompt player to select which character attempts the unlock.
 
@@ -1304,7 +1306,7 @@ class CLI:
 
         # Results are displayed by the event handler for skill-based examinations
 
-    def _prompt_simple_character_selection(self, prompt: str = "Select character:") -> Optional[Character]:
+    def _prompt_simple_character_selection(self, prompt: str = "Select character:") -> Character | None:
         """
         Prompt user to select a character from living party members.
 
@@ -1523,7 +1525,7 @@ class CLI:
             self.game_state.take_item("currency", living_members[0])
 
         if currency_items:
-            print_status_message(f"Collected all currency and split among the party.", "success")
+            print_status_message("Collected all currency and split among the party.", "success")
 
         # For regular items, use intelligent assignment
         if regular_items:
@@ -1540,7 +1542,7 @@ class CLI:
                     else:
                         print_error(f"Failed to pick up {item_id}.")
 
-    def _auto_assign_item(self, item: Dict[str, Any], living_members: List) -> Optional:
+    def _auto_assign_item(self, item: dict[str, Any], living_members: list) -> Optional:
         """
         Intelligently assign an item to a character based on class and item type.
 
@@ -1976,7 +1978,7 @@ class CLI:
 
     def _execute_spell(
         self,
-        spell_data: Dict[str, Any],
+        spell_data: dict[str, Any],
         spell_id: str,
         target,
         spellcasting_ability: str
@@ -2011,7 +2013,7 @@ class CLI:
     def _display_spell_result(
         self,
         result: CombatSpellResult,
-        spell_data: Dict[str, Any],
+        spell_data: dict[str, Any],
         caster
     ) -> None:
         """Display spell casting results - pure presentation logic."""
@@ -2699,7 +2701,7 @@ class CLI:
                     return entry.display_name if entry.display_name else enemy.name
         return enemy.name
 
-    def _find_enemy_by_target(self, target: str) -> Optional[Any]:
+    def _find_enemy_by_target(self, target: str) -> Any | None:
         """
         Find an enemy by number or name.
 
@@ -2721,12 +2723,12 @@ class CLI:
                 target,
                 player_creatures=player_creatures
             )
-            if entry and not entry.creature in player_creatures:
+            if entry and entry.creature not in player_creatures:
                 return entry.creature
 
         return None
 
-    def _parse_command_with_target(self, parts: List[str]) -> tuple[str, Optional[str]]:
+    def _parse_command_with_target(self, parts: list[str]) -> tuple[str, str | None]:
         """
         Parse item/slot name and optional player identifier from command parts.
         Supports both syntaxes:
@@ -2758,7 +2760,7 @@ class CLI:
         # Fall back to old syntax (last word might be player identifier)
         return self._parse_item_and_player(parts)
 
-    def _prompt_consumable_selection(self, character: Optional[Character] = None, show_action_cost: bool = False) -> Optional[tuple[str, Dict[str, Any]]]:
+    def _prompt_consumable_selection(self, character: Character | None = None, show_action_cost: bool = False) -> tuple[str, dict[str, Any]] | None:
         """
         Prompt user to select a consumable item from inventory.
 
@@ -2847,7 +2849,7 @@ class CLI:
         except (EOFError, KeyboardInterrupt):
             return None
 
-    def _prompt_target_selection(self, item_name: str) -> Optional[Character]:
+    def _prompt_target_selection(self, item_name: str) -> Character | None:
         """
         Prompt user to select a target character for item use.
 
@@ -2899,7 +2901,7 @@ class CLI:
         except (EOFError, KeyboardInterrupt):
             return None
 
-    def _prompt_enemy_selection(self) -> Optional[Any]:
+    def _prompt_enemy_selection(self) -> Any | None:
         """
         Prompt user to select an enemy to attack.
 
@@ -2945,7 +2947,7 @@ class CLI:
         except (EOFError, KeyboardInterrupt):
             return None
 
-    def _prompt_combat_ally_selection(self, item_name: str, item_data: Dict[str, Any], user: Character) -> Optional[Character]:
+    def _prompt_combat_ally_selection(self, item_name: str, item_data: dict[str, Any], user: Character) -> Character | None:
         """
         Prompt user to select an ally to use an item on during combat.
         Validates range and includes unconscious allies.
@@ -3006,7 +3008,7 @@ class CLI:
         except (EOFError, KeyboardInterrupt):
             return None
 
-    def _prompt_item_to_take(self) -> Optional[Dict[str, Any]]:
+    def _prompt_item_to_take(self) -> dict[str, Any] | None:
         """
         Prompt user to select an item to take from the current room.
 
@@ -3065,7 +3067,7 @@ class CLI:
         except (EOFError, KeyboardInterrupt):
             return None
 
-    def _prompt_multi_items_to_take(self) -> List[Dict[str, Any]]:
+    def _prompt_multi_items_to_take(self) -> list[dict[str, Any]]:
         """
         Prompt user to select multiple items to take from the current room.
 
@@ -3123,7 +3125,7 @@ class CLI:
         except (EOFError, KeyboardInterrupt):
             return []
 
-    def _parse_item_and_player(self, parts: List[str]) -> tuple[str, Optional[str]]:
+    def _parse_item_and_player(self, parts: list[str]) -> tuple[str, str | None]:
         """
         Parse item/slot name and optional player identifier from command parts.
 
@@ -3160,7 +3162,7 @@ class CLI:
         # Last part is not a player identifier, treat entire string as item name
         return " ".join(parts), None
 
-    def _get_target_player(self, player_identifier: Optional[str], allow_unconscious: bool = False) -> Optional[Character]:
+    def _get_target_player(self, player_identifier: str | None, allow_unconscious: bool = False) -> Character | None:
         """
         Get a target player from an identifier (number or name).
 
@@ -3221,7 +3223,7 @@ class CLI:
             print_error(f"No living player found with identifier: {player_identifier}")
         return None
 
-    def display_inventory(self, filter_arg: Optional[str] = None) -> None:
+    def display_inventory(self, filter_arg: str | None = None) -> None:
         """
         Display party members' inventories with optional filtering.
 
@@ -3349,7 +3351,7 @@ class CLI:
         else:
             print_status_message("No consumables in party inventory", "info")
 
-    def handle_equip(self, item_id: str, player_identifier: Optional[str] = None) -> None:
+    def handle_equip(self, item_id: str, player_identifier: str | None = None) -> None:
         """
         Handle equipping an item for a specific party member.
 
@@ -3408,7 +3410,7 @@ class CLI:
             data={"item_id": target_item, "slot": slot.value}
         ))
 
-    def handle_unequip(self, slot_name: str, player_identifier: Optional[str] = None) -> None:
+    def handle_unequip(self, slot_name: str, player_identifier: str | None = None) -> None:
         """
         Handle unequipping an item for a specific party member.
 
@@ -3503,7 +3505,7 @@ class CLI:
             }
         ))
 
-    def handle_use_item(self, item_id: str, player_identifier: Optional[str] = None) -> None:
+    def handle_use_item(self, item_id: str, player_identifier: str | None = None) -> None:
         """
         Handle using a consumable item on a target character.
 
@@ -3545,7 +3547,7 @@ class CLI:
         # Use the item via the direct handler
         self.handle_use_item_direct(target_item_id, target, owner)
 
-    def handle_use_item_combat_direct(self, item_id: str, item_data: Dict[str, Any], character: Character) -> None:
+    def handle_use_item_combat_direct(self, item_id: str, item_data: dict[str, Any], character: Character) -> None:
         """
         Handle using a consumable item during combat with explicit item data.
 
@@ -3556,8 +3558,8 @@ class CLI:
             item_data: The item data dictionary
             character: The character using the item
         """
-        from dnd_engine.systems.item_effects import apply_item_effect
         from dnd_engine.systems.action_economy import ActionType
+        from dnd_engine.systems.item_effects import apply_item_effect
 
         inventory = character.inventory
         items_data = self.game_state.data_loader.load_items()
@@ -3636,7 +3638,7 @@ class CLI:
             }
         ))
 
-    def handle_use_item_combat_with_target(self, item_id: str, item_data: Dict[str, Any], user: Character, target: Character) -> None:
+    def handle_use_item_combat_with_target(self, item_id: str, item_data: dict[str, Any], user: Character, target: Character) -> None:
         """
         Handle using a consumable item during combat on a specified target.
 
@@ -3648,8 +3650,8 @@ class CLI:
             user: The character using the item
             target: The character receiving the item's effect
         """
-        from dnd_engine.systems.item_effects import apply_item_effect
         from dnd_engine.systems.action_economy import ActionType
+        from dnd_engine.systems.item_effects import apply_item_effect
 
         inventory = user.inventory
         items_data = self.game_state.data_loader.load_items()
@@ -3751,7 +3753,7 @@ class CLI:
             # Process enemy turns
             self.process_enemy_turns()
 
-    def handle_use_item_combat_attack(self, item_id: str, item_data: Dict[str, Any], user: Character, target) -> None:
+    def handle_use_item_combat_attack(self, item_id: str, item_data: dict[str, Any], user: Character, target) -> None:
         """
         Handle using an attack-type consumable item during combat on an enemy target.
 
@@ -3817,8 +3819,8 @@ class CLI:
         Args:
             item_id: The item to use (ID or name)
         """
-        from dnd_engine.systems.item_effects import apply_item_effect
         from dnd_engine.systems.action_economy import ActionType
+        from dnd_engine.systems.item_effects import apply_item_effect
 
         # Verify it's the player's turn
         if not self.game_state.in_combat or not self.game_state.initiative_tracker:
@@ -3979,7 +3981,7 @@ class CLI:
 
         Prompts player to choose between short rest or long rest.
         """
-        from dnd_engine.ui.rich_ui import print_section, print_message, print_status_message
+        from dnd_engine.ui.rich_ui import print_message, print_section, print_status_message
         from dnd_engine.utils.events import Event, EventType
 
         print_section("Rest")
@@ -4062,7 +4064,7 @@ class CLI:
             rest_type: "short" or "long"
             rest_duration: Human-readable duration string (e.g., "1 hour", "8 hours")
         """
-        from dnd_engine.ui.rich_ui import print_section, print_message, print_status_message
+        from dnd_engine.ui.rich_ui import print_message, print_section, print_status_message
 
         print_section(f"{'Short' if rest_type == 'short' else 'Long'} Rest Complete")
         print_message(f"The party rests for {rest_duration}...")
@@ -4089,9 +4091,9 @@ class CLI:
             if hp_recovered == 0 and not resources:
                 # Check if character is at 0 HP (unconscious)
                 if character and character.current_hp == 0:
-                    print_message(f"  ⚠️  Still unconscious (0 HP)")
+                    print_message("  ⚠️  Still unconscious (0 HP)")
                 else:
-                    print_message(f"  Already at full health and resources")
+                    print_message("  Already at full health and resources")
 
             print_message("")
 
@@ -4108,9 +4110,10 @@ class CLI:
         Args:
             character: Character who can prepare spells (Wizard or Cleric)
         """
-        from dnd_engine.ui.rich_ui import print_section, print_message, print_status_message
         import questionary
         from questionary import Choice
+
+        from dnd_engine.ui.rich_ui import print_message, print_section, print_status_message
 
         # Load spell data
         spells_data = self.game_state.data_loader.load_spells()
@@ -4235,7 +4238,7 @@ class CLI:
         Works for both exploration and combat modes. Shows all spellcasters
         in the party with their prepared spells organized by level.
         """
-        from dnd_engine.ui.rich_ui import print_section, print_message, print_status_message
+        from dnd_engine.ui.rich_ui import print_message, print_section, print_status_message
 
         spells_data = self.game_state.data_loader.load_spells()
         found_caster = False
@@ -4269,7 +4272,7 @@ class CLI:
                 continue
 
             # Organize spells by level
-            spells_by_level: Dict[int, List[Tuple[str, Dict]]] = {}
+            spells_by_level: dict[int, list[tuple[str, dict]]] = {}
             for spell_id in spell_list:
                 spell_data = spells_data.get(spell_id)
                 if not spell_data:
@@ -4331,8 +4334,9 @@ class CLI:
         Only available for prepared caster classes (Wizard, Cleric).
         Allows changing prepared spells outside of combat.
         """
-        from dnd_engine.ui.rich_ui import print_status_message, print_error
         import questionary
+
+        from dnd_engine.ui.rich_ui import print_error, print_status_message
 
         if self.game_state.in_combat:
             print_error("You cannot change prepared spells during combat.")
@@ -4378,8 +4382,14 @@ class CLI:
         Allows party members to cast healing and utility spells outside of combat.
         Prompts for caster selection, spell selection, and target selection.
         """
-        from dnd_engine.ui.rich_ui import print_section, print_message, print_status_message, print_error
         import questionary
+
+        from dnd_engine.ui.rich_ui import (
+            print_error,
+            print_message,
+            print_section,
+            print_status_message,
+        )
 
         # 1. Select caster
         caster = self._prompt_party_member_selection("Who will cast a spell?")
@@ -4501,7 +4511,7 @@ class CLI:
             error_msg = result.get("error", "Failed to cast spell")
             print_error(f"❌ {error_msg}")
 
-    def _prompt_party_member_selection(self, prompt_message: str) -> Optional[Character]:
+    def _prompt_party_member_selection(self, prompt_message: str) -> Character | None:
         """
         Prompt user to select a party member.
 
@@ -4943,7 +4953,7 @@ class CLI:
         new_level = event.data["new_level"]
         hp_increase = event.data["hp_increase"]
 
-        print_section(f"🎉 LEVEL UP!")
+        print_section("🎉 LEVEL UP!")
         print_status_message(f"{char_name} reached level {new_level}!", "success")
         print_message(f"❤️  HP increased by {hp_increase}")
 

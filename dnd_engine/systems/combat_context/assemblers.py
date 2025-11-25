@@ -2,7 +2,8 @@
 # ABOUTME: Used by CombatContextBuilder to assemble complete context dictionaries
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Any
+
 from dnd_engine.core.character import Character
 from dnd_engine.core.creature import Creature
 from dnd_engine.rules.loader import DataLoader
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 def get_weapon_context(
     attacker: Character | Creature,
     data_loader: DataLoader,
-    action_data: Optional[Dict[str, Any]] = None,
+    action_data: dict[str, Any] | None = None,
 ) -> tuple[str, str]:
     """
     Get weapon name and damage type for an attacker.
@@ -58,7 +59,7 @@ def get_weapon_context(
 def get_attacker_race(
     attacker: Character | Creature,
     data_loader: DataLoader,
-    monster_cache: Optional[Dict[str, Dict[str, Any]]] = None,
+    monster_cache: dict[str, dict[str, Any]] | None = None,
 ) -> str:
     """
     Get race or type for an attacker.
@@ -102,7 +103,7 @@ def get_attacker_race(
 def get_defender_armor(
     defender: Character | Creature,
     data_loader: DataLoader,
-    monster_cache: Optional[Dict[str, Dict[str, Any]]] = None,
+    monster_cache: dict[str, dict[str, Any]] | None = None,
 ) -> str:
     """
     Get armor description for a defender.
