@@ -204,6 +204,7 @@
     "specimen_chamber": {
       "name": "Specimen Preservation Chamber",
       "description": "A cold room lined with glass tanks containing preserved creatures floating in murky alchemical solutions. Ice crystals cover the walls from some failed refrigeration experiment. A skeleton warrior, animated by residual alchemical energies, stands guard among the specimen jars, its bones clicking softly as it patrols.",
+      "lighting": "dark",
       "exits": {
         "southeast": "storage"
       },
