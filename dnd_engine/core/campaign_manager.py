@@ -2,23 +2,22 @@
 # ABOUTME: Handles campaign directories, save slots, and game state serialization
 
 import json
-from pathlib import Path
-from typing import List, Optional, Dict, Any
-from datetime import datetime
 from dataclasses import asdict
+from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 from dnd_engine.core.campaign import Campaign, SaveSlotMetadata
-from dnd_engine.core.game_state import GameState
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities
+from dnd_engine.core.dice import DiceRoller
+from dnd_engine.core.game_state import GameState
 from dnd_engine.core.party import Party
-from dnd_engine.systems.inventory import Inventory, EquipmentSlot
+from dnd_engine.rules.loader import DataLoader
 from dnd_engine.systems.currency import Currency
+from dnd_engine.systems.inventory import EquipmentSlot, Inventory
 from dnd_engine.systems.resources import ResourcePool
 from dnd_engine.utils.events import EventBus
-from dnd_engine.rules.loader import DataLoader
-from dnd_engine.core.dice import DiceRoller
-
 
 # Current save file version
 SAVE_VERSION = "1.0.0"
@@ -37,7 +36,7 @@ class CampaignManager:
     - Organize campaigns in directory structure
     """
 
-    def __init__(self, campaigns_dir: Optional[Path] = None):
+    def __init__(self, campaigns_dir: Path | None = None):
         """
         Initialize campaign manager.
 
@@ -53,8 +52,8 @@ class CampaignManager:
     def create_campaign(
         self,
         name: str,
-        dungeon_name: Optional[str] = None,
-        party_character_ids: Optional[List[str]] = None
+        dungeon_name: str | None = None,
+        party_character_ids: list[str] | None = None
     ) -> Campaign:
         """
         Create a new campaign.
@@ -128,7 +127,7 @@ class CampaignManager:
         if not metadata_path.exists():
             raise FileNotFoundError(f"Campaign metadata not found for '{campaign_name}'")
 
-        with open(metadata_path, 'r', encoding='utf-8') as f:
+        with open(metadata_path, encoding='utf-8') as f:
             data = json.load(f)
 
         return Campaign.from_dict(data)
@@ -200,9 +199,9 @@ class CampaignManager:
         self,
         campaign_name: str,
         slot_name: str = "auto",
-        event_bus: Optional[EventBus] = None,
-        data_loader: Optional[DataLoader] = None,
-        dice_roller: Optional[DiceRoller] = None
+        event_bus: EventBus | None = None,
+        data_loader: DataLoader | None = None,
+        dice_roller: DiceRoller | None = None
     ) -> GameState:
         """
         Load game state from a campaign save slot.
@@ -245,7 +244,7 @@ class CampaignManager:
 
         # Read and deserialize save file
         try:
-            with open(save_path, 'r', encoding='utf-8') as f:
+            with open(save_path, encoding='utf-8') as f:
                 save_data = json.load(f)
         except json.JSONDecodeError as e:
             raise ValueError(f"Corrupted save file: {e}")
@@ -281,7 +280,7 @@ class CampaignManager:
 
         return game_state
 
-    def list_campaigns(self) -> List[Campaign]:
+    def list_campaigns(self) -> list[Campaign]:
         """
         List all available campaigns with metadata.
 
@@ -299,7 +298,7 @@ class CampaignManager:
                 continue
 
             try:
-                with open(metadata_path, 'r', encoding='utf-8') as f:
+                with open(metadata_path, encoding='utf-8') as f:
                     data = json.load(f)
                 campaign = Campaign.from_dict(data)
                 campaigns.append(campaign)
@@ -312,7 +311,7 @@ class CampaignManager:
 
         return campaigns
 
-    def list_save_slots(self, campaign_name: str) -> List[SaveSlotMetadata]:
+    def list_save_slots(self, campaign_name: str) -> list[SaveSlotMetadata]:
         """
         List all save slots for a campaign.
 
@@ -336,7 +335,7 @@ class CampaignManager:
 
         for save_file in saves_dir.glob("*.json"):
             try:
-                with open(save_file, 'r', encoding='utf-8') as f:
+                with open(save_file, encoding='utf-8') as f:
                     save_data = json.load(f)
 
                 metadata = save_data.get("metadata", {})
@@ -415,7 +414,7 @@ class CampaignManager:
 
         return True
 
-    def get_most_recent_campaign(self) -> Optional[Campaign]:
+    def get_most_recent_campaign(self) -> Campaign | None:
         """
         Get the most recently played campaign.
 
@@ -502,7 +501,7 @@ class CampaignManager:
         self,
         game_state: GameState,
         auto_save: bool
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Serialize game state to a dictionary.
 
@@ -533,7 +532,7 @@ class CampaignManager:
             }
         }
 
-    def _serialize_character(self, character: Character) -> Dict[str, Any]:
+    def _serialize_character(self, character: Character) -> dict[str, Any]:
         """
         Serialize a character to a dictionary.
 
@@ -562,7 +561,7 @@ class CampaignManager:
             "prepared_spells": character.prepared_spells
         }
 
-    def _serialize_inventory(self, inventory: Inventory) -> Dict[str, Any]:
+    def _serialize_inventory(self, inventory: Inventory) -> dict[str, Any]:
         """
         Serialize inventory to a dictionary.
 
@@ -588,7 +587,7 @@ class CampaignManager:
             "currency": asdict(inventory.currency)
         }
 
-    def _serialize_resource_pools(self, character: Character) -> List[Dict[str, Any]]:
+    def _serialize_resource_pools(self, character: Character) -> list[dict[str, Any]]:
         """
         Serialize character resource pools to a list of dictionaries.
 
@@ -608,7 +607,7 @@ class CampaignManager:
             for pool in character.resource_pools.values()
         ]
 
-    def _serialize_dungeon_state(self, dungeon: Dict[str, Any]) -> Dict[str, Any]:
+    def _serialize_dungeon_state(self, dungeon: dict[str, Any]) -> dict[str, Any]:
         """
         Serialize dungeon state (room modifications).
 
@@ -630,10 +629,10 @@ class CampaignManager:
 
     def _deserialize_game_state(
         self,
-        save_data: Dict[str, Any],
-        event_bus: Optional[EventBus],
-        data_loader: Optional[DataLoader],
-        dice_roller: Optional[DiceRoller]
+        save_data: dict[str, Any],
+        event_bus: EventBus | None,
+        data_loader: DataLoader | None,
+        dice_roller: DiceRoller | None
     ) -> GameState:
         """
         Deserialize game state from save data.
@@ -684,7 +683,7 @@ class CampaignManager:
 
         return game_state
 
-    def _deserialize_character(self, char_data: Dict[str, Any]) -> Character:
+    def _deserialize_character(self, char_data: dict[str, Any]) -> Character:
         """
         Deserialize character from save data.
 
@@ -725,7 +724,7 @@ class CampaignManager:
 
         return character
 
-    def _deserialize_inventory(self, inv_data: Dict[str, Any]) -> Inventory:
+    def _deserialize_inventory(self, inv_data: dict[str, Any]) -> Inventory:
         """
         Deserialize inventory from save data.
 
@@ -758,7 +757,7 @@ class CampaignManager:
 
         return inventory
 
-    def _validate_save_data(self, save_data: Dict[str, Any]) -> None:
+    def _validate_save_data(self, save_data: dict[str, Any]) -> None:
         """
         Validate save file structure.
 

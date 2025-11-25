@@ -2,16 +2,15 @@
 # ABOUTME: Tests end-to-end character import/export, multi-vault operations, and character factory integration
 
 import json
-from pathlib import Path
+
 import pytest
 
-from dnd_engine.core.character_vault import CharacterVault, CharacterState
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.character_factory import CharacterFactory
+from dnd_engine.core.character_vault import CharacterState, CharacterVault
 from dnd_engine.core.creature import Abilities
 from dnd_engine.core.dice import DiceRoller
-from dnd_engine.systems.inventory import Inventory, EquipmentSlot
-from dnd_engine.systems.currency import Currency
+from dnd_engine.systems.inventory import EquipmentSlot, Inventory
 from dnd_engine.systems.resources import ResourcePool
 
 
@@ -177,7 +176,7 @@ class TestImportExportWorkflow:
 
         vault.export_character(character_id, export_path, strip_metadata=True)
 
-        with open(export_path, 'r') as f:
+        with open(export_path) as f:
             data = json.load(f)
 
         # Should not have metadata section

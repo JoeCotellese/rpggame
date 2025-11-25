@@ -2,12 +2,12 @@
 # ABOUTME: Handles API calls with timeout and error handling for graceful fallback
 
 import asyncio
-from typing import Optional
 
 from openai import AsyncOpenAI
 
+from dnd_engine.ui.rich_ui import print_error, print_status_message
+
 from .base import LLMProvider
-from dnd_engine.ui.rich_ui import print_status_message, print_error
 
 
 class OpenAIProvider(LLMProvider):
@@ -40,7 +40,7 @@ class OpenAIProvider(LLMProvider):
         self,
         prompt: str,
         temperature: float = 0.7
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Generate text using OpenAI API.
 
@@ -80,7 +80,7 @@ class OpenAIProvider(LLMProvider):
 
             return response.choices[0].message.content.strip()
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             print_status_message(f"OpenAI request timed out after {self.timeout}s", "warning")
             return None
         except Exception as e:

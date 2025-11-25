@@ -3,8 +3,9 @@
 
 import json
 from pathlib import Path
-from typing import Dict, Any
-from dnd_engine.core.creature import Creature, Abilities
+from typing import Any
+
+from dnd_engine.core.creature import Abilities, Creature
 from dnd_engine.core.dice import DiceRoller
 
 
@@ -31,7 +32,7 @@ class DataLoader:
 
         self.dice_roller = DiceRoller()
 
-    def load_monsters(self) -> Dict[str, Any]:
+    def load_monsters(self) -> dict[str, Any]:
         """
         Load all monster definitions from JSON.
 
@@ -39,7 +40,7 @@ class DataLoader:
             Dictionary mapping monster IDs to monster data
         """
         monsters_file = self.data_path / "srd" / "monsters.json"
-        with open(monsters_file, 'r') as f:
+        with open(monsters_file) as f:
             return json.load(f)
 
     def create_monster(self, monster_id: str) -> Creature:
@@ -86,7 +87,7 @@ class DataLoader:
 
         return creature
 
-    def load_items(self) -> Dict[str, Any]:
+    def load_items(self) -> dict[str, Any]:
         """
         Load all item definitions from JSON.
 
@@ -94,10 +95,10 @@ class DataLoader:
             Dictionary containing weapons, armor, and consumables
         """
         items_file = self.data_path / "srd" / "items.json"
-        with open(items_file, 'r') as f:
+        with open(items_file) as f:
             return json.load(f)
 
-    def load_dungeon(self, dungeon_name: str) -> Dict[str, Any]:
+    def load_dungeon(self, dungeon_name: str) -> dict[str, Any]:
         """
         Load a dungeon definition from JSON.
 
@@ -115,10 +116,10 @@ class DataLoader:
         if not dungeon_file.exists():
             raise FileNotFoundError(f"Dungeon file not found: {dungeon_file}")
 
-        with open(dungeon_file, 'r') as f:
+        with open(dungeon_file) as f:
             return json.load(f)
 
-    def load_classes(self) -> Dict[str, Any]:
+    def load_classes(self) -> dict[str, Any]:
         """
         Load all character class definitions from JSON.
 
@@ -126,10 +127,10 @@ class DataLoader:
             Dictionary mapping class names to class data
         """
         classes_file = self.data_path / "srd" / "classes.json"
-        with open(classes_file, 'r') as f:
+        with open(classes_file) as f:
             return json.load(f)
 
-    def load_races(self) -> Dict[str, Any]:
+    def load_races(self) -> dict[str, Any]:
         """
         Load all race definitions from JSON.
 
@@ -137,10 +138,10 @@ class DataLoader:
             Dictionary mapping race IDs to race data
         """
         races_file = self.data_path / "srd" / "races.json"
-        with open(races_file, 'r') as f:
+        with open(races_file) as f:
             return json.load(f)
 
-    def load_skills(self) -> Dict[str, Any]:
+    def load_skills(self) -> dict[str, Any]:
         """
         Load all skill definitions from JSON.
 
@@ -148,10 +149,10 @@ class DataLoader:
             Dictionary mapping skill IDs to skill data (name and ability)
         """
         skills_file = self.data_path / "srd" / "skills.json"
-        with open(skills_file, 'r') as f:
+        with open(skills_file) as f:
             return json.load(f)
 
-    def load_progression(self) -> Dict[str, Any]:
+    def load_progression(self) -> dict[str, Any]:
         """
         Load character progression data (XP thresholds and proficiency bonuses).
 
@@ -159,10 +160,10 @@ class DataLoader:
             Dictionary containing xp_by_level and proficiency_by_level
         """
         progression_file = self.data_path / "srd" / "progression.json"
-        with open(progression_file, 'r') as f:
+        with open(progression_file) as f:
             return json.load(f)
 
-    def load_spells(self) -> Dict[str, Any]:
+    def load_spells(self) -> dict[str, Any]:
         """
         Load all spell definitions from JSON.
 
@@ -175,7 +176,7 @@ class DataLoader:
             ValueError: If any spell is missing target_type or has invalid target_type
         """
         spells_file = self.data_path / "srd" / "spells.json"
-        with open(spells_file, 'r') as f:
+        with open(spells_file) as f:
             spells = json.load(f)
 
         # Validate target_type for all spells
@@ -198,7 +199,7 @@ class DataLoader:
 
         return spells
 
-    def get_spell(self, spell_id: str) -> Dict[str, Any]:
+    def get_spell(self, spell_id: str) -> dict[str, Any]:
         """
         Get a specific spell by its ID.
 

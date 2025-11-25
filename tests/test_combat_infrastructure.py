@@ -8,16 +8,15 @@ Tests the new combat infrastructure systems added to the game engine:
 - Target lookup by reference
 """
 
-import pytest
 import time
-from dnd_engine.core.game_state import GameState, CombatEvent, BattlefieldState, CombatantStatus
-from dnd_engine.core.character import Character, CharacterClass, Abilities
-from dnd_engine.core.character_factory import CharacterFactory
-from dnd_engine.core.party import Party
+
+import pytest
+
+from dnd_engine.core.character import Abilities, Character, CharacterClass
 from dnd_engine.core.creature import Creature
-from dnd_engine.systems.initiative import InitiativeTracker, InitiativeEntry
-from dnd_engine.core.dice import DiceRoller
-from dnd_engine.rules.loader import DataLoader
+from dnd_engine.core.game_state import CombatEvent, GameState
+from dnd_engine.core.party import Party
+from dnd_engine.systems.initiative import InitiativeTracker
 
 
 def create_test_character(name: str, char_class: str = "fighter", level: int = 1) -> Character:

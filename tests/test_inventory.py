@@ -2,7 +2,8 @@
 # ABOUTME: Tests item management, equipment, gold tracking, and edge cases
 
 import pytest
-from dnd_engine.systems.inventory import Inventory, InventoryItem, EquipmentSlot
+
+from dnd_engine.systems.inventory import EquipmentSlot, Inventory, InventoryItem
 
 
 class TestInventoryItem:

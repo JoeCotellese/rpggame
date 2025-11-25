@@ -1,8 +1,10 @@
 # ABOUTME: Main menu system for game startup and campaign management
 # ABOUTME: Handles menu display, input, and navigation between campaigns and character vault
 
-from typing import Optional, List, Dict, Any, Callable
-from pathlib import Path
+
+from rich import box
+from rich.panel import Panel
+from rich.table import Table
 
 from dnd_engine.core.campaign_manager import CampaignManager
 from dnd_engine.core.character_vault import CharacterVault
@@ -12,15 +14,10 @@ from dnd_engine.ui.rich_ui import (
     console,
     print_banner,
     print_choice_menu,
+    print_error,
     print_section,
     print_status_message,
-    print_input_prompt,
-    print_error,
-    print_message
 )
-from rich.table import Table
-from rich.panel import Panel
-from rich import box
 
 
 class MainMenu:
@@ -37,8 +34,8 @@ class MainMenu:
 
     def __init__(
         self,
-        campaign_manager: Optional[CampaignManager] = None,
-        character_vault: Optional[CharacterVault] = None
+        campaign_manager: CampaignManager | None = None,
+        character_vault: CharacterVault | None = None
     ):
         """
         Initialize the main menu.
@@ -50,7 +47,7 @@ class MainMenu:
         self.campaign_manager = campaign_manager or CampaignManager()
         self.character_vault = character_vault or CharacterVault()
 
-    def show(self) -> Optional[str]:
+    def show(self) -> str | None:
         """
         Display the main menu and handle user choice.
 
@@ -86,7 +83,7 @@ class MainMenu:
 
         return choice_map.get(choice)
 
-    def show_continue_preview(self) -> Optional[str]:
+    def show_continue_preview(self) -> str | None:
         """
         Show a preview of the most recent campaign for quick continue.
 
@@ -127,7 +124,7 @@ class MainMenu:
 
         return None
 
-    def show_campaign_list(self) -> Optional[str]:
+    def show_campaign_list(self) -> str | None:
         """
         Display list of all campaigns and let user select one.
 
@@ -194,7 +191,7 @@ class MainMenu:
             print_error("Invalid input. Please enter a number or 'B' for back.")
             return None
 
-    def show_campaign_save_slots(self, campaign_name: str) -> Optional[str]:
+    def show_campaign_save_slots(self, campaign_name: str) -> str | None:
         """
         Show available save slots for a campaign and let user select one.
 
@@ -265,7 +262,7 @@ class MainMenu:
             print_error("Invalid input. Please enter a number or 'B' for back.")
             return None
 
-    def handle_continue_last_campaign(self) -> Optional[GameState]:
+    def handle_continue_last_campaign(self) -> GameState | None:
         """
         Handle the "Continue Last Campaign" flow.
 
@@ -317,7 +314,7 @@ class MainMenu:
             print_error(f"Failed to load campaign: {str(e)}", e)
             return None
 
-    def handle_load_campaign(self) -> Optional[GameState]:
+    def handle_load_campaign(self) -> GameState | None:
         """
         Handle the "Load Campaign" flow with campaign and save slot selection.
 
@@ -348,13 +345,13 @@ class MainMenu:
             )
             return game_state
         except FileNotFoundError as e:
-            print_error(f"Save file not found", e)
+            print_error("Save file not found", e)
             return None
         except Exception as e:
             print_error(f"Failed to load campaign: {str(e)}", e)
             return None
 
-    def handle_quick_start(self) -> Optional[GameState]:
+    def handle_quick_start(self) -> GameState | None:
         """
         Handle the "Quick Start" flow - generate character and jump into game.
 
@@ -369,7 +366,7 @@ class MainMenu:
         )
         return None
 
-    def handle_new_campaign(self) -> Optional[GameState]:
+    def handle_new_campaign(self) -> GameState | None:
         """
         Handle new campaign creation flow.
 
@@ -402,7 +399,7 @@ class MainMenu:
             # We'll need to initialize a new game state
             # For now, return None and let the user load it normally
             print_status_message(
-                f"Campaign created! Use 'Load Campaign' to start playing.",
+                "Campaign created! Use 'Load Campaign' to start playing.",
                 "info"
             )
             return None
@@ -423,7 +420,7 @@ class MainMenu:
         # TODO: Implement Character Vault UI in future iteration
         # This will show the vault menu from Issue #81
 
-    def run(self) -> Optional[GameState]:
+    def run(self) -> GameState | None:
         """
         Run the main menu loop until user makes a valid selection.
 

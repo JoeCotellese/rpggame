@@ -1,13 +1,12 @@
 # ABOUTME: Integration tests for Rogue character creation, features, and combat
 # ABOUTME: Tests the full flow of creating a Rogue and using their abilities in game scenarios
 
-import pytest
 from dnd_engine.core.character import Character, CharacterClass
-from dnd_engine.core.creature import Abilities
 from dnd_engine.core.combat import CombatEngine
+from dnd_engine.core.creature import Abilities
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.rules.loader import DataLoader
-from dnd_engine.systems.inventory import Inventory, EquipmentSlot
+from dnd_engine.systems.inventory import EquipmentSlot, Inventory
 from dnd_engine.utils.events import EventBus, EventType
 
 

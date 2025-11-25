@@ -1,8 +1,9 @@
 """Unit tests for CharacterFactory class"""
 
 import pytest
-from dnd_engine.core.character_factory import CharacterFactory
+
 from dnd_engine.core.character import Character, CharacterClass
+from dnd_engine.core.character_factory import CharacterFactory
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.systems.inventory import EquipmentSlot

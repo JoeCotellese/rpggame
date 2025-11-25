@@ -2,21 +2,22 @@
 # ABOUTME: Provides slash commands to rapidly manipulate game state for testing
 
 import os
-from typing import Optional, List, Dict, Any, Tuple
 import random
-from dnd_engine.core.game_state import GameState
+from typing import Any
+
+from rich.table import Table
+
 from dnd_engine.core.character import Character, CharacterClass
-from dnd_engine.core.creature import Creature, Abilities
 from dnd_engine.core.character_factory import CharacterFactory
+from dnd_engine.core.creature import Abilities, Creature
+from dnd_engine.core.game_state import GameState
 from dnd_engine.ui.rich_ui import (
+    console,
     print_error,
-    print_status_message,
     print_message,
     print_section,
-    print_mechanics_panel,
-    console
+    print_status_message,
 )
-from rich.table import Table
 
 
 class DebugConsole:
@@ -57,7 +58,7 @@ class DebugConsole:
         self._llm_debug_mode = False
 
         # Command registry: maps command names to handler methods
-        self.commands: Dict[str, Any] = {
+        self.commands: dict[str, Any] = {
             # CRITICAL - Character State Manipulation
             "revive": self.cmd_revive,
             "kill": self.cmd_kill,
@@ -122,7 +123,7 @@ class DebugConsole:
         """Check if a command is a debug command (starts with /)."""
         return command.startswith("/")
 
-    def parse_command(self, command: str) -> Tuple[str, List[str]]:
+    def parse_command(self, command: str) -> tuple[str, list[str]]:
         """
         Parse a slash command into command name and arguments.
 
@@ -172,7 +173,7 @@ class DebugConsole:
         # Check if command exists
         if cmd_name not in self.commands:
             print_error(f"Unknown debug command: /{cmd_name}")
-            print_message(f"Type '/help' for available debug commands")
+            print_message("Type '/help' for available debug commands")
             return False
 
         # Execute the command
@@ -190,7 +191,7 @@ class DebugConsole:
     # CRITICAL PRIORITY - Character State Manipulation
     # =====================================================================
 
-    def cmd_revive(self, args: List[str]) -> None:
+    def cmd_revive(self, args: list[str]) -> None:
         """Revive a dead or unconscious character."""
         if not args:
             print_error("Usage: /revive <character_name>")
@@ -211,7 +212,7 @@ class DebugConsole:
 
         print_status_message(f"{character.name} has been revived to full HP!", "success")
 
-    def cmd_kill(self, args: List[str]) -> None:
+    def cmd_kill(self, args: list[str]) -> None:
         """Kill a character or monster."""
         if not args:
             print_error("Usage: /kill <target_name>")
@@ -238,7 +239,7 @@ class DebugConsole:
                 self.game_state._check_combat_end()
             return
 
-    def cmd_set_hp(self, args: List[str]) -> None:
+    def cmd_set_hp(self, args: list[str]) -> None:
         """Set exact HP value for a character."""
         if len(args) < 2:
             print_error("Usage: /sethp <character_name> <hp_value>")
@@ -264,7 +265,7 @@ class DebugConsole:
             "success"
         )
 
-    def cmd_damage(self, args: List[str]) -> None:
+    def cmd_damage(self, args: list[str]) -> None:
         """Deal damage to a character for testing."""
         if len(args) < 2:
             print_error("Usage: /damage <character_name> <damage_amount>")
@@ -292,7 +293,7 @@ class DebugConsole:
         if character.current_hp == 0:
             print_message(f"{character.name} is unconscious!")
 
-    def cmd_heal(self, args: List[str]) -> None:
+    def cmd_heal(self, args: list[str]) -> None:
         """Heal a character directly."""
         if len(args) < 2:
             print_error("Usage: /heal <character_name> <heal_amount>")
@@ -317,7 +318,7 @@ class DebugConsole:
             "success"
         )
 
-    def cmd_godmode(self, args: List[str]) -> None:
+    def cmd_godmode(self, args: list[str]) -> None:
         """Toggle invulnerability for a character."""
         if not args:
             print_error("Usage: /godmode <character_name>")
@@ -339,7 +340,7 @@ class DebugConsole:
             character.current_hp = character.max_hp
             print_status_message(f"God mode ENABLED for {character.name}", "success")
 
-    def cmd_set_level(self, args: List[str]) -> None:
+    def cmd_set_level(self, args: list[str]) -> None:
         """Set character to a specific level."""
         if len(args) < 2:
             print_error("Usage: /setlevel <character_name> <level>")
@@ -381,7 +382,7 @@ class DebugConsole:
             "success"
         )
 
-    def cmd_add_xp(self, args: List[str]) -> None:
+    def cmd_add_xp(self, args: list[str]) -> None:
         """Grant XP to a character."""
         if len(args) < 2:
             print_error("Usage: /addxp <character_name> <xp_amount>")
@@ -406,7 +407,7 @@ class DebugConsole:
             "success"
         )
 
-    def cmd_set_stat(self, args: List[str]) -> None:
+    def cmd_set_stat(self, args: list[str]) -> None:
         """Set ability score for a character."""
         if len(args) < 3:
             print_error("Usage: /setstat <character_name> <ability> <value>")
@@ -453,7 +454,7 @@ class DebugConsole:
     # CRITICAL PRIORITY - Combat Testing
     # =====================================================================
 
-    def cmd_spawn(self, args: List[str]) -> None:
+    def cmd_spawn(self, args: list[str]) -> None:
         """Spawn enemies in the current room."""
         if not args:
             print_error("Usage: /spawn <monster_name> [count]")
@@ -505,7 +506,7 @@ class DebugConsole:
         except Exception as e:
             print_error(f"Failed to spawn monster: {e}")
 
-    def cmd_despawn(self, args: List[str]) -> None:
+    def cmd_despawn(self, args: list[str]) -> None:
         """Remove a monster from combat."""
         if not args:
             print_error("Usage: /despawn <monster_name>")
@@ -537,7 +538,7 @@ class DebugConsole:
         # Check if combat should end
         self.game_state._check_combat_end()
 
-    def cmd_next_turn(self, args: List[str]) -> None:
+    def cmd_next_turn(self, args: list[str]) -> None:
         """Skip to next turn in initiative."""
         if not self.game_state.in_combat:
             print_error("Not in combat")
@@ -556,7 +557,7 @@ class DebugConsole:
             "info"
         )
 
-    def cmd_end_combat(self, args: List[str]) -> None:
+    def cmd_end_combat(self, args: list[str]) -> None:
         """Force end combat encounter."""
         if not self.game_state.in_combat:
             print_error("Not in combat")
@@ -569,7 +570,7 @@ class DebugConsole:
     # CRITICAL PRIORITY - Inventory & Currency
     # =====================================================================
 
-    def cmd_give(self, args: List[str]) -> None:
+    def cmd_give(self, args: list[str]) -> None:
         """Give an item to a character."""
         if len(args) < 2:
             print_error("Usage: /give <item_name> <quantity> [character_name]")
@@ -617,7 +618,7 @@ class DebugConsole:
             "success"
         )
 
-    def cmd_remove(self, args: List[str]) -> None:
+    def cmd_remove(self, args: list[str]) -> None:
         """Remove an item from inventory."""
         if len(args) < 2:
             print_error("Usage: /remove <item_name> <quantity>")
@@ -652,7 +653,7 @@ class DebugConsole:
             "success"
         )
 
-    def cmd_gold(self, args: List[str]) -> None:
+    def cmd_gold(self, args: list[str]) -> None:
         """Add or remove gold from party."""
         if not args:
             print_error("Usage: /gold <amount>")
@@ -684,7 +685,7 @@ class DebugConsole:
         new_gold = self.game_state.party.currency.gold
         print_message(f"Party gold: {old_gold} → {new_gold}")
 
-    def cmd_clear_inventory(self, args: List[str]) -> None:
+    def cmd_clear_inventory(self, args: list[str]) -> None:
         """Clear a character's inventory."""
         if not args:
             print_error("Usage: /clearinventory <character_name>")
@@ -713,7 +714,7 @@ class DebugConsole:
     # HIGH PRIORITY - Condition Testing
     # =====================================================================
 
-    def cmd_add_condition(self, args: List[str]) -> None:
+    def cmd_add_condition(self, args: list[str]) -> None:
         """Add a condition to a character."""
         if len(args) < 2:
             print_error("Usage: /addcondition <character_name> <condition>")
@@ -735,7 +736,7 @@ class DebugConsole:
             "success"
         )
 
-    def cmd_remove_condition(self, args: List[str]) -> None:
+    def cmd_remove_condition(self, args: list[str]) -> None:
         """Remove a condition from a character."""
         if len(args) < 2:
             print_error("Usage: /removecondition <character_name> <condition>")
@@ -760,7 +761,7 @@ class DebugConsole:
             "success"
         )
 
-    def cmd_clear_conditions(self, args: List[str]) -> None:
+    def cmd_clear_conditions(self, args: list[str]) -> None:
         """Clear all conditions from a character."""
         if not args:
             print_error("Usage: /clearconditions <character_name>")
@@ -781,7 +782,7 @@ class DebugConsole:
             "success"
         )
 
-    def cmd_list_conditions(self, args: List[str]) -> None:
+    def cmd_list_conditions(self, args: list[str]) -> None:
         """List all available conditions."""
         from dnd_engine.systems.condition_manager import ConditionManager
 
@@ -802,7 +803,7 @@ class DebugConsole:
     # HIGH PRIORITY - Resource Management
     # =====================================================================
 
-    def cmd_set_slots(self, args: List[str]) -> None:
+    def cmd_set_slots(self, args: list[str]) -> None:
         """Set spell slot count for a character."""
         if len(args) < 3:
             print_error("Usage: /setslots <character_name> <level> <count>")
@@ -839,7 +840,7 @@ class DebugConsole:
             "success"
         )
 
-    def cmd_restore_slots(self, args: List[str]) -> None:
+    def cmd_restore_slots(self, args: list[str]) -> None:
         """Restore all spell slots for a character."""
         if not args:
             print_error("Usage: /restoreslots <character_name>")
@@ -860,7 +861,7 @@ class DebugConsole:
             "success"
         )
 
-    def cmd_set_resource(self, args: List[str]) -> None:
+    def cmd_set_resource(self, args: list[str]) -> None:
         """Set a resource pool value."""
         if len(args) < 3:
             print_error("Usage: /setresource <character_name> <resource_name> <amount>")
@@ -900,7 +901,7 @@ class DebugConsole:
             "success"
         )
 
-    def cmd_short_rest(self, args: List[str]) -> None:
+    def cmd_short_rest(self, args: list[str]) -> None:
         """Instantly take a short rest (all party members)."""
         print_section("Short Rest")
 
@@ -909,7 +910,7 @@ class DebugConsole:
 
         print_status_message("Party took a short rest", "success")
 
-    def cmd_long_rest(self, args: List[str]) -> None:
+    def cmd_long_rest(self, args: list[str]) -> None:
         """Instantly take a long rest (all party members)."""
         print_section("Long Rest")
 
@@ -922,7 +923,7 @@ class DebugConsole:
     # HIGH PRIORITY - Navigation & Exploration
     # =====================================================================
 
-    def cmd_teleport(self, args: List[str]) -> None:
+    def cmd_teleport(self, args: list[str]) -> None:
         """Teleport to a specific room."""
         if not args:
             print_error("Usage: /teleport <room_id>")
@@ -950,7 +951,7 @@ class DebugConsole:
             "success"
         )
 
-    def cmd_list_rooms(self, args: List[str]) -> None:
+    def cmd_list_rooms(self, args: list[str]) -> None:
         """List all rooms in the current dungeon."""
         print_section(f"Rooms in {self.game_state.dungeon_name}")
 
@@ -971,7 +972,7 @@ class DebugConsole:
 
         console.print(table)
 
-    def cmd_unlock(self, args: List[str]) -> None:
+    def cmd_unlock(self, args: list[str]) -> None:
         """Unlock a door in the current room."""
         if not args:
             print_error("Usage: /unlock <direction>")
@@ -998,7 +999,7 @@ class DebugConsole:
 
         print_status_message(f"Unlocked the {direction} exit", "success")
 
-    def cmd_reveal(self, args: List[str]) -> None:
+    def cmd_reveal(self, args: list[str]) -> None:
         """Reveal all hidden features in the current room."""
         current_room = self.game_state.get_current_room()
 
@@ -1024,7 +1025,7 @@ class DebugConsole:
     # HIGH PRIORITY - Spellcasting
     # =====================================================================
 
-    def cmd_learn_spell(self, args: List[str]) -> None:
+    def cmd_learn_spell(self, args: list[str]) -> None:
         """Add a spell to a character's known spells."""
         if len(args) < 2:
             print_error("Usage: /learnspell <character_name> <spell_name>")
@@ -1068,7 +1069,7 @@ class DebugConsole:
             "success"
         )
 
-    def cmd_forget_spell(self, args: List[str]) -> None:
+    def cmd_forget_spell(self, args: list[str]) -> None:
         """Remove a spell from a character's known spells."""
         if len(args) < 2:
             print_error("Usage: /forgetspell <character_name> <spell_name>")
@@ -1102,7 +1103,7 @@ class DebugConsole:
             "success"
         )
 
-    def cmd_list_spells(self, args: List[str]) -> None:
+    def cmd_list_spells(self, args: list[str]) -> None:
         """List available spells, optionally filtered by class and level."""
         spells = self.game_state.data_loader.load_spells()
 
@@ -1169,7 +1170,7 @@ class DebugConsole:
     # MEDIUM PRIORITY - Party Management
     # =====================================================================
 
-    def cmd_add_character(self, args: List[str]) -> None:
+    def cmd_add_character(self, args: list[str]) -> None:
         """Add a new character to the party with specified class, optional race and level."""
         # Load data once at the start
         races_data = self.game_state.data_loader.load_races()
@@ -1338,7 +1339,7 @@ class DebugConsole:
         )
         print_message(f"HP: {character.current_hp}/{character.max_hp}, AC: {character.ac}")
 
-    def cmd_remove_character(self, args: List[str]) -> None:
+    def cmd_remove_character(self, args: list[str]) -> None:
         """Remove a character from the party."""
         if not args:
             print_error("Usage: /removecharacter <character_name>")
@@ -1367,7 +1368,7 @@ class DebugConsole:
     # System Commands
     # =====================================================================
 
-    def cmd_reset(self, args: List[str]) -> None:
+    def cmd_reset(self, args: list[str]) -> None:
         """Reset the game (converted from regular reset command)."""
         print_message("Reset functionality moved to /reset")
         print_message("This will reset the dungeon while keeping your party intact")
@@ -1386,7 +1387,7 @@ class DebugConsole:
 
         print_status_message("Game reset successfully!", "success")
 
-    def cmd_help(self, args: List[str]) -> None:
+    def cmd_help(self, args: list[str]) -> None:
         """Show debug console help."""
         if args:
             # Show help for specific command
@@ -1463,7 +1464,7 @@ class DebugConsole:
         console.print(table)
         print_message("\nUse '/help <command>' for detailed help on a specific command")
 
-    def cmd_disable_llm(self, args: List[str]) -> None:
+    def cmd_disable_llm(self, args: list[str]) -> None:
         """Toggle between debug LLM (shows prompts) and normal LLM."""
         if not self.cli or not self.cli.llm_enhancer:
             print_error("LLM enhancer not available")
@@ -1502,7 +1503,7 @@ class DebugConsole:
     # Helper Methods
     # =====================================================================
 
-    def _find_character(self, name: str, silent: bool = False) -> Optional[Character]:
+    def _find_character(self, name: str, silent: bool = False) -> Character | None:
         """Find a character by name (case-insensitive)."""
         for character in self.game_state.party.characters:
             if character.name.lower() == name.lower():
@@ -1512,7 +1513,7 @@ class DebugConsole:
             print_error(f"Character not found: {name}")
         return None
 
-    def _find_enemy(self, name: str) -> Optional[Creature]:
+    def _find_enemy(self, name: str) -> Creature | None:
         """Find an enemy by name or number."""
         if not self.game_state.in_combat:
             print_error("Not in combat")

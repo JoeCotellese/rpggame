@@ -2,15 +2,15 @@
 # ABOUTME: Tests the fix for #177 - allowing healing potions to be used on unconscious party members
 
 import pytest
+
 from dnd_engine.core.character import Character, CharacterClass
-from dnd_engine.core.creature import Creature, Abilities
 from dnd_engine.core.combat import CombatEngine
+from dnd_engine.core.creature import Abilities, Creature
+from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.party import Party
-from dnd_engine.systems.inventory import Inventory, EquipmentSlot
+from dnd_engine.rules.loader import DataLoader
 from dnd_engine.systems.item_effects import apply_item_effect
 from dnd_engine.utils.events import EventBus, EventType
-from dnd_engine.rules.loader import DataLoader
-from dnd_engine.core.dice import DiceRoller
 
 
 @pytest.fixture

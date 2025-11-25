@@ -1,14 +1,11 @@
 # ABOUTME: Unit tests for debug console functionality
 # ABOUTME: Tests command parsing, execution, and state manipulation
 
-import pytest
-import os
-from dnd_engine.ui.debug_console import DebugConsole
+from dnd_engine.core.character import Character, CharacterClass
+from dnd_engine.core.creature import Abilities
 from dnd_engine.core.game_state import GameState
 from dnd_engine.core.party import Party
-from dnd_engine.core.character import Character, CharacterClass
-from dnd_engine.core.creature import Abilities, Creature
-from dnd_engine.core.dice import DiceRoller
+from dnd_engine.ui.debug_console import DebugConsole
 
 
 class TestDebugConsoleInit:

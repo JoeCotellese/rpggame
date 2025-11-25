@@ -1,7 +1,7 @@
 # ABOUTME: Party class managing a group of player characters
 # ABOUTME: Handles party membership, living members check, and character lookup
 
-from typing import List, Optional
+
 from dnd_engine.core.character import Character
 from dnd_engine.systems.currency import Currency
 
@@ -15,17 +15,17 @@ class Party:
     and find specific characters.
     """
 
-    def __init__(self, characters: Optional[List[Character]] = None):
+    def __init__(self, characters: list[Character] | None = None):
         """
         Initialize a party with characters.
 
         Args:
             characters: List of Character objects (empty list if not provided)
         """
-        self.characters: List[Character] = characters if characters is not None else []
+        self.characters: list[Character] = characters if characters is not None else []
         self.currency: Currency = Currency()  # Shared party currency pool
 
-    def get_living_members(self) -> List[Character]:
+    def get_living_members(self) -> list[Character]:
         """
         Get all living party members.
 
@@ -34,7 +34,7 @@ class Party:
         """
         return [char for char in self.characters if char.is_alive]
 
-    def get_targetable_members(self) -> List[Character]:
+    def get_targetable_members(self) -> list[Character]:
         """
         Get all party members that can be targeted with items/abilities.
 
@@ -107,7 +107,7 @@ class Party:
         if character in self.characters:
             self.characters.remove(character)
 
-    def get_character_by_name(self, name: str) -> Optional[Character]:
+    def get_character_by_name(self, name: str) -> Character | None:
         """
         Find a character in the party by name.
 

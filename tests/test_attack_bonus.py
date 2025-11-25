@@ -1,10 +1,10 @@
 """Unit tests for attack bonus calculation system"""
 
 import pytest
+
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities
 from dnd_engine.rules.loader import DataLoader
-from dnd_engine.systems.inventory import Inventory, EquipmentSlot
 
 
 @pytest.fixture

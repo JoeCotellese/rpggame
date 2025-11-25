@@ -3,17 +3,16 @@
 
 import json
 import uuid
-from pathlib import Path
-from typing import Dict, Any, List, Optional
-from datetime import datetime
 from dataclasses import asdict
+from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities
-from dnd_engine.systems.inventory import Inventory, InventoryItem, EquipmentSlot
 from dnd_engine.systems.currency import Currency
+from dnd_engine.systems.inventory import EquipmentSlot, Inventory
 from dnd_engine.systems.resources import ResourcePool
-
 
 # Current character vault version
 VAULT_VERSION = "2.0.0"
@@ -31,7 +30,7 @@ class CharacterVaultV2:
     This replaces the old UUID-based individual file system.
     """
 
-    def __init__(self, vault_path: Optional[Path] = None):
+    def __init__(self, vault_path: Path | None = None):
         """
         Initialize character vault.
 
@@ -59,7 +58,7 @@ class CharacterVaultV2:
         with open(self.vault_path, 'w', encoding='utf-8') as f:
             json.dump(vault_data, f, indent=2, ensure_ascii=False)
 
-    def _load_vault(self) -> Dict[str, Any]:
+    def _load_vault(self) -> dict[str, Any]:
         """
         Load vault data from disk.
 
@@ -70,12 +69,12 @@ class CharacterVaultV2:
             ValueError: If vault file is corrupted
         """
         try:
-            with open(self.vault_path, 'r', encoding='utf-8') as f:
+            with open(self.vault_path, encoding='utf-8') as f:
                 return json.load(f)
         except json.JSONDecodeError as e:
             raise ValueError(f"Corrupted vault file: {e}")
 
-    def _save_vault(self, vault_data: Dict[str, Any]) -> None:
+    def _save_vault(self, vault_data: dict[str, Any]) -> None:
         """
         Save vault data to disk.
 
@@ -88,7 +87,7 @@ class CharacterVaultV2:
     def add_character(
         self,
         character: Character,
-        character_id: Optional[str] = None
+        character_id: str | None = None
     ) -> str:
         """
         Add a character to the vault.
@@ -219,7 +218,7 @@ class CharacterVaultV2:
         # Save vault
         self._save_vault(vault_data)
 
-    def list_characters(self) -> List[Dict[str, Any]]:
+    def list_characters(self) -> list[dict[str, Any]]:
         """
         List all characters in the vault with metadata.
 
@@ -283,7 +282,7 @@ class CharacterVaultV2:
     def clone_character(
         self,
         character_id: str,
-        new_name: Optional[str] = None
+        new_name: str | None = None
     ) -> str:
         """
         Clone a character with a new UUID.
@@ -314,9 +313,9 @@ class CharacterVaultV2:
 
     def import_characters_bulk(
         self,
-        characters: List[Character],
-        existing_ids: Optional[List[str]] = None
-    ) -> List[str]:
+        characters: list[Character],
+        existing_ids: list[str] | None = None
+    ) -> list[str]:
         """
         Import multiple characters at once.
 
@@ -340,7 +339,7 @@ class CharacterVaultV2:
 
         return character_ids
 
-    def get_usage_stats(self) -> Dict[str, Any]:
+    def get_usage_stats(self) -> dict[str, Any]:
         """
         Get overall usage statistics for the vault.
 
@@ -370,7 +369,7 @@ class CharacterVaultV2:
             "vault_version": vault_data.get("version")
         }
 
-    def _serialize_character(self, character: Character) -> Dict[str, Any]:
+    def _serialize_character(self, character: Character) -> dict[str, Any]:
         """
         Serialize a character to a dictionary.
 
@@ -404,7 +403,7 @@ class CharacterVaultV2:
             "prepared_spells": character.prepared_spells
         }
 
-    def _serialize_inventory(self, inventory: Inventory) -> Dict[str, Any]:
+    def _serialize_inventory(self, inventory: Inventory) -> dict[str, Any]:
         """Serialize inventory to a dictionary."""
         return {
             "items": [
@@ -422,7 +421,7 @@ class CharacterVaultV2:
             "currency": asdict(inventory.currency)
         }
 
-    def _serialize_resource_pools(self, character: Character) -> List[Dict[str, Any]]:
+    def _serialize_resource_pools(self, character: Character) -> list[dict[str, Any]]:
         """Serialize character resource pools to a list of dictionaries."""
         return [
             {
@@ -434,7 +433,7 @@ class CharacterVaultV2:
             for pool in character.resource_pools.values()
         ]
 
-    def _deserialize_character(self, char_data: Dict[str, Any]) -> Character:
+    def _deserialize_character(self, char_data: dict[str, Any]) -> Character:
         """
         Deserialize character from data.
 
@@ -480,7 +479,7 @@ class CharacterVaultV2:
 
         return character
 
-    def _deserialize_inventory(self, inv_data: Dict[str, Any]) -> Inventory:
+    def _deserialize_inventory(self, inv_data: dict[str, Any]) -> Inventory:
         """
         Deserialize inventory from data.
 

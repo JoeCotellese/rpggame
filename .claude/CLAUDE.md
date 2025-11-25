@@ -25,6 +25,14 @@ uv pip install package_name
 - Prefer f-strings over .format() or % formatting
 - Use pathlib for file operations instead of os.path
 - Use dataclasses or Pydantic for data structures
+- Use implicit string concatenation for long strings (ruff/black don't auto-break strings):
+  ```python
+  # Good: Break long strings with implicit concatenation
+  message = (
+      f"This is a long message with {variable} that "
+      f"continues on the next line for readability."
+  )
+  ```
 
 ### Import Organization
 ```python

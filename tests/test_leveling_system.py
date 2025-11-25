@@ -1,11 +1,10 @@
 # ABOUTME: Unit tests for character leveling system
 # ABOUTME: Tests XP thresholds, level-up mechanics, HP increases, and feature granting
 
-import pytest
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities
 from dnd_engine.rules.loader import DataLoader
-from dnd_engine.utils.events import EventBus, Event, EventType
+from dnd_engine.utils.events import Event, EventBus, EventType
 
 
 class TestLevelingSystem:

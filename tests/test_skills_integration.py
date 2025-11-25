@@ -1,10 +1,12 @@
 # ABOUTME: Integration tests for the skills system
 # ABOUTME: Tests skill proficiency selection in character creation and event emission
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, MagicMock
-from dnd_engine.core.character_factory import CharacterFactory
+
 from dnd_engine.core.character import CharacterClass
+from dnd_engine.core.character_factory import CharacterFactory
 from dnd_engine.rules.loader import DataLoader
 
 

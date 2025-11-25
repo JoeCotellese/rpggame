@@ -5,7 +5,8 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, TextIO
+from typing import TextIO
+
 from rich.console import Console
 
 
@@ -77,9 +78,9 @@ class LoggingConfig:
             debug_enabled: Whether debug mode is enabled
         """
         self.debug_enabled = debug_enabled
-        self.log_file_path: Optional[Path] = None
-        self.log_file: Optional[TextIO] = None
-        self.tee_console: Optional[Console] = None
+        self.log_file_path: Path | None = None
+        self.log_file: TextIO | None = None
+        self.tee_console: Console | None = None
         self._event_counter = 0
 
         if debug_enabled:
@@ -279,7 +280,7 @@ class LoggingConfig:
 
         logger.info(msg)
 
-    def get_log_file_path(self) -> Optional[Path]:
+    def get_log_file_path(self) -> Path | None:
         """
         Get the path to the current log file.
 
@@ -296,7 +297,7 @@ class LoggingConfig:
 
 
 # Global logging config instance
-_logging_config: Optional[LoggingConfig] = None
+_logging_config: LoggingConfig | None = None
 
 
 def init_logging(debug_enabled: bool = False) -> LoggingConfig:
@@ -314,7 +315,7 @@ def init_logging(debug_enabled: bool = False) -> LoggingConfig:
     return _logging_config
 
 
-def get_logging_config() -> Optional[LoggingConfig]:
+def get_logging_config() -> LoggingConfig | None:
     """
     Get the global logging configuration.
 

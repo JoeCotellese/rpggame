@@ -4,7 +4,6 @@
 import asyncio
 import threading
 import time
-from typing import Dict, Optional
 
 from ..utils.events import Event, EventBus, EventType
 from .base import LLMProvider
@@ -27,7 +26,7 @@ class LLMEnhancer:
 
     def __init__(
         self,
-        provider: Optional[LLMProvider],
+        provider: LLMProvider | None,
         event_bus: EventBus,
         enable_cache: bool = True
     ) -> None:
@@ -41,11 +40,11 @@ class LLMEnhancer:
         """
         self.provider = provider
         self.event_bus = event_bus
-        self.cache: Optional[Dict[str, str]] = {} if enable_cache else None
+        self.cache: dict[str, str] | None = {} if enable_cache else None
 
         # Create background event loop for async tasks
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
-        self._loop_thread: Optional[threading.Thread] = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._loop_thread: threading.Thread | None = None
 
         if provider:
             # Start background event loop
@@ -82,7 +81,7 @@ class LLMEnhancer:
         if self._loop and not self._loop.is_closed():
             asyncio.run_coroutine_threadsafe(coro, self._loop)
 
-    def _run_sync(self, coro, timeout: float = 20.0) -> Optional[str]:
+    def _run_sync(self, coro, timeout: float = 20.0) -> str | None:
         """
         Run a coroutine synchronously with timeout.
 
@@ -361,7 +360,7 @@ class LLMEnhancer:
 
     # Public synchronous API for blocking narrative generation
 
-    def get_combat_narrative_sync(self, action_data: Dict, timeout: float = 20.0) -> Optional[str]:
+    def get_combat_narrative_sync(self, action_data: dict, timeout: float = 20.0) -> str | None:
         """
         Generate combat narrative synchronously with timeout.
 
@@ -397,7 +396,7 @@ class LLMEnhancer:
 
         return self._run_sync(generate(), timeout=timeout)
 
-    def get_death_narrative_sync(self, character_data: Dict, timeout: float = 20.0) -> Optional[str]:
+    def get_death_narrative_sync(self, character_data: dict, timeout: float = 20.0) -> str | None:
         """
         Generate death narrative synchronously with timeout.
 
@@ -433,7 +432,7 @@ class LLMEnhancer:
 
         return self._run_sync(generate(), timeout=timeout)
 
-    def get_room_description_sync(self, room_data: Dict, timeout: float = 20.0) -> Optional[str]:
+    def get_room_description_sync(self, room_data: dict, timeout: float = 20.0) -> str | None:
         """
         Generate room description enhancement synchronously with timeout.
 
@@ -511,7 +510,7 @@ class LLMEnhancer:
 
         return self._run_sync(generate(), timeout=timeout)
 
-    def get_combat_start_narrative_sync(self, combat_data: Dict, timeout: float = 20.0) -> Optional[str]:
+    def get_combat_start_narrative_sync(self, combat_data: dict, timeout: float = 20.0) -> str | None:
         """
         Generate combat start narrative synchronously with timeout.
 

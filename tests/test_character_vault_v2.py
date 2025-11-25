@@ -1,12 +1,13 @@
 # Unit tests for CharacterVaultV2
 
-import pytest
 import json
 import tempfile
 from pathlib import Path
 
-from dnd_engine.core.character_vault_v2 import CharacterVaultV2
+import pytest
+
 from dnd_engine.core.character import Character, CharacterClass
+from dnd_engine.core.character_vault_v2 import CharacterVaultV2
 from dnd_engine.core.creature import Abilities
 
 
@@ -55,7 +56,7 @@ class TestCharacterVaultV2:
         """Test that initialization creates vault file with proper structure."""
         assert temp_vault_path.exists()
 
-        with open(temp_vault_path, 'r') as f:
+        with open(temp_vault_path) as f:
             data = json.load(f)
 
         assert "version" in data

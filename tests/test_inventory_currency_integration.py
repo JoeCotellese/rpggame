@@ -1,9 +1,8 @@
 # ABOUTME: Integration tests for Inventory and Currency systems
 # ABOUTME: Tests real-world game scenarios involving item and currency management
 
-import pytest
-from dnd_engine.systems.inventory import Inventory, EquipmentSlot
 from dnd_engine.systems.currency import Currency
+from dnd_engine.systems.inventory import EquipmentSlot, Inventory
 
 
 class TestInventoryCurrencyIntegration:

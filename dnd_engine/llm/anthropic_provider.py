@@ -2,12 +2,12 @@
 # ABOUTME: Handles API calls with timeout and error handling for graceful fallback
 
 import asyncio
-from typing import Optional
 
 from anthropic import AsyncAnthropic
 
+from dnd_engine.ui.rich_ui import print_error, print_status_message
+
 from .base import LLMProvider
-from dnd_engine.ui.rich_ui import print_status_message, print_error
 
 
 class AnthropicProvider(LLMProvider):
@@ -40,7 +40,7 @@ class AnthropicProvider(LLMProvider):
         self,
         prompt: str,
         temperature: float = 0.7
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Generate text using Anthropic API.
 
@@ -77,7 +77,7 @@ class AnthropicProvider(LLMProvider):
 
             return response.content[0].text.strip()
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             print_status_message(f"Anthropic request timed out after {self.timeout}s", "warning")
             return None
         except Exception as e:

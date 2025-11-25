@@ -1,7 +1,7 @@
 # Unit tests for SaveSlot data model
 
-import pytest
 from datetime import datetime, timedelta
+
 from dnd_engine.core.save_slot import SaveSlot
 
 

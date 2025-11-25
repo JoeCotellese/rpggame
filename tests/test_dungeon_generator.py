@@ -1,9 +1,9 @@
 # ABOUTME: Unit tests for random dungeon generation
 # ABOUTME: Tests dungeon structure, connectivity, monsters, and loot
 
-import pytest
 import json
 from pathlib import Path
+
 from dnd_engine.rules.dungeon_generator import DungeonGenerator
 from dnd_engine.rules.loader import DataLoader
 
@@ -219,7 +219,7 @@ class TestDungeonGenerator:
         assert output_file.exists()
 
         # File should contain valid JSON
-        with open(output_file, 'r') as f:
+        with open(output_file) as f:
             loaded_dungeon = json.load(f)
 
         assert loaded_dungeon == dungeon
@@ -233,7 +233,7 @@ class TestDungeonGenerator:
             dungeon = self.generator.generate(level=1, output_path=dungeon_path)
 
             # Load it back
-            with open(dungeon_path, 'r') as f:
+            with open(dungeon_path) as f:
                 loaded = json.load(f)
 
             # Should have all required fields

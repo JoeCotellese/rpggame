@@ -2,19 +2,20 @@
 # ABOUTME: Auto-detects provider from environment or creates from explicit parameters
 
 import os
-from typing import Any, Optional
+from typing import Any
+
+from dnd_engine.ui.rich_ui import print_status_message
 
 from .anthropic_provider import AnthropicProvider
 from .base import LLMProvider
 from .debug_provider import DebugProvider
 from .openai_provider import OpenAIProvider
-from dnd_engine.ui.rich_ui import print_status_message
 
 
 def create_llm_provider(
-    provider_name: Optional[str] = None,
+    provider_name: str | None = None,
     **kwargs: Any
-) -> Optional[LLMProvider]:
+) -> LLMProvider | None:
     """
     Factory function to create LLM provider from config.
 

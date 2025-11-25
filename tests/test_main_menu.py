@@ -1,16 +1,16 @@
 # ABOUTME: Unit tests for MainMenu class
 # ABOUTME: Tests menu display, input handling, and navigation logic
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime, timedelta
-from pathlib import Path
+from unittest.mock import Mock, patch
 
-from dnd_engine.ui.main_menu import MainMenu
+import pytest
+
 from dnd_engine.core.campaign import Campaign
 from dnd_engine.core.campaign_manager import CampaignManager
 from dnd_engine.core.character_vault import CharacterVault
 from dnd_engine.core.game_state import GameState
+from dnd_engine.ui.main_menu import MainMenu
 
 
 @pytest.fixture

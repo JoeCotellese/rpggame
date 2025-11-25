@@ -2,6 +2,7 @@
 # ABOUTME: Tests Character.get_out_of_combat_spells() filtering logic
 
 import pytest
+
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities
 from dnd_engine.rules.loader import DataLoader

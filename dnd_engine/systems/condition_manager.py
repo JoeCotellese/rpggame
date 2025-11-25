@@ -2,13 +2,13 @@
 # ABOUTME: Handles turn-start effects, ability checks to remove conditions, and data-driven condition definitions
 
 import json
-from pathlib import Path
-from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
-from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.creature import Creature
-from dnd_engine.utils.events import Event, EventType, EventBus
+from dnd_engine.core.dice import DiceRoller
+from dnd_engine.utils.events import Event, EventBus, EventType
 
 
 @dataclass
@@ -47,9 +47,9 @@ class ConditionManager:
 
     def __init__(
         self,
-        conditions_file: Optional[Path] = None,
-        dice_roller: Optional[DiceRoller] = None,
-        event_bus: Optional[EventBus] = None
+        conditions_file: Path | None = None,
+        dice_roller: DiceRoller | None = None,
+        event_bus: EventBus | None = None
     ):
         """
         Initialize the ConditionManager.
@@ -66,11 +66,11 @@ class ConditionManager:
         if conditions_file is None:
             conditions_file = Path(__file__).parent.parent / "data" / "srd" / "conditions.json"
 
-        with open(conditions_file, 'r') as f:
+        with open(conditions_file) as f:
             data = json.load(f)
-            self.conditions_data: Dict[str, Any] = data.get("conditions", {})
+            self.conditions_data: dict[str, Any] = data.get("conditions", {})
 
-    def get_condition_info(self, condition_id: str) -> Optional[Dict[str, Any]]:
+    def get_condition_info(self, condition_id: str) -> dict[str, Any] | None:
         """
         Get information about a condition.
 
@@ -115,7 +115,7 @@ class ConditionManager:
     def process_turn_start_effects(
         self,
         creature: Creature
-    ) -> List[ConditionEffectResult]:
+    ) -> list[ConditionEffectResult]:
         """
         Process all turn-start effects for a creature's conditions.
 
@@ -141,7 +141,7 @@ class ConditionManager:
         self,
         creature: Creature,
         condition_id: str
-    ) -> Optional[ConditionEffectResult]:
+    ) -> ConditionEffectResult | None:
         """
         Process the turn-start effect for a single condition.
 
@@ -172,7 +172,7 @@ class ConditionManager:
         self,
         creature: Creature,
         condition_id: str,
-        effect_data: Dict[str, Any]
+        effect_data: dict[str, Any]
     ) -> ConditionEffectResult:
         """
         Apply a damage effect to a creature.
@@ -228,7 +228,7 @@ class ConditionManager:
         self,
         creature: Creature,
         condition_id: str
-    ) -> Optional[AbilityCheckResult]:
+    ) -> AbilityCheckResult | None:
         """
         Attempt to remove a condition via ability check.
 
@@ -323,7 +323,7 @@ class ConditionManager:
 
         return ability_map.get(ability.lower(), 0)
 
-    def get_removal_prompt_info(self, condition_id: str) -> Optional[Dict[str, Any]]:
+    def get_removal_prompt_info(self, condition_id: str) -> dict[str, Any] | None:
         """
         Get information for prompting a creature about removing a condition.
 

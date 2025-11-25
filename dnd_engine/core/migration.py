@@ -3,14 +3,14 @@
 
 import json
 import shutil
-from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
+from dnd_engine.core.campaign import Campaign
+from dnd_engine.core.character_vault_v2 import CharacterVaultV2
 from dnd_engine.core.save_slot import SaveSlot
 from dnd_engine.core.save_slot_manager import SaveSlotManager
-from dnd_engine.core.character_vault_v2 import CharacterVaultV2
-from dnd_engine.core.campaign import Campaign
 
 
 class MigrationManager:
@@ -26,9 +26,9 @@ class MigrationManager:
 
     def __init__(
         self,
-        old_campaigns_dir: Optional[Path] = None,
-        new_save_dir: Optional[Path] = None,
-        new_vault_path: Optional[Path] = None
+        old_campaigns_dir: Path | None = None,
+        new_save_dir: Path | None = None,
+        new_vault_path: Path | None = None
     ):
         """
         Initialize migration manager.
@@ -72,7 +72,7 @@ class MigrationManager:
 
         return has_old_campaigns and not has_new_saves
 
-    def get_migration_info(self) -> Dict[str, Any]:
+    def get_migration_info(self) -> dict[str, Any]:
         """
         Get information about what will be migrated.
 
@@ -100,7 +100,7 @@ class MigrationManager:
                 continue
 
             try:
-                with open(metadata_path, 'r') as f:
+                with open(metadata_path) as f:
                     campaign_data = json.load(f)
 
                 campaign = Campaign.from_dict(campaign_data)
@@ -112,7 +112,7 @@ class MigrationManager:
                 # Collect character info
                 for save_file in save_files:
                     try:
-                        with open(save_file, 'r') as f:
+                        with open(save_file) as f:
                             save_data = json.load(f)
 
                         for char_data in save_data.get("party", []):
@@ -150,7 +150,7 @@ class MigrationManager:
             "unique_characters": list(all_characters.values())
         }
 
-    def migrate(self, dry_run: bool = False) -> Tuple[bool, str, Dict[str, Any]]:
+    def migrate(self, dry_run: bool = False) -> tuple[bool, str, dict[str, Any]]:
         """
         Perform migration from old to new system.
 
@@ -240,7 +240,7 @@ class MigrationManager:
             # Create new backup
             shutil.copytree(self.old_campaigns_dir, self.backup_dir)
 
-    def _collect_campaigns(self) -> List[Tuple[Campaign, Path]]:
+    def _collect_campaigns(self) -> list[tuple[Campaign, Path]]:
         """
         Collect all campaigns with their most recent save file.
 
@@ -258,7 +258,7 @@ class MigrationManager:
                 continue
 
             try:
-                with open(metadata_path, 'r') as f:
+                with open(metadata_path) as f:
                     campaign_data = json.load(f)
 
                 campaign = Campaign.from_dict(campaign_data)
@@ -293,8 +293,8 @@ class MigrationManager:
 
     def _collect_unique_characters(
         self,
-        campaigns: List[Tuple[Campaign, Path]]
-    ) -> Dict[str, Dict[str, Any]]:
+        campaigns: list[tuple[Campaign, Path]]
+    ) -> dict[str, dict[str, Any]]:
         """
         Collect unique characters across all campaigns (highest level version).
 
@@ -308,7 +308,7 @@ class MigrationManager:
 
         for campaign, save_path in campaigns:
             try:
-                with open(save_path, 'r') as f:
+                with open(save_path) as f:
                     save_data = json.load(f)
 
                 for char_data in save_data.get("party", []):
@@ -342,7 +342,7 @@ class MigrationManager:
             save_path: Path to the save file to migrate
         """
         # Load save file
-        with open(save_path, 'r') as f:
+        with open(save_path) as f:
             save_data = json.load(f)
 
         # Create new slot file with migrated data
@@ -375,7 +375,7 @@ class MigrationManager:
         with open(slot_path, 'w', encoding='utf-8') as f:
             json.dump(migrated_data, f, indent=2, ensure_ascii=False)
 
-    def _deserialize_character(self, char_data: Dict[str, Any]):
+    def _deserialize_character(self, char_data: dict[str, Any]):
         """
         Deserialize character from old save format.
 
@@ -387,8 +387,8 @@ class MigrationManager:
         """
         from dnd_engine.core.character import Character, CharacterClass
         from dnd_engine.core.creature import Abilities
-        from dnd_engine.systems.inventory import Inventory, EquipmentSlot
         from dnd_engine.systems.currency import Currency
+        from dnd_engine.systems.inventory import EquipmentSlot, Inventory
         from dnd_engine.systems.resources import ResourcePool
 
         abilities = Abilities(**char_data["abilities"])
@@ -441,7 +441,7 @@ class MigrationManager:
 
         return character
 
-    def _verify_migration(self, stats: Dict[str, Any]) -> Tuple[bool, str]:
+    def _verify_migration(self, stats: dict[str, Any]) -> tuple[bool, str]:
         """
         Verify migration completed successfully.
 

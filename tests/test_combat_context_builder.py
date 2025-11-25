@@ -1,12 +1,12 @@
 # ABOUTME: Unit tests for CombatContextBuilder class
 # ABOUTME: Tests context assembly with mocked dependencies
 
-import pytest
-from unittest.mock import Mock, MagicMock
-from dnd_engine.systems.combat_context.builder import CombatContextBuilder
-from dnd_engine.core.combat import AttackResult
+from unittest.mock import Mock
+
 from dnd_engine.core.character import Character
+from dnd_engine.core.combat import AttackResult
 from dnd_engine.core.creature import Creature
+from dnd_engine.systems.combat_context.builder import CombatContextBuilder
 from dnd_engine.systems.inventory import EquipmentSlot
 
 

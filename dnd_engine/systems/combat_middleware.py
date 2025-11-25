@@ -2,13 +2,14 @@
 # ABOUTME: Eliminates boilerplate from combat handlers via reusable middleware chain
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Callable, Optional, Any, Dict, List, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from dnd_engine.game_state import GameState
     from dnd_engine.core.character import Character
+    from dnd_engine.game_state import GameState
 
 from dnd_engine.systems.action_economy import ActionType
 
@@ -32,13 +33,13 @@ class CombatActionContext:
     actor: "Character"  # Who is taking the action
     action_type: ActionType  # ACTION, BONUS_ACTION, etc.
     action_name: str  # "attack", "cast_spell", "use_item" for logging
-    details: Dict[str, Any]  # Action-specific data
+    details: dict[str, Any]  # Action-specific data
     result: ActionResult = ActionResult.SUCCESS
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
     # Resources to refund on failure/cancellation
     # Format: List of (resource_pool_name, amount) tuples
-    resources_consumed: List[Tuple[str, int]] = field(default_factory=list)
+    resources_consumed: list[tuple[str, int]] = field(default_factory=list)
 
 
 class CombatMiddleware(ABC):
@@ -226,7 +227,7 @@ class CombatActionExecutor:
             game_state: The game state containing combat state, initiative, etc.
         """
         self.game_state = game_state
-        self.middleware_stack: List[CombatMiddleware] = [
+        self.middleware_stack: list[CombatMiddleware] = [
             TurnValidationMiddleware(),
             ActionEconomyMiddleware(),
             LoggingMiddleware(),
@@ -239,7 +240,7 @@ class CombatActionExecutor:
         action_type: ActionType,
         action_name: str,
         action_handler: Callable[[CombatActionContext], bool],
-        resources_consumed: Optional[List[Tuple[str, int]]] = None,
+        resources_consumed: list[tuple[str, int]] | None = None,
         **details
     ) -> CombatActionContext:
         """
@@ -272,7 +273,7 @@ class CombatActionExecutor:
         )
 
         # Build and execute middleware chain
-        def execute_chain(ctx: CombatActionContext, remaining_middleware: List[CombatMiddleware]) -> bool:
+        def execute_chain(ctx: CombatActionContext, remaining_middleware: list[CombatMiddleware]) -> bool:
             if not remaining_middleware:
                 # End of middleware chain - execute actual action
                 return action_handler(ctx)

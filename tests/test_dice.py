@@ -2,7 +2,8 @@
 # ABOUTME: Tests dice notation parsing, rolling mechanics, and advantage/disadvantage
 
 import pytest
-from dnd_engine.core.dice import DiceRoller, DiceRoll, format_dice_with_modifier
+
+from dnd_engine.core.dice import DiceRoll, DiceRoller, format_dice_with_modifier
 
 
 class TestDiceRoller:

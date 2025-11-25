@@ -1,21 +1,22 @@
 # ABOUTME: Unit tests for combat middleware pattern components
 # ABOUTME: Tests validation, logging, resource cleanup, and middleware chain execution
 
+from unittest.mock import Mock, patch
+
 import pytest
-from unittest.mock import Mock, MagicMock, patch
-from dnd_engine.systems.combat_middleware import (
-    CombatMiddleware,
-    CombatActionContext,
-    CombatActionExecutor,
-    TurnValidationMiddleware,
-    ActionEconomyMiddleware,
-    LoggingMiddleware,
-    ResourceCleanupMiddleware,
-    ActionResult
-)
-from dnd_engine.systems.action_economy import ActionType, TurnState
+
 from dnd_engine.core.character import Character
 from dnd_engine.core.game_state import GameState
+from dnd_engine.systems.action_economy import ActionType, TurnState
+from dnd_engine.systems.combat_middleware import (
+    ActionEconomyMiddleware,
+    ActionResult,
+    CombatActionContext,
+    CombatActionExecutor,
+    LoggingMiddleware,
+    ResourceCleanupMiddleware,
+    TurnValidationMiddleware,
+)
 
 
 @pytest.fixture

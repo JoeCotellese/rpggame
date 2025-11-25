@@ -2,11 +2,20 @@
 # ABOUTME: Tests spell save DC, save resolution, damage calculation, and upcasting
 
 import pytest
+
 from dnd_engine.core.character import Character, CharacterClass
-from dnd_engine.core.creature import Creature, Abilities
 from dnd_engine.core.combat import CombatEngine
+from dnd_engine.core.creature import Abilities, Creature
 from dnd_engine.core.dice import DiceRoller
-from dnd_engine.core.spell import Spell, SpellDamage, SavingThrow, SpellSchool, CastingTime, SpellComponents, DurationType
+from dnd_engine.core.spell import (
+    CastingTime,
+    DurationType,
+    SavingThrow,
+    Spell,
+    SpellComponents,
+    SpellDamage,
+    SpellSchool,
+)
 from dnd_engine.utils.events import EventBus, EventType
 
 

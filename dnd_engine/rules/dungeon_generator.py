@@ -1,11 +1,11 @@
 # ABOUTME: This module generates random dungeons for D&D 5E adventures.
 # ABOUTME: It creates room layouts, populates them with monsters and loot based on difficulty level.
 
-import random
 import json
-from typing import Dict, List, Any, Optional
-from pathlib import Path
+import random
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 
 class DungeonGenerator:
@@ -83,7 +83,7 @@ class DungeonGenerator:
         self.monsters = data_loader.load_monsters()
         self.items = data_loader.load_items()
 
-    def generate(self, level: int = 1, output_path: Optional[Path] = None) -> Dict[str, Any]:
+    def generate(self, level: int = 1, output_path: Path | None = None) -> dict[str, Any]:
         """
         Generate a random dungeon appropriate for the given character level.
 
@@ -124,7 +124,7 @@ class DungeonGenerator:
 
         return dungeon
 
-    def _generate_room_graph(self, num_rooms: int, theme: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    def _generate_room_graph(self, num_rooms: int, theme: dict[str, Any]) -> dict[str, dict[str, Any]]:
         """
         Generate a connected graph of rooms.
 
@@ -192,7 +192,7 @@ class DungeonGenerator:
 
         return rooms
 
-    def _populate_rooms(self, rooms: Dict[str, Dict[str, Any]], theme: Dict[str, Any], level: int) -> None:
+    def _populate_rooms(self, rooms: dict[str, dict[str, Any]], theme: dict[str, Any], level: int) -> None:
         """
         Populate rooms with enemies and items.
 
@@ -246,7 +246,7 @@ class DungeonGenerator:
                     room["enemies"] = [random.choice(available_monsters) for _ in range(num_enemies)]
                     room["items"] = self._generate_loot(level)
 
-    def _find_boss_room(self, rooms: Dict[str, Dict[str, Any]]) -> str:
+    def _find_boss_room(self, rooms: dict[str, dict[str, Any]]) -> str:
         """Find the best room for the boss (furthest from start or dead end)."""
         # Prefer dead ends (rooms with only one exit) or rooms far from start
         dead_ends = [room_id for room_id, room in rooms.items()
@@ -259,7 +259,7 @@ class DungeonGenerator:
         max_room_id = max(rooms.keys(), key=lambda x: int(x.split('_')[1]))
         return max_room_id
 
-    def _find_safe_room(self, rooms: Dict[str, Dict[str, Any]], boss_room_id: str) -> str:
+    def _find_safe_room(self, rooms: dict[str, dict[str, Any]], boss_room_id: str) -> str:
         """Find a good room for safe rest (not start, not boss, preferably dead end)."""
         candidates = [room_id for room_id, room in rooms.items()
                      if room_id not in ["room_0", boss_room_id] and len(room["exits"]) == 1]
@@ -272,7 +272,7 @@ class DungeonGenerator:
                      if room_id not in ["room_0", boss_room_id]]
         return random.choice(candidates) if candidates else "room_1"
 
-    def _get_monsters_for_level(self, theme_monsters: List[str], level: int) -> List[str]:
+    def _get_monsters_for_level(self, theme_monsters: list[str], level: int) -> list[str]:
         """
         Get monsters appropriate for the character level.
 
@@ -304,7 +304,7 @@ class DungeonGenerator:
         return appropriate_monsters if appropriate_monsters else theme_monsters
 
     def _generate_loot(self, level: int, is_boss: bool = False,
-                      is_treasure: bool = False, is_minor: bool = False) -> List[Dict[str, Any]]:
+                      is_treasure: bool = False, is_minor: bool = False) -> list[dict[str, Any]]:
         """
         Generate loot appropriate for the level and room type.
 
@@ -377,7 +377,7 @@ class DungeonGenerator:
 
         return items
 
-    def _generate_dungeon_description(self, theme: Dict[str, Any]) -> str:
+    def _generate_dungeon_description(self, theme: dict[str, Any]) -> str:
         """Generate a description for the entire dungeon."""
         descriptions = {
             "goblinoid": "A warren of caves and tunnels inhabited by goblinoids. The air reeks of filth and violence.",
@@ -391,7 +391,7 @@ class DungeonGenerator:
 
         return "A dangerous dungeon filled with threats."
 
-    def _generate_room_description(self, theme: Dict[str, Any]) -> str:
+    def _generate_room_description(self, theme: dict[str, Any]) -> str:
         """Generate a random description for a room based on theme."""
         template = random.choice(theme["description_templates"])
 

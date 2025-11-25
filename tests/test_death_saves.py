@@ -10,12 +10,13 @@ Tests D&D 5E death save rules:
 - Character state properties (unconscious, dead)
 """
 
+from unittest.mock import Mock, patch
+
 import pytest
+
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities
-from dnd_engine.core.dice import DiceRoller
 from dnd_engine.utils.events import EventBus, EventType
-from unittest.mock import Mock, patch
 
 
 @pytest.fixture

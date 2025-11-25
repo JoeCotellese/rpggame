@@ -2,12 +2,12 @@
 # ABOUTME: Verifies target selection logic for different AI behaviors.
 
 import pytest
+
 from dnd_engine.systems.ai.targeting import (
-    TargetingStrategy,
     LowestHPStrategy,
     RandomStrategy,
+    TargetingStrategy,
 )
-from dnd_engine.core.character import Character
 
 
 class MockCharacter:

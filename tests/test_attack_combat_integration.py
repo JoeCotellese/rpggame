@@ -1,11 +1,12 @@
 """Integration tests for attack system with combat"""
 
 import pytest
+
 from dnd_engine.core.character import Character, CharacterClass
-from dnd_engine.core.creature import Creature, Abilities
 from dnd_engine.core.combat import CombatEngine
+from dnd_engine.core.creature import Abilities, Creature
 from dnd_engine.rules.loader import DataLoader
-from dnd_engine.systems.inventory import Inventory, EquipmentSlot
+from dnd_engine.systems.inventory import EquipmentSlot
 
 
 @pytest.fixture

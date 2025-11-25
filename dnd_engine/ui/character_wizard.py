@@ -1,27 +1,23 @@
 # ABOUTME: Character creation wizard for interactive character building
 # ABOUTME: Supports custom, template-based, and random character generation with navigation
 
-from typing import Optional, Dict, Any, List, Tuple
 from enum import Enum
+from typing import Any
 
 from dnd_engine.core.character import Character, CharacterClass
-from dnd_engine.core.creature import Abilities
 from dnd_engine.core.character_factory import CharacterFactory
+from dnd_engine.core.creature import Abilities
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.rules.loader import DataLoader
-from dnd_engine.systems.inventory import EquipmentSlot
 from dnd_engine.ui.rich_ui import (
     console,
     print_banner,
-    print_section,
     print_choice_menu,
+    print_error,
     print_message,
+    print_section,
     print_status_message,
-    print_input_prompt,
-    print_error
 )
-from rich.table import Table
-from rich import box
 
 
 class CreationPath(Enum):
@@ -45,9 +41,9 @@ class CharacterCreationWizard:
 
     def __init__(
         self,
-        character_factory: Optional[CharacterFactory] = None,
-        data_loader: Optional[DataLoader] = None,
-        dice_roller: Optional[DiceRoller] = None
+        character_factory: CharacterFactory | None = None,
+        data_loader: DataLoader | None = None,
+        dice_roller: DiceRoller | None = None
     ):
         """
         Initialize the character creation wizard.
@@ -70,31 +66,30 @@ class CharacterCreationWizard:
         self.templates_data = self._load_templates()
 
         # Wizard state
-        self.creation_path: Optional[CreationPath] = None
-        self.name: Optional[str] = None
-        self.race: Optional[str] = None
-        self.character_class: Optional[str] = None
-        self.abilities: Optional[Dict[str, int]] = None
-        self.rolled_scores: Optional[List[int]] = None
-        self.skill_proficiencies: List[str] = []
-        self.expertise_skills: List[str] = []
-        self.selected_spells: List[str] = []
+        self.creation_path: CreationPath | None = None
+        self.name: str | None = None
+        self.race: str | None = None
+        self.character_class: str | None = None
+        self.abilities: dict[str, int] | None = None
+        self.rolled_scores: list[int] | None = None
+        self.skill_proficiencies: list[str] = []
+        self.expertise_skills: list[str] = []
+        self.selected_spells: list[str] = []
         self.level: int = 1
 
-    def _load_templates(self) -> Dict[str, Any]:
+    def _load_templates(self) -> dict[str, Any]:
         """Load character templates from JSON."""
         try:
             import json
-            from pathlib import Path
 
             templates_path = self.data_loader.data_path / "srd" / "character_templates.json"
-            with open(templates_path, 'r') as f:
+            with open(templates_path) as f:
                 return json.load(f)
         except Exception as e:
             print_error(f"Warning: Could not load character templates: {e}")
             return {}
 
-    def run(self) -> Optional[Character]:
+    def run(self) -> Character | None:
         """
         Run the character creation wizard.
 
@@ -170,7 +165,7 @@ class CharacterCreationWizard:
             else:
                 print_error("Invalid choice. Please enter 1, 2, 3, or B.")
 
-    def _run_custom_path(self) -> Optional[Character]:
+    def _run_custom_path(self) -> Character | None:
         """
         Run the custom character creation path with Back/Review navigation.
 
@@ -387,7 +382,7 @@ class CharacterCreationWizard:
             print_error(str(e))
             return False
 
-    def _display_abilities(self, abilities: Dict[str, int], before: Optional[Dict[str, int]] = None) -> None:
+    def _display_abilities(self, abilities: dict[str, int], before: dict[str, int] | None = None) -> None:
         """Display ability scores in a formatted way."""
         ability_display = []
 
@@ -470,7 +465,7 @@ class CharacterCreationWizard:
         console.print()
         console.input("[dim]Press Enter to continue...[/dim]")
 
-    def _run_template_path(self) -> Optional[Character]:
+    def _run_template_path(self) -> Character | None:
         """
         Run the template-based character creation path.
 
@@ -499,7 +494,7 @@ class CharacterCreationWizard:
             console.print(f"    [dim]Abilities: {ability_str}[/dim]")
             console.print()
 
-        console.print(f"[B] Back/Cancel")
+        console.print("[B] Back/Cancel")
         console.print()
 
         while True:
@@ -518,7 +513,7 @@ class CharacterCreationWizard:
             except ValueError:
                 print_error("Please enter a valid number")
 
-    def _create_from_template(self, template_id: str) -> Optional[Character]:
+    def _create_from_template(self, template_id: str) -> Character | None:
         """
         Create character from template.
 
@@ -568,7 +563,7 @@ class CharacterCreationWizard:
         # Show final summary and confirm
         return self._finalize_character()
 
-    def _run_random_path(self) -> Optional[Character]:
+    def _run_random_path(self) -> Character | None:
         """
         Run the random character generation path.
 
@@ -677,7 +672,7 @@ class CharacterCreationWizard:
 
         return f"{rng.choice(first_names)} {rng.choice(last_names)}"
 
-    def _finalize_character(self) -> Optional[Character]:
+    def _finalize_character(self) -> Character | None:
         """
         Show final summary and create character.
 

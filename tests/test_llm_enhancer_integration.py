@@ -1,8 +1,6 @@
 """Integration tests for LLM enhancer with event bus."""
 
 import asyncio
-from typing import Optional
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -14,17 +12,17 @@ from dnd_engine.utils.events import Event, EventBus, EventType
 class MockLLMProvider(LLMProvider):
     """Mock LLM provider for testing."""
 
-    def __init__(self, response: Optional[str] = "Enhanced description") -> None:
+    def __init__(self, response: str | None = "Enhanced description") -> None:
         super().__init__(api_key="test", model="test")
         self.response = response
         self.call_count = 0
-        self.last_prompt: Optional[str] = None
+        self.last_prompt: str | None = None
 
     async def generate(
         self,
         prompt: str,
         temperature: float = 0.7
-    ) -> Optional[str]:
+    ) -> str | None:
         """Mock generate method."""
         self.call_count += 1
         self.last_prompt = prompt

@@ -2,8 +2,9 @@
 # ABOUTME: Adds class, level, XP, proficiency bonus, combat bonuses, and skill tracking
 
 from enum import Enum
-from typing import Optional, List, Dict, Any, Tuple
-from dnd_engine.core.creature import Creature, Abilities
+from typing import Any
+
+from dnd_engine.core.creature import Abilities, Creature
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.spell import Spell
 from dnd_engine.systems.inventory import Inventory
@@ -40,17 +41,17 @@ class Character(Creature):
         ac: int,
         current_hp: int | None = None,
         xp: int = 0,
-        inventory: Optional[Inventory] = None,
+        inventory: Inventory | None = None,
         race: str = "human",
-        subclass: Optional[str] = None,
-        saving_throw_proficiencies: Optional[List[str]] = None,
-        skill_proficiencies: Optional[list[str]] = None,
-        expertise_skills: Optional[List[str]] = None,
-        weapon_proficiencies: Optional[List[str]] = None,
-        armor_proficiencies: Optional[List[str]] = None,
-        spellcasting_ability: Optional[str] = None,
-        known_spells: Optional[List[str]] = None,
-        prepared_spells: Optional[List[str]] = None
+        subclass: str | None = None,
+        saving_throw_proficiencies: list[str] | None = None,
+        skill_proficiencies: list[str] | None = None,
+        expertise_skills: list[str] | None = None,
+        weapon_proficiencies: list[str] | None = None,
+        armor_proficiencies: list[str] | None = None,
+        spellcasting_ability: str | None = None,
+        known_spells: list[str] | None = None,
+        prepared_spells: list[str] | None = None
     ):
         """
         Initialize a player character.
@@ -95,7 +96,7 @@ class Character(Creature):
         self.expertise_skills = expertise_skills if expertise_skills is not None else []
         self.weapon_proficiencies = weapon_proficiencies if weapon_proficiencies is not None else []
         self.armor_proficiencies = armor_proficiencies if armor_proficiencies is not None else []
-        self.resource_pools: Dict[str, ResourcePool] = {}
+        self.resource_pools: dict[str, ResourcePool] = {}
         self._dice_roller = DiceRoller()
 
         # Spellcasting properties
@@ -218,7 +219,7 @@ class Character(Creature):
         advantage: bool = False,
         disadvantage: bool = False,
         event_bus=None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Roll a saving throw against a DC.
 
@@ -686,7 +687,7 @@ class Character(Creature):
             "proficient": skill in self.skill_proficiencies
         }
 
-    def get_sneak_attack_dice(self) -> Optional[str]:
+    def get_sneak_attack_dice(self) -> str | None:
         """
         Get sneak attack dice for Rogue.
 
@@ -797,7 +798,7 @@ class Character(Creature):
             return self.resource_pools[pool_name].use(amount)
         return False
 
-    def get_resource_pool(self, pool_name: str) -> Optional[ResourcePool]:
+    def get_resource_pool(self, pool_name: str) -> ResourcePool | None:
         """
         Get a resource pool by name.
 
@@ -1099,7 +1100,7 @@ class Character(Creature):
                         }
                     ))
 
-    def recover_hp(self, amount: Optional[int] = None) -> int:
+    def recover_hp(self, amount: int | None = None) -> int:
         """
         Recover hit points.
 
@@ -1125,7 +1126,7 @@ class Character(Creature):
 
         return healed
 
-    def recover_resources(self, rest_type: str) -> List[str]:
+    def recover_resources(self, rest_type: str) -> list[str]:
         """
         Recover resource pools based on rest type.
 
@@ -1235,7 +1236,7 @@ class Character(Creature):
         """
         return self.death_save_failures >= 3
 
-    def make_death_save(self, event_bus=None) -> Dict[str, Any]:
+    def make_death_save(self, event_bus=None) -> dict[str, Any]:
         """
         Roll a death saving throw.
 
@@ -1557,7 +1558,7 @@ class Character(Creature):
         self.prepared_spells.remove(spell_id)
         return True
 
-    def set_prepared_spells(self, spell_ids: List[str]) -> bool:
+    def set_prepared_spells(self, spell_ids: list[str]) -> bool:
         """
         Set the character's prepared spells to a specific list.
 
@@ -1586,7 +1587,7 @@ class Character(Creature):
         self.prepared_spells = spell_ids[:]
         return True
 
-    def get_preparable_spells(self, spells_data: Dict[str, Any]) -> tuple[list[str], list[tuple[str, dict[str, Any]]]]:
+    def get_preparable_spells(self, spells_data: dict[str, Any]) -> tuple[list[str], list[tuple[str, dict[str, Any]]]]:
         """
         Get cantrips and leveled spells available for preparation.
 
@@ -1625,7 +1626,7 @@ class Character(Creature):
 
         return (cantrips, leveled_spells)
 
-    def get_castable_spells(self, spells_data: Dict[str, Any]) -> List[Tuple[str, Dict[str, Any]]]:
+    def get_castable_spells(self, spells_data: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
         """
         Get all spells the character can cast in combat.
 
@@ -1674,7 +1675,7 @@ class Character(Creature):
 
         return castable
 
-    def get_out_of_combat_spells(self, spells_data: Dict[str, Any]) -> List[Tuple[str, Dict[str, Any]]]:
+    def get_out_of_combat_spells(self, spells_data: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
         """
         Get all spells the character can cast outside of combat.
 
@@ -1729,7 +1730,7 @@ class Character(Creature):
 
         return out_of_combat
 
-    def use_arcane_recovery(self, spell_slot_levels: Dict[int, int]) -> bool:
+    def use_arcane_recovery(self, spell_slot_levels: dict[int, int]) -> bool:
         """
         Use Arcane Recovery to restore spell slots.
 

@@ -1,16 +1,15 @@
 # ABOUTME: Targeting strategy implementations for enemy AI.
 # ABOUTME: Provides different algorithms for selecting which character to attack.
 
-from abc import ABC, abstractmethod
-from typing import List
 import random
+from abc import ABC, abstractmethod
 
 
 class TargetingStrategy(ABC):
     """Base class for target selection strategies."""
 
     @abstractmethod
-    def select_target(self, available_targets: List) -> object:
+    def select_target(self, available_targets: list) -> object:
         """
         Select a target from the available targets.
 
@@ -26,7 +25,7 @@ class TargetingStrategy(ABC):
 class LowestHPStrategy(TargetingStrategy):
     """Always target the character with the lowest current HP."""
 
-    def select_target(self, available_targets: List) -> object:
+    def select_target(self, available_targets: list) -> object:
         """
         Select the target with the lowest current HP.
 
@@ -48,7 +47,7 @@ class LowestHPStrategy(TargetingStrategy):
 class RandomStrategy(TargetingStrategy):
     """Select a random target from available targets."""
 
-    def select_target(self, available_targets: List) -> object:
+    def select_target(self, available_targets: list) -> object:
         """
         Select a random target.
 

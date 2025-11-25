@@ -1,9 +1,9 @@
 # ABOUTME: Unit tests for the combat engine
 # ABOUTME: Tests attack resolution, damage calculation, critical hits, and combat outcomes
 
+from dnd_engine.core.combat import AttackResult, CombatEngine
+from dnd_engine.core.creature import Abilities, Creature
 from dnd_engine.core.dice import DiceRoller
-from dnd_engine.core.creature import Creature, Abilities
-from dnd_engine.core.combat import CombatEngine, AttackResult
 
 
 class TestCombatEngine:

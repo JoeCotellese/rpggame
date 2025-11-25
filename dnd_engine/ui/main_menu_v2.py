@@ -1,31 +1,26 @@
 # ABOUTME: Main menu system with new save slot system and migration support
 # ABOUTME: Handles menu display, save slot selection, character vault integration, and migration
 
-from typing import Optional, List, Dict, Any, Tuple
 from pathlib import Path
 
-from dnd_engine.core.save_slot_manager import SaveSlotManager
-from dnd_engine.core.save_slot import SaveSlot
-from dnd_engine.core.character_vault_v2 import CharacterVaultV2
-from dnd_engine.core.migration import MigrationManager
-from dnd_engine.core.game_state import GameState
-from dnd_engine.core.party import Party
+from rich.panel import Panel
+
 from dnd_engine.core.character import Character
 from dnd_engine.core.character_factory import CharacterFactory
+from dnd_engine.core.character_vault_v2 import CharacterVaultV2
+from dnd_engine.core.game_state import GameState
+from dnd_engine.core.migration import MigrationManager
+from dnd_engine.core.party import Party
+from dnd_engine.core.save_slot_manager import SaveSlotManager
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.ui.rich_ui import (
     console,
     print_banner,
     print_choice_menu,
+    print_error,
     print_section,
     print_status_message,
-    print_input_prompt,
-    print_error,
-    print_message
 )
-from rich.table import Table
-from rich.panel import Panel
-from rich import box
 
 
 class MainMenuV2:
@@ -51,7 +46,7 @@ class MainMenuV2:
         self.data_loader = DataLoader()
 
         # Track current slot for save operations
-        self.current_slot_number: Optional[int] = None
+        self.current_slot_number: int | None = None
 
     def _handle_migration_if_needed(self) -> None:
         """Check for old campaigns and handle migration."""
@@ -111,7 +106,7 @@ class MainMenuV2:
 
         console.clear()
 
-    def show(self) -> Optional[str]:
+    def show(self) -> str | None:
         """
         Display the main menu and handle user choice.
 
@@ -193,7 +188,7 @@ class MainMenuV2:
             )
             console.print(panel)
 
-    def handle_load_game(self) -> Optional[Tuple[GameState, int]]:
+    def handle_load_game(self) -> tuple[GameState, int] | None:
         """
         Handle load game flow.
 
@@ -245,7 +240,7 @@ class MainMenuV2:
             print_error(f"Failed to load game: {e}")
             return None
 
-    def handle_new_game(self) -> Optional[Tuple[GameState, int]]:
+    def handle_new_game(self) -> tuple[GameState, int] | None:
         """
         Handle new game flow with character vault and slot selection.
 
@@ -337,7 +332,7 @@ class MainMenuV2:
             print_error(f"Failed to create game: {e}")
             return None
 
-    def _select_party_from_vault(self) -> List[Character]:
+    def _select_party_from_vault(self) -> list[Character]:
         """
         Select party members from character vault or create new.
 
@@ -365,14 +360,14 @@ class MainMenuV2:
             else:
                 console.print("\n[dim]No characters in vault yet.[/dim]")
 
-            console.print(f"\n  [C] Create new character")
+            console.print("\n  [C] Create new character")
             console.print(f"  [F] Finish party selection (current: {len(selected_characters)})")
 
             if len(selected_characters) == 0:
                 console.print("\n[dim]Note: You need at least 1 character[/dim]")
 
             console.print()
-            choice = console.input(f"[bold cyan]Select option:[/bold cyan] ").strip()
+            choice = console.input("[bold cyan]Select option:[/bold cyan] ").strip()
 
             if choice.upper() == 'F':
                 if len(selected_characters) > 0:
@@ -404,7 +399,7 @@ class MainMenuV2:
 
         return selected_characters
 
-    def _create_character_interactive(self) -> Optional[Character]:
+    def _create_character_interactive(self) -> Character | None:
         """
         Create a new character interactively.
 
@@ -429,7 +424,7 @@ class MainMenuV2:
             print_error(f"Character creation failed: {e}")
             return None
 
-    def _select_adventure(self) -> Optional[str]:
+    def _select_adventure(self) -> str | None:
         """
         Select an adventure/dungeon to play.
 
@@ -502,7 +497,7 @@ class MainMenuV2:
                     )
                     console.print(panel)
 
-            console.print(f"\n[bold]Actions:[/bold]")
+            console.print("\n[bold]Actions:[/bold]")
             console.print("  [C] Create new character")
             if char_list:
                 console.print("  [D] Delete character")
@@ -548,7 +543,7 @@ class MainMenuV2:
             console.print()
             self.show_save_slot_list(filter_empty=False)
 
-            console.print(f"\n[bold]Actions:[/bold]")
+            console.print("\n[bold]Actions:[/bold]")
             console.print("  [R] Rename slot")
             console.print("  [C] Clear slot")
             console.print("  [B] Back to main menu")
@@ -589,7 +584,7 @@ class MainMenuV2:
             console.print("\n[dim]Press Enter to continue...[/dim]")
             console.input()
 
-    def run(self) -> Optional[Tuple[GameState, int]]:
+    def run(self) -> tuple[GameState, int] | None:
         """
         Run the main menu loop until user makes a valid selection.
 

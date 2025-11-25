@@ -1,10 +1,8 @@
 """Unit tests for LLM providers with mocked API calls."""
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
-import pytest
 
-from dnd_engine.llm.base import LLMProvider
+import pytest
 
 
 class TestOpenAIProvider:
@@ -46,7 +44,7 @@ class TestOpenAIProvider:
             mock_client = AsyncMock()
             # Simulate a timeout
             mock_client.chat.completions.create = AsyncMock(
-                side_effect=asyncio.TimeoutError()
+                side_effect=TimeoutError()
             )
             mock_client_class.return_value = mock_client
 
@@ -150,7 +148,7 @@ class TestAnthropicProvider:
 
         with patch('dnd_engine.llm.anthropic_provider.AsyncAnthropic') as mock_client_class:
             mock_client = AsyncMock()
-            mock_client.messages.create = AsyncMock(side_effect=asyncio.TimeoutError())
+            mock_client.messages.create = AsyncMock(side_effect=TimeoutError())
             mock_client_class.return_value = mock_client
 
             provider = AnthropicProvider(

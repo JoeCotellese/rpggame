@@ -111,13 +111,24 @@ def build_room_description_prompt(
     # Build instruction based on whether combat is starting
     if combat_starting and monster_context:
         party_context = f"Party size: {party_size} adventurer{'s' if party_size != 1 else ''}\n"
-        instruction = f"""Add vivid sensory details (sights, sounds, smells) in 2-3 sentences. Make it immersive but concise.
-
-IMPORTANT: This is the moment combat begins. Naturally transition from describing the room into the combat initiation - describe how the enemies react to the party's presence using behavior appropriate to their nature. Show their threatening stance or aggressive movement toward the party, and the immediate tension as battle is about to erupt. Make it feel like a seamless escalation from scene-setting to action. Do NOT use phrases like "combat begins" - show it through the enemies' actions and the rising tension.
-
-{party_context}{creature_behavior_guide}"""
+        instruction = (
+            f"Add vivid sensory details (sights, sounds, smells) in 2-3 sentences. "
+            f"Make it immersive but concise.\n\n"
+            f"IMPORTANT: This is the moment combat begins. Naturally transition from "
+            f"describing the room into the combat initiation - describe how the enemies "
+            f"react to the party's presence using behavior appropriate to their nature. "
+            f"Show their threatening stance or aggressive movement toward the party, "
+            f"and the immediate tension as battle is about to erupt. Make it feel like "
+            f"a seamless escalation from scene-setting to action. Do NOT use phrases "
+            f"like \"combat begins\" - show it through the enemies' actions and the "
+            f"rising tension.\n\n"
+            f"{party_context}{creature_behavior_guide}"
+        )
     elif monster_context:
-        instruction = " Acknowledge the presence of hostile creatures naturally in your description - describe their stance, readiness, or threatening demeanor."
+        instruction = (
+            " Acknowledge the presence of hostile creatures naturally in your "
+            "description - describe their stance, readiness, or threatening demeanor."
+        )
     else:
         instruction = ""
 
@@ -155,42 +166,78 @@ IMPORTANT: This is the moment combat begins. Naturally transition from describin
                 )
 
             if cannot_see:
-                lighting_context = f"\n\nLighting: The room is pitch black, but {light_source} illuminates the area for the party. Describe the magical light cutting through the darkness."
+                lighting_context = (
+                    f"\n\nLighting: The room is pitch black, but {light_source} "
+                    f"illuminates the area for the party. "
+                    f"Describe the magical light cutting through the darkness."
+                )
             else:
-                lighting_context = f"\n\nLighting: {light_source} pierces the darkness, revealing the chamber in bright magical light."
+                lighting_context = (
+                    f"\n\nLighting: {light_source} pierces the darkness, "
+                    f"revealing the chamber in bright magical light."
+                )
         elif can_see_bright:
             # Can see bright but no Light spell tracked - generic
             lighting_context = "\n\nLighting: Magical light illuminates the darkness."
         elif can_see_dim and not cannot_see:
             # Everyone has darkvision
-            lighting_context = "\n\nLighting: The room is pitch black, but the party sees through the darkness with darkvision - limited grayscale vision. Describe muted colors and shadows."
+            lighting_context = (
+                "\n\nLighting: The room is pitch black, but the party sees through "
+                "the darkness with darkvision - limited grayscale vision. "
+                "Describe muted colors and shadows."
+            )
         elif can_see_dim and cannot_see:
             # Mixed darkvision
-            lighting_context = f"\n\nLighting: The room is pitch black. {', '.join(can_see_dim)} see through the darkness with darkvision, but {', '.join(cannot_see)} are blind. Emphasize the contrast."
+            lighting_context = (
+                f"\n\nLighting: The room is pitch black. "
+                f"{', '.join(can_see_dim)} see through the darkness with darkvision, "
+                f"but {', '.join(cannot_see)} are blind. Emphasize the contrast."
+            )
         else:
             # Nobody can see
-            lighting_context = "\n\nLighting: The room is pitch black. The party cannot see anything - describe only non-visual sensory details (sounds, smells, textures, echoes, temperature). Emphasize the oppressive darkness and disorientation."
+            lighting_context = (
+                "\n\nLighting: The room is pitch black. The party cannot see "
+                "anything - describe only non-visual sensory details (sounds, smells, "
+                "textures, echoes, temperature). Emphasize the oppressive darkness "
+                "and disorientation."
+            )
 
     elif base_lighting == "dim":
-        lighting_context = "\n\nLighting: The room is dimly lit with shadows and limited visibility. Describe how shapes are unclear, colors are muted, and details are hard to make out. Create an atmosphere of uncertainty and gloom."
+        lighting_context = (
+            "\n\nLighting: The room is dimly lit with shadows and limited visibility. "
+            "Describe how shapes are unclear, colors are muted, and details are hard "
+            "to make out. Create an atmosphere of uncertainty and gloom."
+        )
 
     # If bright, no special lighting context needed
 
     # Build transition narrative instruction
     transition_instruction = ""
     if is_entering:
-        transition_instruction = "\n\nNarrative Context: The party is ENTERING this room. We don't know where they came from last nor do we know how they get into this room (i.e., door, opening, etc). Make it feel like they're arriving for the first time without describing the entrance way."
+        transition_instruction = (
+            "\n\nNarrative Context: The party is ENTERING this room. We don't know "
+            "where they came from last nor do we know how they get into this room "
+            "(i.e., door, opening, etc). Make it feel like they're arriving for the "
+            "first time without describing the entrance way."
+        )
     else:
-        transition_instruction = "\n\nNarrative Context: The party is already IN this room, examining it more closely. Do NOT describe them entering or transitioning - they're already here. Focus on what they observe in the moment."
+        transition_instruction = (
+            "\n\nNarrative Context: The party is already IN this room, examining it "
+            "more closely. Do NOT describe them entering or transitioning - they're "
+            "already here. Focus on what they observe in the moment."
+        )
 
-    prompt = f"""Enhance this D&D dungeon room description with atmospheric details:
-
-Room: {room_type}
-Basic description: {base_desc}{monster_context}{lighting_context}{transition_instruction}
-
-Add vivid sensory details (sights, sounds, smells) in 2-3 sentences. Make it immersive but concise.{instruction}
-
-IMPORTANT: If lighting context is provided above, you MUST incorporate it into your description. The lighting level dramatically affects what can be perceived and should be central to the atmosphere."""
+    prompt = (
+        f"Enhance this D&D dungeon room description with atmospheric details:\n\n"
+        f"Room: {room_type}\n"
+        f"Basic description: {base_desc}{monster_context}{lighting_context}"
+        f"{transition_instruction}\n\n"
+        f"Add vivid sensory details (sights, sounds, smells) in 2-3 sentences. "
+        f"Make it immersive but concise.{instruction}\n\n"
+        f"IMPORTANT: If lighting context is provided above, you MUST incorporate it "
+        f"into your description. The lighting level dramatically affects what can be "
+        f"perceived and should be central to the atmosphere."
+    )
 
     return prompt
 
@@ -286,24 +333,26 @@ def build_combat_action_prompt(action_data: dict[str, Any]) -> str:
 
     # Build the main prompt
     if hit:
-        prompt = f"""Narrate this D&D combat action vividly:
-
-{location_context}{round_context}{battlefield_context}{history_context}
-Current Action: {attacker_desc} attacks {defender_desc} with a {weapon_desc}
-for {damage} damage.
-
-Describe the hit in a single dramatic sentence. Focus on rich detail but maintain
-brevity so the player isn't bogged down reading. Consider the battlefield state
-and recent action flow. Focus on the impact and visual details."""
+        prompt = (
+            f"Narrate this D&D combat action vividly:\n\n"
+            f"{location_context}{round_context}{battlefield_context}{history_context}"
+            f"Current Action: {attacker_desc} attacks {defender_desc} with a "
+            f"{weapon_desc} for {damage} damage.\n\n"
+            f"Describe the hit in a single dramatic sentence. Focus on rich detail "
+            f"but maintain brevity so the player isn't bogged down reading. Consider "
+            f"the battlefield state and recent action flow. Focus on the impact and "
+            f"visual details."
+        )
     else:
-        prompt = f"""Narrate this D&D combat miss:
-
-{location_context}{round_context}{battlefield_context}{history_context}Current 
-Action: {attacker_desc} attacks {defender_desc} with a {weapon_desc} but misses.
-
-Describe the miss in a single sentence. Focus on rich detail but maintain
-brevity so the player isn't bogged down reading.
-Consider the battlefield state and recent action flow. Make it cinematic."""
+        prompt = (
+            f"Narrate this D&D combat miss:\n\n"
+            f"{location_context}{round_context}{battlefield_context}{history_context}"
+            f"Current Action: {attacker_desc} attacks {defender_desc} with a "
+            f"{weapon_desc} but misses.\n\n"
+            f"Describe the miss in a single sentence. Focus on rich detail but "
+            f"maintain brevity so the player isn't bogged down reading. Consider "
+            f"the battlefield state and recent action flow. Make it cinematic."
+        )
 
     return prompt
 
@@ -323,17 +372,19 @@ def build_death_prompt(character_data: dict[str, Any]) -> str:
     how_died = character_data.get("cause", "fell in battle")
 
     if is_player:
-        prompt = f"""Narrate a heroic D&D character death:
-
-{name} {how_died}.
-
-Write 2-3 sentences about their final moments. Be dramatic but respectful. This is the end of their story."""
+        prompt = (
+            f"Narrate a heroic D&D character death:\n\n"
+            f"{name} {how_died}.\n\n"
+            f"Write 2-3 sentences about their final moments. Be dramatic but "
+            f"respectful. This is the end of their story."
+        )
     else:
-        prompt = f"""Narrate the defeat of an enemy creature:
-
-{name} {how_died}.
-
-Write 2-3 sentences about their final moments. Be dramatic and satisfying for the victors."""
+        prompt = (
+            f"Narrate the defeat of an enemy creature:\n\n"
+            f"{name} {how_died}.\n\n"
+            f"Write 2-3 sentences about their final moments. Be dramatic and "
+            f"satisfying for the victors."
+        )
 
     return prompt
 
@@ -351,11 +402,12 @@ def build_victory_prompt(combat_data: dict[str, Any]) -> str:
     enemies = combat_data.get("enemies", ["foes"])
     final_blow = combat_data.get("final_blow", "struck down the last enemy")
 
-    prompt = f"""Narrate a D&D combat victory:
-
-The party defeats {", ".join(enemies)}. The final blow: {final_blow}.
-
-Describe the aftermath in 2-3 sentences. Capture the sense of triumph and relief."""
+    prompt = (
+        f"Narrate a D&D combat victory:\n\n"
+        f"The party defeats {', '.join(enemies)}. The final blow: {final_blow}.\n\n"
+        f"Describe the aftermath in 2-3 sentences. Capture the sense of triumph "
+        f"and relief."
+    )
 
     return prompt
 
@@ -385,10 +437,12 @@ def build_combat_start_prompt(combat_data: dict[str, Any]) -> str:
     else:
         enemy_desc = f"{len(enemies)} enemies"
 
-    prompt = f"""Narrate the start of a D&D combat encounter:
-
-{party_desc} encounters {enemy_desc}{location_context}.
-
-Describe how combat begins in 2-3 dramatic sentences. Do the enemies ambush the party, or does the party surprise them? Set the scene for the battle to come."""
+    prompt = (
+        f"Narrate the start of a D&D combat encounter:\n\n"
+        f"{party_desc} encounters {enemy_desc}{location_context}.\n\n"
+        f"Describe how combat begins in 2-3 dramatic sentences. Do the enemies "
+        f"ambush the party, or does the party surprise them? Set the scene for "
+        f"the battle to come."
+    )
 
     return prompt

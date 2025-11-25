@@ -1,12 +1,12 @@
 """Unit tests for LLM prompt template functions."""
 
+from dnd_engine.core.game_state import BattlefieldState, CombatantStatus
 from dnd_engine.llm.prompts import (
     build_combat_action_prompt,
     build_death_prompt,
     build_room_description_prompt,
     build_victory_prompt,
 )
-from dnd_engine.core.game_state import BattlefieldState, CombatantStatus
 
 
 class TestRoomDescriptionPrompt:

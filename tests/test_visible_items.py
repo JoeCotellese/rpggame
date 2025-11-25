@@ -1,13 +1,14 @@
 # ABOUTME: Unit tests for visible items functionality in search and take commands
 # ABOUTME: Tests visible/hidden item separation, fuzzy matching, and take all command
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
-from dnd_engine.core.game_state import GameState
-from dnd_engine.core.party import Party
+import pytest
+
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities
+from dnd_engine.core.game_state import GameState
+from dnd_engine.core.party import Party
 from dnd_engine.utils.events import EventBus
 
 

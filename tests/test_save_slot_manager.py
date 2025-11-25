@@ -1,17 +1,17 @@
 # Unit tests for SaveSlotManager
 
-import pytest
 import json
 import tempfile
 from pathlib import Path
-from datetime import datetime
 
-from dnd_engine.core.save_slot_manager import SaveSlotManager
-from dnd_engine.core.save_slot import SaveSlot
-from dnd_engine.core.party import Party
+import pytest
+
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities
 from dnd_engine.core.game_state import GameState
+from dnd_engine.core.party import Party
+from dnd_engine.core.save_slot import SaveSlot
+from dnd_engine.core.save_slot_manager import SaveSlotManager
 from dnd_engine.rules.loader import DataLoader
 
 
@@ -234,7 +234,7 @@ class TestSaveSlotManager:
 
         slot_path = temp_saves_dir / "slot_08.json"
 
-        with open(slot_path, 'r') as f:
+        with open(slot_path) as f:
             data = json.load(f)
 
         # Check required top-level keys

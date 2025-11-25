@@ -2,9 +2,9 @@
 # ABOUTME: Tests saving throw modifier calculation, rolls, and proficiency bonuses
 
 import pytest
+
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities
-from dnd_engine.core.dice import DiceRoller
 
 
 class TestGetSavingThrowModifier:

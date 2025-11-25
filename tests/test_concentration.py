@@ -1,15 +1,16 @@
 # ABOUTME: Unit tests for spell concentration mechanics
 # ABOUTME: Tests concentration tracking, damage-triggered checks, and concentration breaking
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
-from dnd_engine.core.game_state import GameState
-from dnd_engine.core.party import Party
+import pytest
+
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities
-from dnd_engine.utils.events import EventBus
+from dnd_engine.core.game_state import GameState
+from dnd_engine.core.party import Party
 from dnd_engine.systems.time_manager import ActiveEffect, EffectType
+from dnd_engine.utils.events import EventBus
 
 
 @pytest.fixture

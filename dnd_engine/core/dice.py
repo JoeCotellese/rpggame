@@ -1,10 +1,9 @@
 # ABOUTME: Core dice rolling system for D&D 5E mechanics
 # ABOUTME: Handles dice notation parsing, rolling with modifiers, and advantage/disadvantage
 
-import re
 import random
-from dataclasses import dataclass, field
-from typing import List, Optional
+import re
+from dataclasses import dataclass
 
 
 @dataclass
@@ -19,7 +18,7 @@ class DiceRoll:
         advantage: Whether the roll was made with advantage
         disadvantage: Whether the roll was made with disadvantage
     """
-    rolls: List[int]
+    rolls: list[int]
     modifier: int
     notation: str
     advantage: bool = False
@@ -70,7 +69,7 @@ class DiceRoller:
     # Regex pattern for parsing dice notation: NdS+M or NdS-M
     DICE_PATTERN = re.compile(r'^(\d*)d(\d+)(([+-])(\d+))?$', re.IGNORECASE)
 
-    def __init__(self, seed: Optional[int] = None):
+    def __init__(self, seed: int | None = None):
         """
         Initialize the dice roller.
 

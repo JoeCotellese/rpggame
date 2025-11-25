@@ -3,8 +3,6 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional, List
-from pathlib import Path
 
 
 @dataclass
@@ -32,13 +30,13 @@ class Campaign:
     playtime_seconds: int = 0
     """Total time spent playing this campaign (in seconds)"""
 
-    current_dungeon: Optional[str] = None
+    current_dungeon: str | None = None
     """Current dungeon filename (e.g., 'tomb_of_horrors')"""
 
-    current_room: Optional[str] = None
+    current_room: str | None = None
     """Current room ID in the dungeon"""
 
-    party_character_ids: List[str] = field(default_factory=list)
+    party_character_ids: list[str] = field(default_factory=list)
     """List of character IDs/names in the party"""
 
     save_version: str = "1.0.0"
@@ -164,10 +162,10 @@ class SaveSlotMetadata:
     created_at: datetime
     """When this save was created"""
 
-    location: Optional[str] = None
+    location: str | None = None
     """Current location description (e.g., 'Room 12 - The Crypt')"""
 
-    party_hp_summary: Optional[str] = None
+    party_hp_summary: str | None = None
     """Party HP summary (e.g., 'Aria 23/30, Zephyr 18/18')"""
 
     save_type: str = "manual"

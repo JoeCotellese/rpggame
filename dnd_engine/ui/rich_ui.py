@@ -1,15 +1,16 @@
 # ABOUTME: Rich UI utilities for enhanced terminal display
 # ABOUTME: Provides reusable rich components for formatting game output
 
-from typing import List, Optional, Dict, Any
-from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
-from rich.align import Align
-from rich.style import Style
-from rich import box
-from dnd_engine.utils.logging_config import init_logging
+from typing import Any
 
+from rich import box
+from rich.align import Align
+from rich.console import Console
+from rich.panel import Panel
+from rich.style import Style
+from rich.table import Table
+
+from dnd_engine.utils.logging_config import init_logging
 
 # Global console instance - initialized via init_console()
 console = Console()
@@ -34,7 +35,7 @@ def init_console(debug_mode: bool = False) -> None:
     console = logging_config.create_console()
 
 
-def print_title(title: str, subtitle: Optional[str] = None) -> None:
+def print_title(title: str, subtitle: str | None = None) -> None:
     """Display a styled title panel.
 
     Args:
@@ -77,7 +78,7 @@ def print_banner(title: str = "D&D 5E Terminal Adventure", version: str = "0.1.0
     console.print(panel)
 
 
-def create_party_status_table(party_data: List[Dict[str, Any]]) -> Table:
+def create_party_status_table(party_data: list[dict[str, Any]]) -> Table:
     """Create a styled table for party status display.
 
     Args:
@@ -157,7 +158,7 @@ def create_party_status_table(party_data: List[Dict[str, Any]]) -> Table:
     return table
 
 
-def create_inventory_table(items: Dict[str, List[Dict[str, Any]]]) -> Table:
+def create_inventory_table(items: dict[str, list[dict[str, Any]]]) -> Table:
     """Create a styled table for inventory display.
 
     Args:
@@ -186,7 +187,7 @@ def create_inventory_table(items: Dict[str, List[Dict[str, Any]]]) -> Table:
     return table
 
 
-def create_combat_table(combatants: List[Dict[str, Any]]) -> Table:
+def create_combat_table(combatants: list[dict[str, Any]]) -> Table:
     """Create a styled table for combat display.
 
     Args:
@@ -313,7 +314,7 @@ def print_status_message(message: str, message_type: str = "info") -> None:
     console.print(f"[{color}]{symbol}[/{color}] {message}", style=style)
 
 
-def print_error(message: str, error: Optional[Exception] = None) -> None:
+def print_error(message: str, error: Exception | None = None) -> None:
     """Print an error message with optional exception details.
 
     Args:
@@ -325,7 +326,7 @@ def print_error(message: str, error: Optional[Exception] = None) -> None:
         console.print(f"[dim red]{str(error)}[/dim red]")
 
 
-def print_room_description(title: str, description: str, exits: List[str]) -> None:
+def print_room_description(title: str, description: str, exits: list[str]) -> None:
     """Print a formatted room description.
 
     Args:
@@ -344,7 +345,7 @@ def print_room_description(title: str, description: str, exits: List[str]) -> No
     console.print(panel)
 
 
-def print_help_section(title: str, commands: List[tuple]) -> None:
+def print_help_section(title: str, commands: list[tuple]) -> None:
     """Print a formatted help section with commands.
 
     Args:
@@ -387,7 +388,7 @@ def print_section(title: str, content: str = "") -> None:
     console.print(panel)
 
 
-def print_list(items: List[str], title: Optional[str] = None, numbered: bool = False) -> None:
+def print_list(items: list[str], title: str | None = None, numbered: bool = False) -> None:
     """Print a formatted list of items.
 
     Args:
@@ -414,7 +415,7 @@ def print_list(items: List[str], title: Optional[str] = None, numbered: bool = F
         console.print(content.rstrip())
 
 
-def print_choice_menu(title: str, options: List[Dict[str, str]]) -> None:
+def print_choice_menu(title: str, options: list[dict[str, str]]) -> None:
     """Print a formatted choice menu.
 
     Args:
@@ -473,7 +474,7 @@ def print_mechanics_panel(content: str) -> None:
     console.print(panel)
 
 
-def print_combat_action(mechanics: str, narrative: Optional[str] = None) -> None:
+def print_combat_action(mechanics: str, narrative: str | None = None) -> None:
     """
     Display combat action with mechanics and optional narrative in a unified sequential flow.
 
@@ -523,7 +524,7 @@ def print_narrative_panel(content: str) -> None:
     console.print(panel)
 
 
-def create_character_sheet_table(character_data: Dict[str, Any]) -> Table:
+def create_character_sheet_table(character_data: dict[str, Any]) -> Table:
     """Create a styled table for character sheet display.
 
     Args:

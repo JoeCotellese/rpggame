@@ -1,19 +1,20 @@
 # ABOUTME: Central game state manager coordinating all game systems
 # ABOUTME: Manages dungeon exploration, combat state, player actions, and game flow
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Any, Optional
 import logging
+from dataclasses import dataclass, field
+from typing import Any
+
 from dnd_engine.core.character import Character
-from dnd_engine.core.party import Party
+from dnd_engine.core.combat import AttackResult, CombatEngine
 from dnd_engine.core.creature import Creature
 from dnd_engine.core.dice import DiceRoller
-from dnd_engine.core.combat import CombatEngine, AttackResult
-from dnd_engine.systems.initiative import InitiativeTracker
-from dnd_engine.systems.action_economy import ActionType
-from dnd_engine.systems.time_manager import TimeManager, ActiveEffect, EffectType
+from dnd_engine.core.party import Party
 from dnd_engine.rules.loader import DataLoader
-from dnd_engine.utils.events import EventBus, Event, EventType
+from dnd_engine.systems.action_economy import ActionType
+from dnd_engine.systems.initiative import InitiativeTracker
+from dnd_engine.systems.time_manager import ActiveEffect, EffectType, TimeManager
+from dnd_engine.utils.events import Event, EventBus, EventType
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +40,11 @@ class CombatEvent:
     timestamp: float
     event_type: str  # "attack", "spell", "miss", "death", "damage", "heal"
     attacker: str
-    defender: Optional[str] = None
+    defender: str | None = None
     damage: int = 0
     critical: bool = False
     description: str = ""  # Human-readable summary
-    details: Dict[str, Any] = field(default_factory=dict)  # Additional event-specific data
+    details: dict[str, Any] = field(default_factory=dict)  # Additional event-specific data
 
 
 @dataclass
@@ -58,7 +59,7 @@ class CombatantStatus:
     current_hp: int
     max_hp: int
     is_alive: bool
-    conditions: List[str]
+    conditions: list[str]
     is_player: bool
     ac: int = 0  # Armor class
 
@@ -71,8 +72,8 @@ class BattlefieldState:
     Provides a clean, structured view of combat state for
     UI display, LLM context, analytics, etc.
     """
-    party_combatants: List[CombatantStatus]
-    enemy_combatants: List[CombatantStatus]
+    party_combatants: list[CombatantStatus]
+    enemy_combatants: list[CombatantStatus]
     round_number: int
     current_turn: str  # Name of creature whose turn it is
     in_combat: bool
@@ -83,11 +84,11 @@ class CombatItemResult:
     def __init__(
         self,
         success: bool,
-        attack_result: Optional[AttackResult],
+        attack_result: AttackResult | None,
         item_name: str,
         action_type: ActionType,
-        special_effects: Optional[List[str]] = None,
-        error_message: Optional[str] = None
+        special_effects: list[str] | None = None,
+        error_message: str | None = None
     ):
         self.success = success
         self.attack_result = attack_result
@@ -108,40 +109,40 @@ class CombatSpellResult:
     success: bool
     spell_name: str
     caster_name: str
-    targets: List[str]
+    targets: list[str]
     is_area_effect: bool
     spell_type: str  # "attack", "save", "auto_hit", "buff"
 
     # Attack results (spell_type == "attack")
-    attack_result: Optional[AttackResult] = None
+    attack_result: AttackResult | None = None
 
     # Save results (spell_type == "save")
-    save_results: Optional[List[Dict[str, Any]]] = None
-    save_dc: Optional[int] = None
-    save_ability: Optional[str] = None
+    save_results: list[dict[str, Any]] | None = None
+    save_dc: int | None = None
+    save_ability: str | None = None
 
     # Damage (all damaging spell types)
     total_damage: int = 0
-    damage_type: Optional[str] = None
+    damage_type: str | None = None
 
     # Concentration tracking
-    broke_concentration: Optional[str] = None  # Previous spell name if broken
+    broke_concentration: str | None = None  # Previous spell name if broken
     now_concentrating: bool = False
 
     # Target concentration breaks (from damage dealt)
-    target_concentration_breaks: List[Dict[str, Any]] = field(default_factory=list)
+    target_concentration_breaks: list[dict[str, Any]] = field(default_factory=list)
 
     # Deaths
-    killed_targets: List[str] = field(default_factory=list)
+    killed_targets: list[str] = field(default_factory=list)
 
     # HP Pool results (spell_type == "hp_pool", e.g., Sleep)
-    hp_pool_rolled: Optional[int] = None
-    hp_pool_remaining: Optional[int] = None
-    affected_targets: Optional[List[Dict[str, Any]]] = None
-    unaffected_targets: Optional[List[Dict[str, Any]]] = None
+    hp_pool_rolled: int | None = None
+    hp_pool_remaining: int | None = None
+    affected_targets: list[dict[str, Any]] | None = None
+    unaffected_targets: list[dict[str, Any]] | None = None
 
     # Error handling
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class GameState:
@@ -161,9 +162,9 @@ class GameState:
         self,
         party: Party,
         dungeon_name: str,
-        event_bus: Optional[EventBus] = None,
-        data_loader: Optional[DataLoader] = None,
-        dice_roller: Optional[DiceRoller] = None
+        event_bus: EventBus | None = None,
+        data_loader: DataLoader | None = None,
+        dice_roller: DiceRoller | None = None
     ):
         """
         Initialize the game state.
@@ -187,21 +188,21 @@ class GameState:
         self.dungeon_name = dungeon_name  # Store filename for saving
         self.dungeon = self.data_loader.load_dungeon(dungeon_name)
         self.current_room_id = self.dungeon["start_room"]
-        self.previous_room_id: Optional[str] = None  # Track room transitions for narrative
+        self.previous_room_id: str | None = None  # Track room transitions for narrative
 
         # Combat state
         self.in_combat = False
-        self.initiative_tracker: Optional[InitiativeTracker] = None
-        self.active_enemies: List[Creature] = []
+        self.initiative_tracker: InitiativeTracker | None = None
+        self.active_enemies: list[Creature] = []
         self.combat_engine = CombatEngine(self.dice_roller)
-        self.combat_history: List[CombatEvent] = []
+        self.combat_history: list[CombatEvent] = []
         self.max_combat_history_size = 50  # Configurable limit
 
         # Navigation tracking for flee mechanic
-        self.last_entry_direction: Optional[str] = None
+        self.last_entry_direction: str | None = None
 
         # Action history for narrative context
-        self.action_history: List[str] = []
+        self.action_history: list[str] = []
 
     def start(self) -> None:
         """
@@ -216,7 +217,7 @@ class GameState:
         # Check for enemies
         self._check_for_enemies()
 
-    def get_current_room(self) -> Dict[str, Any]:
+    def get_current_room(self) -> dict[str, Any]:
         """
         Get the current room data.
 
@@ -333,7 +334,7 @@ class GameState:
 
         return True, False, None
 
-    def get_available_actions(self) -> List[str]:
+    def get_available_actions(self) -> list[str]:
         """
         Get list of available actions in the current state.
 
@@ -410,7 +411,7 @@ class GameState:
 
         return True
 
-    def get_exit_info(self, direction: str) -> Optional[Dict[str, Any]]:
+    def get_exit_info(self, direction: str) -> dict[str, Any] | None:
         """
         Get exit information for a direction.
 
@@ -455,7 +456,7 @@ class GameState:
 
         return exit_info.get("locked", False)
 
-    def get_unlock_methods(self, direction: str) -> List[Dict[str, Any]]:
+    def get_unlock_methods(self, direction: str) -> list[dict[str, Any]]:
         """
         Get available unlock methods for a locked exit.
 
@@ -476,7 +477,7 @@ class GameState:
         direction: str,
         method_index: int,
         character: Character
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Attempt to unlock a door using a specific method.
 
@@ -608,7 +609,7 @@ class GameState:
             "reason": "Invalid unlock method configuration"
         }
 
-    def get_examinable_objects(self) -> List[Dict[str, Any]]:
+    def get_examinable_objects(self) -> list[dict[str, Any]]:
         """
         Get list of examinable objects in the current room.
 
@@ -618,7 +619,7 @@ class GameState:
         room = self.get_current_room()
         return room.get("examinable_objects", [])
 
-    def get_examinable_exits(self) -> List[str]:
+    def get_examinable_exits(self) -> list[str]:
         """
         Get list of exits that can be examined in the current room.
 
@@ -643,7 +644,7 @@ class GameState:
         self,
         direction: str,
         character: Character
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Examine an exit (e.g., listen at a door) with a skill check.
 
@@ -756,7 +757,7 @@ class GameState:
         self,
         object_id: str,
         character: Character
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Examine an object in the current room with a skill check.
 
@@ -871,8 +872,8 @@ class GameState:
 
     def search_room(
         self,
-        character: Optional[Character] = None
-    ) -> Dict[str, Any]:
+        character: Character | None = None
+    ) -> dict[str, Any]:
         """
         Search the current room for items, optionally with skill checks.
 
@@ -1010,7 +1011,7 @@ class GameState:
                 "already_searched": False
             }
 
-    def get_available_items_in_room(self) -> List[Dict[str, Any]]:
+    def get_available_items_in_room(self) -> list[dict[str, Any]]:
         """
         Get list of items available to pick up in the current room.
 
@@ -1119,7 +1120,7 @@ class GameState:
         room.get("items", []).remove(item_to_take)
         return True
 
-    def prepare_spells(self, character_name: str, spell_ids: List[str]) -> bool:
+    def prepare_spells(self, character_name: str, spell_ids: list[str]) -> bool:
         """
         Prepare spells for a character (orchestration for player action).
 
@@ -1156,8 +1157,8 @@ class GameState:
         self,
         caster_name: str,
         spell_id: str,
-        target_name: Optional[str] = None
-    ) -> Dict[str, Any]:
+        target_name: str | None = None
+    ) -> dict[str, Any]:
         """
         Cast a spell outside of combat during exploration.
 
@@ -1331,8 +1332,8 @@ class GameState:
     def cast_spell_combat(
         self,
         caster: Character,
-        spell_data: Dict[str, Any],
-        target: Optional[Creature],
+        spell_data: dict[str, Any],
+        target: Creature | None,
         spellcasting_ability: str
     ) -> "CombatSpellResult":
         """
@@ -1408,10 +1409,10 @@ class GameState:
         self,
         caster: Character,
         target: Creature,
-        spell_data: Dict[str, Any],
+        spell_data: dict[str, Any],
         spellcasting_ability: str,
         spell_name: str,
-        broke_concentration: Optional[str]
+        broke_concentration: str | None
     ) -> "CombatSpellResult":
         """Resolve attack spell via combat_engine.resolve_spell_attack()."""
         # Delegate to existing combat engine method
@@ -1466,11 +1467,11 @@ class GameState:
     def _resolve_combat_save_spell(
         self,
         caster: Character,
-        targets: List[Creature],
-        spell_data: Dict[str, Any],
+        targets: list[Creature],
+        spell_data: dict[str, Any],
         spell_name: str,
         is_area: bool,
-        broke_concentration: Optional[str]
+        broke_concentration: str | None
     ) -> "CombatSpellResult":
         """Resolve saving throw spell via combat_engine.resolve_spell_save()."""
         # Delegate to existing combat engine method
@@ -1535,11 +1536,11 @@ class GameState:
     def _resolve_combat_hp_pool_spell(
         self,
         caster: Character,
-        targets: List[Creature],
-        spell_data: Dict[str, Any],
+        targets: list[Creature],
+        spell_data: dict[str, Any],
         spell_name: str,
         is_area: bool,
-        broke_concentration: Optional[str]
+        broke_concentration: str | None
     ) -> "CombatSpellResult":
         """Resolve HP pool spells like Sleep that affect creatures based on HP total."""
         # Delegate to combat engine
@@ -1577,10 +1578,10 @@ class GameState:
     def _resolve_combat_auto_hit_spell(
         self,
         caster: Character,
-        target: Optional[Creature],
-        spell_data: Dict[str, Any],
+        target: Creature | None,
+        spell_data: dict[str, Any],
         spell_name: str,
-        broke_concentration: Optional[str]
+        broke_concentration: str | None
     ) -> "CombatSpellResult":
         """Resolve auto-hit damage or buff spells."""
         damage = 0
@@ -1648,7 +1649,7 @@ class GameState:
             killed_targets=killed
         )
 
-    def get_concentration_spell(self, character_name: str) -> Optional[str]:
+    def get_concentration_spell(self, character_name: str) -> str | None:
         """
         Get the spell a character is currently concentrating on.
 
@@ -1722,10 +1723,10 @@ class GameState:
 
     def _create_spell_effect(
         self,
-        spell_data: Dict[str, Any],
+        spell_data: dict[str, Any],
         caster_name: str,
         target_name: str
-    ) -> Optional[ActiveEffect]:
+    ) -> ActiveEffect | None:
         """
         Create an ActiveEffect from spell data if the spell has a duration.
 
@@ -1775,7 +1776,7 @@ class GameState:
 
         return effect
 
-    def _get_item_category(self, item_id: str) -> Optional[str]:
+    def _get_item_category(self, item_id: str) -> str | None:
         """
         Determine the category of an item by ID.
 
@@ -1901,7 +1902,7 @@ class GameState:
 
         return result
 
-    def get_player_status(self) -> List[Dict[str, Any]]:
+    def get_player_status(self) -> list[dict[str, Any]]:
         """
         Get status for all party members.
 
@@ -2019,7 +2020,7 @@ class GameState:
                     }
                 ))
 
-    def is_room_alerted(self, room_id: Optional[str] = None) -> bool:
+    def is_room_alerted(self, room_id: str | None = None) -> bool:
         """Check if a room's occupants are alerted to the party's presence."""
         if room_id is None:
             room_id = self.current_room_id
@@ -2034,7 +2035,7 @@ class GameState:
 
         return room["alerted"]
 
-    def set_room_alerted(self, room_id: Optional[str] = None, alert_source: str = "unknown") -> None:
+    def set_room_alerted(self, room_id: str | None = None, alert_source: str = "unknown") -> None:
         """Set a room's alert state to True."""
         if room_id is None:
             room_id = self.current_room_id
@@ -2247,7 +2248,7 @@ class GameState:
         if len(self.combat_history) > self.max_combat_history_size:
             self.combat_history = self.combat_history[-self.max_combat_history_size:]
 
-    def get_recent_combat_history(self, count: int = 12) -> List[CombatEvent]:
+    def get_recent_combat_history(self, count: int = 12) -> list[CombatEvent]:
         """
         Get recent combat events for narrative context.
 
@@ -2318,7 +2319,7 @@ class GameState:
             in_combat=True
         )
 
-    def flee_combat(self) -> Dict[str, Any]:
+    def flee_combat(self) -> dict[str, Any]:
         """
         Attempt to flee from combat.
 
@@ -2474,7 +2475,7 @@ class GameState:
             "retreat_room": retreat_room_name
         }
 
-    def reset_dungeon(self, new_dungeon_name: Optional[str] = None) -> None:
+    def reset_dungeon(self, new_dungeon_name: str | None = None) -> None:
         """
         Reset the dungeon to its initial state.
 

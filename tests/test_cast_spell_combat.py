@@ -2,16 +2,15 @@
 # ABOUTME: Tests combat spellcasting including attack, save, buff, and concentration spells
 
 import pytest
-from dnd_engine.core.game_state import GameState, CombatSpellResult
+
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities, Creature
-from dnd_engine.core.party import Party
 from dnd_engine.core.dice import DiceRoller
-from dnd_engine.core.combat import CombatEngine
+from dnd_engine.core.game_state import CombatSpellResult, GameState
+from dnd_engine.core.party import Party
 from dnd_engine.rules.loader import DataLoader
-from dnd_engine.utils.events import EventBus
 from dnd_engine.systems.resources import ResourcePool
-from dnd_engine.systems.time_manager import TimeManager
+from dnd_engine.utils.events import EventBus
 
 
 class TestCastSpellCombat:

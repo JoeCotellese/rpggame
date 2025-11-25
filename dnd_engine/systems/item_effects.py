@@ -1,10 +1,11 @@
 # ABOUTME: Item effect system for applying consumable effects to creatures
 # ABOUTME: Handles healing potions, damage items, buffs, condition removal, light sources, and spell scrolls
 
-from typing import Dict, Any, Optional, List, TYPE_CHECKING
-from dnd_engine.core.dice import DiceRoller
+from typing import TYPE_CHECKING, Any, Optional
+
 from dnd_engine.core.creature import Creature
-from dnd_engine.utils.events import Event, EventType, EventBus
+from dnd_engine.core.dice import DiceRoller
+from dnd_engine.utils.events import Event, EventBus, EventType
 
 if TYPE_CHECKING:
     from dnd_engine.systems.time_manager import TimeManager
@@ -17,7 +18,7 @@ class ItemEffectResult:
         success: bool,
         effect_type: str,
         amount: int = 0,
-        dice_notation: Optional[str] = None,
+        dice_notation: str | None = None,
         message: str = ""
     ):
         self.success = success
@@ -28,10 +29,10 @@ class ItemEffectResult:
 
 
 def apply_item_effect(
-    item_info: Dict[str, Any],
+    item_info: dict[str, Any],
     target: Creature,
-    dice_roller: Optional[DiceRoller] = None,
-    event_bus: Optional[EventBus] = None,
+    dice_roller: DiceRoller | None = None,
+    event_bus: EventBus | None = None,
     time_manager: Optional["TimeManager"] = None
 ) -> ItemEffectResult:
     """
@@ -88,10 +89,10 @@ def apply_item_effect(
 
 
 def _apply_healing_effect(
-    item_info: Dict[str, Any],
+    item_info: dict[str, Any],
     target: Creature,
     dice_roller: DiceRoller,
-    event_bus: Optional[EventBus]
+    event_bus: EventBus | None
 ) -> ItemEffectResult:
     """
     Apply a healing effect to a target.
@@ -148,7 +149,7 @@ def _apply_healing_effect(
     else:
         message = f"{target.name} healed for {actual_healing} HP (rolled {healing_dice}: {healing_amount})"
         if actual_healing < healing_amount:
-            message += f" - capped at max HP"
+            message += " - capped at max HP"
 
     return ItemEffectResult(
         success=actual_healing > 0,
@@ -160,10 +161,10 @@ def _apply_healing_effect(
 
 
 def _apply_damage_effect(
-    item_info: Dict[str, Any],
+    item_info: dict[str, Any],
     target: Creature,
     dice_roller: DiceRoller,
-    event_bus: Optional[EventBus]
+    event_bus: EventBus | None
 ) -> ItemEffectResult:
     """
     Apply a damage effect to a target.
@@ -248,9 +249,9 @@ def _apply_damage_effect(
 
 
 def _apply_condition_removal_effect(
-    item_info: Dict[str, Any],
+    item_info: dict[str, Any],
     target: Creature,
-    event_bus: Optional[EventBus]
+    event_bus: EventBus | None
 ) -> ItemEffectResult:
     """
     Apply a condition removal effect to a target.
@@ -310,9 +311,9 @@ def _apply_condition_removal_effect(
 
 
 def _apply_buff_effect(
-    item_info: Dict[str, Any],
+    item_info: dict[str, Any],
     target: Creature,
-    event_bus: Optional[EventBus]
+    event_bus: EventBus | None
 ) -> ItemEffectResult:
     """
     Apply a buff effect to a target.
@@ -404,10 +405,10 @@ def _apply_buff_effect(
 
 
 def _apply_spell_effect(
-    item_info: Dict[str, Any],
+    item_info: dict[str, Any],
     target: Creature,
     dice_roller: DiceRoller,
-    event_bus: Optional[EventBus]
+    event_bus: EventBus | None
 ) -> ItemEffectResult:
     """
     Apply a spell effect from a scroll or spell-effect potion.
@@ -440,10 +441,10 @@ def _apply_spell_effect(
 
 
 def _apply_light_effect(
-    item_info: Dict[str, Any],
+    item_info: dict[str, Any],
     target: Creature,
     time_manager: Optional["TimeManager"],
-    event_bus: Optional[EventBus]
+    event_bus: EventBus | None
 ) -> ItemEffectResult:
     """
     Apply a light effect that illuminates the area for a duration.
