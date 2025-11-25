@@ -347,3 +347,123 @@ class TestCharacterFactoryResourceInitialization:
         assert action_surge.current == 1
         assert action_surge.maximum == 1
         assert action_surge.recovery_type == "short_rest"
+
+
+class TestCharacterSpellSlotDisplay:
+    """Test Character spell slot display methods"""
+
+    @pytest.fixture
+    def spellcaster(self):
+        """Create a character with spell slots"""
+        abilities = Abilities(
+            strength=8,
+            dexterity=14,
+            constitution=12,
+            intelligence=16,
+            wisdom=10,
+            charisma=10
+        )
+        char = Character(
+            name="Test Wizard",
+            character_class=CharacterClass.WIZARD,
+            level=3,
+            abilities=abilities,
+            max_hp=14,
+            ac=12
+        )
+        # Add spell slots for a level 3 wizard: 4 first-level, 2 second-level
+        char.add_resource_pool(ResourcePool(
+            name="spell_slots_level_1",
+            current=4,
+            maximum=4,
+            recovery_type="long_rest"
+        ))
+        char.add_resource_pool(ResourcePool(
+            name="spell_slots_level_2",
+            current=2,
+            maximum=2,
+            recovery_type="long_rest"
+        ))
+        return char
+
+    @pytest.fixture
+    def non_spellcaster(self):
+        """Create a character without spell slots"""
+        abilities = Abilities(
+            strength=16,
+            dexterity=14,
+            constitution=14,
+            intelligence=10,
+            wisdom=12,
+            charisma=8
+        )
+        return Character(
+            name="Test Fighter",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=abilities,
+            max_hp=12,
+            ac=16
+        )
+
+    def test_has_spell_slots_returns_true_for_spellcaster(self, spellcaster):
+        """Test has_spell_slots returns True for character with spell slots"""
+        assert spellcaster.has_spell_slots() is True
+
+    def test_has_spell_slots_returns_false_for_non_spellcaster(self, non_spellcaster):
+        """Test has_spell_slots returns False for character without spell slots"""
+        assert non_spellcaster.has_spell_slots() is False
+
+    def test_get_spell_slots_display_full_slots(self, spellcaster):
+        """Test display string shows full spell slots correctly"""
+        display = spellcaster.get_spell_slots_display()
+        assert display == "1st: 4/4, 2nd: 2/2"
+
+    def test_get_spell_slots_display_partial_slots(self, spellcaster):
+        """Test display string shows partially used spell slots"""
+        # Use some slots
+        spellcaster.use_spell_slot(1)
+        spellcaster.use_spell_slot(1)
+        spellcaster.use_spell_slot(2)
+
+        display = spellcaster.get_spell_slots_display()
+        assert display == "1st: 2/4, 2nd: 1/2"
+
+    def test_get_spell_slots_display_empty_slots(self, spellcaster):
+        """Test display string shows exhausted spell slots"""
+        # Use all slots
+        for _ in range(4):
+            spellcaster.use_spell_slot(1)
+        for _ in range(2):
+            spellcaster.use_spell_slot(2)
+
+        display = spellcaster.get_spell_slots_display()
+        assert display == "1st: 0/4, 2nd: 0/2"
+
+    def test_get_spell_slots_display_non_spellcaster(self, non_spellcaster):
+        """Test display string is empty for non-spellcaster"""
+        display = non_spellcaster.get_spell_slots_display()
+        assert display == ""
+
+    def test_get_spell_slots_display_higher_level_slots(self):
+        """Test display string handles 3rd level and higher correctly"""
+        abilities = Abilities(
+            strength=8, dexterity=14, constitution=12,
+            intelligence=16, wisdom=10, charisma=10
+        )
+        char = Character(
+            name="High Level Wizard",
+            character_class=CharacterClass.WIZARD,
+            level=9,
+            abilities=abilities,
+            max_hp=38,
+            ac=12
+        )
+        char.add_resource_pool(ResourcePool("spell_slots_level_1", 4, 4, "long_rest"))
+        char.add_resource_pool(ResourcePool("spell_slots_level_2", 3, 3, "long_rest"))
+        char.add_resource_pool(ResourcePool("spell_slots_level_3", 3, 3, "long_rest"))
+        char.add_resource_pool(ResourcePool("spell_slots_level_4", 3, 3, "long_rest"))
+        char.add_resource_pool(ResourcePool("spell_slots_level_5", 1, 1, "long_rest"))
+
+        display = char.get_spell_slots_display()
+        assert display == "1st: 4/4, 2nd: 3/3, 3rd: 3/3, 4th: 3/3, 5th: 1/1"
