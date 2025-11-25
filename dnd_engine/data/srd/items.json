@@ -473,6 +473,20 @@
       "description": "A spell scroll bears the words of a single spell, written in a mystical cipher. If the spell is on your class's spell list, you can use an action to read the scroll and cast its spell. This scroll contains cure wounds.",
       "value": 50
     },
+    "torch": {
+      "name": "Torch",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "consumable",
+      "rarity": "common",
+      "effect_type": "light",
+      "light_level": "bright",
+      "duration_minutes": 60,
+      "action_required": "action",
+      "target_type": "self",
+      "range": 0,
+      "description": "A torch burns for 1 hour, providing bright light in a 20-foot radius and dim light for an additional 20 feet.",
+      "value": 0.01
+    },
     "gorgus_journal": {
       "name": "Cultist's Journal",
       "source": "The Unquiet Dead (Adventures Await Studios, OGL)",
