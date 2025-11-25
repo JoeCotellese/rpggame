@@ -970,6 +970,37 @@ class Character(Creature):
         else:
             return f"{level}th"
 
+    def get_spell_slots_display(self) -> str:
+        """
+        Get a formatted display of all spell slots for this character.
+
+        Returns:
+            Formatted string like "1st: 2/4, 2nd: 1/2" or empty string if no slots
+        """
+        slots = []
+        for level in range(1, 10):
+            pool_name = f"spell_slots_level_{level}"
+            pool = self.resource_pools.get(pool_name)
+            if pool and pool.maximum > 0:
+                ordinal = self._level_to_ordinal(level)
+                slots.append(f"{ordinal}: {pool.current}/{pool.maximum}")
+
+        return ", ".join(slots)
+
+    def has_spell_slots(self) -> bool:
+        """
+        Check if this character has any spell slot pools.
+
+        Returns:
+            True if character has at least one spell slot pool with max > 0
+        """
+        for level in range(1, 10):
+            pool_name = f"spell_slots_level_{level}"
+            pool = self.resource_pools.get(pool_name)
+            if pool and pool.maximum > 0:
+                return True
+        return False
+
     def scale_cantrip_damage(self, base_damage_dice: str) -> str:
         """
         Scale cantrip damage based on character level.

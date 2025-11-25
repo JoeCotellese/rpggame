@@ -82,17 +82,22 @@ def create_party_status_table(party_data: List[Dict[str, Any]]) -> Table:
 
     Args:
         party_data: List of dicts with character info
-                   {name, level, class, hp, max_hp, ac, xp, active_effects}
+                   {name, level, class, hp, max_hp, ac, xp, active_effects, spell_slots}
 
     Returns:
         Formatted Rich Table
     """
+    # Check if any character has spell slots to determine if we need the column
+    any_spellcaster = any(char.get("spell_slots") for char in party_data)
+
     table = Table(title="PARTY STATUS", style="cyan", show_header=True, header_style="bold magenta")
     table.add_column("Character", style="bold")
     table.add_column("Class", style="dim")
     table.add_column("Level", justify="center")
     table.add_column("HP", justify="center")
     table.add_column("AC", justify="center")
+    if any_spellcaster:
+        table.add_column("Spell Slots", style="cyan", no_wrap=False)
     table.add_column("Active Effects", style="dim", no_wrap=False)
     table.add_column("XP", justify="right")
 
@@ -130,15 +135,24 @@ def create_party_status_table(party_data: List[Dict[str, Any]]) -> Table:
         else:
             effects_display = "—"
 
-        table.add_row(
+        # Build row data
+        row_data = [
             f"[bold]{char.get('name', 'Unknown')}[/bold]",
             char.get("class", "—"),
             str(char.get("level", 0)),
             hp_text,
             str(char.get("ac", 0)),
-            effects_display,
-            str(char.get("xp", 0))
-        )
+        ]
+
+        # Add spell slots column if any character has them
+        if any_spellcaster:
+            spell_slots = char.get("spell_slots")
+            row_data.append(spell_slots if spell_slots else "—")
+
+        row_data.append(effects_display)
+        row_data.append(str(char.get("xp", 0)))
+
+        table.add_row(*row_data)
 
     return table
 

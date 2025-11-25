@@ -1,8 +1,8 @@
 # ABOUTME: Command-line interface for the D&D 5E terminal game
 # ABOUTME: Handles player input, displays game state, and manages the game loop
 
-from typing import Optional, List, Dict, Any
-from dnd_engine.core.character import Character
+from typing import Optional, List, Dict, Any, Tuple
+from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.game_state import GameState, CombatEvent, CombatSpellResult
 from dnd_engine.core.dice import format_dice_with_modifier
 from dnd_engine.utils.events import Event, EventType
@@ -228,7 +228,8 @@ class CLI:
                 "max_hp": char.max_hp,
                 "ac": effective_ac,
                 "xp": char.xp,
-                "active_effects": active_effects
+                "active_effects": active_effects,
+                "spell_slots": char.get_spell_slots_display() if char.has_spell_slots() else None
             })
 
         table = create_party_status_table(party_data)
@@ -317,8 +318,22 @@ class CLI:
 
             enemies_str = ", ".join(enemy_summary) if enemy_summary else "None"
 
+            # Build status line
+            status_parts = [
+                f"[bold]{char.name}'s turn![/bold]",
+                f"HP: [{hp_color}]{char.current_hp}/{char.max_hp}[/{hp_color}]"
+            ]
+
+            # Add spell slots for spellcasters
+            if char.has_spell_slots():
+                spell_slots_display = char.get_spell_slots_display()
+                if spell_slots_display:
+                    status_parts.append(f"Slots: [cyan]{spell_slots_display}[/cyan]")
+
+            status_parts.append(f"Enemies: {enemies_str}")
+
             console.print(Panel(
-                f"[bold]{char.name}'s turn![/bold] | HP: [{hp_color}]{char.current_hp}/{char.max_hp}[/{hp_color}] | Enemies: {enemies_str}",
+                " | ".join(status_parts),
                 border_style="yellow",
                 padding=(0, 1)
             ))
@@ -591,6 +606,14 @@ class CLI:
             self.handle_cast_spell_exploration()
             return
 
+        if command in ["spells"]:
+            self.handle_spells()
+            return
+
+        if command in ["prepare"]:
+            self.handle_prepare_spells()
+            return
+
         if command in ["time"]:
             self.handle_time()
             return
@@ -677,6 +700,10 @@ class CLI:
         if command == "cast":
             # Prompt for spell selection
             self.handle_cast_spell("")
+            return
+
+        if command in ["spells"]:
+            self.handle_spells()
             return
 
         if command in ["flee", "run", "escape", "retreat"]:
@@ -4072,108 +4099,277 @@ class CLI:
 
     def _offer_spell_preparation(self, character: Character) -> None:
         """
-        Offer spell preparation UI for prepared caster classes.
+        Spell preparation UI for prepared caster classes.
 
-        Allows player to review and change prepared spells after a long rest.
-        This is pure UI - displays spells, captures selections, calls GameState.
+        Shows all spells from spellbook with checkboxes, pre-selecting currently
+        prepared spells. Allows selecting up to max_prepared spells total.
+        Automatically shown after long rest (no confirmation prompt).
 
         Args:
             character: Character who can prepare spells (Wizard or Cleric)
         """
         from dnd_engine.ui.rich_ui import print_section, print_message, print_status_message
-
-        # Ask if player wants to change prepared spells
-        print_message("")
-        print_message(f"{character.name} can prepare spells.")
-        choice = input("Change prepared spells? (y/n): ").strip().lower()
-
-        if choice != 'y':
-            print_message("Keeping current spell selection.")
-            return
+        import questionary
+        from questionary import Choice
 
         # Load spell data
         spells_data = self.game_state.data_loader.load_spells()
 
-        # Get available spells
+        # Get available spells from spellbook
         cantrips, leveled_spells = character.get_preparable_spells(spells_data)
 
         # Calculate preparation limit
         max_prepared = character.get_max_prepared_spells()
 
-        # Show current prepared spells (excluding cantrips)
-        current_prepared = [s for s in character.prepared_spells if s not in cantrips]
+        # Get currently prepared spells (excluding cantrips)
+        current_prepared = {s for s in character.prepared_spells if s not in cantrips}
+
+        # Filter to only spells of levels for which character has spell slots
+        available_leveled_spells = []
+        for spell_id, spell_data in leveled_spells:
+            spell_level = spell_data.get("level", 1)
+            # Check if character has slots for this level
+            pool_name = f"spell_slots_level_{spell_level}"
+            pool = character.resource_pools.get(pool_name)
+            if pool and pool.maximum > 0:
+                available_leveled_spells.append((spell_id, spell_data))
 
         print_section(f"Spell Preparation - {character.name}")
-        print_message(f"You can prepare up to {max_prepared} spells (cantrips don't count).")
-        print_message("")
-        print_message("Cantrips (always prepared):")
-        for cantrip_id in cantrips:
-            cantrip = spells_data.get(cantrip_id, {})
-            print_message(f"  • {cantrip.get('name', cantrip_id)}")
+        print_message(f"Select up to [cyan]{max_prepared}[/cyan] spells to prepare.")
         print_message("")
 
-        if not leveled_spells:
+        # Show cantrips (always prepared, not selectable)
+        if cantrips:
+            print_message("[green]Cantrips (always prepared):[/green]")
+            for cantrip_id in cantrips:
+                cantrip = spells_data.get(cantrip_id, {})
+                print_message(f"  • {cantrip.get('name', cantrip_id)}")
+            print_message("")
+
+        if not available_leveled_spells:
             print_status_message("No leveled spells available to prepare.", "warning")
             return
 
-        print_message("Available Spells:")
-        for idx, (spell_id, spell_data) in enumerate(leveled_spells, 1):
+        # Build checkbox choices organized by spell level
+        choices = []
+        current_level = 0
+
+        for spell_id, spell_data in available_leveled_spells:
+            spell_level = spell_data.get("level", 1)
             spell_name = spell_data.get("name", spell_id)
-            spell_level = spell_data.get("level", "?")
             school = spell_data.get("school", "")
-            prepared_mark = "✓" if spell_id in current_prepared else " "
-            print_message(f"  [{prepared_mark}] {idx}. {spell_name} (Level {spell_level}, {school})")
 
-        print_message("")
-        print_message("Enter spell numbers to prepare (comma-separated, e.g., '1,3,5')")
-        print_message(f"You can select up to {max_prepared} spells.")
-        print_message("Press Enter without typing to cancel.")
-        print_message("")
+            # Add level separator
+            if spell_level != current_level:
+                current_level = spell_level
+                level_ordinal = character._level_to_ordinal(spell_level)
+                pool = character.resource_pools.get(f"spell_slots_level_{spell_level}")
+                max_slots = pool.maximum if pool else 0
+                choices.append(questionary.Separator(f"── {level_ordinal.capitalize()} Level ({max_slots} slots) ──"))
 
-        selection = input(f"Select spells (max {max_prepared}): ").strip()
+            # Build choice with spell info
+            # Get effect description
+            if spell_data.get("damage"):
+                effect = f"{spell_data['damage'].get('dice', '')} {spell_data['damage'].get('type', '')}"
+            elif spell_data.get("healing"):
+                effect = f"healing {spell_data['healing'].get('dice', '')}"
+            else:
+                desc = spell_data.get("description", "utility")
+                effect = desc[:30] + "..." if len(desc) > 30 else desc
 
-        if not selection:
-            print_message("Spell preparation cancelled.")
-            return
+            choice_title = f"{spell_name} ({school}) - {effect}"
+            is_checked = spell_id in current_prepared
 
-        # Parse selection
+            choices.append(Choice(
+                title=choice_title,
+                value=spell_id,
+                checked=is_checked
+            ))
+
+        # Custom validator to enforce max selection
+        def validate_selection(selected):
+            if len(selected) > max_prepared:
+                return f"Too many spells! Select at most {max_prepared} (you selected {len(selected)})"
+            return True
+
         try:
-            indices = [int(x.strip()) - 1 for x in selection.split(',')]
-        except ValueError:
-            print_status_message("Invalid input. Spell preparation cancelled.", "error")
-            return
+            selected_spell_ids = questionary.checkbox(
+                f"Select spells to prepare (max {max_prepared}):",
+                choices=choices,
+                validate=validate_selection,
+                instruction="(Space to toggle, Enter to confirm)"
+            ).ask()
 
-        # Validate indices
-        if any(i < 0 or i >= len(leveled_spells) for i in indices):
-            print_status_message("Invalid spell number. Spell preparation cancelled.", "error")
-            return
+            # Handle cancellation
+            if selected_spell_ids is None:
+                print_message("Spell preparation cancelled. Keeping current selection.")
+                return
 
-        # Check count
-        if len(indices) > max_prepared:
-            print_status_message(
-                f"Too many spells selected ({len(indices)}/{max_prepared}). Preparation cancelled.",
-                "error"
-            )
+        except (EOFError, KeyboardInterrupt):
+            print_message("Spell preparation cancelled. Keeping current selection.")
             return
-
-        # Get selected spell IDs (excluding duplicates)
-        selected_spell_ids = list(dict.fromkeys([leveled_spells[i][0] for i in indices]))
 
         # Add cantrips to selection (they're always prepared)
         final_spell_ids = cantrips + selected_spell_ids
 
-        # Call GameState to prepare spells (it validates and updates)
+        # Call GameState to prepare spells
         success = self.game_state.prepare_spells(character.name, final_spell_ids)
 
         if success:
-            spell_names = [spells_data[sid].get("name", sid) for sid in selected_spell_ids]
-            print_status_message(
-                f"✓ Prepared {len(selected_spell_ids)} spell{'s' if len(selected_spell_ids) != 1 else ''}: "
-                f"{', '.join(spell_names)}",
-                "success"
-            )
+            if selected_spell_ids:
+                spell_names = [spells_data[sid].get("name", sid) for sid in selected_spell_ids]
+                print_status_message(
+                    f"Prepared {len(selected_spell_ids)} spell{'s' if len(selected_spell_ids) != 1 else ''}: "
+                    f"{', '.join(spell_names)}",
+                    "success"
+                )
+            else:
+                print_status_message("No leveled spells prepared.", "warning")
         else:
             print_status_message("Failed to prepare spells. Please try again.", "error")
+
+    def handle_spells(self) -> None:
+        """
+        Display spellbook, prepared spells, and spell slot availability.
+
+        Works for both exploration and combat modes. Shows all spellcasters
+        in the party with their prepared spells organized by level.
+        """
+        from dnd_engine.ui.rich_ui import print_section, print_message, print_status_message
+
+        spells_data = self.game_state.data_loader.load_spells()
+        found_caster = False
+
+        for character in self.game_state.party.characters:
+            # Check if character has any spells
+            if not character.known_spells and not character.prepared_spells:
+                continue
+
+            found_caster = True
+            print_section(f"{character.name}'s Spells ({character.character_class.value.capitalize()})")
+
+            # Show spell slots
+            if character.has_spell_slots():
+                slots_display = character.get_spell_slots_display()
+                print_message(f"[cyan]Spell Slots: {slots_display}[/cyan]")
+                print_message("")
+
+            # Determine which spell list to use
+            prepared_caster_classes = {CharacterClass.WIZARD, CharacterClass.CLERIC}
+            if character.character_class in prepared_caster_classes:
+                spell_list = character.prepared_spells
+                list_type = "Prepared"
+            else:
+                spell_list = character.known_spells
+                list_type = "Known"
+
+            if not spell_list:
+                print_message(f"[yellow]No spells {list_type.lower()}.[/yellow]")
+                print_message("")
+                continue
+
+            # Organize spells by level
+            spells_by_level: Dict[int, List[Tuple[str, Dict]]] = {}
+            for spell_id in spell_list:
+                spell_data = spells_data.get(spell_id)
+                if not spell_data:
+                    continue
+                level = spell_data.get("level", 0)
+                if level not in spells_by_level:
+                    spells_by_level[level] = []
+                spells_by_level[level].append((spell_id, spell_data))
+
+            # Display cantrips first
+            if 0 in spells_by_level:
+                print_message("[green]Cantrips:[/green]")
+                for spell_id, spell_data in sorted(spells_by_level[0], key=lambda x: x[1].get("name", "")):
+                    name = spell_data.get("name", spell_id)
+                    school = spell_data.get("school", "")
+                    # Get damage or effect info
+                    if spell_data.get("damage"):
+                        effect = f"{spell_data['damage'].get('dice', '')} {spell_data['damage'].get('type', '')}"
+                    elif spell_data.get("healing"):
+                        effect = f"healing {spell_data['healing'].get('dice', '')}"
+                    else:
+                        effect = "utility"
+                    print_message(f"  • {name} ({school}) - {effect}")
+                print_message("")
+
+            # Display leveled spells
+            for level in sorted(k for k in spells_by_level.keys() if k > 0):
+                available_slots = character.get_available_spell_slots(level)
+                level_ordinal = character._level_to_ordinal(level)
+                print_message(f"[cyan]{level_ordinal.capitalize()} Level[/cyan] [{available_slots} slots]:")
+                for spell_id, spell_data in sorted(spells_by_level[level], key=lambda x: x[1].get("name", "")):
+                    name = spell_data.get("name", spell_id)
+                    school = spell_data.get("school", "")
+                    # Get damage or effect info
+                    if spell_data.get("damage"):
+                        effect = f"{spell_data['damage'].get('dice', '')} {spell_data['damage'].get('type', '')}"
+                    elif spell_data.get("healing"):
+                        effect = f"healing {spell_data['healing'].get('dice', '')}"
+                    else:
+                        effect = spell_data.get("description", "")[:40] + "..." if len(spell_data.get("description", "")) > 40 else spell_data.get("description", "utility")
+                    print_message(f"  • {name} ({school}) - {effect}")
+                print_message("")
+
+            # Show spellbook info for wizards
+            if character.character_class == CharacterClass.WIZARD:
+                known_count = len(character.known_spells)
+                prepared_count = len([s for s in character.prepared_spells if spells_data.get(s, {}).get("level", 0) > 0])
+                max_prepared = character.get_max_prepared_spells()
+                print_message(f"[dim]Spellbook: {known_count} spells known | Prepared: {prepared_count}/{max_prepared}[/dim]")
+                print_message("")
+
+        if not found_caster:
+            print_status_message("No spellcasters in the party.", "warning")
+
+    def handle_prepare_spells(self) -> None:
+        """
+        Handle the prepare command to manage prepared spells.
+
+        Only available for prepared caster classes (Wizard, Cleric).
+        Allows changing prepared spells outside of combat.
+        """
+        from dnd_engine.ui.rich_ui import print_status_message, print_error
+        import questionary
+
+        if self.game_state.in_combat:
+            print_error("You cannot change prepared spells during combat.")
+            return
+
+        # Find prepared casters in the party
+        prepared_caster_classes = {CharacterClass.WIZARD, CharacterClass.CLERIC}
+        casters = [c for c in self.game_state.party.characters
+                   if c.character_class in prepared_caster_classes and c.known_spells]
+
+        if not casters:
+            print_status_message("No prepared casters in the party (Wizards or Clerics with spellbooks).", "warning")
+            return
+
+        # If only one caster, use them directly
+        if len(casters) == 1:
+            character = casters[0]
+        else:
+            # Prompt for caster selection
+            choices = [questionary.Choice(title=f"{c.name} ({c.character_class.value.capitalize()})", value=c)
+                       for c in casters]
+            choices.append(questionary.Choice(title="Cancel", value=None))
+
+            try:
+                character = questionary.select(
+                    "Which character will prepare spells?",
+                    choices=choices,
+                    use_arrow_keys=True
+                ).ask()
+
+                if not character:
+                    return
+            except (EOFError, KeyboardInterrupt):
+                return
+
+        # Use existing spell preparation logic
+        self._offer_spell_preparation(character)
 
     def handle_cast_spell_exploration(self) -> None:
         """
@@ -4471,7 +4667,9 @@ class CLI:
             ("use <item> [on <player>]", "Use consumable (e.g., 'use potion on 2')"),
             ("status", "Show your character status"),
             ("rest", "Take a short or long rest"),
-            ("cast", "Cast healing or utility spells outside combat"),
+            ("cast [spell]", "Cast a spell (e.g., 'cast light' or just 'cast' for menu)"),
+            ("spells", "View prepared spells and available spell slots"),
+            ("prepare", "Manage prepared spells (wizards/clerics)"),
             ("time", "Show elapsed game time"),
             ("effects", "Show active spell effects and their durations"),
             ("save", "Create a named save"),
@@ -4493,7 +4691,8 @@ class CLI:
         """Display help for combat commands."""
         commands = [
             ("attack <enemy>", "Attack an enemy (e.g., 'attack goblin 1' or 'attack 1')"),
-            ("cast <spell>", "Cast a spell (e.g., 'cast magic missile')"),
+            ("cast [spell]", "Cast a spell (e.g., 'cast magic missile' or just 'cast')"),
+            ("spells", "View prepared spells and available spell slots"),
             ("use <item>", "Use a consumable item (e.g., 'use potion') - costs an action"),
             ("stabilize <ally>", "Stabilize an unconscious ally (Medicine DC 10)"),
             ("end turn / done / pass", "End your turn and skip remaining actions"),
