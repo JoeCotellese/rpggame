@@ -765,3 +765,165 @@ class CombatEngine:
                     total_damage += extra_roll.total
 
         return total_damage
+
+    def resolve_spell_hp_pool(
+        self,
+        caster,
+        targets: list,
+        spell,
+        upcast_level: Optional[int] = None,
+        event_bus=None
+    ) -> Dict[str, Any]:
+        """
+        Resolve a spell that affects creatures based on an HP pool.
+
+        Used for spells like Sleep and Color Spray that roll dice to determine
+        how many HP worth of creatures are affected, then apply effects starting
+        with the lowest HP creature.
+
+        Args:
+            caster: The creature casting the spell
+            targets: List of creatures that could be affected
+            spell: Spell object or dict containing:
+                - "name": spell name
+                - "hp_pool": dict with "dice" and optionally "higher_levels"
+                - "effect": dict with condition to apply
+                - "level": spell level
+            upcast_level: Spell slot level used (for upcasting)
+            event_bus: Optional EventBus instance for event emission
+
+        Returns:
+            Dictionary with spell cast results:
+            {
+                "spell_name": str,
+                "caster": str,
+                "hp_pool_rolled": int,
+                "hp_pool_remaining": int,
+                "affected_targets": [
+                    {"name": str, "hp": int, "condition": str},
+                    ...
+                ],
+                "unaffected_targets": [
+                    {"name": str, "hp": int, "reason": str},
+                    ...
+                ]
+            }
+        """
+        from dnd_engine.utils.events import Event, EventType
+
+        # Get spell info
+        if hasattr(spell, 'name'):
+            spell_name = spell.name
+            spell_level = spell.level
+            hp_pool_info = spell.hp_pool
+            effect_info = spell.effect
+        else:
+            spell_name = spell.get("name", "Unknown Spell")
+            spell_level = spell.get("level", 1)
+            hp_pool_info = spell.get("hp_pool", {})
+            effect_info = spell.get("effect", {})
+
+        # Determine cast level for upcasting
+        actual_level = upcast_level if upcast_level else spell_level
+
+        # Roll HP pool
+        base_dice = hp_pool_info.get("dice", "5d8")
+        hp_pool_roll = self.dice_roller.roll(base_dice)
+        hp_pool = hp_pool_roll.total
+
+        # Handle upcasting (Sleep adds 2d8 per level above 1st)
+        if actual_level > spell_level:
+            extra_levels = actual_level - spell_level
+            higher_levels_dice = hp_pool_info.get("higher_levels_dice", "2d8")
+            for _ in range(extra_levels):
+                extra_roll = self.dice_roller.roll(higher_levels_dice)
+                hp_pool += extra_roll.total
+
+        hp_pool_rolled = hp_pool
+
+        # Get condition to apply
+        condition = effect_info.get("condition", "unconscious")
+        duration = effect_info.get("duration_rounds", 10)  # 1 minute = 10 rounds
+
+        # Get immunity types (undead and constructs are immune to Sleep)
+        immune_types = hp_pool_info.get("immune_types", ["undead", "construct"])
+
+        # Filter and sort targets by current HP (ascending)
+        valid_targets = []
+        immune_targets = []
+
+        for target in targets:
+            if not target.is_alive:
+                continue
+
+            # Check creature type immunity
+            creature_type = getattr(target, 'creature_type', None) or getattr(target, 'type', '')
+            if isinstance(creature_type, str) and creature_type.lower() in immune_types:
+                immune_targets.append({
+                    "name": target.name,
+                    "hp": target.current_hp,
+                    "reason": f"immune ({creature_type})"
+                })
+                continue
+
+            valid_targets.append(target)
+
+        # Sort by current HP ascending
+        valid_targets.sort(key=lambda t: t.current_hp)
+
+        affected_targets = []
+        unaffected_targets = list(immune_targets)  # Start with immune creatures
+
+        # Apply effect to creatures until HP pool is exhausted
+        for target in valid_targets:
+            if hp_pool >= target.current_hp:
+                # Affect this creature
+                hp_pool -= target.current_hp
+
+                # Apply the condition with duration
+                if hasattr(target, 'apply_condition_with_metadata'):
+                    target.apply_condition_with_metadata(
+                        condition=condition,
+                        duration_type="rounds",
+                        duration=duration
+                    )
+                elif hasattr(target, 'add_condition'):
+                    target.add_condition(condition)
+
+                affected_targets.append({
+                    "name": target.name,
+                    "hp": target.current_hp,
+                    "condition": condition
+                })
+            else:
+                # Not enough HP pool remaining
+                unaffected_targets.append({
+                    "name": target.name,
+                    "hp": target.current_hp,
+                    "reason": "not enough HP pool remaining"
+                })
+
+        # Emit event
+        if event_bus:
+            event = Event(
+                type=EventType.SPELL_CAST,
+                data={
+                    "spell_name": spell_name,
+                    "caster": caster.name,
+                    "spell_level": spell_level,
+                    "slot_level": actual_level,
+                    "hp_pool_rolled": hp_pool_rolled,
+                    "affected_count": len(affected_targets),
+                    "condition": condition
+                }
+            )
+            event_bus.emit(event)
+
+        return {
+            "spell_name": spell_name,
+            "caster": caster.name,
+            "hp_pool_rolled": hp_pool_rolled,
+            "hp_pool_remaining": hp_pool,
+            "affected_targets": affected_targets,
+            "unaffected_targets": unaffected_targets
+        }

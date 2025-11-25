@@ -134,6 +134,12 @@ class CombatSpellResult:
     # Deaths
     killed_targets: List[str] = field(default_factory=list)
 
+    # HP Pool results (spell_type == "hp_pool", e.g., Sleep)
+    hp_pool_rolled: Optional[int] = None
+    hp_pool_remaining: Optional[int] = None
+    affected_targets: Optional[List[Dict[str, Any]]] = None
+    unaffected_targets: Optional[List[Dict[str, Any]]] = None
+
     # Error handling
     error: Optional[str] = None
 
@@ -1344,6 +1350,7 @@ class GameState:
         spell_name = spell_data.get("name", "Unknown Spell")
         has_attack = spell_data.get("attack_type") is not None
         has_save = spell_data.get("saving_throw") is not None
+        has_hp_pool = spell_data.get("hp_pool") is not None
         target_type = spell_data.get("target_type")
 
         # Resolve targets based on target_type
@@ -1377,6 +1384,11 @@ class GameState:
             return self._resolve_combat_attack_spell(
                 caster, targets[0], spell_data, spellcasting_ability,
                 spell_name, broke_concentration
+            )
+        elif has_hp_pool:
+            return self._resolve_combat_hp_pool_spell(
+                caster, targets, spell_data, spell_name,
+                is_area, broke_concentration
             )
         elif has_save:
             return self._resolve_combat_save_spell(
@@ -1515,6 +1527,48 @@ class GameState:
             now_concentrating=now_concentrating,
             target_concentration_breaks=target_conc_breaks,
             killed_targets=killed
+        )
+
+    def _resolve_combat_hp_pool_spell(
+        self,
+        caster: Character,
+        targets: List[Creature],
+        spell_data: Dict[str, Any],
+        spell_name: str,
+        is_area: bool,
+        broke_concentration: Optional[str]
+    ) -> "CombatSpellResult":
+        """Resolve HP pool spells like Sleep that affect creatures based on HP total."""
+        # Delegate to combat engine
+        result = self.combat_engine.resolve_spell_hp_pool(
+            caster=caster,
+            targets=targets,
+            spell=spell_data,
+            event_bus=self.event_bus
+        )
+
+        # Handle concentration for caster (Sleep is not concentration, but others might be)
+        now_concentrating = False
+        if spell_data.get("concentration", False):
+            effect_target = targets[0].name if targets else ""
+            effect = self._create_spell_effect(spell_data, caster.name, effect_target)
+            if effect:
+                self.time_manager.add_effect(effect)
+                now_concentrating = True
+
+        return CombatSpellResult(
+            success=True,
+            spell_name=spell_name,
+            caster_name=caster.name,
+            targets=[t["name"] for t in result["affected_targets"]],
+            is_area_effect=is_area,
+            spell_type="hp_pool",
+            hp_pool_rolled=result["hp_pool_rolled"],
+            hp_pool_remaining=result["hp_pool_remaining"],
+            affected_targets=result["affected_targets"],
+            unaffected_targets=result["unaffected_targets"],
+            broke_concentration=broke_concentration,
+            now_concentrating=now_concentrating
         )
 
     def _resolve_combat_auto_hit_spell(
