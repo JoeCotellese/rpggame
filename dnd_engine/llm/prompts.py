@@ -179,7 +179,7 @@ IMPORTANT: This is the moment combat begins. Naturally transition from describin
     # Build transition narrative instruction
     transition_instruction = ""
     if is_entering:
-        transition_instruction = "\n\nNarrative Context: The party is ENTERING this room. Include a brief transition that describes their entrance (e.g., 'As you step through the doorway...' or 'Leaving the previous chamber behind...'). Make it feel like they're arriving for the first time."
+        transition_instruction = "\n\nNarrative Context: The party is ENTERING this room. We don't know where they came from last nor do we know how they get into this room (i.e., door, opening, etc). Make it feel like they're arriving for the first time without describing the entrance way."
     else:
         transition_instruction = "\n\nNarrative Context: The party is already IN this room, examining it more closely. Do NOT describe them entering or transitioning - they're already here. Focus on what they observe in the moment."
 

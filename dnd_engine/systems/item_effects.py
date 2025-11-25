@@ -1,10 +1,13 @@
 # ABOUTME: Item effect system for applying consumable effects to creatures
-# ABOUTME: Handles healing potions, damage items, buffs, condition removal, and spell scrolls
+# ABOUTME: Handles healing potions, damage items, buffs, condition removal, light sources, and spell scrolls
 
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, TYPE_CHECKING
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.creature import Creature
 from dnd_engine.utils.events import Event, EventType, EventBus
+
+if TYPE_CHECKING:
+    from dnd_engine.systems.time_manager import TimeManager
 
 
 class ItemEffectResult:
@@ -28,7 +31,8 @@ def apply_item_effect(
     item_info: Dict[str, Any],
     target: Creature,
     dice_roller: Optional[DiceRoller] = None,
-    event_bus: Optional[EventBus] = None
+    event_bus: Optional[EventBus] = None,
+    time_manager: Optional["TimeManager"] = None
 ) -> ItemEffectResult:
     """
     Apply an item's effect to a target creature.
@@ -38,6 +42,7 @@ def apply_item_effect(
     - damage: Deals damage (e.g., alchemist's fire, acid vial)
     - condition_removal: Removes status conditions (e.g., elixir of health)
     - buff: Adds temporary conditions/effects (e.g., antitoxin, potion of heroism)
+    - light: Provides light for a duration (e.g., torch)
     - spell: Placeholder for spell scrolls (not yet implemented)
 
     Args:
@@ -45,6 +50,7 @@ def apply_item_effect(
         target: Creature to apply the effect to
         dice_roller: DiceRoller instance (creates new one if not provided)
         event_bus: Optional event bus for emitting events
+        time_manager: Optional time manager for creating timed effects (required for light effects)
 
     Returns:
         ItemEffectResult describing what happened
@@ -68,6 +74,8 @@ def apply_item_effect(
         return _apply_condition_removal_effect(item_info, target, event_bus)
     elif effect_type == "buff":
         return _apply_buff_effect(item_info, target, event_bus)
+    elif effect_type == "light":
+        return _apply_light_effect(item_info, target, time_manager, event_bus)
     elif effect_type == "spell":
         return _apply_spell_effect(item_info, target, dice_roller, event_bus)
     else:
@@ -428,4 +436,79 @@ def _apply_spell_effect(
         success=False,
         effect_type="spell",
         message=f"{item_name} cannot be used - spell system not yet implemented (spell: {spell_id})"
+    )
+
+
+def _apply_light_effect(
+    item_info: Dict[str, Any],
+    target: Creature,
+    time_manager: Optional["TimeManager"],
+    event_bus: Optional[EventBus]
+) -> ItemEffectResult:
+    """
+    Apply a light effect that illuminates the area for a duration.
+
+    Creates an ActiveEffect in the time manager that provides light.
+    The get_effective_lighting() method in GameState checks for these effects.
+
+    Args:
+        item_info: Item data containing light configuration
+        target: Creature using the light source (for tracking purposes)
+        time_manager: TimeManager to register the timed effect
+        event_bus: Optional event bus for emitting events
+
+    Returns:
+        ItemEffectResult with light effect details
+    """
+    from dnd_engine.systems.time_manager import ActiveEffect, EffectType
+
+    item_name = item_info.get("name", "Unknown Light Source")
+    duration_minutes = item_info.get("duration_minutes", 60)
+    light_level = item_info.get("light_level", "bright")
+
+    if time_manager is None:
+        return ItemEffectResult(
+            success=False,
+            effect_type="light",
+            message=f"{item_name} cannot be used - time manager not available"
+        )
+
+    # Create an ActiveEffect for the light source
+    light_effect = ActiveEffect(
+        effect_type=EffectType.BUFF,
+        source=item_name,
+        duration_type="minutes",
+        duration_value=duration_minutes,
+        remaining_value=duration_minutes,
+        target_name="party",
+        description=f"{item_name} providing {light_level} light",
+        concentration=False,
+        effect_data={"light_level": light_level}
+    )
+
+    time_manager.add_effect(light_effect)
+
+    # Emit event
+    if event_bus is not None:
+        event = Event(
+            type=EventType.BUFF_APPLIED,
+            data={
+                "target": "party",
+                "item": item_name,
+                "effect": "light",
+                "light_level": light_level,
+                "duration_minutes": duration_minutes
+            }
+        )
+        event_bus.emit(event)
+
+    # Build result message
+    duration_text = f"{duration_minutes} minutes" if duration_minutes < 60 else f"{duration_minutes // 60} hour"
+    message = f"{item_name} lit! Provides {light_level} light for {duration_text}."
+
+    return ItemEffectResult(
+        success=True,
+        effect_type="light",
+        amount=duration_minutes,
+        message=message
     )

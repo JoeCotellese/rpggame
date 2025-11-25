@@ -253,13 +253,16 @@ class GameState:
         room = self.get_current_room()
         base_lighting = room.get("lighting", "bright")
 
-        # Check for temporary lighting effects (Light spell, etc.)
+        # Check for temporary lighting effects (Light spell, torches, etc.)
         # Look for active lighting effects in the time manager
         from dnd_engine.systems.time_manager import EffectType
         for effect in self.time_manager.active_effects:
+            # Check for Light spell
             if effect.effect_type == EffectType.SPELL and effect.source.lower() == "light":
-                # Light spell provides bright light
                 return "bright"
+            # Check for light-providing items (torches, lanterns, etc.)
+            if effect.effect_data.get("light_level"):
+                return effect.effect_data["light_level"]
 
         # If room is dark and character has darkvision, treat as dim
         if base_lighting == "dark" and character.darkvision_range > 0:

@@ -3452,7 +3452,8 @@ class CLI:
             item_info=item_info,
             target=target,
             dice_roller=self.game_state.dice_roller,
-            event_bus=self.game_state.event_bus
+            event_bus=self.game_state.event_bus,
+            time_manager=self.game_state.time_manager
         )
 
         # Display the result
@@ -3578,7 +3579,8 @@ class CLI:
             item_info=used_item_data,
             target=character,
             dice_roller=self.game_state.dice_roller,
-            event_bus=self.game_state.event_bus
+            event_bus=self.game_state.event_bus,
+            time_manager=self.game_state.time_manager
         )
 
         # Display the result
@@ -3672,7 +3674,8 @@ class CLI:
             item_info=used_item_data,
             target=target,
             dice_roller=self.game_state.dice_roller,
-            event_bus=self.game_state.event_bus
+            event_bus=self.game_state.event_bus,
+            time_manager=self.game_state.time_manager
         )
 
         # Display the result with target information
@@ -3869,7 +3872,8 @@ class CLI:
             item_info=item_data,
             target=character,
             dice_roller=self.game_state.dice_roller,
-            event_bus=self.game_state.event_bus
+            event_bus=self.game_state.event_bus,
+            time_manager=self.game_state.time_manager
         )
 
         # Display the result

@@ -20,6 +20,12 @@
           "type": "item",
           "id": "acid_vial",
           "visible": true
+        },
+        {
+          "type": "item",
+          "id": "torch",
+          "quantity": 3,
+          "visible": true
         }
       ],
       "searched": false,
