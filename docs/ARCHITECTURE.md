@@ -251,6 +251,19 @@ The deterministic heart of the game. No randomness except dice rolls.
   - `calculate_damage()`: Weapon dice + modifiers
   - `apply_damage()`: Reduce HP, handle temp HP
   - `check_critical()`: Natural 20 = crit (double damage dice)
+  - `resolve_spell_hp_pool()`: HP pool spells (Sleep, Color Spray)
+- **HP Pool Spell Flow** (Sleep, Color Spray):
+  ```
+  1. Roll HP pool dice (e.g., 5d8 for Sleep)
+  2. Sort targets by current HP (ascending)
+  3. For each target (lowest HP first):
+     - Skip if immune (undead/construct for Sleep)
+     - If current HP <= remaining pool:
+       - Apply condition (unconscious)
+       - Subtract HP from pool
+     - Else: not enough pool remaining
+  4. Return affected/unaffected targets
+  ```
 - **Attack Flow**:
   ```
   1. Roll 1d20 + attack bonus

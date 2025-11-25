@@ -2025,6 +2025,40 @@ class CLI:
                 )
             return  # Early return for area effects
 
+        # Handle HP pool spells (Sleep, Color Spray)
+        if result.spell_type == "hp_pool":
+            console.print(f"[bold cyan]✨ {result.caster_name} casts {result.spell_name}![/bold cyan]")
+            console.print(f"[cyan]🎲 HP Pool: {result.hp_pool_rolled}[/cyan]")
+
+            # Show affected targets
+            if result.affected_targets:
+                for target_info in result.affected_targets:
+                    condition = target_info.get("condition", "affected")
+                    console.print(
+                        f"  [green]💤 {target_info['name']} ({target_info['hp']} HP) "
+                        f"falls {condition}![/green]"
+                    )
+
+            # Show unaffected targets
+            if result.unaffected_targets:
+                for target_info in result.unaffected_targets:
+                    reason = target_info.get("reason", "unaffected")
+                    console.print(
+                        f"  [yellow]{target_info['name']} ({target_info['hp']} HP) - {reason}[/yellow]"
+                    )
+
+            # Display remaining HP pool
+            if result.hp_pool_remaining and result.hp_pool_remaining > 0:
+                console.print(f"[dim]HP Pool remaining: {result.hp_pool_remaining}[/dim]")
+
+            # Display new concentration
+            if result.now_concentrating:
+                console.print(
+                    f"[cyan]🎯 {result.caster_name} begins concentrating on "
+                    f"{result.spell_name}[/cyan]"
+                )
+            return  # Early return for HP pool spells
+
         # Display target concentration breaks for single-target spells
         for conc_break in result.target_concentration_breaks:
             save_result = conc_break.get("save_result", {})
