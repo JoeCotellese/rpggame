@@ -743,7 +743,7 @@ class CLI:
                 elif target_type == "enemy":
                     # Prompt for enemy target selection
                     target = self._prompt_enemy_selection()
-                    if target is None:
+                    if target is None or target == "Cancel":
                         return  # User cancelled
                     # Execute attack with item on enemy
                     self.handle_use_item_combat_attack(item_id, item_data, character, target)
@@ -935,7 +935,8 @@ class CLI:
                 use_arrow_keys=True
             ).ask()
 
-            if method_index is None:
+            # questionary may return "Cancel" string or None when user cancels
+            if method_index is None or method_index == "Cancel":
                 print_status_message("Cancelled.", "warning")
                 return
 
@@ -1055,7 +1056,8 @@ class CLI:
                 use_arrow_keys=True
             ).ask()
 
-            if result is None:
+            # questionary may return "Cancel" string or None when user cancels
+            if result is None or result == "Cancel":
                 print_status_message("Cancelled.", "warning")
                 return None
 
