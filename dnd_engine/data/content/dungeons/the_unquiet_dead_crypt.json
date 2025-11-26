@@ -1,18 +1,26 @@
 {
+  "id": "the_unquiet_dead_crypt",
   "name": "The Unquiet Dead: Davos Family Crypt",
   "description": "The skeletons of the Davos family ancestors have begun to rise from their ancient crypt. Strange figures were seen skulking about in the dark. The local noble is offering 50 gold pieces to investigate and put the dead back to rest. But something darker lurks within these halls - a cult plot that threatens far more than just a family's legacy.",
-  "start_room": "graveyard_entrance",
+  "start_room": "crypt.graveyard_entrance",
   "level_range": "1-2",
   "estimated_playtime": "45-60 minutes",
   "focus": "combat, investigation",
   "notes": "First part of a three-part campaign. Completing this dungeon should reveal clues leading to the Cult Hideout location. Some features from the original module cannot yet be implemented: locked doors (room 6), skill checks (Perception DC 16, Medicine DC 12), ghoul enemy (using goblin_boss as placeholder), and story items (journal treated as lootable text).",
   "rooms": {
-    "graveyard_entrance": {
+    "crypt.graveyard_entrance": {
+      "id": "crypt.graveyard_entrance",
+      "location_type": "dungeon",
+      "parent": "the_unquiet_dead_crypt",
       "name": "Overgrown Graveyard",
       "description": "A rusted iron gate opens into a small graveyard. Ancient headstones lean at odd angles, covered in moss and ivy. At the center stands a stone mausoleum bearing the name 'DAVOS' in weathered letters. The heavy door hangs ajar, revealing darkness within.",
       "lighting": "bright",
       "exits": {
-        "down": "hall_of_the_dead"
+        "down": "crypt.hall_of_the_dead",
+        "road": {
+          "destination": "arden.town_gate",
+          "label": "Road back to Arden"
+        }
       },
       "enemies": [
         "skeleton",
@@ -29,7 +37,10 @@
       "searched": false,
       "searchable": true
     },
-    "hall_of_the_dead": {
+    "crypt.hall_of_the_dead": {
+      "id": "crypt.hall_of_the_dead",
+      "location_type": "dungeon",
+      "parent": "the_unquiet_dead_crypt",
       "name": "Hall of the Dead",
       "description": "Dusty stone stairs descend into a large burial chamber. The walls are lined with plaques and sealed coffins bearing the names of deceased Davos family members - generations of the dead laid to rest in this silent hall. Cobwebs hang thick in the corners, though recent disturbance has cleared a path through them. Footprints in the dust lead deeper into the crypt. The air is cold and still, carrying the faint scent of decay.",
       "lighting": "dark",
@@ -44,23 +55,26 @@
         }
       ],
       "exits": {
-        "up": "graveyard_entrance",
-        "north": "antechamber"
+        "up": "crypt.graveyard_entrance",
+        "north": "crypt.antechamber"
       },
       "enemies": [],
       "items": [],
       "searched": false,
       "searchable": false
     },
-    "antechamber": {
+    "crypt.antechamber": {
+      "id": "crypt.antechamber",
+      "location_type": "dungeon",
+      "parent": "the_unquiet_dead_crypt",
       "name": "Antechamber",
       "description": "This octagonal chamber serves as a central hub for the crypt. Doors of solid oak with iron reinforcements stand in each cardinal direction, their metal hinges spotted with rust. The stone floor here shows heavy foot traffic - many boots have passed through recently. A faint scraping sound echoes from somewhere nearby, like bone dragging across stone.",
       "lighting": "dark",
       "exits": {
-        "south": "hall_of_the_dead",
-        "east": "eastern_crypt",
+        "south": "crypt.hall_of_the_dead",
+        "east": "crypt.eastern_crypt",
         "west": {
-          "destination": "family_shrine",
+          "destination": "crypt.family_shrine",
           "locked": true,
           "unlock_methods": [
             {
@@ -79,7 +93,7 @@
           ]
         },
         "north": {
-          "destination": "northern_crypt",
+          "destination": "crypt.northern_crypt",
           "examine_checks": [
             {
               "skill": "perception",
@@ -91,7 +105,7 @@
           ]
         },
         "down": {
-          "destination": "southern_crypt",
+          "destination": "crypt.southern_crypt",
           "examine_checks": [
             {
               "skill": "perception",
@@ -108,12 +122,15 @@
       "searched": false,
       "searchable": false
     },
-    "eastern_crypt": {
+    "crypt.eastern_crypt": {
+      "id": "crypt.eastern_crypt",
+      "location_type": "dungeon",
+      "parent": "the_unquiet_dead_crypt",
       "name": "Eastern Crypt",
       "description": "Two large stone coffins are embedded in the northern and southern walls of this burial chamber. Their lids have been pushed aside, revealing empty interiors lined with rotting cloth.",
       "lighting": "dark",
       "exits": {
-        "west": "antechamber"
+        "west": "crypt.antechamber"
       },
       "enemies": [
         "skeleton",
@@ -130,12 +147,15 @@
       "searched": false,
       "searchable": true
     },
-    "northern_crypt": {
+    "crypt.northern_crypt": {
+      "id": "crypt.northern_crypt",
+      "location_type": "dungeon",
+      "parent": "the_unquiet_dead_crypt",
       "name": "Northern Crypt",
       "description": "This burial chamber mirrors its southern counterpart - coffins and memorial plaques line the granite walls, bearing dates that span centuries.",
       "lighting": "dark",
       "exits": {
-        "south": "antechamber"
+        "south": "crypt.antechamber"
       },
       "enemies": [
         "skeleton",
@@ -153,12 +173,15 @@
       "searched": false,
       "searchable": true
     },
-    "southern_crypt": {
+    "crypt.southern_crypt": {
+      "id": "crypt.southern_crypt",
+      "location_type": "dungeon",
+      "parent": "the_unquiet_dead_crypt",
       "name": "Southern Crypt",
       "description": "More ancestral remains rest here, their names carved into brass plaques that have long since tarnished. The air grows colder, and a malevolent presence seems to permeate the chamber.",
       "lighting": "dark",
       "exits": {
-        "up": "antechamber"
+        "up": "crypt.antechamber"
       },
       "enemies": [
         "skeleton",
@@ -176,7 +199,10 @@
       "searched": false,
       "searchable": true
     },
-    "family_shrine": {
+    "crypt.family_shrine": {
+      "id": "crypt.family_shrine",
+      "location_type": "dungeon",
+      "parent": "the_unquiet_dead_crypt",
       "name": "Family Shrine - Chamber of Davos",
       "description": "A small stone dais rises against the western wall. Upon it rests an ornate coffin, clearly more elaborate than the others you've seen. The lid has been violently smashed inward, splinters of ancient wood scattered across the floor. This was the final resting place of Davos the cleric, whose divine power once sealed away a great evil. In the corner lies a fresh corpse, wearing tattered cultist robes.",
       "lighting": "dark",
@@ -196,7 +222,7 @@
         }
       ],
       "exits": {
-        "east": "antechamber"
+        "east": "crypt.antechamber"
       },
       "enemies": [
         "ghoul"

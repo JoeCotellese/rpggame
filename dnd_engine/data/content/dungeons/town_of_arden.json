@@ -1,0 +1,54 @@
+{
+  "id": "town_of_arden",
+  "name": "Town of Arden",
+  "description": "A small frontier town nestled at the edge of the wilderness. The townsfolk are hardworking and suspicious of strangers, though they've grown accustomed to adventurers passing through. Recent troubles at the old Davos family crypt have the locals on edge.",
+  "start_room": "arden.town_square",
+  "level_range": "1-3",
+  "estimated_playtime": "varies",
+  "focus": "exploration, roleplay",
+  "notes": "Hub town for The Unquiet Dead campaign. Players start here and return between dungeons.",
+  "rooms": {
+    "arden.town_square": {
+      "id": "arden.town_square",
+      "location_type": "settlement",
+      "parent": "town_of_arden",
+      "safe_zone": true,
+      "name": "Town Square",
+      "description": "You stand in the center of Arden. Cobblestones worn smooth by generations of foot traffic spread out beneath you. A weathered wooden post displays a map of the town and a notice board covered in parchments. A stone fountain burbles quietly at the square's heart, its basin green with moss. The sounds of daily life surround you - merchants hawking wares, children playing, the clang of a blacksmith's hammer in the distance.",
+      "lighting": "bright",
+      "exits": {
+        "gate": {
+          "destination": "arden.town_gate",
+          "label": "Town Gate"
+        }
+      },
+      "enemies": [],
+      "items": [],
+      "searched": false,
+      "searchable": false
+    },
+    "arden.town_gate": {
+      "id": "arden.town_gate",
+      "location_type": "settlement",
+      "parent": "town_of_arden",
+      "safe_zone": true,
+      "name": "Town Gate",
+      "description": "The eastern gate of Arden stands open during daylight hours, watched over by a pair of bored-looking guards. Beyond the wooden palisade, a dirt road winds through farmland before disappearing into a copse of trees. A weathered signpost points the way to nearby locations.",
+      "lighting": "bright",
+      "exits": {
+        "square": {
+          "destination": "arden.town_square",
+          "label": "Back to Town Square"
+        },
+        "graveyard": {
+          "destination": "crypt.graveyard_entrance",
+          "label": "Road to Davos Family Graveyard"
+        }
+      },
+      "enemies": [],
+      "items": [],
+      "searched": false,
+      "searchable": false
+    }
+  }
+}

@@ -75,7 +75,7 @@ class TestLightSpellIntegration:
         game_state = GameState(party, "the_unquiet_dead_crypt")
 
         # Move to dark room with hidden features
-        game_state.current_room_id = "hall_of_the_dead"
+        game_state.current_room_id = "crypt.hall_of_the_dead"
         room = game_state.get_current_room()
         assert room.get("lighting") == "dark"
 
@@ -101,7 +101,7 @@ class TestLightSpellIntegration:
         """Test that Light spell effect expires after 1 hour."""
         party = Party([wizard_with_light_spell])
         game_state = GameState(party, "the_unquiet_dead_crypt")
-        game_state.current_room_id = "hall_of_the_dead"
+        game_state.current_room_id = "crypt.hall_of_the_dead"
 
         # Cast Light
         result = game_state.cast_spell_exploration("Tim the Wizard", "light")
@@ -134,7 +134,7 @@ class TestDarkvisionIntegration:
         game_state = GameState(party, "the_unquiet_dead_crypt")
 
         # Move to dark room
-        game_state.current_room_id = "hall_of_the_dead"
+        game_state.current_room_id = "crypt.hall_of_the_dead"
         room = game_state.get_current_room()
         assert room.get("lighting") == "dark"
 
@@ -148,7 +148,7 @@ class TestDarkvisionIntegration:
         game_state = GameState(party, "the_unquiet_dead_crypt")
 
         # Move to dark room
-        game_state.current_room_id = "hall_of_the_dead"
+        game_state.current_room_id = "crypt.hall_of_the_dead"
 
         # Wizard (no darkvision) sees darkness
         wizard_lighting = game_state.get_effective_lighting(wizard_with_light_spell)
@@ -178,7 +178,7 @@ class TestPerceptionIntegration:
         game_state = GameState(party, "the_unquiet_dead_crypt", event_bus=event_bus)
 
         # Move to dark hall with passive Perception check (DC 16)
-        game_state.current_room_id = "hall_of_the_dead"
+        game_state.current_room_id = "crypt.hall_of_the_dead"
         game_state._check_passive_perception()
 
         # Should have 2 skill checks (one per character)
@@ -214,7 +214,7 @@ class TestPerceptionIntegration:
         event_bus.subscribe(EventType.SKILL_CHECK, capture_skill_check)
 
         game_state = GameState(party, "the_unquiet_dead_crypt", event_bus=event_bus)
-        game_state.current_room_id = "antechamber"
+        game_state.current_room_id = "crypt.antechamber"
 
         # Add an examinable door with Perception check
         room = game_state.get_current_room()
@@ -238,7 +238,7 @@ class TestPerceptionIntegration:
         game_state = GameState(party, "the_unquiet_dead_crypt")
 
         # Move to antechamber with examine checks on exits
-        game_state.current_room_id = "antechamber"
+        game_state.current_room_id = "crypt.antechamber"
 
         # Try to listen at the north door (Perception DC 14)
         result = game_state.examine_exit("north", wizard_with_light_spell)
@@ -267,7 +267,7 @@ class TestCompleteWorkflow:
         game_state = GameState(party, "the_unquiet_dead_crypt")
 
         # Start at graveyard (bright light)
-        assert game_state.current_room_id == "graveyard_entrance"
+        assert game_state.current_room_id == "crypt.graveyard_entrance"
         room = game_state.get_current_room()
         assert room.get("lighting") == "bright"
 
@@ -278,7 +278,7 @@ class TestCompleteWorkflow:
         # Move down to Hall of the Dead (dark)
         move_result = game_state.move("down")
         assert move_result is True  # move() returns bool, not dict
-        assert game_state.current_room_id == "hall_of_the_dead"
+        assert game_state.current_room_id == "crypt.hall_of_the_dead"
 
         # Wizard sees darkness, dwarf sees dim
         assert game_state.get_effective_lighting(wizard_with_light_spell) == "dark"
@@ -302,7 +302,7 @@ class TestCompleteWorkflow:
         # Move to another room - Light effect should persist
         move_result = game_state.move("north")
         assert move_result is True  # move() returns bool, not dict
-        assert game_state.current_room_id == "antechamber"
+        assert game_state.current_room_id == "crypt.antechamber"
 
         # Still bright due to Light spell
         assert game_state.get_effective_lighting(wizard_with_light_spell) == "bright"

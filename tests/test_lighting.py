@@ -78,7 +78,7 @@ class TestRoomLighting:
         game_state = GameState(party, "the_unquiet_dead_crypt")
 
         # Move to a dark room (hall_of_the_dead)
-        game_state.current_room_id = "hall_of_the_dead"
+        game_state.current_room_id = "crypt.hall_of_the_dead"
         room = game_state.get_current_room()
         assert room.get("lighting") == "dark"
 
@@ -103,7 +103,7 @@ class TestDarkvision:
         game_state = GameState(party, "the_unquiet_dead_crypt")
 
         # Move to a dark room
-        game_state.current_room_id = "hall_of_the_dead"
+        game_state.current_room_id = "crypt.hall_of_the_dead"
         room = game_state.get_current_room()
         assert room.get("lighting") == "dark"
 
@@ -137,7 +137,7 @@ class TestLightSpell:
         game_state = GameState(party, "the_unquiet_dead_crypt")
 
         # Move to a dark room
-        game_state.current_room_id = "hall_of_the_dead"
+        game_state.current_room_id = "crypt.hall_of_the_dead"
 
         # Verify room is dark before casting
         effective_lighting = game_state.get_effective_lighting(human_character)
@@ -232,7 +232,7 @@ class TestPerceptionPenalties:
         game_state = GameState(party, "the_unquiet_dead_crypt")
 
         # Move to dark room
-        game_state.current_room_id = "hall_of_the_dead"
+        game_state.current_room_id = "crypt.hall_of_the_dead"
         lighting = game_state.get_effective_lighting(human_character)
         assert lighting == "dark"
 
@@ -245,7 +245,7 @@ class TestPerceptionPenalties:
         game_state = GameState(party, "the_unquiet_dead_crypt")
 
         # Move to dark room
-        game_state.current_room_id = "hall_of_the_dead"
+        game_state.current_room_id = "crypt.hall_of_the_dead"
 
         # Base lighting is dark
         room = game_state.get_current_room()
