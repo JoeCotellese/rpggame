@@ -103,7 +103,7 @@ class CLI:
         # Extract room name and basic description
         room_name = room.get("name", "Unknown Room")
         basic_desc = room.get("description", self.game_state.get_room_description())
-        exits = room.get("exits", [])
+        exits = self.game_state.get_available_exits()
 
         # Check for monsters in the room
         enemy_ids = room.get("enemies", [])
@@ -890,11 +890,13 @@ class CLI:
     def handle_move(self, direction: str) -> None:
         """Handle movement command."""
         if not direction:
-            # Show available exits
-            room = self.game_state.get_current_room()
-            exits = room.get("exits", [])
+            # Show available exits (filtered by requirements)
+            exits = self.game_state.get_available_exits()
             if exits:
-                print_status_message(f"Specify a direction. Available exits: {', '.join(exits)}", "warning")
+                print_status_message(
+                    f"Specify a direction. Available exits: {', '.join(exits)}",
+                    "warning"
+                )
             else:
                 print_status_message("No exits available from this room.", "warning")
             return
@@ -902,6 +904,13 @@ class CLI:
         # Check if exit is locked before attempting move
         if self.game_state.is_exit_locked(direction):
             self.handle_unlock(direction)
+            return
+
+        # Check if exit requirements are met (quest items, etc.)
+        req_check = self.game_state.check_exit_requirements(direction)
+        if not req_check["met"]:
+            for reason in req_check["missing"]:
+                print_error(reason)
             return
 
         # Move without checking for enemies yet
@@ -917,10 +926,12 @@ class CLI:
                 print_error("You cannot move during combat!")
             else:
                 # Show available exits when movement fails
-                room = self.game_state.get_current_room()
-                exits = room.get("exits", [])
+                exits = self.game_state.get_available_exits()
                 if exits:
-                    print_error(f"You cannot go {direction} from here. Available exits: {', '.join(exits)}")
+                    print_error(
+                        f"You cannot go {direction} from here. "
+                        f"Available exits: {', '.join(exits)}"
+                    )
                 else:
                     print_error("No exits available from this room.")
 
@@ -3317,11 +3328,13 @@ class CLI:
                         item_data = items_data[category].get(inv_item.item_id, {})
                         item_name = item_data.get("name", inv_item.item_id)
                         is_equipped = (inv_item.item_id == weapon_id or inv_item.item_id == armor_id)
+                        is_quest_item = item_data.get("quest_item", False)
 
                         inventory_items[category].append({
                             "name": item_name,
                             "quantity": inv_item.quantity,
-                            "equipped": is_equipped
+                            "equipped": is_equipped,
+                            "quest_item": is_quest_item
                         })
 
             # Display character title with player number
