@@ -389,6 +389,11 @@ class GameState:
         if self.is_exit_locked(direction):
             return False  # Door is locked
 
+        # Check if exit requirements are met (quest items, etc.)
+        req_check = self.check_exit_requirements(direction)
+        if not req_check["met"]:
+            return False  # Requirements not met
+
         # Track direction for flee mechanic (before moving)
         self.last_entry_direction = direction
 
@@ -495,6 +500,100 @@ class GameState:
             return False
 
         return exit_info.get("locked", False)
+
+    def party_has_quest_item(self, item_id: str) -> bool:
+        """
+        Check if any party member has a specific quest item.
+
+        Args:
+            item_id: The item ID to check for
+
+        Returns:
+            True if any party member has the item
+        """
+        for character in self.party.characters:
+            if character.inventory.has_item(item_id):
+                return True
+        return False
+
+    def check_exit_requirements(self, direction: str) -> dict[str, Any]:
+        """
+        Check if exit requirements are met for a direction.
+
+        Args:
+            direction: Direction to check
+
+        Returns:
+            Dict with:
+            - met: bool - Whether all requirements are met
+            - missing: list - List of unmet requirement descriptions
+        """
+        exit_info = self.get_exit_info(direction)
+        if not exit_info:
+            return {"met": True, "missing": []}
+
+        requires = exit_info.get("requires")
+        if not requires:
+            return {"met": True, "missing": []}
+
+        missing = []
+
+        # Check quest_item requirement
+        if "quest_item" in requires:
+            item_id = requires["quest_item"]
+            if not self.party_has_quest_item(item_id):
+                # Get item name from data loader if available
+                item_name = item_id
+                if self.data_loader:
+                    items_data = self.data_loader.load_items()
+                    for category in items_data.values():
+                        if item_id in category:
+                            item_name = category[item_id].get("name", item_id)
+                            break
+                missing.append(f"Requires: {item_name}")
+
+        return {"met": len(missing) == 0, "missing": missing}
+
+    def is_exit_hidden(self, direction: str) -> bool:
+        """
+        Check if an exit should be hidden (requirements not met + hidden_until_unlocked).
+
+        Args:
+            direction: Direction to check
+
+        Returns:
+            True if exit should be hidden from player
+        """
+        exit_info = self.get_exit_info(direction)
+        if not exit_info:
+            return False
+
+        # If not marked as hidden_until_unlocked, always show
+        if not exit_info.get("hidden_until_unlocked", False):
+            return False
+
+        # Check if requirements are met
+        req_check = self.check_exit_requirements(direction)
+        return not req_check["met"]
+
+    def get_available_exits(self) -> dict[str, Any]:
+        """
+        Get exits that should be shown to the player.
+
+        Filters out exits that are hidden due to unmet requirements.
+
+        Returns:
+            Dict of direction -> exit info for visible exits
+        """
+        current_room = self.get_current_room()
+        all_exits = current_room.get("exits", {})
+
+        visible_exits = {}
+        for direction, exit_info in all_exits.items():
+            if not self.is_exit_hidden(direction):
+                visible_exits[direction] = exit_info
+
+        return visible_exits
 
     def get_unlock_methods(self, direction: str) -> list[dict[str, Any]]:
         """

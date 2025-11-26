@@ -163,7 +163,7 @@ def create_inventory_table(items: dict[str, list[dict[str, Any]]]) -> Table:
 
     Args:
         items: Dict with categories (weapons, armor, consumables)
-               Each category has list of {name, quantity, equipped}
+               Each category has list of {name, quantity, equipped, quest_item}
 
     Returns:
         Formatted Rich Table
@@ -177,8 +177,11 @@ def create_inventory_table(items: dict[str, list[dict[str, Any]]]) -> Table:
     for category, item_list in items.items():
         for item in item_list:
             status = "[bold yellow]⚔ EQUIPPED[/bold yellow]" if item.get("equipped") else "—"
+            item_name = item.get("name", "Unknown")
+            if item.get("quest_item"):
+                item_name = f"[bold cyan]★[/bold cyan] {item_name}"
             table.add_row(
-                item.get("name", "Unknown"),
+                item_name,
                 category.capitalize(),
                 str(item.get("quantity", 1)),
                 status

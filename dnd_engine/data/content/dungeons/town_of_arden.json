@@ -174,7 +174,15 @@
       "description": "The cobblestones give way to packed dirt as you enter the oldest part of Arden. Here the buildings lean together like drunken conspirators, their upper stories nearly touching across narrow lanes that twist without logic. This is the Warrens - home to those who cannot afford better and those who prefer not to be found. The town guard rarely patrols these streets after dark, and the locals eye strangers with a mixture of suspicion and calculation. Faded signs mark establishments of dubious reputation: a pawnbroker who asks no questions, a fortune teller whose predictions are said to be unsettlingly accurate, a nameless tavern where the ale is cheap and the clientele cheaper. Somewhere in this maze of alleys and abandoned warehouses, darker things stir - though whether the rumors of hooded figures and strange symbols are truth or tavern tales, none can say for certain.",
       "lighting": "dim",
       "exits": {
-        "west": "arden.town_road"
+        "west": "arden.town_road",
+        "down": {
+          "destination": "cult_hideout.entrance",
+          "label": "Hidden Cellar Door",
+          "requires": {
+            "quest_item": "gorgus_journal"
+          },
+          "hidden_until_unlocked": true
+        }
       },
       "enemies": [],
       "items": [],
