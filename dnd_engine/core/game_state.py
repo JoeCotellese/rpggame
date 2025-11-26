@@ -10,6 +10,7 @@ from dnd_engine.core.combat import AttackResult, CombatEngine
 from dnd_engine.core.creature import Creature
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.party import Party
+from dnd_engine.core.room_registry import RoomRegistry
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.systems.action_economy import ActionType
 from dnd_engine.systems.initiative import InitiativeTracker
@@ -184,9 +185,23 @@ class GameState:
         # Time tracking system
         self.time_manager = TimeManager(event_bus=self.event_bus)
 
-        # Load dungeon
+        # Load dungeon using data_loader (supports mocking in tests)
         self.dungeon_name = dungeon_name  # Store filename for saving
         self.dungeon = self.data_loader.load_dungeon(dungeon_name)
+
+        # Room registry for cross-dungeon navigation
+        # May be None if data_path is unavailable (e.g., in tests with mocked loaders)
+        self.room_registry: RoomRegistry | None = None
+        try:
+            dungeons_path = self.data_loader.data_path / "content" / "dungeons"
+            if dungeons_path.exists():
+                self.room_registry = RoomRegistry(dungeons_path)
+                # Pre-populate registry cache with current dungeon data
+                # so modifications are shared when we return to this dungeon
+                self.room_registry._loaded_dungeons[dungeon_name] = self.dungeon
+        except (AttributeError, TypeError):
+            # data_path may not exist on mocked loaders
+            pass
         self.current_room_id = self.dungeon["start_room"]
         self.previous_room_id: str | None = None  # Track room transitions for narrative
 
@@ -383,6 +398,31 @@ class GameState:
             new_room_id = exit_info
         else:
             new_room_id = exit_info["destination"]
+
+        # Check if this is a cross-dungeon move
+        if new_room_id not in self.dungeon.get("rooms", {}):
+            # Room not in current dungeon - use registry to find and load it
+            if not self.room_registry:
+                logger.warning(f"Room {new_room_id} not in current dungeon and no registry available")
+                return False
+
+            new_dungeon_name = self.room_registry.get_dungeon_for_room(new_room_id)
+            if new_dungeon_name:
+                new_dungeon = self.room_registry.load_dungeon(new_dungeon_name)
+                if new_dungeon and new_room_id in new_dungeon.get("rooms", {}):
+                    # Switch to new dungeon
+                    self.dungeon = new_dungeon
+                    self.dungeon_name = new_dungeon_name
+                    logger.info(
+                        f"Cross-dungeon move: {self.current_room_id} -> {new_room_id} "
+                        f"(switched to {new_dungeon_name})"
+                    )
+                else:
+                    logger.warning(f"Room {new_room_id} not found in dungeon {new_dungeon_name}")
+                    return False
+            else:
+                logger.warning(f"No dungeon found for room {new_room_id}")
+                return False
 
         # Track previous room for narrative transitions
         self.previous_room_id = self.current_room_id
