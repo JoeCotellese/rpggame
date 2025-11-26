@@ -164,25 +164,8 @@ class CLI:
         # Use enhanced description if available, otherwise use basic
         room_text = enhanced_desc if enhanced_desc else basic_desc
 
-        # Add lighting indicator to room name based on best party lighting
-        # (if anyone can see bright, show bright; if anyone can see dim, show dim; else dark)
-        best_lighting = "dark"
-        for char_lighting in party_lighting:
-            if char_lighting["lighting"] == "bright":
-                best_lighting = "bright"
-                break
-            elif char_lighting["lighting"] == "dim":
-                best_lighting = "dim"
-
-        lighting_icons = {
-            "bright": "☀️",
-            "dim": "🌙",
-            "dark": "⚫"
-        }
-        lighting_icon = lighting_icons.get(best_lighting, "")
-        room_name_with_lighting = f"{room_name} {lighting_icon}"
-
-        print_room_description(room_name_with_lighting, room_text, exits)
+        # Lighting is now shown in the status bar, so we just use the room name
+        print_room_description(room_name, room_text, exits)
 
         # Show visible items in the room
         visible_items = [item for item in room.get("items", []) if item.get("visible", False)]
@@ -426,6 +409,42 @@ class CLI:
             padding=(0, 1)
         ))
 
+    def _get_status_bar(self):
+        """Build the status bar content for the bottom toolbar."""
+        from prompt_toolkit.formatted_text import HTML
+
+        # Get current location
+        room = self.game_state.get_current_room()
+        room_name = room.get("name", "Unknown")
+        dungeon = self.game_state.dungeon
+        location_name = dungeon.get("name", "Unknown") if dungeon else "Unknown"
+
+        # Get effective lighting (best among party members)
+        best_lighting = "dark"
+        for char in self.game_state.party.characters:
+            lighting = self.game_state.get_effective_lighting(char)
+            if lighting == "bright":
+                best_lighting = "bright"
+                break
+            elif lighting == "dim":
+                best_lighting = "dim"
+
+        # Format lighting with icon and color
+        lighting_display = {
+            "bright": ("☀️", "yellow", "Bright"),
+            "dim": ("🌙", "orange", "Dim"),
+            "dark": ("⚫", "red", "Dark")
+        }
+        icon, color, label = lighting_display.get(best_lighting, ("?", "white", "Unknown"))
+
+        return HTML(
+            f'<style fg="cyan">{location_name}</style>'
+            f' <style fg="white">│</style> '
+            f'<style fg="white">{room_name}</style>'
+            f' <style fg="white">│</style> '
+            f'<style fg="{color}">{icon} {label}</style>'
+        )
+
     def get_player_command(self) -> str:
         """
         Get a command from the player with history support.
@@ -447,6 +466,7 @@ class CLI:
                 "\n> ",
                 history=FileHistory(str(history_file)),
                 auto_suggest=AutoSuggestFromHistory(),
+                bottom_toolbar=self._get_status_bar,
             ).strip().lower()
         except (EOFError, KeyboardInterrupt):
             return "quit"

@@ -72,7 +72,7 @@
       "parent": "town_of_arden",
       "safe_zone": true,
       "name": "Outside Davos Manor",
-      "description": "You stand before the iron gates of Davos Manor. The family crest - a radiant sun over crossed swords - is worked into the metalwork, though rust has claimed much of its former glory. Beyond the gates, manicured grounds have gone slightly wild from neglect. Overgrown hedges line a gravel path leading to the manor's front door. The manor itself is an imposing structure of grey stone, tall windows staring down like hollow eyes. Ivy creeps up the eastern wall unchecked. A servant in faded livery waits near the entrance, watching for visitors who might answer the family's plea for aid.",
+      "description": "You stand before the iron gates of Davos Manor. The family crest - a radiant sun over crossed swords - is worked into the metalwork, though rust has claimed much of its former glory. Beyond the gates, manicured grounds have gone slightly wild from neglect. Overgrown hedges line a gravel path leading to the manor's front door. The manor itself is an imposing structure of grey stone, tall windows staring down like hollow eyes. Ivy creeps up the eastern wall unchecked. A servant in faded livery tends to the overgrown hedges, paying you little mind.",
       "lighting": "bright",
       "exits": {
         "east": "arden.town_square",
@@ -92,7 +92,7 @@
       "parent": "town_of_arden",
       "safe_zone": true,
       "name": "Davos Manor - Entry Hall",
-      "description": "The entry hall of Davos Manor speaks of wealth accumulated over generations, now fading into genteel decay. A grand staircase sweeps upward, its banister polished by countless hands over the centuries. Portraits of ancestors line the walls - stern men and women in the formal dress of ages past, and at the center, a larger painting of a man in clerical robes holding a sunburst holy symbol: Davos himself, the legendary cleric who defeated the devil Durgon. Dust motes drift in shafts of light from high windows. The current Lord Davos, old and frail, rarely leaves his study these days. A servant offers to announce your presence should you wish an audience with his lordship regarding the troubles at the family crypt.",
+      "description": "The entry hall of Davos Manor speaks of wealth accumulated over generations, now fading into genteel decay. A grand staircase sweeps upward, its banister polished by countless hands over the centuries. Portraits of ancestors line the walls - stern men and women in the formal dress of ages past, and at the center, a larger painting of a man in clerical robes holding a sunburst holy symbol: Davos himself, the legendary cleric who defeated the devil Durgon. Dust motes drift in shafts of light from high windows. The current Lord Davos, old and frail, rarely leaves his study these days. Footsteps echo from somewhere above - servants going about their quiet duties in the old house.",
       "lighting": "dim",
       "exits": {
         "east": {
