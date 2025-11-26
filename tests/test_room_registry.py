@@ -236,7 +236,7 @@ class TestRoomRegistryWithRealData:
 
         # Should find town rooms
         assert registry.get_dungeon_for_room("arden.town_square") == "town_of_arden"
-        assert registry.room_exists("arden.town_gate")
+        assert registry.room_exists("arden.town_road")
 
     def test_cross_dungeon_exit_resolution(self):
         """Test that exits between dungeons can be resolved."""
@@ -246,12 +246,12 @@ class TestRoomRegistryWithRealData:
 
         registry = RoomRegistry(dungeons_path)
 
-        # Get the town gate room
-        town_gate = registry.get_room("arden.town_gate")
-        assert town_gate is not None
+        # Get the town road room (connects to crypt)
+        town_road = registry.get_room("arden.town_road")
+        assert town_road is not None
 
-        # Check the exit to crypt
-        graveyard_exit = town_gate["exits"].get("graveyard")
+        # Check the exit to crypt (south direction)
+        graveyard_exit = town_road["exits"].get("south")
         assert graveyard_exit is not None
         destination = graveyard_exit["destination"]
 

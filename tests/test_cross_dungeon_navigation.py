@@ -53,13 +53,13 @@ class TestCrossDungeonNavigation:
         assert game_state.current_room_id == "arden.town_square"
         assert game_state.dungeon_name == "town_of_arden"
 
-        # Move to gate
-        success = game_state.move("gate", check_for_enemies=False)
+        # Move south to town road
+        success = game_state.move("south", check_for_enemies=False)
         assert success is True
-        assert game_state.current_room_id == "arden.town_gate"
+        assert game_state.current_room_id == "arden.town_road"
 
-        # Move to crypt (cross-dungeon)
-        success = game_state.move("graveyard", check_for_enemies=False)
+        # Move south to crypt (cross-dungeon)
+        success = game_state.move("south", check_for_enemies=False)
         assert success is True
         assert game_state.current_room_id == "crypt.graveyard_entrance"
         assert game_state.dungeon_name == "the_unquiet_dead_crypt"
@@ -81,10 +81,10 @@ class TestCrossDungeonNavigation:
         assert game_state.current_room_id == "crypt.graveyard_entrance"
         assert game_state.dungeon_name == "the_unquiet_dead_crypt"
 
-        # Move to town (cross-dungeon)
-        success = game_state.move("road", check_for_enemies=False)
+        # Move north to town (cross-dungeon)
+        success = game_state.move("north", check_for_enemies=False)
         assert success is True
-        assert game_state.current_room_id == "arden.town_gate"
+        assert game_state.current_room_id == "arden.town_road"
         assert game_state.dungeon_name == "town_of_arden"
 
     def test_round_trip_navigation(self, test_party):
@@ -100,18 +100,18 @@ class TestCrossDungeonNavigation:
             data_loader=data_loader
         )
 
-        # Go to crypt
-        game_state.move("gate", check_for_enemies=False)
-        game_state.move("graveyard", check_for_enemies=False)
+        # Go to crypt (south twice)
+        game_state.move("south", check_for_enemies=False)
+        game_state.move("south", check_for_enemies=False)
         assert game_state.current_room_id == "crypt.graveyard_entrance"
 
-        # Go back to town
-        game_state.move("road", check_for_enemies=False)
-        assert game_state.current_room_id == "arden.town_gate"
+        # Go back to town (north)
+        game_state.move("north", check_for_enemies=False)
+        assert game_state.current_room_id == "arden.town_road"
         assert game_state.dungeon_name == "town_of_arden"
 
-        # Go back to crypt again
-        game_state.move("graveyard", check_for_enemies=False)
+        # Go back to crypt again (south)
+        game_state.move("south", check_for_enemies=False)
         assert game_state.current_room_id == "crypt.graveyard_entrance"
         assert game_state.dungeon_name == "the_unquiet_dead_crypt"
 
@@ -132,12 +132,12 @@ class TestCrossDungeonNavigation:
         room = game_state.get_current_room()
         room["searched"] = True
 
-        # Go to town
-        game_state.move("road", check_for_enemies=False)
-        assert game_state.current_room_id == "arden.town_gate"
+        # Go to town (north)
+        game_state.move("north", check_for_enemies=False)
+        assert game_state.current_room_id == "arden.town_road"
 
-        # Go back to crypt
-        game_state.move("graveyard", check_for_enemies=False)
+        # Go back to crypt (south)
+        game_state.move("south", check_for_enemies=False)
 
         # The searched flag should still be set
         room = game_state.get_current_room()
@@ -156,9 +156,9 @@ class TestCrossDungeonNavigation:
             data_loader=data_loader
         )
 
-        # Navigate to crypt
-        game_state.move("gate", check_for_enemies=False)
-        game_state.move("graveyard", check_for_enemies=False)
+        # Navigate to crypt (south twice)
+        game_state.move("south", check_for_enemies=False)
+        game_state.move("south", check_for_enemies=False)
 
         # Check room info
         room = game_state.get_current_room()
@@ -180,19 +180,19 @@ class TestCrossDungeonNavigation:
             data_loader=data_loader
         )
 
-        # Navigate to crypt
-        game_state.move("gate", check_for_enemies=False)
-        game_state.move("graveyard", check_for_enemies=False)
+        # Navigate to crypt (south twice)
+        game_state.move("south", check_for_enemies=False)
+        game_state.move("south", check_for_enemies=False)
 
         # Check exits
         room = game_state.get_current_room()
         exits = room.get("exits", {})
 
-        # Should have exit down to hall_of_the_dead and road back to town
+        # Should have exit down to hall_of_the_dead and north back to town
         assert "down" in exits
-        assert "road" in exits
+        assert "north" in exits
 
         # Verify exit destinations
         assert exits["down"] == "crypt.hall_of_the_dead"
-        road_exit = exits["road"]
-        assert road_exit["destination"] == "arden.town_gate"
+        north_exit = exits["north"]
+        assert north_exit["destination"] == "arden.town_road"

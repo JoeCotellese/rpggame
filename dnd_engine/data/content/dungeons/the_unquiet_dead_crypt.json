@@ -17,8 +17,8 @@
       "lighting": "bright",
       "exits": {
         "down": "crypt.hall_of_the_dead",
-        "road": {
-          "destination": "arden.town_gate",
+        "north": {
+          "destination": "arden.town_road",
           "label": "Road back to Arden"
         }
       },
