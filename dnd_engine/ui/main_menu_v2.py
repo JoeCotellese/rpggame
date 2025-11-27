@@ -3,6 +3,7 @@
 
 from pathlib import Path
 
+import questionary
 from rich.panel import Panel
 
 from dnd_engine.core.character import Character
@@ -342,63 +343,70 @@ class MainMenuV2:
         Returns:
             List of selected characters (1-6)
         """
-        selected_characters = []
+        selected_characters: list[Character] = []
+        char_list = self.vault.list_characters()
 
+        # Step 1: Select from existing vault characters (if any)
+        if char_list:
+            console.print()
+
+            # Build choices for questionary
+            choices = []
+            for char_info in char_list:
+                display = (
+                    f"{char_info['name']} - "
+                    f"Level {char_info['level']} {char_info['class']}"
+                )
+                choices.append(questionary.Choice(title=display, value=char_info['id']))
+
+            def validate_selection(selected: list) -> bool | str:
+                if len(selected) > 6:
+                    return "Maximum 6 characters in a party"
+                return True
+
+            try:
+                selected_ids = questionary.checkbox(
+                    "Select characters for your party (1-6):",
+                    choices=choices,
+                    validate=validate_selection,
+                    instruction="(Space to toggle, Enter to confirm)"
+                ).ask()
+
+                if selected_ids:
+                    for char_id in selected_ids:
+                        character = self.vault.get_character(char_id)
+                        selected_characters.append(character)
+
+            except (EOFError, KeyboardInterrupt):
+                return []
+
+        # Step 2: Offer to create new characters if party isn't full
         while len(selected_characters) < 6:
-            console.print()
-            print_section(f"SELECT CHARACTER #{len(selected_characters) + 1}")
-
-            # Show vault characters
-            char_list = self.vault.list_characters()
-
-            if char_list:
-                console.print("\n[bold]Characters in Vault:[/bold]")
-                for i, char_info in enumerate(char_list, 1):
-                    usage_str = f"Used {char_info['times_used']} times" if char_info['times_used'] > 0 else "Never used"
-                    console.print(
-                        f"  [{i}] {char_info['name']} - "
-                        f"Level {char_info['level']} {char_info['class']} "
-                        f"[dim]({usage_str})[/dim]"
-                    )
-            else:
-                console.print("\n[dim]No characters in vault yet.[/dim]")
-
-            console.print("\n  [C] Create new character")
-            console.print(f"  [F] Finish party selection (current: {len(selected_characters)})")
-
             if len(selected_characters) == 0:
-                console.print("\n[dim]Note: You need at least 1 character[/dim]")
+                prompt = "No characters selected. Create a new character?"
+            else:
+                party_names = ", ".join(c.name for c in selected_characters)
+                prompt = f"Party: {party_names}\nCreate another character?"
 
-            console.print()
-            choice = console.input("[bold cyan]Select option:[/bold cyan] ").strip()
-
-            if choice.upper() == 'F':
+            try:
+                create_more = questionary.confirm(
+                    prompt,
+                    default=len(selected_characters) == 0  # Default yes if no characters
+                ).ask()
+            except (EOFError, KeyboardInterrupt):
                 if len(selected_characters) > 0:
                     break
-                else:
-                    console.print("\n[yellow]You need at least 1 character.[/yellow]")
-                    continue
+                return []
 
-            elif choice.upper() == 'C':
-                # Create new character
-                new_char = self._create_character_interactive()
-                if new_char:
-                    # Add to vault
-                    char_id = self.vault.add_character(new_char)
-                    selected_characters.append(new_char)
-                    print_status_message(f"Added {new_char.name} to party", "success")
+            if not create_more:
+                break
 
-            elif choice.isdigit():
-                idx = int(choice)
-                if 1 <= idx <= len(char_list):
-                    char_info = char_list[idx - 1]
-                    character = self.vault.get_character(char_info['id'])
-                    selected_characters.append(character)
-                    print_status_message(f"Added {character.name} to party", "success")
-                else:
-                    print_error("Invalid character number.")
-            else:
-                print_error("Invalid input.")
+            # Create new character
+            new_char = self._create_character_interactive()
+            if new_char:
+                self.vault.add_character(new_char)
+                selected_characters.append(new_char)
+                print_status_message(f"Added {new_char.name} to party", "success")
 
         return selected_characters
 
@@ -434,6 +442,8 @@ class MainMenuV2:
         Returns:
             Dict with campaign_id and starting_dungeon, or None if cancelled
         """
+        import json
+
         console.print()
         print_section("SELECT CAMPAIGN")
 
@@ -449,7 +459,6 @@ class MainMenuV2:
         campaigns = []
         for campaign_file in campaign_files:
             try:
-                import json
                 with open(campaign_file) as f:
                     campaign_data = json.load(f)
                     campaigns.append(campaign_data)
@@ -460,31 +469,38 @@ class MainMenuV2:
             print_error("No valid campaigns found!")
             return None
 
-        console.print("\n[bold]Available Campaigns:[/bold]\n")
-        for i, campaign in enumerate(campaigns, 1):
+        # Build choices for questionary
+        choices = []
+        for campaign in campaigns:
             level_range = campaign.get("level_range", "Any")
-            console.print(f"  [bold cyan][{i}][/bold cyan] {campaign['name']} [dim](Level {level_range})[/dim]")
-            console.print(f"      [dim]{campaign.get('description', '')}[/dim]\n")
+            display = f"{campaign['name']} (Level {level_range})"
+            choices.append(questionary.Choice(title=display, value=campaign["id"]))
 
-        console.print()
-        choice = console.input(f"[bold cyan]Select campaign [1-{len(campaigns)}]:[/bold cyan] ").strip()
+        choices.append(questionary.Choice(title="← Back", value=None))
 
         try:
-            idx = int(choice)
-            if 1 <= idx <= len(campaigns):
-                selected = campaigns[idx - 1]
-                return {
-                    "campaign_id": selected["id"],
-                    "name": selected["name"],
-                    "level_range": selected.get("level_range", "Any"),
-                    "starting_dungeon": selected["starting_dungeon"]
-                }
-            else:
-                print_error("Invalid campaign number.")
-                return None
-        except ValueError:
-            print_error("Invalid input.")
+            selected_id = questionary.select(
+                "Choose a campaign:",
+                choices=choices,
+                use_arrow_keys=True
+            ).ask()
+        except (EOFError, KeyboardInterrupt):
             return None
+
+        if not selected_id:
+            return None
+
+        # Find the selected campaign
+        selected = next((c for c in campaigns if c["id"] == selected_id), None)
+        if not selected:
+            return None
+
+        return {
+            "campaign_id": selected["id"],
+            "name": selected["name"],
+            "level_range": selected.get("level_range", "Any"),
+            "starting_dungeon": selected["starting_dungeon"]
+        }
 
     def handle_character_vault(self) -> None:
         """Handle character vault management menu."""
