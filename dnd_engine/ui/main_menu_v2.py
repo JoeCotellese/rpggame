@@ -247,10 +247,19 @@ class MainMenuV2:
         Returns:
             Tuple of (GameState, slot_number) if successful, None otherwise
         """
-        # Step 1: Select party from vault or create new
+        # Step 1: Select campaign
+        campaign_info = self._select_adventure()
+
+        if not campaign_info:
+            console.print("\n[yellow]No campaign selected. Returning to menu.[/yellow]")
+            return None
+
+        # Step 2: Select party from vault or create new
         console.print()
+        level_range = campaign_info.get("level_range", "Any")
         print_section(
-            "NEW GAME - SELECT PARTY",
+            "SELECT PARTY",
+            f"Campaign: {campaign_info['name']} (Level {level_range})\n"
             "Build your party by selecting 1-6 characters from your vault.\n"
             "Press [bold]C[/bold] to create new characters on the fly."
         )
@@ -259,13 +268,6 @@ class MainMenuV2:
 
         if not party_characters:
             console.print("\n[yellow]No party selected. Returning to menu.[/yellow]")
-            return None
-
-        # Step 2: Select campaign
-        campaign_info = self._select_adventure()
-
-        if not campaign_info:
-            console.print("\n[yellow]No campaign selected. Returning to menu.[/yellow]")
             return None
 
         # Step 3: Select save slot
@@ -473,6 +475,8 @@ class MainMenuV2:
                 selected = campaigns[idx - 1]
                 return {
                     "campaign_id": selected["id"],
+                    "name": selected["name"],
+                    "level_range": selected.get("level_range", "Any"),
                     "starting_dungeon": selected["starting_dungeon"]
                 }
             else:
