@@ -218,3 +218,45 @@ class DataLoader:
             raise KeyError(f"Spell '{spell_id}' not found in spell definitions")
 
         return spells[spell_id]
+
+    def load_quests(self, campaign_id: str) -> dict[str, Any]:
+        """
+        Load quest definitions for a campaign from JSON.
+
+        Args:
+            campaign_id: ID of the campaign (e.g., "the_unquiet_dead")
+
+        Returns:
+            Dictionary containing quest data with 'quests' list
+
+        Raises:
+            FileNotFoundError: If quest file doesn't exist
+        """
+        quest_file = self.data_path / "content" / "quests" / f"{campaign_id}.json"
+
+        if not quest_file.exists():
+            raise FileNotFoundError(f"Quest file not found: {quest_file}")
+
+        with open(quest_file, encoding="utf-8") as f:
+            return json.load(f)
+
+    def load_npcs(self, campaign_id: str) -> dict[str, Any]:
+        """
+        Load NPC definitions for a campaign from JSON.
+
+        Args:
+            campaign_id: ID of the campaign (e.g., "the_unquiet_dead")
+
+        Returns:
+            Dictionary containing NPC data with 'npcs' dict
+
+        Raises:
+            FileNotFoundError: If NPC file doesn't exist
+        """
+        npc_file = self.data_path / "content" / "npcs" / f"{campaign_id}.json"
+
+        if not npc_file.exists():
+            raise FileNotFoundError(f"NPC file not found: {npc_file}")
+
+        with open(npc_file, encoding="utf-8") as f:
+            return json.load(f)

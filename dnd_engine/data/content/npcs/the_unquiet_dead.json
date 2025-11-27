@@ -1,0 +1,165 @@
+{
+  "campaign_id": "the_unquiet_dead",
+  "npcs": {
+    "marta_innkeeper": {
+      "id": "marta_innkeeper",
+      "name": "Marta",
+      "display_name": "Marta, the Innkeeper",
+      "home_location": "arden.inn_common_room",
+      "current_location": "arden.inn_common_room",
+      "can_move": false,
+      "personality": {
+        "traits": ["warm", "maternal", "practical", "gossip-loving"],
+        "speech_style": "folksy, conversational, uses endearments like 'dearie' and 'love'",
+        "attitude_default": "friendly",
+        "suspicion_of_strangers": "mild"
+      },
+      "knowledge": {
+        "general": [
+          "Runs The Rusty Tankard inn for 20 years",
+          "Knows everyone in Arden and their business",
+          "Has heard worrying rumors about the old cemetery"
+        ],
+        "quest_hooks": ["investigate_crypt", "missing_merchant"],
+        "local_lore": [
+          "The Davos family has protected Arden for generations",
+          "The chapel was built by Lord Davos after he defeated something evil long ago"
+        ]
+      },
+      "shop": {
+        "enabled": true,
+        "shop_type": "tavern",
+        "inventory": [
+          {"item_id": "ale", "price": 2, "stock": -1},
+          {"item_id": "meal", "price": 5, "stock": -1},
+          {"item_id": "room_night", "price": 8, "stock": 3},
+          {"item_id": "wine", "price": 4, "stock": 10}
+        ],
+        "buy_rate": 0.5,
+        "sell_dialogue": "What can I get you, dearie?",
+        "insufficient_funds_dialogue": "Oh dearie, looks like you're a bit short there."
+      },
+      "dialogue": {
+        "greeting": "Well now, look what the wind blew in! Welcome to the Rusty Tankard. What can I get for you?",
+        "farewell": "Safe travels, dearie. Come back soon!",
+        "hostile_greeting": "I don't serve your kind here. Move along."
+      },
+      "reputation_modifiers": {
+        "friendly_threshold": 10,
+        "hostile_threshold": -20,
+        "disposition_effects": {
+          "friendly": {"price_modifier": 0.9, "extra_hints": true},
+          "hostile": {"refuses_service": true}
+        }
+      },
+      "schedule": null,
+      "services": null
+    },
+    "father_aldric": {
+      "id": "father_aldric",
+      "name": "Father Aldric",
+      "display_name": "Father Aldric",
+      "home_location": "arden.chapel_interior",
+      "current_location": "arden.chapel_interior",
+      "can_move": true,
+      "personality": {
+        "traits": ["devout", "worried", "scholarly", "gentle"],
+        "speech_style": "formal but kind, occasionally references scripture, speaks with measured concern",
+        "attitude_default": "welcoming",
+        "suspicion_of_strangers": "none"
+      },
+      "knowledge": {
+        "general": [
+          "Serves as the town's priest for 15 years",
+          "Expert on local religious history and the legend of Davos",
+          "Has felt a dark presence growing at the cemetery",
+          "The holy wards on the crypt have been weakening"
+        ],
+        "quest_hooks": ["investigate_crypt"],
+        "local_lore": [
+          "Lord Davos defeated the devil Durgon two hundred years ago",
+          "Davos's holy symbol is said to still rest in his tomb",
+          "The crypt was sealed with divine wards that have weakened over time",
+          "Unholy chanting has been heard from the cemetery at night"
+        ]
+      },
+      "shop": {
+        "enabled": true,
+        "shop_type": "temple",
+        "inventory": [
+          {"item_id": "potion_of_healing", "price": 50, "stock": 3},
+          {"item_id": "holy_water", "price": 25, "stock": 5}
+        ],
+        "buy_rate": 0.0,
+        "sell_dialogue": "The church has a few blessed items that might aid righteous travelers.",
+        "insufficient_funds_dialogue": "I wish I could help more, but the church has its own needs."
+      },
+      "dialogue": {
+        "greeting": "Blessings upon you, travelers. I am Father Aldric. How may I serve you?",
+        "farewell": "May the Light guide your path and shield you from darkness.",
+        "hostile_greeting": "Leave this holy place at once."
+      },
+      "reputation_modifiers": null,
+      "schedule": {
+        "morning": "arden.chapel_interior",
+        "afternoon": "arden.outside_chapel",
+        "evening": "arden.chapel_interior",
+        "night": "arden.chapel_interior"
+      },
+      "services": {
+        "healing": {"cost_per_hp": 1, "available": true},
+        "bless": {"cost": 25, "available": true}
+      }
+    },
+    "guard_captain_roderick": {
+      "id": "guard_captain_roderick",
+      "name": "Captain Roderick",
+      "display_name": "Captain Roderick of the Town Guard",
+      "home_location": "arden.town_gate",
+      "current_location": "arden.town_gate",
+      "can_move": true,
+      "personality": {
+        "traits": ["gruff", "duty-bound", "protective", "suspicious"],
+        "speech_style": "clipped and military, gets to the point, distrustful of strangers",
+        "attitude_default": "neutral",
+        "suspicion_of_strangers": "high"
+      },
+      "knowledge": {
+        "general": [
+          "Commands the small town guard of Arden",
+          "Has noticed increased undead activity near the cemetery",
+          "Concerned about protecting the town with limited resources",
+          "Reports to the mayor but makes tactical decisions independently"
+        ],
+        "quest_hooks": ["investigate_crypt"],
+        "local_lore": [
+          "The guard has been stretched thin lately",
+          "Several travelers have gone missing on the roads",
+          "Something is disturbing the old burial grounds"
+        ]
+      },
+      "shop": {
+        "enabled": false,
+        "shop_type": "none",
+        "inventory": [],
+        "buy_rate": 0.0
+      },
+      "dialogue": {
+        "greeting": "Halt. State your business in Arden.",
+        "farewell": "Keep your weapons sheathed in town. Move along.",
+        "hostile_greeting": "You're not welcome here. Leave now or face the consequences."
+      },
+      "reputation_modifiers": {
+        "friendly_threshold": 15,
+        "hostile_threshold": -10
+      },
+      "schedule": {
+        "morning": "arden.town_gate",
+        "afternoon": "arden.market_square",
+        "evening": "arden.town_gate",
+        "night": "arden.guard_barracks"
+      },
+      "services": null
+    }
+  }
+}

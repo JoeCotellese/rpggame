@@ -1,6 +1,7 @@
 {
   "id": "the_unquiet_dead_crypt",
   "name": "The Unquiet Dead: Davos Family Crypt",
+  "campaign_id": "the_unquiet_dead",
   "description": "The skeletons of the Davos family ancestors have begun to rise from their ancient crypt. Strange figures were seen skulking about in the dark. The local noble is offering 50 gold pieces to investigate and put the dead back to rest. But something darker lurks within these halls - a cult plot that threatens far more than just a family's legacy.",
   "start_room": "crypt.graveyard_entrance",
   "level_range": "1-2",

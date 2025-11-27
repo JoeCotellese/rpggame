@@ -357,6 +357,8 @@ class TestShowCampaignSaveSlots:
         mock_game_state.action_history = []
         mock_game_state.last_entry_direction = None
         mock_game_state.in_combat = False
+        mock_game_state.campaign_id = None
+        mock_game_state.quest_manager = None
 
         campaign_manager.save_campaign_state(
             "Test Campaign",
@@ -391,6 +393,8 @@ class TestShowCampaignSaveSlots:
         mock_game_state.action_history = []
         mock_game_state.last_entry_direction = None
         mock_game_state.in_combat = False
+        mock_game_state.campaign_id = None
+        mock_game_state.quest_manager = None
 
         campaign_manager.save_campaign_state(
             "Test Campaign",

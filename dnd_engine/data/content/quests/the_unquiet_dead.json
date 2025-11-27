@@ -1,0 +1,72 @@
+{
+  "campaign_id": "the_unquiet_dead",
+  "campaign_name": "The Unquiet Dead",
+  "campaign_description": "A three-part campaign investigating a cult's plot to resurrect a devil.",
+  "quests": [
+    {
+      "id": "investigate_crypt",
+      "name": "The Crypt Problem",
+      "description": "Strange lights and sounds emanate from the old Davos family crypt. The townsfolk are frightened, and Father Aldric is beside himself. Someone must investigate the disturbances.",
+      "unlocked_by_default": true,
+      "unlock_requirements": null,
+      "target_dungeon": "the_unquiet_dead_crypt",
+      "completion_criteria": {
+        "dungeon_completed": "the_unquiet_dead_crypt"
+      },
+      "unlocks_quests": ["cult_conspiracy"],
+      "reward_gold": 50,
+      "npc_hints": {
+        "available": {
+          "innkeeper": "Strange lights at the cemetery lately. Father Aldric's been coming in more often, looking pale as a ghost himself. Says something unholy's stirring in the old Davos crypt.",
+          "priest": "Please, you must help! The dead will not rest. Something evil has awakened in the crypt beneath the old graveyard. I can feel it - a darkness spreading.",
+          "guard": "Father Aldric's been filing complaints every day now. Strange noises from the cemetery, he says. The lads won't patrol near there after dark anymore."
+        },
+        "active": "Any luck with that crypt? The whole town's on edge.",
+        "completed": "You cleared out that crypt! The town owes you a debt. Drinks are on me tonight."
+      }
+    },
+    {
+      "id": "cult_conspiracy",
+      "name": "The Cult Conspiracy",
+      "description": "The journal found in the crypt reveals a sinister plot. Cultists of Durgon operate from a hidden lair somewhere in the Warrens. The map tucked inside shows the way.",
+      "unlocked_by_default": false,
+      "unlock_requirements": {
+        "quest_completed": "investigate_crypt",
+        "quest_item": "gorgus_journal"
+      },
+      "target_dungeon": "cult_hideout",
+      "completion_criteria": {
+        "dungeon_completed": "cult_hideout"
+      },
+      "unlocks_quests": ["temple_assault"],
+      "reward_gold": 100,
+      "npc_hints": {
+        "available": "That journal you found... it speaks of cultists hiding somewhere in the Warrens. Dark business, that. Be careful if you go looking.",
+        "active": "Still hunting those cultists? Watch yourself in the Warrens - not everyone there is what they seem.",
+        "completed": "You routed the cultists! But their leader escaped, you say? That's troubling news indeed."
+      }
+    },
+    {
+      "id": "temple_assault",
+      "name": "Temple of Durgon",
+      "description": "The cult's true lair lies in an ancient temple hidden beneath the old ruins outside town. Their leader prepares the final ritual to resurrect the devil Durgon. This must be stopped.",
+      "unlocked_by_default": false,
+      "unlock_requirements": {
+        "quest_completed": "cult_conspiracy",
+        "quest_item": "cult_map"
+      },
+      "target_dungeon": "temple_of_durgon",
+      "completion_criteria": {
+        "dungeon_completed": "temple_of_durgon"
+      },
+      "unlocks_quests": [],
+      "final_quest": true,
+      "reward_gold": 200,
+      "npc_hints": {
+        "available": "The Temple of Durgon... I'd hoped that place was just a legend. If the cult truly means to complete their ritual there, all of Arden is in danger.",
+        "active": "The fate of us all rests on your shoulders now. May the Light guide you in that dark place.",
+        "completed": "You've done it! The devil's return has been prevented. You'll be remembered as heroes in Arden for generations to come."
+      }
+    }
+  ]
+}

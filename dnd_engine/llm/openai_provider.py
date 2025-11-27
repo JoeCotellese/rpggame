@@ -2,6 +2,8 @@
 # ABOUTME: Handles API calls with timeout and error handling for graceful fallback
 
 import asyncio
+import json
+from typing import Any
 
 from openai import AsyncOpenAI
 
@@ -22,7 +24,7 @@ class OpenAIProvider(LLMProvider):
         api_key: str,
         model: str = "gpt-4o-mini",
         timeout: float = 10.0,
-        max_tokens: int = 150
+        max_tokens: int = 1000
     ) -> None:
         """
         Initialize OpenAI provider.
@@ -95,3 +97,61 @@ class OpenAIProvider(LLMProvider):
             Human-readable provider name
         """
         return f"OpenAI ({self.model})"
+
+    async def chat_with_tools(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        temperature: float = 0.7,
+    ) -> dict[str, Any] | None:
+        """
+        Send a chat request with tool calling support.
+
+        Args:
+            messages: List of chat messages (role, content)
+            tools: OpenAI-format tool definitions
+            temperature: Sampling temperature (0.0-1.0)
+
+        Returns:
+            Response dict with content, tool_calls, finish_reason
+            or None on error
+        """
+        try:
+            response = await asyncio.wait_for(
+                self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    tools=tools if tools else None,
+                    temperature=temperature,
+                    max_tokens=500,  # More tokens for conversational responses
+                ),
+                timeout=self.timeout,
+            )
+
+            message = response.choices[0].message
+            tool_calls = []
+
+            if message.tool_calls:
+                for tc in message.tool_calls:
+                    tool_calls.append(
+                        {
+                            "id": tc.id,
+                            "name": tc.function.name,
+                            "arguments": json.loads(tc.function.arguments),
+                        }
+                    )
+
+            return {
+                "content": message.content,
+                "tool_calls": tool_calls,
+                "finish_reason": response.choices[0].finish_reason,
+            }
+
+        except TimeoutError:
+            print_status_message(
+                f"OpenAI request timed out after {self.timeout}s", "warning"
+            )
+            return None
+        except Exception as e:
+            print_error(f"OpenAI API error: {e}")
+            return None
