@@ -1,6 +1,7 @@
 {
   "id": "town_of_arden",
   "name": "Town of Arden",
+  "campaign_id": "the_unquiet_dead",
   "description": "A small frontier town nestled at the edge of the wilderness. The townsfolk are hardworking and suspicious of strangers, though they've grown accustomed to adventurers passing through. Recent troubles at the old Davos family crypt have the locals on edge.",
   "start_room": "arden.town_square",
   "level_range": "1-3",

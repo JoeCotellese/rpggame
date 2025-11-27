@@ -514,7 +514,7 @@ class CampaignManager:
         """
         now = datetime.now().isoformat()
 
-        return {
+        save_data = {
             "version": SAVE_VERSION,
             "metadata": {
                 "created": now,
@@ -528,9 +528,16 @@ class CampaignManager:
                 "dungeon_state": self._serialize_dungeon_state(game_state.dungeon),
                 "in_combat": game_state.in_combat,
                 "action_history": game_state.action_history,
-                "last_entry_direction": game_state.last_entry_direction
+                "last_entry_direction": game_state.last_entry_direction,
+                "campaign_id": game_state.campaign_id
             }
         }
+
+        # Include quest states if quest manager is active
+        if game_state.quest_manager:
+            save_data["quest_states"] = game_state.quest_manager.serialize_states()
+
+        return save_data
 
     def _serialize_character(self, character: Character) -> dict[str, Any]:
         """
@@ -656,13 +663,14 @@ class CampaignManager:
         # Get game state data
         gs_data = save_data["game_state"]
 
-        # Create game state (this loads fresh dungeon)
+        # Create game state (this loads fresh dungeon and quest data if campaign_id is set)
         game_state = GameState(
             party=party,
             dungeon_name=gs_data["dungeon_name"],
             event_bus=event_bus,
             data_loader=data_loader,
-            dice_roller=dice_roller
+            dice_roller=dice_roller,
+            campaign_id=gs_data.get("campaign_id")
         )
 
         # Restore room-specific state
@@ -680,6 +688,10 @@ class CampaignManager:
 
         # Restore navigation tracking
         game_state.last_entry_direction = gs_data.get("last_entry_direction")
+
+        # Restore quest states if present
+        if game_state.quest_manager and "quest_states" in save_data:
+            game_state.quest_manager.deserialize_states(save_data["quest_states"])
 
         return game_state
 

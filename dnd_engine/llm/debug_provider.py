@@ -1,6 +1,7 @@
 # ABOUTME: Debug LLM provider that returns the prompt text instead of calling an API
 # ABOUTME: Useful for inspecting exactly what prompts are being sent to the LLM
 
+from typing import Any
 
 from .base import LLMProvider
 
@@ -19,7 +20,7 @@ class DebugProvider(LLMProvider):
         api_key: str = "debug",
         model: str = "debug",
         timeout: float = 10.0,
-        max_tokens: int = 150
+        max_tokens: int = 1000
     ) -> None:
         """
         Initialize debug provider.
@@ -59,3 +60,38 @@ class DebugProvider(LLMProvider):
             Human-readable provider name
         """
         return "Debug (no API calls)"
+
+    async def chat_with_tools(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        temperature: float = 0.7,
+    ) -> dict[str, Any] | None:
+        """
+        Return debug info about the chat request.
+
+        Args:
+            messages: Chat messages to inspect
+            tools: Tool definitions to inspect
+            temperature: Ignored
+
+        Returns:
+            Debug response showing what would be sent
+        """
+        # Format messages for inspection
+        msg_summary = "\n".join(
+            f"  [{m.get('role', '?')}]: {str(m.get('content', ''))[:100]}..."
+            for m in messages
+        )
+        tool_names = [t.get("function", {}).get("name", "?") for t in tools]
+
+        return {
+            "content": (
+                f"=== DEBUG CHAT ===\n"
+                f"Messages ({len(messages)}):\n{msg_summary}\n"
+                f"Tools: {tool_names}\n"
+                f"=== /DEBUG CHAT ==="
+            ),
+            "tool_calls": [],
+            "finish_reason": "stop",
+        }

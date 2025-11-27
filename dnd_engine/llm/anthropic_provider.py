@@ -2,6 +2,7 @@
 # ABOUTME: Handles API calls with timeout and error handling for graceful fallback
 
 import asyncio
+from typing import Any
 
 from anthropic import AsyncAnthropic
 
@@ -22,7 +23,7 @@ class AnthropicProvider(LLMProvider):
         api_key: str,
         model: str = "claude-3-5-haiku-20241022",
         timeout: float = 10.0,
-        max_tokens: int = 150
+        max_tokens: int = 1000
     ) -> None:
         """
         Initialize Anthropic provider.
@@ -92,3 +93,18 @@ class AnthropicProvider(LLMProvider):
             Human-readable provider name
         """
         return f"Anthropic ({self.model})"
+
+    async def chat_with_tools(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        temperature: float = 0.7,
+    ) -> dict[str, Any] | None:
+        """
+        Send a chat request with tool calling support.
+
+        Note: Anthropic tool calling not yet implemented for NPC chat.
+        Returns None to trigger fallback behavior.
+        """
+        # TODO: Implement Anthropic tool calling when needed
+        return None

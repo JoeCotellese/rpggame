@@ -4,6 +4,7 @@
 from typing import Any, Optional
 
 from dnd_engine.core.character import Character, CharacterClass
+from dnd_engine.llm.npc_chat import NPCChatManager
 from dnd_engine.core.dice import format_dice_with_modifier
 from dnd_engine.core.game_state import CombatEvent, CombatSpellResult, GameState
 from dnd_engine.systems.action_economy import ActionType
@@ -58,6 +59,14 @@ class CLI:
         self.running = True
         self.auto_save_enabled = auto_save_enabled
         self.llm_enhancer = llm_enhancer
+
+        # NPC chat manager for LLM-powered conversations
+        self.npc_chat_manager: NPCChatManager | None = None
+        if llm_enhancer and llm_enhancer.provider:
+            self.npc_chat_manager = NPCChatManager(
+                provider=llm_enhancer.provider,
+                game_state=game_state
+            )
 
         # Condition manager for handling status effects
         self.condition_manager = ConditionManager(
@@ -189,6 +198,16 @@ class CLI:
                     item_name = item.get('id', 'an item').replace("_", " ").title()
                     print_status_message(f"  • {item_name}", "info")
             print_status_message("Use 'take <item>' or 'take all' to pick up items.", "info")
+
+        # Show NPCs in the room
+        if self.game_state.npc_manager:
+            room_id = room.get("id", "")
+            npcs = self.game_state.npc_manager.get_npcs_in_room(room_id)
+            if npcs:
+                print_status_message("\nYou see:", "info")
+                for npc in npcs:
+                    print_status_message(f"  • {npc.display_name}", "info")
+                print_status_message("Use 'talk <name>' to start a conversation.", "info")
 
         # Mark room as displayed so subsequent "look" commands show "already in room" narrative
         self.game_state.mark_room_displayed()
@@ -672,6 +691,15 @@ class CLI:
                     self.handle_take(item_name)
             else:
                 print_error("Specify an item to take. Example: 'take dagger'")
+            return
+
+        if command == "talk" or command.startswith("talk "):
+            parts = command.split()[1:]
+            if not parts:
+                self.handle_talk_menu()
+            else:
+                npc_name = " ".join(parts)
+                self.handle_talk(npc_name)
             return
 
         print_status_message("Unknown command. Type 'help' for available commands.", "warning")
@@ -1659,6 +1687,180 @@ class CLI:
             return result
         except (EOFError, KeyboardInterrupt):
             return None
+
+    def handle_talk_menu(self) -> None:
+        """Show a menu of NPCs in the current room to talk to."""
+        import questionary
+
+        # Check if NPC manager is available
+        if not self.game_state.npc_manager:
+            print_error("No NPCs available in this campaign.")
+            return
+
+        # Get NPCs in current room
+        current_room = self.game_state.get_current_room()
+        room_id = current_room.get("id", "")
+        npcs = self.game_state.npc_manager.get_npcs_in_room(room_id)
+
+        if not npcs:
+            print_status_message("There's no one here to talk to.", "info")
+            return
+
+        # Build choices
+        choices = []
+        for npc in npcs:
+            choices.append(questionary.Choice(title=npc.display_name, value=npc))
+        choices.append(questionary.Choice(title="Cancel", value=None))
+
+        try:
+            result = questionary.select(
+                "Who do you want to talk to?",
+                choices=choices,
+                use_arrow_keys=True
+            ).ask()
+
+            if result is None:
+                print_status_message("Cancelled.", "warning")
+                return
+
+            self._run_chat_loop(result)
+        except (EOFError, KeyboardInterrupt):
+            print_status_message("Cancelled.", "warning")
+
+    def handle_talk(self, npc_name: str) -> None:
+        """
+        Start a conversation with a specific NPC.
+
+        Args:
+            npc_name: Name of the NPC to talk to
+        """
+        # Check if NPC manager is available
+        if not self.game_state.npc_manager:
+            print_error("No NPCs available in this campaign.")
+            return
+
+        # Get NPCs in current room
+        current_room = self.game_state.get_current_room()
+        room_id = current_room.get("id", "")
+        npcs = self.game_state.npc_manager.get_npcs_in_room(room_id)
+
+        if not npcs:
+            print_status_message("There's no one here to talk to.", "info")
+            return
+
+        # Find matching NPC by name (fuzzy match)
+        npc_name_lower = npc_name.lower()
+        matched_npc = None
+
+        # Try exact match first
+        for npc in npcs:
+            if npc.name.lower() == npc_name_lower or npc.display_name.lower() == npc_name_lower:
+                matched_npc = npc
+                break
+
+        # Try partial match
+        if not matched_npc:
+            for npc in npcs:
+                if npc_name_lower in npc.name.lower() or npc_name_lower in npc.display_name.lower():
+                    matched_npc = npc
+                    break
+
+        if not matched_npc:
+            print_error(f"'{npc_name}' is not here.")
+            print_status_message("People here:", "info")
+            for npc in npcs:
+                print_status_message(f"  - {npc.display_name}", "info")
+            return
+
+        self._run_chat_loop(matched_npc)
+
+    def _run_chat_loop(self, npc) -> None:
+        """
+        Run the interactive chat loop with an NPC.
+
+        Args:
+            npc: The NPC to converse with
+        """
+        from rich.console import Console
+        from rich.panel import Panel
+
+        console = Console()
+
+        # Start conversation
+        if self.npc_chat_manager:
+            greeting = self.npc_chat_manager.start_conversation_sync(npc)
+        else:
+            greeting = npc.get_greeting()
+
+        # Display greeting
+        console.print()
+        console.print(Panel(
+            greeting or "...",
+            title=f"[bold cyan]{npc.display_name}[/bold cyan]",
+            border_style="cyan"
+        ))
+
+        # Chat loop
+        while True:
+            try:
+                # Get player input
+                player_input = console.input("\n[bold green]You:[/bold green] ").strip()
+
+                if not player_input:
+                    continue
+
+                # Check for exit commands
+                if player_input.lower() in ["bye", "goodbye", "leave", "farewell", "exit", "quit", "q"]:
+                    if self.npc_chat_manager:
+                        response, _ = self.npc_chat_manager.send_message_sync(player_input)
+                        if response:
+                            console.print()
+                            console.print(Panel(
+                                response,
+                                title=f"[bold cyan]{npc.display_name}[/bold cyan]",
+                                border_style="cyan"
+                            ))
+                        self.npc_chat_manager.end_conversation()
+                    else:
+                        farewell = npc.get_farewell()
+                        console.print()
+                        console.print(Panel(
+                            farewell,
+                            title=f"[bold cyan]{npc.display_name}[/bold cyan]",
+                            border_style="cyan"
+                        ))
+                    console.print()
+                    print_status_message("You end the conversation.", "info")
+                    break
+
+                # Get NPC response
+                if self.npc_chat_manager:
+                    response, ended = self.npc_chat_manager.send_message_sync(player_input)
+                else:
+                    response = "Hmm, I'm not sure what to say to that."
+                    ended = False
+
+                if response:
+                    console.print()
+                    console.print(Panel(
+                        response,
+                        title=f"[bold cyan]{npc.display_name}[/bold cyan]",
+                        border_style="cyan"
+                    ))
+
+                if ended:
+                    if self.npc_chat_manager:
+                        self.npc_chat_manager.end_conversation()
+                    console.print()
+                    print_status_message("The conversation ends.", "info")
+                    break
+
+            except (EOFError, KeyboardInterrupt):
+                if self.npc_chat_manager:
+                    self.npc_chat_manager.end_conversation()
+                console.print()
+                print_status_message("You walk away.", "info")
+                break
 
     def handle_attack(self, target_name: str) -> None:
         """Handle attack command during combat."""
@@ -4702,6 +4904,7 @@ class CLI:
             ("move/go <direction>", "Move in a direction (e.g., 'go north')"),
             ("look or l", "Look around the current room"),
             ("examine / x [target]", "Examine objects or listen at doors (e.g., 'examine corpse')"),
+            ("talk [npc]", "Talk to an NPC (e.g., 'talk marta' or just 'talk' for menu)"),
             ("search", "Search the room for items"),
             ("take/get/pickup <item>", "Pick up an item (e.g., 'take dagger', 'get gold')"),
             ("inventory / i [filter]", "Show inventory. Filter: summary, player name/number, or item type"),

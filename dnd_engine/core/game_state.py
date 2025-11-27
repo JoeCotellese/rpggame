@@ -10,6 +10,8 @@ from dnd_engine.core.combat import AttackResult, CombatEngine
 from dnd_engine.core.creature import Creature
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.party import Party
+from dnd_engine.core.npc_manager import NPCManager
+from dnd_engine.core.quest import QuestManager
 from dnd_engine.core.room_registry import RoomRegistry
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.systems.action_economy import ActionType
@@ -165,7 +167,8 @@ class GameState:
         dungeon_name: str,
         event_bus: EventBus | None = None,
         data_loader: DataLoader | None = None,
-        dice_roller: DiceRoller | None = None
+        dice_roller: DiceRoller | None = None,
+        campaign_id: str | None = None
     ):
         """
         Initialize the game state.
@@ -176,18 +179,23 @@ class GameState:
             event_bus: Event bus for game events (creates new if not provided)
             data_loader: Data loader for loading content (creates new if not provided)
             dice_roller: Dice roller (creates new if not provided)
+            campaign_id: Optional campaign ID for quest tracking (e.g., "the_unquiet_dead")
         """
         self.party = party
         self.event_bus = event_bus or EventBus()
         self.data_loader = data_loader or DataLoader()
         self.dice_roller = dice_roller or DiceRoller()
-
         # Time tracking system
         self.time_manager = TimeManager(event_bus=self.event_bus)
 
         # Load dungeon using data_loader (supports mocking in tests)
         self.dungeon_name = dungeon_name  # Store filename for saving
         self.dungeon = self.data_loader.load_dungeon(dungeon_name)
+
+        # Auto-detect campaign_id from dungeon if not explicitly provided
+        if campaign_id is None:
+            campaign_id = self.dungeon.get("campaign_id")
+        self.campaign_id = campaign_id
 
         # Room registry for cross-dungeon navigation
         # May be None if data_path is unavailable (e.g., in tests with mocked loaders)
@@ -204,6 +212,24 @@ class GameState:
             pass
         self.current_room_id = self.dungeon["start_room"]
         self.previous_room_id: str | None = None  # Track room transitions for narrative
+
+        # Quest tracking system (optional, only if campaign_id is provided)
+        self.quest_manager: QuestManager | None = None
+        if self.campaign_id:
+            try:
+                quest_data = self.data_loader.load_quests(self.campaign_id)
+                self.quest_manager = QuestManager()
+                self.quest_manager.load_quests_from_dict(quest_data)
+            except FileNotFoundError:
+                logger.warning(f"No quest data found for campaign '{self.campaign_id}'")
+
+        # NPC system (optional, only if campaign_id is provided)
+        self.npc_manager: NPCManager | None = None
+        if self.campaign_id:
+            try:
+                self.npc_manager = NPCManager(self.campaign_id, self.data_loader)
+            except FileNotFoundError:
+                logger.warning(f"No NPC data found for campaign '{self.campaign_id}'")
 
         # Combat state
         self.in_combat = False

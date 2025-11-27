@@ -2,6 +2,7 @@
 # ABOUTME: Defines interface for text generation with timeout and error handling
 
 from abc import ABC, abstractmethod
+from typing import Any
 
 
 class LLMProvider(ABC):
@@ -18,7 +19,7 @@ class LLMProvider(ABC):
         api_key: str,
         model: str,
         timeout: float = 10.0,
-        max_tokens: int = 150
+        max_tokens: int = 1000
     ) -> None:
         """
         Initialize LLM provider.
@@ -63,5 +64,29 @@ class LLMProvider(ABC):
 
         Returns:
             Human-readable provider name
+        """
+        pass
+
+    @abstractmethod
+    async def chat_with_tools(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        temperature: float = 0.7,
+    ) -> dict[str, Any] | None:
+        """
+        Send a chat request with tool calling support.
+
+        Args:
+            messages: List of chat messages (role, content)
+            tools: OpenAI-format tool definitions
+            temperature: Sampling temperature (0.0-1.0)
+
+        Returns:
+            Response dict with:
+                - content: str | None (assistant's text response)
+                - tool_calls: list[dict] | None (tool calls to execute)
+                - finish_reason: str ("stop", "tool_use", etc.)
+            Returns None on error
         """
         pass
