@@ -165,8 +165,8 @@ class TestSaveSlotManager:
             playtime_delta=60
         )
 
-        # Load
-        loaded_state = save_manager.load_game(slot_number=4)
+        # Load - now returns tuple of (game_state, campaign_progress)
+        loaded_state, campaign_progress = save_manager.load_game(slot_number=4)
 
         assert loaded_state is not None
         assert len(loaded_state.party.characters) == 1
@@ -174,6 +174,8 @@ class TestSaveSlotManager:
         assert loaded_state.party.characters[0].level == 3
         assert loaded_state.party.characters[0].current_hp == 25
         assert loaded_state.dungeon_name == "test_dungeon"
+        # No campaign progress saved, so should be None
+        assert campaign_progress is None
 
     def test_load_game_from_empty_slot_raises_error(self, save_manager):
         """Test that loading from empty slot raises ValueError."""
@@ -302,8 +304,8 @@ class TestSaveSlotManager:
         assert slot.party_composition == ["Test Hero", "Wizard Friend"]
         assert slot.party_levels == [3, 3]
 
-        # Load
-        loaded_state = save_manager.load_game(slot_number=10)
+        # Load - returns tuple of (game_state, campaign_progress)
+        loaded_state, _ = save_manager.load_game(slot_number=10)
         assert len(loaded_state.party.characters) == 2
         assert loaded_state.party.characters[0].name == "Test Hero"
         assert loaded_state.party.characters[1].name == "Wizard Friend"

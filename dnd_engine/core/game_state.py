@@ -5,6 +5,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
+from dnd_engine.core.campaign_progress import CampaignProgress
 from dnd_engine.core.character import Character
 from dnd_engine.core.combat import AttackResult, CombatEngine
 from dnd_engine.core.creature import Creature
@@ -168,7 +169,8 @@ class GameState:
         event_bus: EventBus | None = None,
         data_loader: DataLoader | None = None,
         dice_roller: DiceRoller | None = None,
-        campaign_id: str | None = None
+        campaign_id: str | None = None,
+        campaign_progress: CampaignProgress | None = None
     ):
         """
         Initialize the game state.
@@ -180,6 +182,7 @@ class GameState:
             data_loader: Data loader for loading content (creates new if not provided)
             dice_roller: Dice roller (creates new if not provided)
             campaign_id: Optional campaign ID for quest tracking (e.g., "the_unquiet_dead")
+            campaign_progress: Optional campaign progress for multi-dungeon campaigns
         """
         self.party = party
         self.event_bus = event_bus or EventBus()
@@ -196,6 +199,9 @@ class GameState:
         if campaign_id is None:
             campaign_id = self.dungeon.get("campaign_id")
         self.campaign_id = campaign_id
+
+        # Campaign progress for multi-dungeon campaigns
+        self.campaign_progress = campaign_progress
 
         # Room registry for cross-dungeon navigation
         # May be None if data_path is unavailable (e.g., in tests with mocked loaders)

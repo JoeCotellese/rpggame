@@ -1,17 +1,17 @@
 # ABOUTME: Main menu system with new save slot system and migration support
 # ABOUTME: Handles menu display, save slot selection, character vault integration, and migration
 
-from pathlib import Path
-
 import questionary
 from rich.panel import Panel
 
+from dnd_engine.core.campaign_progress import CampaignProgressTracker
 from dnd_engine.core.character import Character
 from dnd_engine.core.character_factory import CharacterFactory
 from dnd_engine.core.character_vault_v2 import CharacterVaultV2
 from dnd_engine.core.game_state import GameState
 from dnd_engine.core.migration import MigrationManager
 from dnd_engine.core.party import Party
+from dnd_engine.core.room_registry import RoomRegistry
 from dnd_engine.core.save_slot_manager import SaveSlotManager
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.ui.rich_ui import (
@@ -45,6 +45,7 @@ class MainMenuV2:
         self.slot_manager = SaveSlotManager()
         self.vault = CharacterVaultV2()
         self.data_loader = DataLoader()
+        self.campaign_tracker = CampaignProgressTracker()
 
         # Track current slot for save operations
         self.current_slot_number: int | None = None
@@ -224,8 +225,12 @@ class MainMenuV2:
                 print_error(f"Slot {slot_num} is empty.")
                 return None
 
-            # Load game state
-            game_state = self.slot_manager.load_game(slot_num)
+            # Load game state - returns tuple of (game_state, campaign_progress)
+            game_state, campaign_progress = self.slot_manager.load_game(slot_num)
+
+            # Store campaign progress on game_state if available
+            if campaign_progress:
+                game_state.campaign_progress = campaign_progress
 
             print_status_message(f"Loaded: {slot.get_display_name()}", "success")
 
@@ -297,20 +302,37 @@ class MainMenuV2:
                     console.print("\n[yellow]Cancelled.[/yellow]")
                     return None
 
-            # Step 4: Create game state
+            # Step 4: Create game state with campaign progress
             party = Party(party_characters)
+            campaign_progress = campaign_info.get("campaign_progress")
+
+            # Use room registry to find the dungeon containing the starting room
+            starting_room = campaign_info["starting_room"]
+            dungeons_path = self.data_loader.data_path / "content" / "dungeons"
+            room_registry = RoomRegistry(dungeons_path)
+            starting_dungeon = room_registry.get_dungeon_for_room(starting_room)
+
+            if not starting_dungeon:
+                print_error(f"Could not find dungeon for room: {starting_room}")
+                return None
+
             game_state = GameState(
                 party=party,
-                dungeon_name=campaign_info["starting_dungeon"],
+                dungeon_name=starting_dungeon,
                 campaign_id=campaign_info["campaign_id"],
-                data_loader=self.data_loader
+                data_loader=self.data_loader,
+                campaign_progress=campaign_progress
             )
 
-            # Step 5: Save to slot
+            # Override to start at the campaign's specific starting room
+            game_state.current_room_id = starting_room
+
+            # Step 5: Save to slot with campaign progress
             self.slot_manager.save_game(
                 slot_number=slot_num,
                 game_state=game_state,
-                playtime_delta=0
+                playtime_delta=0,
+                campaign_progress=campaign_progress
             )
 
             # Step 6: Record character usage in vault
@@ -439,42 +461,29 @@ class MainMenuV2:
         """
         Select a campaign to play.
 
-        Returns:
-            Dict with campaign_id and starting_dungeon, or None if cancelled
-        """
-        import json
+        Shows campaigns with dungeon progression info:
+        - ✓ = completed, 🔓 = unlocked/available, 🔒 = locked
 
+        Returns:
+            Dict with campaign_id, starting_dungeon, and campaign_progress, or None if cancelled
+        """
         console.print()
         print_section("SELECT CAMPAIGN")
 
         # List available campaigns
-        campaigns_dir = Path(__file__).parent.parent / "data" / "content" / "campaigns"
-        campaign_files = list(campaigns_dir.glob("*.json"))
+        campaigns = self.campaign_tracker.list_available_campaigns()
 
-        if not campaign_files:
+        if not campaigns:
             print_error("No campaigns found!")
             return None
 
-        # Load campaign metadata
-        campaigns = []
-        for campaign_file in campaign_files:
-            try:
-                with open(campaign_file) as f:
-                    campaign_data = json.load(f)
-                    campaigns.append(campaign_data)
-            except Exception:
-                continue
-
-        if not campaigns:
-            print_error("No valid campaigns found!")
-            return None
-
-        # Build choices for questionary
+        # Build choices for questionary with rich display
         choices = []
         for campaign in campaigns:
-            level_range = campaign.get("level_range", "Any")
-            display = f"{campaign['name']} (Level {level_range})"
-            choices.append(questionary.Choice(title=display, value=campaign["id"]))
+            level_range = campaign.level_range
+            playtime = campaign.estimated_playtime
+            display = f"{campaign.name} (Level {level_range}, ~{playtime})"
+            choices.append(questionary.Choice(title=display, value=campaign.id))
 
         choices.append(questionary.Choice(title="← Back", value=None))
 
@@ -490,16 +499,56 @@ class MainMenuV2:
         if not selected_id:
             return None
 
-        # Find the selected campaign
-        selected = next((c for c in campaigns if c["id"] == selected_id), None)
-        if not selected:
+        # Find the selected campaign definition
+        definition = self.campaign_tracker.load_campaign_definition(selected_id)
+        if not definition:
+            return None
+
+        # Create initial progress for new game
+        progress = self.campaign_tracker.create_initial_progress(selected_id)
+        if not progress:
+            return None
+
+        # Display dungeon progression info
+        console.print()
+        print_section(f"{definition.name} - Dungeon Progression")
+        console.print()
+        console.print(f"[dim]{definition.description}[/dim]")
+        console.print()
+
+        # Show dungeons with lock states
+        ordered_dungeons = self.campaign_tracker.get_ordered_dungeons(selected_id)
+        for dungeon_id, dungeon_def in ordered_dungeons:
+            state = self.campaign_tracker.get_dungeon_state(progress, dungeon_id)
+
+            # State icons
+            if state == "completed":
+                icon = "[green]✓[/green]"
+            elif state == "unlocked":
+                icon = "[cyan]🔓[/cyan]"
+            else:
+                icon = "[dim]🔒[/dim]"
+
+            # Dungeon display
+            if state == "locked":
+                console.print(f"  {icon} [dim]{dungeon_def.name}[/dim]")
+            else:
+                console.print(f"  {icon} {dungeon_def.name}")
+
+        console.print()
+
+        # Use campaign's starting_room to determine where to begin
+        starting_room = definition.starting_room
+        if not starting_room:
+            print_error("Campaign has no starting room defined!")
             return None
 
         return {
-            "campaign_id": selected["id"],
-            "name": selected["name"],
-            "level_range": selected.get("level_range", "Any"),
-            "starting_dungeon": selected["starting_dungeon"]
+            "campaign_id": definition.id,
+            "name": definition.name,
+            "level_range": definition.level_range,
+            "starting_room": starting_room,
+            "campaign_progress": progress
         }
 
     def handle_character_vault(self) -> None:

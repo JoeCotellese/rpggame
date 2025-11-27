@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from dnd_engine.core.campaign_progress import CampaignProgress
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities
 from dnd_engine.core.dice import DiceRoller
@@ -147,7 +148,8 @@ class SaveSlotManager:
         self,
         slot_number: int,
         game_state: GameState,
-        playtime_delta: int = 0
+        playtime_delta: int = 0,
+        campaign_progress: CampaignProgress | None = None
     ) -> Path:
         """
         Save game state to a specific slot.
@@ -156,6 +158,7 @@ class SaveSlotManager:
             slot_number: Slot number (1-10)
             game_state: Current game state to save
             playtime_delta: Seconds to add to playtime (for this session)
+            campaign_progress: Optional campaign progress for multi-dungeon campaigns
 
         Returns:
             Path to the saved file
@@ -188,7 +191,7 @@ class SaveSlotManager:
         slot.party_levels = [char.level for char in game_state.party.characters]
 
         # Save to file
-        return self._save_slot_file(slot_number, slot, game_state)
+        return self._save_slot_file(slot_number, slot, game_state, campaign_progress)
 
     def load_game(
         self,
@@ -196,7 +199,7 @@ class SaveSlotManager:
         event_bus: EventBus | None = None,
         data_loader: DataLoader | None = None,
         dice_roller: DiceRoller | None = None
-    ) -> GameState:
+    ) -> tuple[GameState, CampaignProgress | None]:
         """
         Load game state from a specific slot.
 
@@ -207,7 +210,7 @@ class SaveSlotManager:
             dice_roller: Dice roller (creates new if not provided)
 
         Returns:
-            Loaded GameState
+            Tuple of (GameState, CampaignProgress or None)
 
         Raises:
             ValueError: If slot number is out of range or slot is empty
@@ -249,12 +252,17 @@ class SaveSlotManager:
             dice_roller
         )
 
+        # Deserialize campaign progress if present
+        campaign_progress = None
+        if "campaign_progress" in slot_data:
+            campaign_progress = CampaignProgress.from_dict(slot_data["campaign_progress"])
+
         # Update last_played timestamp
         slot_data["metadata"]["last_played"] = datetime.now().isoformat()
         with open(slot_path, 'w', encoding='utf-8') as f:
             json.dump(slot_data, f, indent=2, ensure_ascii=False)
 
-        return game_state
+        return game_state, campaign_progress
 
     def clear_slot(self, slot_number: int) -> None:
         """
@@ -298,7 +306,8 @@ class SaveSlotManager:
         self,
         slot_number: int,
         slot: SaveSlot,
-        game_state: GameState | None
+        game_state: GameState | None,
+        campaign_progress: CampaignProgress | None = None
     ) -> Path:
         """
         Save slot data and game state to disk.
@@ -307,6 +316,7 @@ class SaveSlotManager:
             slot_number: Slot number (1-10)
             slot: SaveSlot metadata
             game_state: Optional game state (None for empty slots)
+            campaign_progress: Optional campaign progress for multi-dungeon campaigns
 
         Returns:
             Path to the saved file
@@ -334,6 +344,9 @@ class SaveSlotManager:
                 "action_history": game_state.action_history,
                 "last_entry_direction": game_state.last_entry_direction
             }
+            # Include campaign progress if present
+            if campaign_progress:
+                slot_data["campaign_progress"] = campaign_progress.to_dict()
         else:
             # Empty slot
             slot_data["party"] = []
