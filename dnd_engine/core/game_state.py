@@ -5,7 +5,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from dnd_engine.core.campaign_progress import CampaignProgress
+from dnd_engine.core.campaign_progress import CampaignProgress, CampaignProgressTracker
 from dnd_engine.core.character import Character
 from dnd_engine.core.combat import AttackResult, CombatEngine
 from dnd_engine.core.creature import Creature
@@ -202,6 +202,16 @@ class GameState:
 
         # Campaign progress for multi-dungeon campaigns
         self.campaign_progress = campaign_progress
+
+        # Campaign tracker for checking completion criteria
+        self.campaign_tracker: CampaignProgressTracker | None = None
+        if campaign_progress:
+            try:
+                campaigns_dir = self.data_loader.data_path / "content" / "campaigns"
+                if campaigns_dir.exists():
+                    self.campaign_tracker = CampaignProgressTracker(campaigns_dir)
+            except (AttributeError, TypeError):
+                pass
 
         # Room registry for cross-dungeon navigation
         # May be None if data_path is unavailable (e.g., in tests with mocked loaders)
@@ -2407,6 +2417,76 @@ class GameState:
                 "xp_per_character": total_xp // len(self.party.characters) if len(self.party.characters) > 0 else 0
             }
         ))
+
+        # Check for boss defeat and dungeon completion (campaign progression)
+        if victory and room.get("boss_room"):
+            self._handle_boss_defeat()
+
+    def _handle_boss_defeat(self) -> None:
+        """Handle boss defeat for campaign progression."""
+        if not self.campaign_progress or not self.campaign_tracker:
+            return
+
+        # Record boss defeat for current dungeon
+        self.campaign_tracker.record_boss_defeat(
+            self.campaign_progress, self.dungeon_name
+        )
+
+        # Emit boss defeated event
+        self.event_bus.emit(Event(
+            type=EventType.BOSS_DEFEATED,
+            data={
+                "dungeon_id": self.dungeon_name,
+                "dungeon_name": self.dungeon.get("name", self.dungeon_name)
+            }
+        ))
+
+        # Check if dungeon completion criteria are now met
+        self._check_dungeon_completion()
+
+    def _check_dungeon_completion(self) -> None:
+        """Check if current dungeon is complete and unlock next dungeons."""
+        if not self.campaign_progress or not self.campaign_tracker:
+            return
+
+        # Get quest items in party inventory
+        inventory_item_ids = []
+        for character in self.party.characters:
+            for item in character.inventory.items.values():
+                inventory_item_ids.append(item.item_id)
+
+        # Try to complete the dungeon
+        newly_unlocked = self.campaign_tracker.complete_dungeon(
+            self.campaign_progress,
+            self.dungeon_name,
+            inventory_item_ids
+        )
+
+        if newly_unlocked:
+            # Get dungeon names for display
+            unlocked_names = []
+            for dungeon_id in newly_unlocked:
+                definition = self.campaign_tracker.load_campaign_definition(
+                    self.campaign_progress.campaign_id
+                )
+                if definition and dungeon_id in definition.dungeons:
+                    unlocked_names.append(definition.dungeons[dungeon_id].name)
+                else:
+                    unlocked_names.append(dungeon_id)
+
+            # Emit dungeon completed event
+            self.event_bus.emit(Event(
+                type=EventType.DUNGEON_COMPLETED,
+                data={
+                    "dungeon_id": self.dungeon_name,
+                    "dungeon_name": self.dungeon.get("name", self.dungeon_name),
+                    "newly_unlocked": newly_unlocked,
+                    "unlocked_names": unlocked_names,
+                    "campaign_complete": self.campaign_tracker.is_campaign_complete(
+                        self.campaign_progress
+                    )
+                }
+            ))
 
     def record_combat_event(self, event: CombatEvent) -> None:
         """

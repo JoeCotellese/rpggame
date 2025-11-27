@@ -79,6 +79,10 @@ class EventType(Enum):
     HOUR_PASSED = "hour_passed"
     EFFECT_EXPIRED = "effect_expired"
 
+    # Campaign progression events
+    BOSS_DEFEATED = "boss_defeated"
+    DUNGEON_COMPLETED = "dungeon_completed"
+
 
 @dataclass
 class Event:
