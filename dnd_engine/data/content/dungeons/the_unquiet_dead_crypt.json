@@ -209,14 +209,33 @@
       "lighting": "dark",
       "examinable_objects": [
         {
-          "id": "cultist_corpse",
-          "name": "fresh corpse",
-          "description": "A fresh corpse lies in the corner, wearing tattered cultist robes. The body shows signs of violence.",
+          "id": "davos_coffin",
+          "name": "ornate coffin",
+          "description": "An elaborate stone coffin bearing the holy symbol of a long-forgotten deity. The lid has been violently smashed open from within... or without.",
           "examine_checks": [
             {
               "skill": "medicine",
               "dc": 12,
-              "on_success": "The victim's skull was surgically removed with precision - this was no wild animal attack. The cuts are clean and deliberate, suggesting a dark ritual.",
+              "on_success": "The skull is missing from the skeleton inside. Examining the neck vertebrae reveals clean, deliberate cuts - someone surgically removed it recently, not more than a few days ago.",
+              "on_failure": "The skeleton inside is incomplete, but you can't determine what happened to it."
+            },
+            {
+              "skill": "religion",
+              "dc": 14,
+              "on_success": "The holy symbols on the coffin belong to Davos, a legendary cleric who banished the devil Durgon from this realm centuries ago. Durgon was a fiend of immense power who terrorized this region until Davos sealed him away at great personal cost.",
+              "on_failure": "The religious iconography is old and unfamiliar to you."
+            }
+          ]
+        },
+        {
+          "id": "cultist_corpse",
+          "name": "fresh corpse",
+          "description": "A fresh corpse lies in the corner, wearing tattered cultist robes. A horned skull symbol is stitched into the fabric.",
+          "examine_checks": [
+            {
+              "skill": "medicine",
+              "dc": 12,
+              "on_success": "The cultist was killed by the ghoul - claw marks and bite wounds cover the body. Death was recent, perhaps a day or two ago.",
               "on_failure": "You see signs of violence but cannot determine the specifics of the injuries."
             }
           ]
