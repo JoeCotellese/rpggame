@@ -382,13 +382,7 @@ class NPCChatManager:
             gold = result.get("gold", 0)
             print_status_message(f"💰 Party gold: {gold}", "info")
 
-        elif tool_name == "get_available_quests":
-            quests = result.get("quests", [])
-            if quests:
-                quest_names = [q.get("name", q.get("id")) for q in quests]
-                print_status_message(
-                    f"📜 Available quests: {', '.join(quest_names)}", "info"
-                )
+        # Note: get_available_quests has no user feedback - NPC describes quests naturally
 
     # === Tool Handlers ===
 
