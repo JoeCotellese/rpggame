@@ -1,5 +1,5 @@
 # ABOUTME: Item effect system for applying consumable effects to creatures
-# ABOUTME: Handles healing potions, damage items, buffs, condition removal, light sources, and spell scrolls
+# ABOUTME: Handles healing, damage, buffs, condition removal, light, spells, and information (readable items)
 
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -79,6 +79,8 @@ def apply_item_effect(
         return _apply_light_effect(item_info, target, time_manager, event_bus)
     elif effect_type == "spell":
         return _apply_spell_effect(item_info, target, dice_roller, event_bus)
+    elif effect_type == "information":
+        return _apply_information_effect(item_info)
     else:
         # Unknown or unimplemented effect type
         return ItemEffectResult(
@@ -512,4 +514,27 @@ def _apply_light_effect(
         effect_type="light",
         amount=duration_minutes,
         message=message
+    )
+
+
+def _apply_information_effect(item_info: dict[str, Any]) -> ItemEffectResult:
+    """
+    Apply an information effect - displays the item description.
+
+    Used for readable items like journals, notes, scrolls, etc.
+    These items are NOT consumed when read.
+
+    Args:
+        item_info: Item data containing "description"
+
+    Returns:
+        ItemEffectResult with the item contents
+    """
+    description = item_info.get("description", "The document appears blank.")
+
+    return ItemEffectResult(
+        success=True,
+        effect_type="information",
+        amount=0,
+        message=description
     )

@@ -13,6 +13,11 @@
       "items": [
         {
           "type": "item",
+          "id": "magic_quest_item",
+          "visible": true
+        },
+        {
+          "type": "item",
           "id": "alchemists_fire",
           "visible": true
         },
