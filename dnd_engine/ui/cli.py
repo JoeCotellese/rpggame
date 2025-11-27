@@ -3,6 +3,8 @@
 
 from typing import Any, Optional
 
+from rich.panel import Panel
+
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.llm.npc_chat import NPCChatManager
 from dnd_engine.core.dice import format_dice_with_modifier
@@ -93,6 +95,8 @@ class CLI:
         self.game_state.event_bus.subscribe(EventType.COMBAT_START, self._on_combat_start)
         self.game_state.event_bus.subscribe(EventType.COMBAT_END, self._on_combat_end)
         self.game_state.event_bus.subscribe(EventType.COMBAT_FLED, self._on_combat_fled)
+        self.game_state.event_bus.subscribe(EventType.BOSS_DEFEATED, self._on_boss_defeated)
+        self.game_state.event_bus.subscribe(EventType.DUNGEON_COMPLETED, self._on_dungeon_completed)
         self.game_state.event_bus.subscribe(EventType.ITEM_ACQUIRED, self._on_item_acquired)
         self.game_state.event_bus.subscribe(EventType.GOLD_ACQUIRED, self._on_gold_acquired)
         self.game_state.event_bus.subscribe(EventType.ROOM_ENTER, self._on_room_enter)
@@ -5152,6 +5156,46 @@ class CLI:
 
         # Auto-save after combat
         self._auto_save("after_combat")
+
+    def _on_boss_defeated(self, event: Event) -> None:
+        """Handle boss defeated event."""
+        dungeon_name = event.data.get("dungeon_name", "Unknown")
+        console.print()
+        console.print(
+            Panel(
+                f"[bold yellow]⚔️ BOSS DEFEATED![/bold yellow]\n\n"
+                f"You have defeated the boss of {dungeon_name}!",
+                border_style="yellow"
+            )
+        )
+
+    def _on_dungeon_completed(self, event: Event) -> None:
+        """Handle dungeon completed event."""
+        dungeon_name = event.data.get("dungeon_name", "Unknown")
+        unlocked_names = event.data.get("unlocked_names", [])
+        campaign_complete = event.data.get("campaign_complete", False)
+
+        console.print()
+
+        if campaign_complete:
+            console.print(
+                Panel(
+                    "[bold green]🎉 CAMPAIGN COMPLETE! 🎉[/bold green]\n\n"
+                    f"You have completed {dungeon_name} and finished the entire campaign!\n\n"
+                    "[dim]Congratulations, brave adventurers![/dim]",
+                    border_style="green"
+                )
+            )
+        else:
+            unlocked_text = "\n".join(f"  🔓 {name}" for name in unlocked_names)
+            console.print(
+                Panel(
+                    f"[bold cyan]✨ DUNGEON COMPLETE![/bold cyan]\n\n"
+                    f"You have completed {dungeon_name}!\n\n"
+                    f"[bold]New areas unlocked:[/bold]\n{unlocked_text}",
+                    border_style="cyan"
+                )
+            )
 
     def _on_combat_fled(self, event: Event) -> None:
         """Handle combat fled event."""

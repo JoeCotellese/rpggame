@@ -353,3 +353,121 @@ class TestAllCampaignFilesValid:
             assert (
                 starting_dungeon is not None
             ), f"Campaign {campaign.id} has no unlocked starting dungeon"
+
+
+class TestDungeonCompletionDetection:
+    """Tests for dungeon completion detection in GameState."""
+
+    def test_boss_defeat_recorded_in_boss_room(self, campaigns_dir, sample_campaign_data):
+        """Test that boss defeat is recorded when combat ends in boss_room."""
+        from unittest.mock import MagicMock, patch
+
+        from dnd_engine.core.character import Character, CharacterClass
+        from dnd_engine.core.creature import Abilities
+        from dnd_engine.core.party import Party
+        from dnd_engine.utils.events import EventType
+
+        # Create a character
+        abilities = Abilities(10, 10, 10, 10, 10, 10)
+        char = Character(
+            name="Test Hero",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=abilities,
+            max_hp=10,
+            ac=10,
+            current_hp=10,
+        )
+        party = Party([char])
+
+        # Create campaign progress
+        tracker = CampaignProgressTracker(campaigns_dir)
+        progress = tracker.create_initial_progress("test_campaign")
+
+        # Mock data loader and dungeon
+        mock_loader = MagicMock()
+        mock_loader.load_dungeon.return_value = {
+            "id": "dungeon1",
+            "name": "First Dungeon",
+            "start_room": "dungeon1.entrance",
+            "rooms": {
+                "dungeon1.boss_room": {
+                    "id": "dungeon1.boss_room",
+                    "name": "Boss Chamber",
+                    "boss_room": True,
+                    "enemies": [],
+                    "exits": {},
+                }
+            },
+        }
+        mock_loader.load_monsters.return_value = {}
+        mock_loader.data_path = campaigns_dir.parent
+
+        # Patch GameState to use our mocks
+        with patch.object(
+            CampaignProgressTracker, "__init__", lambda self, path=None: None
+        ):
+            from dnd_engine.core.game_state import GameState
+
+            # Create game state with campaign progress
+            game_state = GameState(
+                party=party,
+                dungeon_name="dungeon1",
+                data_loader=mock_loader,
+                campaign_id="test_campaign",
+                campaign_progress=progress,
+            )
+
+            # Manually set up campaign tracker
+            game_state.campaign_tracker = tracker
+            game_state.current_room_id = "dungeon1.boss_room"
+
+            # Track events
+            events_emitted = []
+
+            def capture_event(event):
+                events_emitted.append(event.type)
+
+            game_state.event_bus.subscribe(EventType.BOSS_DEFEATED, capture_event)
+
+            # Call boss defeat handler
+            game_state._handle_boss_defeat()
+
+            # Verify boss defeat was recorded
+            assert progress.boss_defeats.get("dungeon1") is True
+            assert EventType.BOSS_DEFEATED in events_emitted
+
+    def test_dungeon_completion_unlocks_next(self, campaigns_dir, sample_campaign_data):
+        """Test that completing a dungeon unlocks the next one."""
+        tracker = CampaignProgressTracker(campaigns_dir)
+        progress = tracker.create_initial_progress("test_campaign")
+
+        # Record boss defeat
+        tracker.record_boss_defeat(progress, "dungeon1")
+
+        # Complete with required quest item
+        newly_unlocked = tracker.complete_dungeon(
+            progress, "dungeon1", inventory_item_ids=["quest_key"]
+        )
+
+        assert "dungeon1" in progress.completed_dungeons
+        assert "dungeon2" in newly_unlocked
+        assert "dungeon2" in progress.unlocked_dungeons
+
+    def test_dungeon_not_completed_without_quest_item(
+        self, campaigns_dir, sample_campaign_data
+    ):
+        """Test that dungeon isn't completed without required quest item."""
+        tracker = CampaignProgressTracker(campaigns_dir)
+        progress = tracker.create_initial_progress("test_campaign")
+
+        # Record boss defeat but no quest item
+        tracker.record_boss_defeat(progress, "dungeon1")
+
+        # Try to complete without quest item
+        newly_unlocked = tracker.complete_dungeon(
+            progress, "dungeon1", inventory_item_ids=[]
+        )
+
+        assert "dungeon1" not in progress.completed_dungeons
+        assert newly_unlocked == []
