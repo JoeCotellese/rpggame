@@ -1,11 +1,40 @@
 {
   "id": "the_unquiet_dead",
   "name": "The Unquiet Dead",
-  "description": "A three-part campaign investigating a cult's plot to summon a devil. Begin in the Town of Arden, explore the Davos Family Crypt, and uncover the dark conspiracy that threatens the realm.",
+  "description": "A three-part campaign investigating a cult's plot to summon the devil Durgon. The skeletons of the Davos family have begun to rise from their ancient crypt, and strange figures have been seen skulking in the dark.",
   "level_range": "1-3",
-  "starting_dungeon": "town_of_arden",
-  "dungeons": [
-    "town_of_arden",
-    "the_unquiet_dead_crypt"
-  ]
+  "estimated_playtime": "2-3 hours",
+  "starting_room": "arden.town_square",
+  "dungeons": {
+    "the_unquiet_dead_crypt": {
+      "name": "Davos Family Crypt",
+      "order": 1,
+      "unlocked_by_default": true,
+      "completion_criteria": {
+        "boss_defeated": true,
+        "required_quest_items": ["gorgus_journal"]
+      },
+      "unlocks": ["cult_hideout"]
+    },
+    "cult_hideout": {
+      "name": "Cult Hideout",
+      "order": 2,
+      "unlocked_by_default": false,
+      "completion_criteria": {
+        "boss_defeated": true,
+        "required_quest_items": ["cult_map"]
+      },
+      "unlocks": ["temple_of_durgon"]
+    },
+    "temple_of_durgon": {
+      "name": "Temple of Durgon",
+      "order": 3,
+      "unlocked_by_default": false,
+      "completion_criteria": {
+        "boss_defeated": true
+      },
+      "unlocks": [],
+      "final_dungeon": true
+    }
+  }
 }
