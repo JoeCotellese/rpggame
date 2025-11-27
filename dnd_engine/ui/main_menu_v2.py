@@ -261,11 +261,11 @@ class MainMenuV2:
             console.print("\n[yellow]No party selected. Returning to menu.[/yellow]")
             return None
 
-        # Step 2: Select adventure
-        adventure_name = self._select_adventure()
+        # Step 2: Select campaign
+        campaign_info = self._select_adventure()
 
-        if not adventure_name:
-            console.print("\n[yellow]No adventure selected. Returning to menu.[/yellow]")
+        if not campaign_info:
+            console.print("\n[yellow]No campaign selected. Returning to menu.[/yellow]")
             return None
 
         # Step 3: Select save slot
@@ -298,7 +298,8 @@ class MainMenuV2:
             party = Party(party_characters)
             game_state = GameState(
                 party=party,
-                dungeon_name=adventure_name,
+                dungeon_name=campaign_info["starting_dungeon"],
+                campaign_id=campaign_info["campaign_id"],
                 data_loader=self.data_loader
             )
 
@@ -424,43 +425,58 @@ class MainMenuV2:
             print_error(f"Character creation failed: {e}")
             return None
 
-    def _select_adventure(self) -> str | None:
+    def _select_adventure(self) -> dict | None:
         """
-        Select an adventure/dungeon to play.
+        Select a campaign to play.
 
         Returns:
-            Dungeon filename or None if cancelled
+            Dict with campaign_id and starting_dungeon, or None if cancelled
         """
         console.print()
-        print_section("SELECT ADVENTURE")
+        print_section("SELECT CAMPAIGN")
 
-        # List available dungeons
-        dungeons_dir = Path(__file__).parent.parent / "data" / "content" / "dungeons"
-        dungeon_files = list(dungeons_dir.glob("*.json"))
+        # List available campaigns
+        campaigns_dir = Path(__file__).parent.parent / "data" / "content" / "campaigns"
+        campaign_files = list(campaigns_dir.glob("*.json"))
 
-        # Filter out test dungeons
-        dungeon_files = [f for f in dungeon_files if not f.stem.startswith("test_") and not f.stem.startswith("multi_char_")]
-
-        if not dungeon_files:
-            print_error("No adventures found!")
+        if not campaign_files:
+            print_error("No campaigns found!")
             return None
 
-        console.print("\n[bold]Available Adventures:[/bold]")
-        for i, dungeon_file in enumerate(dungeon_files, 1):
-            # Convert filename to display name
-            display_name = dungeon_file.stem.replace('_', ' ').title()
-            console.print(f"  [{i}] {display_name}")
+        # Load campaign metadata
+        campaigns = []
+        for campaign_file in campaign_files:
+            try:
+                import json
+                with open(campaign_file) as f:
+                    campaign_data = json.load(f)
+                    campaigns.append(campaign_data)
+            except Exception:
+                continue
+
+        if not campaigns:
+            print_error("No valid campaigns found!")
+            return None
+
+        console.print("\n[bold]Available Campaigns:[/bold]\n")
+        for i, campaign in enumerate(campaigns, 1):
+            level_range = campaign.get("level_range", "Any")
+            console.print(f"  [bold cyan][{i}][/bold cyan] {campaign['name']} [dim](Level {level_range})[/dim]")
+            console.print(f"      [dim]{campaign.get('description', '')}[/dim]\n")
 
         console.print()
-        choice = console.input(f"[bold cyan]Select adventure [1-{len(dungeon_files)}]:[/bold cyan] ").strip()
+        choice = console.input(f"[bold cyan]Select campaign [1-{len(campaigns)}]:[/bold cyan] ").strip()
 
         try:
             idx = int(choice)
-            if 1 <= idx <= len(dungeon_files):
-                selected_file = dungeon_files[idx - 1]
-                return selected_file.stem  # Return filename without extension
+            if 1 <= idx <= len(campaigns):
+                selected = campaigns[idx - 1]
+                return {
+                    "campaign_id": selected["id"],
+                    "starting_dungeon": selected["starting_dungeon"]
+                }
             else:
-                print_error("Invalid adventure number.")
+                print_error("Invalid campaign number.")
                 return None
         except ValueError:
             print_error("Invalid input.")

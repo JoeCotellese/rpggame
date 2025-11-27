@@ -1,0 +1,11 @@
+{
+  "id": "the_unquiet_dead",
+  "name": "The Unquiet Dead",
+  "description": "A three-part campaign investigating a cult's plot to summon a devil. Begin in the Town of Arden, explore the Davos Family Crypt, and uncover the dark conspiracy that threatens the realm.",
+  "level_range": "1-3",
+  "starting_dungeon": "town_of_arden",
+  "dungeons": [
+    "town_of_arden",
+    "the_unquiet_dead_crypt"
+  ]
+}

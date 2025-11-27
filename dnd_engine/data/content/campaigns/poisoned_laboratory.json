@@ -1,0 +1,10 @@
+{
+  "id": "poisoned_laboratory",
+  "name": "The Poisoned Laboratory",
+  "description": "A standalone adventure in an abandoned alchemist's workshop filled with dangerous fumes, volatile chemicals, and failed experiments.",
+  "level_range": "1",
+  "starting_dungeon": "poisoned_laboratory",
+  "dungeons": [
+    "poisoned_laboratory"
+  ]
+}
