@@ -3,6 +3,7 @@
 
 from pathlib import Path
 
+import questionary
 from rich.panel import Panel
 
 from dnd_engine.core.character import Character
@@ -247,10 +248,19 @@ class MainMenuV2:
         Returns:
             Tuple of (GameState, slot_number) if successful, None otherwise
         """
-        # Step 1: Select party from vault or create new
+        # Step 1: Select campaign
+        campaign_info = self._select_adventure()
+
+        if not campaign_info:
+            console.print("\n[yellow]No campaign selected. Returning to menu.[/yellow]")
+            return None
+
+        # Step 2: Select party from vault or create new
         console.print()
+        level_range = campaign_info.get("level_range", "Any")
         print_section(
-            "NEW GAME - SELECT PARTY",
+            "SELECT PARTY",
+            f"Campaign: {campaign_info['name']} (Level {level_range})\n"
             "Build your party by selecting 1-6 characters from your vault.\n"
             "Press [bold]C[/bold] to create new characters on the fly."
         )
@@ -259,13 +269,6 @@ class MainMenuV2:
 
         if not party_characters:
             console.print("\n[yellow]No party selected. Returning to menu.[/yellow]")
-            return None
-
-        # Step 2: Select adventure
-        adventure_name = self._select_adventure()
-
-        if not adventure_name:
-            console.print("\n[yellow]No adventure selected. Returning to menu.[/yellow]")
             return None
 
         # Step 3: Select save slot
@@ -298,7 +301,8 @@ class MainMenuV2:
             party = Party(party_characters)
             game_state = GameState(
                 party=party,
-                dungeon_name=adventure_name,
+                dungeon_name=campaign_info["starting_dungeon"],
+                campaign_id=campaign_info["campaign_id"],
                 data_loader=self.data_loader
             )
 
@@ -339,63 +343,70 @@ class MainMenuV2:
         Returns:
             List of selected characters (1-6)
         """
-        selected_characters = []
+        selected_characters: list[Character] = []
+        char_list = self.vault.list_characters()
 
+        # Step 1: Select from existing vault characters (if any)
+        if char_list:
+            console.print()
+
+            # Build choices for questionary
+            choices = []
+            for char_info in char_list:
+                display = (
+                    f"{char_info['name']} - "
+                    f"Level {char_info['level']} {char_info['class']}"
+                )
+                choices.append(questionary.Choice(title=display, value=char_info['id']))
+
+            def validate_selection(selected: list) -> bool | str:
+                if len(selected) > 6:
+                    return "Maximum 6 characters in a party"
+                return True
+
+            try:
+                selected_ids = questionary.checkbox(
+                    "Select characters for your party (1-6):",
+                    choices=choices,
+                    validate=validate_selection,
+                    instruction="(Space to toggle, Enter to confirm)"
+                ).ask()
+
+                if selected_ids:
+                    for char_id in selected_ids:
+                        character = self.vault.get_character(char_id)
+                        selected_characters.append(character)
+
+            except (EOFError, KeyboardInterrupt):
+                return []
+
+        # Step 2: Offer to create new characters if party isn't full
         while len(selected_characters) < 6:
-            console.print()
-            print_section(f"SELECT CHARACTER #{len(selected_characters) + 1}")
-
-            # Show vault characters
-            char_list = self.vault.list_characters()
-
-            if char_list:
-                console.print("\n[bold]Characters in Vault:[/bold]")
-                for i, char_info in enumerate(char_list, 1):
-                    usage_str = f"Used {char_info['times_used']} times" if char_info['times_used'] > 0 else "Never used"
-                    console.print(
-                        f"  [{i}] {char_info['name']} - "
-                        f"Level {char_info['level']} {char_info['class']} "
-                        f"[dim]({usage_str})[/dim]"
-                    )
-            else:
-                console.print("\n[dim]No characters in vault yet.[/dim]")
-
-            console.print("\n  [C] Create new character")
-            console.print(f"  [F] Finish party selection (current: {len(selected_characters)})")
-
             if len(selected_characters) == 0:
-                console.print("\n[dim]Note: You need at least 1 character[/dim]")
+                prompt = "No characters selected. Create a new character?"
+            else:
+                party_names = ", ".join(c.name for c in selected_characters)
+                prompt = f"Party: {party_names}\nCreate another character?"
 
-            console.print()
-            choice = console.input("[bold cyan]Select option:[/bold cyan] ").strip()
-
-            if choice.upper() == 'F':
+            try:
+                create_more = questionary.confirm(
+                    prompt,
+                    default=len(selected_characters) == 0  # Default yes if no characters
+                ).ask()
+            except (EOFError, KeyboardInterrupt):
                 if len(selected_characters) > 0:
                     break
-                else:
-                    console.print("\n[yellow]You need at least 1 character.[/yellow]")
-                    continue
+                return []
 
-            elif choice.upper() == 'C':
-                # Create new character
-                new_char = self._create_character_interactive()
-                if new_char:
-                    # Add to vault
-                    char_id = self.vault.add_character(new_char)
-                    selected_characters.append(new_char)
-                    print_status_message(f"Added {new_char.name} to party", "success")
+            if not create_more:
+                break
 
-            elif choice.isdigit():
-                idx = int(choice)
-                if 1 <= idx <= len(char_list):
-                    char_info = char_list[idx - 1]
-                    character = self.vault.get_character(char_info['id'])
-                    selected_characters.append(character)
-                    print_status_message(f"Added {character.name} to party", "success")
-                else:
-                    print_error("Invalid character number.")
-            else:
-                print_error("Invalid input.")
+            # Create new character
+            new_char = self._create_character_interactive()
+            if new_char:
+                self.vault.add_character(new_char)
+                selected_characters.append(new_char)
+                print_status_message(f"Added {new_char.name} to party", "success")
 
         return selected_characters
 
@@ -424,47 +435,72 @@ class MainMenuV2:
             print_error(f"Character creation failed: {e}")
             return None
 
-    def _select_adventure(self) -> str | None:
+    def _select_adventure(self) -> dict | None:
         """
-        Select an adventure/dungeon to play.
+        Select a campaign to play.
 
         Returns:
-            Dungeon filename or None if cancelled
+            Dict with campaign_id and starting_dungeon, or None if cancelled
         """
+        import json
+
         console.print()
-        print_section("SELECT ADVENTURE")
+        print_section("SELECT CAMPAIGN")
 
-        # List available dungeons
-        dungeons_dir = Path(__file__).parent.parent / "data" / "content" / "dungeons"
-        dungeon_files = list(dungeons_dir.glob("*.json"))
+        # List available campaigns
+        campaigns_dir = Path(__file__).parent.parent / "data" / "content" / "campaigns"
+        campaign_files = list(campaigns_dir.glob("*.json"))
 
-        # Filter out test dungeons
-        dungeon_files = [f for f in dungeon_files if not f.stem.startswith("test_") and not f.stem.startswith("multi_char_")]
-
-        if not dungeon_files:
-            print_error("No adventures found!")
+        if not campaign_files:
+            print_error("No campaigns found!")
             return None
 
-        console.print("\n[bold]Available Adventures:[/bold]")
-        for i, dungeon_file in enumerate(dungeon_files, 1):
-            # Convert filename to display name
-            display_name = dungeon_file.stem.replace('_', ' ').title()
-            console.print(f"  [{i}] {display_name}")
+        # Load campaign metadata
+        campaigns = []
+        for campaign_file in campaign_files:
+            try:
+                with open(campaign_file) as f:
+                    campaign_data = json.load(f)
+                    campaigns.append(campaign_data)
+            except Exception:
+                continue
 
-        console.print()
-        choice = console.input(f"[bold cyan]Select adventure [1-{len(dungeon_files)}]:[/bold cyan] ").strip()
+        if not campaigns:
+            print_error("No valid campaigns found!")
+            return None
+
+        # Build choices for questionary
+        choices = []
+        for campaign in campaigns:
+            level_range = campaign.get("level_range", "Any")
+            display = f"{campaign['name']} (Level {level_range})"
+            choices.append(questionary.Choice(title=display, value=campaign["id"]))
+
+        choices.append(questionary.Choice(title="← Back", value=None))
 
         try:
-            idx = int(choice)
-            if 1 <= idx <= len(dungeon_files):
-                selected_file = dungeon_files[idx - 1]
-                return selected_file.stem  # Return filename without extension
-            else:
-                print_error("Invalid adventure number.")
-                return None
-        except ValueError:
-            print_error("Invalid input.")
+            selected_id = questionary.select(
+                "Choose a campaign:",
+                choices=choices,
+                use_arrow_keys=True
+            ).ask()
+        except (EOFError, KeyboardInterrupt):
             return None
+
+        if not selected_id:
+            return None
+
+        # Find the selected campaign
+        selected = next((c for c in campaigns if c["id"] == selected_id), None)
+        if not selected:
+            return None
+
+        return {
+            "campaign_id": selected["id"],
+            "name": selected["name"],
+            "level_range": selected.get("level_range", "Any"),
+            "starting_dungeon": selected["starting_dungeon"]
+        }
 
     def handle_character_vault(self) -> None:
         """Handle character vault management menu."""

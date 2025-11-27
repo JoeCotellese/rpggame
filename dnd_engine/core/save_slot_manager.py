@@ -327,6 +327,7 @@ class SaveSlotManager:
             ]
             slot_data["game_state"] = {
                 "dungeon_name": game_state.dungeon_name,
+                "campaign_id": game_state.campaign_id,
                 "current_room_id": game_state.current_room_id,
                 "dungeon_state": self._serialize_dungeon_state(game_state.dungeon),
                 "in_combat": game_state.in_combat,
@@ -468,6 +469,7 @@ class SaveSlotManager:
         game_state = GameState(
             party=party,
             dungeon_name=gs_data["dungeon_name"],
+            campaign_id=gs_data.get("campaign_id"),
             event_bus=event_bus,
             data_loader=data_loader,
             dice_roller=dice_roller

@@ -408,8 +408,13 @@ class Inventory:
             # Item exists in inventory but not in data file (data integrity issue)
             return False, None
 
-        # Remove one from inventory
-        self.remove_item(item_id, quantity=1)
+        # Don't consume quest items or information items (readable documents)
+        is_quest_item = item_info.get("quest_item", False)
+        is_information = item_info.get("effect_type") == "information"
+
+        if not is_quest_item and not is_information:
+            # Remove one from inventory (only for regular consumables)
+            self.remove_item(item_id, quantity=1)
 
         return True, item_info
 
