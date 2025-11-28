@@ -210,6 +210,25 @@ class PlayerAttackResult:
     error: str | None = None
 
 
+@dataclass
+class StabilizeResult:
+    """
+    Result of attempting to stabilize a dying character.
+
+    Contains all information needed for UI display without requiring
+    the CLI to perform any game logic calculations.
+    """
+    success: bool
+    helper_name: str
+    target_name: str
+
+    # Skill check details
+    roll: int
+    modifier: int
+    total: int
+    dc: int
+
+
 class EnemyTurnAction(Enum):
     """Actions an enemy can take during their turn."""
     ATTACK = "attack"
@@ -1975,6 +1994,55 @@ class GameState:
             concentration_broken=concentration_broken,
             target_killed=not target.is_alive,
             narrative_context=narrative_context
+        )
+
+    def execute_stabilize(
+        self,
+        helper: Character,
+        target: Character
+    ) -> "StabilizeResult":
+        """
+        Execute an attempt to stabilize a dying character.
+
+        Handles the complete flow:
+        1. Loads skills data
+        2. Makes Medicine skill check (DC 10)
+        3. Stabilizes target on success
+        4. Emits stabilization event
+
+        Args:
+            helper: Character attempting to stabilize
+            target: Dying character to stabilize
+
+        Returns:
+            StabilizeResult with check details and outcome.
+        """
+        # Load skills data and make Medicine check (DC 10)
+        skills_data = self.data_loader.load_skills()
+        check_result = helper.make_skill_check("medicine", 10, skills_data)
+
+        if check_result["success"]:
+            # Stabilize the target
+            target.stabilize_character()
+
+            # Emit stabilization event
+            self.event_bus.emit(Event(
+                type=EventType.CHARACTER_STABILIZED,
+                data={
+                    "helper": helper.name,
+                    "target": target.name,
+                    "check_total": check_result["total"]
+                }
+            ))
+
+        return StabilizeResult(
+            success=check_result["success"],
+            helper_name=helper.name,
+            target_name=target.name,
+            roll=check_result["roll"],
+            modifier=check_result["modifier"],
+            total=check_result["total"],
+            dc=check_result["dc"]
         )
 
     def _resolve_combat_attack_spell(
