@@ -33,6 +33,15 @@ class MockLLMProvider(LLMProvider):
         """Return mock provider name."""
         return "Mock Provider"
 
+    async def chat_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        temperature: float = 0.7
+    ) -> dict | None:
+        """Mock chat_with_tools method."""
+        return {"content": "test", "tool_calls": [], "finish_reason": "stop"}
+
 
 class TestLLMEnhancer:
     """Test LLM enhancer integration with event bus."""

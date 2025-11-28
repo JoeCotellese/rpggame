@@ -65,7 +65,7 @@ Add vivid sensory details."""
         assert provider.api_key == "debug"
         assert provider.model == "debug"
         assert provider.timeout == 10.0
-        assert provider.max_tokens == 150
+        assert provider.max_tokens == 1000
 
     def test_init_with_custom_args(self) -> None:
         """Test that custom initialization args are accepted but ignored."""

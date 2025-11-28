@@ -840,6 +840,9 @@ class TestLLMToggleCommand:
             def get_provider_name(self):
                 return "Mock Provider"
 
+            async def chat_with_tools(self, messages, tools, temperature=0.7):
+                return {"content": "test", "tool_calls": [], "finish_reason": "stop"}
+
         # Create mock CLI with LLM enhancer
         party = Party([])
         game_state = GameState(party, "test_dungeon")
@@ -887,6 +890,9 @@ class TestLLMToggleCommand:
 
             def get_provider_name(self):
                 return "Mock Provider"
+
+            async def chat_with_tools(self, messages, tools, temperature=0.7):
+                return {"content": "test", "tool_calls": [], "finish_reason": "stop"}
 
         # Create mock CLI with LLM enhancer
         party = Party([])

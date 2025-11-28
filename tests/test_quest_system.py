@@ -417,9 +417,10 @@ class TestQuestManagerGameStateIntegration:
         event_bus = EventBus()
         data_loader = DataLoader()
 
+        # Use test_dungeon which doesn't have a campaign_id in its data
         game_state = GameState(
             party=party,
-            dungeon_name="town_of_arden",
+            dungeon_name="test_dungeon",
             event_bus=event_bus,
             data_loader=data_loader
         )
