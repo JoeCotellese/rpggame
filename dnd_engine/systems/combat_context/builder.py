@@ -121,12 +121,19 @@ class CombatContextBuilder:
         # Get battlefield state
         battlefield_state = self.game_state.get_battlefield_state()
 
+        # Detect killing blow - damage will kill the defender
+        is_killing_blow = False
+        if result.hit and result.damage > 0:
+            defender_hp = getattr(defender, "current_hp", getattr(defender, "hp", 0))
+            is_killing_blow = result.damage >= defender_hp
+
         # Build complete context dictionary
         context = {
             "attacker": result.attacker_name,
             "defender": result.defender_name,
             "damage": result.damage,
-            "critical": result.critical_hit,
+            "is_critical": result.critical_hit,
+            "is_killing_blow": is_killing_blow,
             "hit": result.hit,
             "location": location,
             "weapon": weapon_name,

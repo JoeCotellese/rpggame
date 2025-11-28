@@ -2345,7 +2345,14 @@ class CLI:
 
         # Display LLM narrative for attack spells that hit
         if self.llm_enhancer and result.attack_result and result.attack_result.hit:
-            target_creature = self.game_state.active_enemies[0] if self.game_state.active_enemies else None
+            # Find actual target creature by name (not active_enemies[0] which could be dead)
+            target_name = result.targets[0] if result.targets else None
+            target_creature = None
+            if target_name:
+                for enemy in self.game_state.active_enemies:
+                    if enemy.name == target_name:
+                        target_creature = enemy
+                        break
             if target_creature:
                 spell_action_data = {
                     "name": spell_data.get("name", "spell"),

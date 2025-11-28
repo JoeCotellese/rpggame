@@ -109,7 +109,7 @@ class TestCombatContextBuilder:
         assert context["attacker"] == "Fighter"
         assert context["defender"] == "Skeleton"
         assert context["damage"] == 10
-        assert context["critical"] is False
+        assert context["is_critical"] is False
         assert context["hit"] is True
         assert context["location"] == "Dark Crypt"
         assert context["weapon"] == "Longsword"
@@ -226,7 +226,7 @@ class TestCombatContextBuilder:
         assert context["weapon"] == "Fire Bolt"
         assert context["damage_type"] == "fire"
         assert context["is_spell"] is True
-        assert context["critical"] is True
+        assert context["is_critical"] is True
 
     def test_build_context_with_unknown_race(self):
         """Test building context when race is not in data."""

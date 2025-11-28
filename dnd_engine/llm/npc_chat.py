@@ -424,8 +424,8 @@ class NPCChatManager:
                     available.append(
                         {
                             "id": quest.id,
-                            "name": quest.name,
                             "state": state.value,
+                            # 'hint' is how the NPC would describe this situation
                             "hint": hint,
                         }
                     )

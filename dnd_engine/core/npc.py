@@ -241,8 +241,11 @@ class NPC:
         lines.extend(
             [
                 "",
-                "IMPORTANT:",
-                "- Don't list quests mechanically - weave them into conversation",
+                "IMPORTANT - QUEST DIALOGUE:",
+                "- NEVER say 'there's a quest called X' - quests don't have names in-world",
+                "- Describe PROBLEMS and SITUATIONS naturally (e.g., 'strange sounds from the crypt')",
+                "- Let players infer it's an opportunity to help - don't label it a 'quest'",
+                "- Use the 'hint' field for how YOUR CHARACTER would describe the situation",
                 "- Keep responses conversational and in-character",
             ]
         )
