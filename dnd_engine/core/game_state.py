@@ -103,6 +103,33 @@ class CombatItemResult:
 
 
 @dataclass
+class CombatItemUseResult:
+    """
+    Result of using a consumable item during combat (non-attack items).
+
+    Contains all information needed for UI display without requiring
+    the CLI to perform any game logic calculations.
+    """
+    success: bool
+    item_name: str
+    action_type: ActionType
+    user_name: str
+    target_name: str
+
+    # Effect details (from ItemEffectResult)
+    effect_type: str | None = None
+    effect_message: str | None = None
+    effect_amount: int = 0
+
+    # HP tracking for healing display
+    hp_before: int | None = None
+    hp_after: int | None = None
+
+    # Error handling
+    error_message: str | None = None
+
+
+@dataclass
 class CombatSpellResult:
     """
     Result of casting a spell in combat.
@@ -2951,4 +2978,150 @@ class GameState:
             item_name=item_name,
             action_type=action_required,
             special_effects=special_effects
+        )
+
+    def use_item_combat(
+        self,
+        user: Character,
+        item_id: str,
+        target: Character | Creature
+    ) -> CombatItemUseResult:
+        """
+        Use a consumable item during combat (non-attack items like potions).
+
+        Handles the complete flow of using consumable items:
+        1. Validates action economy
+        2. Consumes item from inventory
+        3. Applies item effect to target
+        4. Emits appropriate events
+
+        Args:
+            user: Character using the item
+            item_id: ID of the item to use
+            target: Target character/creature for the effect
+
+        Returns:
+            CombatItemUseResult with effect outcome and display information
+        """
+        from dnd_engine.systems.item_effects import apply_item_effect
+
+        # Load item data
+        items_data = self.data_loader.load_items()
+
+        # Find item in consumables category
+        item_data = items_data.get("consumables", {}).get(item_id)
+
+        if item_data is None:
+            return CombatItemUseResult(
+                success=False,
+                item_name=item_id,
+                action_type=ActionType.ACTION,
+                user_name=user.name,
+                target_name=target.name,
+                error_message=f"Item '{item_id}' not found in consumables"
+            )
+
+        item_name = item_data.get("name", item_id)
+
+        # Parse action required
+        action_required_str = item_data.get("action_required", "action")
+        action_type_map = {
+            "action": ActionType.ACTION,
+            "bonus_action": ActionType.BONUS_ACTION,
+            "free_object": ActionType.FREE_OBJECT,
+            "no_action": ActionType.NO_ACTION
+        }
+        action_required = action_type_map.get(action_required_str, ActionType.ACTION)
+
+        # Validate action economy
+        turn_state = self.initiative_tracker.get_current_turn_state() if self.initiative_tracker else None
+        if not turn_state:
+            return CombatItemUseResult(
+                success=False,
+                item_name=item_name,
+                action_type=action_required,
+                user_name=user.name,
+                target_name=target.name,
+                error_message="Unable to get current turn state"
+            )
+
+        if not turn_state.is_action_available(action_required):
+            action_name = action_required_str.replace("_", " ").title()
+            return CombatItemUseResult(
+                success=False,
+                item_name=item_name,
+                action_type=action_required,
+                user_name=user.name,
+                target_name=target.name,
+                error_message=f"No {action_name} available this turn"
+            )
+
+        # Consume the action
+        if not turn_state.consume_action(action_required):
+            return CombatItemUseResult(
+                success=False,
+                item_name=item_name,
+                action_type=action_required,
+                user_name=user.name,
+                target_name=target.name,
+                error_message=f"Failed to consume {action_required_str}"
+            )
+
+        # Track HP before for healing display
+        hp_before = target.current_hp
+
+        # Use the item from inventory (removes it)
+        inventory = user.inventory
+        success, used_item_data = inventory.use_item(item_id, items_data)
+
+        if not success:
+            # Restore the action since item use failed
+            turn_state.reset()
+            turn_state.consume_action(action_required)
+            return CombatItemUseResult(
+                success=False,
+                item_name=item_name,
+                action_type=action_required,
+                user_name=user.name,
+                target_name=target.name,
+                error_message=f"Failed to use {item_name} from inventory"
+            )
+
+        # Apply the item's effect
+        effect_result = apply_item_effect(
+            item_info=used_item_data,
+            target=target,
+            dice_roller=self.dice_roller,
+            event_bus=self.event_bus,
+            time_manager=self.time_manager
+        )
+
+        # Track HP after for healing display
+        hp_after = target.current_hp
+
+        # Emit item used event
+        self.event_bus.emit(Event(
+            type=EventType.ITEM_USED,
+            data={
+                "character": user.name,
+                "target": target.name,
+                "item_id": item_id,
+                "item_name": item_name,
+                "effect_type": effect_result.effect_type,
+                "action_cost": action_required_str,
+                "success": effect_result.success
+            }
+        ))
+
+        return CombatItemUseResult(
+            success=True,
+            item_name=item_name,
+            action_type=action_required,
+            user_name=user.name,
+            target_name=target.name,
+            effect_type=effect_result.effect_type,
+            effect_message=effect_result.message,
+            effect_amount=effect_result.amount,
+            hp_before=hp_before,
+            hp_after=hp_after
         )
