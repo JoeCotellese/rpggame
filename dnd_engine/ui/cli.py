@@ -13,6 +13,7 @@ from dnd_engine.core.game_state import (
     EnemyTurnAction,
     EnemyTurnResult,
     GameState,
+    PlayerAttackResult,
 )
 from dnd_engine.llm.npc_chat import NPCChatManager
 from dnd_engine.systems.action_economy import ActionType
@@ -1855,58 +1856,39 @@ class CLI:
         current = self.game_state.initiative_tracker.get_current_combatant()
         attacker = current.creature
 
-        # Get equipped weapon and its properties
-        equipped_weapon = attacker.inventory.get_equipped_item(EquipmentSlot.WEAPON)
+        # Execute attack through game engine
+        result = self.game_state.execute_player_attack(attacker, target)
 
-        # Load weapon data
-        items_data = self.game_state.data_loader.load_items()
+        # Display the attack result
+        self._display_player_attack_result(result, attacker, target)
 
-        # Get attack bonus and damage bonus based on weapon
-        if equipped_weapon:
-            attack_bonus = attacker.get_attack_bonus(equipped_weapon, items_data)
-            damage_bonus = attacker.get_damage_bonus(equipped_weapon, items_data)
-            # Get weapon damage dice from item data
-            weapon_data = items_data.get("weapons", {}).get(equipped_weapon, {})
-            damage_dice = weapon_data.get("damage", "1d8")
-            damage_dice = format_dice_with_modifier(damage_dice, damage_bonus)
-        else:
-            # Fallback to melee attack if no weapon equipped
-            attack_bonus = attacker.melee_attack_bonus
-            damage_bonus = attacker.melee_damage_bonus
-            damage_dice = format_dice_with_modifier("1d8", damage_bonus)
+        return True
 
-        # Perform attack (resolve mechanics)
-        result = self.game_state.combat_engine.resolve_attack(
-            attacker=attacker,
-            defender=target,
-            attack_bonus=attack_bonus,
-            damage_dice=damage_dice,
-            apply_damage=True,
-            game_state=self.game_state
-        )
+    def _display_player_attack_result(
+        self,
+        result: PlayerAttackResult,
+        attacker: Character,
+        target
+    ) -> None:
+        """Display the results of a player attack."""
+        attack_result = result.attack_result
 
-        # Check concentration if target was hit and took damage
-        if result.hit and result.damage > 0 and isinstance(target, Character):
-            concentration_result = self.game_state.check_concentration_from_damage(
-                target.name,
-                result.damage
+        # Display concentration break if applicable
+        if result.concentration_broken:
+            spell_name = result.concentration_broken["spell_name"]
+            save_result = result.concentration_broken["save_result"]
+            dc = result.concentration_broken["dc"]
+            console.print(
+                f"[yellow]💫 {target.name}'s concentration on {spell_name} is broken! "
+                f"(CON save: {save_result['total']} vs DC {dc})[/yellow]"
             )
-            if concentration_result["concentration_broken"]:
-                spell_name = concentration_result["spell_name"]
-                save_result = concentration_result["save_result"]
-                dc = concentration_result["dc"]
-                console.print(
-                    f"[yellow]💫 {target.name}'s concentration on {spell_name} is broken! "
-                    f"(CON save: {save_result['total']} vs DC {dc})[/yellow]"
-                )
 
-        # NEW FLOW: Narrative → Mechanics → Death Narrative → Death Message
+        # FLOW: Narrative → Mechanics → Death Narrative → Death Message
 
         # 1. Get and display attack narrative FIRST (if hit)
-        if self.llm_enhancer and result.hit:
-            # Build complete attack context using service
+        if self.llm_enhancer and attack_result.hit:
             attack_context = self.context_builder.build_attack_context(
-                attacker, target, result
+                attacker, target, attack_result
             )
 
             with console.status("", spinner="dots"):
@@ -1918,13 +1900,13 @@ class CLI:
                 self.display_narrative_panel(narrative)
 
         # Record this action in combat history
-        self._record_combat_action(result)
+        self._record_combat_action(attack_result)
 
         # 2. Display mechanics after narrative
-        console.print(f"[cyan]⚔️  {str(result)}[/cyan]")
+        console.print(f"[cyan]⚔️  {str(attack_result)}[/cyan]")
 
         # 3. If target died, show death narrative then confirmation
-        if not target.is_alive:
+        if result.target_killed:
             if self.llm_enhancer:
                 with console.status("", spinner="dots"):
                     death_narrative = self.llm_enhancer.get_death_narrative_sync(
@@ -1939,8 +1921,6 @@ class CLI:
 
             # 4. Display defeated message after death narrative
             print_status_message(f"{target.name} is defeated!", "success")
-
-        return True
 
     def handle_cast_spell(self, spell_name: str) -> None:
         """Handle cast spell command during combat."""
