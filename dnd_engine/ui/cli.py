@@ -15,6 +15,11 @@ from dnd_engine.systems.combat_context import CombatContextBuilder
 from dnd_engine.systems.combat_middleware import ActionResult, CombatActionExecutor
 from dnd_engine.systems.condition_manager import ConditionManager
 from dnd_engine.systems.inventory import EquipmentSlot
+from dnd_engine.systems.targeting import (
+    get_item_targeting_requirements,
+    get_spell_targeting_requirements,
+    ValidTargets,
+)
 from dnd_engine.ui.debug_console import DebugConsole
 from dnd_engine.ui.rich_ui import (
     console,
@@ -812,26 +817,24 @@ class CLI:
                 item_id, item_data = item_selection
                 item_name = item_data.get("name", item_id)
 
-                # Check if item can target others
-                target_type = item_data.get("target_type", "self")
-                if target_type == "any":
+                # Get targeting requirements from game engine (not interpreting data directly)
+                targeting = get_item_targeting_requirements(item_data)
+
+                if targeting.valid_targets == ValidTargets.ANY:
                     # Prompt for target selection (allies within range)
                     target = self._prompt_combat_ally_selection(item_name, item_data, character)
                     if not isinstance(target, Character):
                         return  # User cancelled or invalid selection
-                    # Execute the use with selected target
                     self.handle_use_item_combat_with_target(item_id, item_data, character, target)
-                elif target_type == "enemy":
+                elif targeting.valid_targets == ValidTargets.ENEMY:
                     # Prompt for enemy target selection
                     target = self._prompt_enemy_selection()
                     if target is None or target == "Cancel":
                         return  # User cancelled
-                    # Execute attack with item on enemy
                     self.handle_use_item_combat_attack(item_id, item_data, character, target)
                 else:
-                    # Self-target only
+                    # Self-target only (SELF or default)
                     target = character
-                    # Execute the use with selected target
                     self.handle_use_item_combat_with_target(item_id, item_data, character, target)
                 return
 
@@ -877,12 +880,12 @@ class CLI:
                 print_error(f"{character.name} doesn't have a consumable '{item_id}' in inventory.")
                 return
 
-            # Determine target based on item type and player specification
-            target_type = found_item_data.get("target_type", "self")
+            # Get targeting requirements from game engine (not interpreting data directly)
+            targeting = get_item_targeting_requirements(found_item_data)
 
             if player_id:
                 # Player specified a target - validate it
-                if target_type == "enemy":
+                if targeting.valid_targets == ValidTargets.ENEMY:
                     print_error(f"{found_item_data.get('name', found_item)} must target an enemy. Use the enemy name or number.")
                     return
 
@@ -893,11 +896,11 @@ class CLI:
 
                 # Use item on specified target
                 self.handle_use_item_combat_with_target(found_item, found_item_data, character, target)
-            elif target_type == "enemy":
+            elif targeting.valid_targets == ValidTargets.ENEMY:
                 # Item requires enemy target but none specified
                 print_error(f"{found_item_data.get('name', found_item)} requires an enemy target. Specify the target (e.g., 'use {item_id} skeleton 1')")
                 return
-            elif target_type == "any":
+            elif targeting.valid_targets == ValidTargets.ANY:
                 # Item can target anyone but no target specified - default to self
                 self.handle_use_item_combat_with_target(found_item, found_item_data, character, character)
             else:
@@ -2138,37 +2141,40 @@ class CLI:
                 print_error(f"No {ordinal}-level spell slots available!")
                 return
 
-        # Determine and select target based on spell target_type
-        target_type = spell_data.get("target_type")
+        # Get targeting requirements from game engine (not interpreting data directly)
+        targeting = get_spell_targeting_requirements(spell_data)
         spell_display_name = spell_data.get("name", spell_id)
 
-        # Route targeting based on data-driven target_type field
-        if target_type == "area":
+        # Warn if spell data is missing target_type
+        if targeting.missing_target_type:
+            print_error(f"Warning: Spell '{spell_display_name}' missing target_type, defaulting to enemy targeting")
+
+        # Route targeting based on requirements from game engine
+        if targeting.is_area_effect:
             # Area effect spells - target all living enemies
             target = None  # Special marker for area effects
             print_status_message(f"{caster.name} casts {spell_display_name}!", "info")
-        elif target_type == "self":
+        elif targeting.valid_targets == ValidTargets.SELF:
             # Self-only spells
             target = caster
             print_status_message(f"{caster.name} targets themselves with {spell_display_name}", "info")
-        elif target_type == "ally":
+        elif targeting.valid_targets == ValidTargets.ALLY:
             # Allied target (including self)
             target = self._prompt_combat_ally_selection(spell_display_name, spell_data, caster)
-        elif target_type == "enemy":
+        elif targeting.valid_targets == ValidTargets.ENEMY:
             # Single enemy target
             target = self._prompt_enemy_selection()
-        elif target_type == "any":
+        elif targeting.valid_targets == ValidTargets.ANY:
             # Any creature (rare - Light, Identify, etc.)
             # For now, prompt ally selection (can be expanded later)
             target = self._prompt_combat_ally_selection(spell_display_name, spell_data, caster)
         else:
-            # Fallback: missing target_type, default to enemy
-            print_error(f"Warning: Spell '{spell_display_name}' missing target_type, defaulting to enemy targeting")
+            # Fallback should not happen, but handle gracefully
             target = self._prompt_enemy_selection()
 
         # Handle target cancellation - nothing consumed yet so just return
         # Note: target=None is valid for area effects, so check for explicit "Cancel"
-        if target == "Cancel" or (target is None and target_type != "area"):
+        if target == "Cancel" or (target is None and not targeting.is_area_effect):
             return
 
         # NOW consume spell slot (will be auto-refunded by middleware if action fails)
@@ -4697,11 +4703,11 @@ class CLI:
         except (EOFError, KeyboardInterrupt):
             return
 
-        # 3. Select target if needed (based on target_type)
+        # 3. Select target if needed (using targeting requirements from game engine)
         target_name = None
-        target_type = spell_data.get("target_type")
+        targeting = get_spell_targeting_requirements(spell_data)
 
-        if target_type == "ally":
+        if targeting.valid_targets == ValidTargets.ALLY:
             # Ally-targeting spells need a target selection
             target = self._prompt_party_member_selection(
                 f"Who should {caster.name} target with {spell_data.get('name')}?"
@@ -4710,7 +4716,7 @@ class CLI:
             if not target or isinstance(target, str):
                 return  # User cancelled
             target_name = target.name
-        elif target_type == "any":
+        elif targeting.valid_targets == ValidTargets.ANY:
             # "Any" target type - for now, treat like ally (can expand later for objects/items)
             target = self._prompt_party_member_selection(
                 f"Who should {caster.name} target with {spell_data.get('name')}?"
