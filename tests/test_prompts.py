@@ -26,7 +26,9 @@ class TestRoomDescriptionPrompt:
         assert "Torture Chamber" in prompt
         assert "dark room with rusty chains" in prompt
         assert "D&D" in prompt
-        assert "atmospheric" in prompt or "vivid" in prompt
+        # Should include length instruction for standard rooms
+        assert "LENGTH:" in prompt
+        assert "2-3 sentences" in prompt or "50 words" in prompt
 
     def test_build_room_description_minimal_data(self) -> None:
         """Test building room description with minimal data."""
@@ -201,17 +203,71 @@ class TestRoomDescriptionPrompt:
         assert "combat begins" not in prompt.lower()
         assert "battle is about to erupt" not in prompt.lower()
 
+    def test_build_room_description_pov_constraints(self) -> None:
+        """Test that room description enforces third-person POV and no arrival language."""
+        room_data = {
+            "name": "Town Square",
+            "description": "A bustling market square with a fountain."
+        }
+
+        prompt = build_room_description_prompt(room_data)
+
+        # Should enforce third-person POV
+        assert "third-person" in prompt.lower() or 'never "you"' in prompt.lower()
+        # Should prohibit arrival/transition language
+        assert "never describe arrival" in prompt.lower() or "stepping into" in prompt.lower()
+
+    def test_build_room_description_significance_levels(self) -> None:
+        """Test that room significance affects description length instruction."""
+        base_room = {
+            "name": "Test Room",
+            "description": "A test room."
+        }
+
+        # Minor rooms get shortest descriptions
+        minor_room = {**base_room, "significance": "minor"}
+        prompt = build_room_description_prompt(minor_room)
+        assert "1 sentence" in prompt
+        assert "20 words" in prompt
+
+        # Standard rooms (default) get medium descriptions
+        standard_room = {**base_room, "significance": "standard"}
+        prompt = build_room_description_prompt(standard_room)
+        assert "2-3 sentences" in prompt
+        assert "50 words" in prompt
+
+        # Major rooms get longest descriptions
+        major_room = {**base_room, "significance": "major"}
+        prompt = build_room_description_prompt(major_room)
+        assert "3-4 sentences" in prompt
+        assert "80 words" in prompt
+
+    def test_build_room_description_combat_overrides_significance(self) -> None:
+        """Test that combat starting overrides significance to short description."""
+        room_data = {
+            "name": "Boss Chamber",
+            "description": "The dragon's lair.",
+            "significance": "major",  # Would normally be long
+            "monsters": ["Dragon"]
+        }
+
+        prompt = build_room_description_prompt(room_data, combat_starting=True)
+
+        # Combat should override to short, even for major rooms
+        assert "1-2 sentences" in prompt
+        assert "40 words" in prompt
+        assert "Combat is imminent" in prompt
+
 
 class TestCombatActionPrompt:
     """Test combat action prompt building."""
 
     def test_build_combat_action_hit(self) -> None:
-        """Test building combat action prompt for a hit."""
+        """Test building combat action prompt for a regular hit."""
         action_data = {
             "attacker": "Thorin",
             "defender": "Goblin",
             "weapon": "longsword",
-            "damage": 8,
             "hit": True
         }
 
@@ -220,8 +276,11 @@ class TestCombatActionPrompt:
         assert "Thorin" in prompt
         assert "Goblin" in prompt
         assert "longsword" in prompt
-        assert "8" in prompt
-        assert "hit" in prompt or "damage" in prompt
+        assert "hit" in prompt.lower()
+        # Regular hits should request brief output
+        assert "under 20 words" in prompt or "one sentence" in prompt.lower()
+        # Should enforce third-person POV (player controls multiple characters)
+        assert "third-person" in prompt.lower() or 'never "you"' in prompt.lower()
 
     def test_build_combat_action_miss(self) -> None:
         """Test building combat action prompt for a miss."""
@@ -229,7 +288,6 @@ class TestCombatActionPrompt:
             "attacker": "Bjorn",
             "defender": "Orc",
             "weapon": "battleaxe",
-            "damage": 0,
             "hit": False
         }
 
@@ -238,7 +296,9 @@ class TestCombatActionPrompt:
         assert "Bjorn" in prompt
         assert "Orc" in prompt
         assert "battleaxe" in prompt
-        assert "miss" in prompt
+        assert "miss" in prompt.lower()
+        # Misses should be extra brief
+        assert "under 15 words" in prompt
 
     def test_build_combat_action_minimal_data(self) -> None:
         """Test building combat action with minimal data."""
@@ -255,7 +315,6 @@ class TestCombatActionPrompt:
             "attacker": "Gandalf",
             "defender": "Balrog",
             "weapon": "staff",
-            "damage": 12,
             "hit": True,
             "location": "Bridge of Khazad-dûm"
         }
@@ -266,73 +325,75 @@ class TestCombatActionPrompt:
         assert "Balrog" in prompt
         assert "Bridge of Khazad-dûm" in prompt
         assert "Location:" in prompt
-        assert "environmental" in prompt.lower() or "location" in prompt.lower()
 
-    def test_build_combat_action_with_full_context(self) -> None:
-        """Test building combat action prompt with full context (weapon, armor, race, damage type)."""
+    def test_build_combat_action_critical_hit(self) -> None:
+        """Test building combat action prompt for a critical hit."""
         action_data = {
             "attacker": "Thorin",
             "defender": "Goblin",
             "weapon": "Longsword",
-            "damage": 9,
             "hit": True,
+            "is_critical": True,
             "location": "Goblin Warren",
-            "attacker_race": "mountain dwarf",
-            "defender_armor": "leather armor",
-            "damage_type": "slashing"
+            "damage_type": "slashing",
+            "combat_history": ["Goblin attacked Thorin", "Thorin missed Goblin"]
         }
 
         prompt = build_combat_action_prompt(action_data)
 
         assert "Thorin" in prompt
-        assert "mountain dwarf" in prompt
         assert "Goblin" in prompt
-        assert "leather armor" in prompt
         assert "Longsword" in prompt
         assert "slashing" in prompt
         assert "Goblin Warren" in prompt
-        assert "9" in prompt
+        # Critical hits should include recent history
+        assert "Recent Actions:" in prompt
+        # Critical hits should request visceral output
+        assert "visceral" in prompt.lower() or "15-25 words" in prompt
 
-    def test_build_combat_action_round_zero_or_one(self) -> None:
-        """Test combat action prompt shows opening exchange for round 0-1."""
-        # Test round 0 (first round of combat)
+    def test_build_combat_action_killing_blow(self) -> None:
+        """Test building combat action prompt for a killing blow."""
         action_data = {
             "attacker": "Legolas",
             "defender": "Orc",
             "weapon": "Longbow",
-            "damage": 7,
             "hit": True,
-            "round_number": 0
+            "is_killing_blow": True,
+            "combat_history": [
+                "Orc attacked Legolas",
+                "Legolas shot Orc",
+                "Orc attacked Gimli",
+                "Gimli hit Orc"
+            ]
         }
 
         prompt = build_combat_action_prompt(action_data)
-        assert "opening exchange" in prompt.lower()
+
         assert "Legolas" in prompt
+        assert "killing blow" in prompt.lower() or "strikes down" in prompt.lower()
+        # Killing blows get more history
+        assert "Recent Actions:" in prompt
+        # Killing blows should request 2-3 sentences
+        assert "2-3" in prompt
 
-        # Test round 1 (still early combat)
-        action_data["round_number"] = 1
-        prompt = build_combat_action_prompt(action_data)
-        assert "opening exchange" in prompt.lower()
-
-    def test_build_combat_action_ongoing_battle(self) -> None:
-        """Test combat action prompt shows ongoing battle for round 2+."""
+    def test_build_combat_action_regular_hit_excludes_history(self) -> None:
+        """Test that regular hits don't include combat history."""
         action_data = {
             "attacker": "Gimli",
             "defender": "Uruk-hai",
             "weapon": "Battleaxe",
-            "damage": 10,
             "hit": True,
-            "round_number": 3
+            "combat_history": ["Uruk-hai attacked Gimli", "Gimli attacked Uruk-hai"]
         }
 
         prompt = build_combat_action_prompt(action_data)
 
-        assert "round 3" in prompt.lower()
-        assert "ongoing battle" in prompt.lower()
         assert "Gimli" in prompt
+        # Regular hits should NOT include history
+        assert "Recent Actions:" not in prompt
 
-    def test_build_combat_action_with_battlefield_state(self) -> None:
-        """Test combat action prompt with BattlefieldState dataclass."""
+    def test_build_combat_action_killing_blow_with_battlefield_state(self) -> None:
+        """Test combat action prompt includes battlefield state for killing blows."""
         # Create a BattlefieldState with party and enemy combatants
         party_combatants = [
             CombatantStatus(
@@ -392,12 +453,11 @@ class TestCombatActionPrompt:
             "attacker": "Thorin",
             "defender": "Skeleton 1",
             "weapon": "battleaxe",
-            "damage": 7,
             "hit": True,
+            "is_killing_blow": True,
             "battlefield_state": battlefield_state
         }
 
-        # This should not raise an AttributeError
         prompt = build_combat_action_prompt(action_data)
 
         # Verify the prompt was built successfully
@@ -406,27 +466,80 @@ class TestCombatActionPrompt:
         assert prompt is not None
         assert len(prompt) > 0
 
-        # Verify battlefield context is included
-        assert "Battlefield:" in prompt or "25/30" in prompt or "10/13" in prompt
+        # Verify battlefield context is included for killing blows
+        assert "Battlefield:" in prompt
+        assert "25/30" in prompt or "Thorin" in prompt
+
+    def test_build_combat_action_regular_hit_excludes_battlefield_state(self) -> None:
+        """Test that regular hits don't include battlefield state."""
+        party_combatants = [
+            CombatantStatus(
+                name="Thorin",
+                display_name="Thorin",
+                current_hp=25,
+                max_hp=30,
+                is_alive=True,
+                conditions=[],
+                is_player=True,
+                ac=16
+            )
+        ]
+
+        enemy_combatants = [
+            CombatantStatus(
+                name="Skeleton",
+                display_name="Skeleton 1",
+                current_hp=10,
+                max_hp=13,
+                is_alive=True,
+                conditions=[],
+                is_player=False,
+                ac=13
+            )
+        ]
+
+        battlefield_state = BattlefieldState(
+            party_combatants=party_combatants,
+            enemy_combatants=enemy_combatants,
+            round_number=2,
+            current_turn="Thorin",
+            in_combat=True
+        )
+
+        action_data = {
+            "attacker": "Thorin",
+            "defender": "Skeleton 1",
+            "weapon": "battleaxe",
+            "hit": True,
+            "battlefield_state": battlefield_state
+        }
+
+        prompt = build_combat_action_prompt(action_data)
+
+        # Regular hits should NOT include battlefield state
+        assert "Battlefield:" not in prompt
+        assert "25/30" not in prompt
+        assert "10/13" not in prompt
 
 
 class TestDeathPrompt:
     """Test character death prompt building."""
 
-    def test_build_death_prompt_full_data(self) -> None:
-        """Test building death prompt with full character data."""
+    def test_build_death_prompt_enemy(self) -> None:
+        """Test building death prompt for enemy (brief, focused)."""
         character_data = {
-            "name": "Thorin Ironshield",
-            "race": "Dwarf",
-            "class": "Fighter",
-            "cause": "was slain by a dragon's fiery breath"
+            "name": "Skeleton",
+            "cause": "was shattered by a mighty blow"
         }
 
         prompt = build_death_prompt(character_data)
 
-        assert "Thorin Ironshield" in prompt
-        assert "slain by a dragon's fiery breath" in prompt
-        assert "death" in prompt or "final" in prompt
+        assert "Skeleton" in prompt
+        assert "shattered" in prompt
+        # Enemy deaths should be brief
+        assert "brief sentence" in prompt.lower() or "falls" in prompt.lower()
+        # Should enforce third-person POV
+        assert "third-person" in prompt.lower() or 'never "you"' in prompt.lower()
 
     def test_build_death_prompt_minimal_data(self) -> None:
         """Test building death prompt with minimal data."""

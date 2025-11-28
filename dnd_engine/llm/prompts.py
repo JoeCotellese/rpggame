@@ -27,6 +27,12 @@ def build_room_description_prompt(
     room_id = room_data.get("id", room_type.lower().replace(" ", "_"))
     monsters = room_data.get("monsters", [])
 
+    # Room significance determines description length
+    # "minor" = transition rooms, hallways (1 sentence)
+    # "standard" = typical rooms (2-3 sentences)
+    # "major" = story beats, boss rooms, reveals (3-4 sentences)
+    significance = room_data.get("significance", "standard")
+
     # Detect room transition for narrative context
     previous_room_id = room_data.get("previous_room_id")
     is_entering = previous_room_id != room_id if previous_room_id is not None else True
@@ -211,32 +217,32 @@ def build_room_description_prompt(
 
     # If bright, no special lighting context needed
 
-    # Build transition narrative instruction
-    transition_instruction = ""
-    if is_entering:
-        transition_instruction = (
-            "\n\nNarrative Context: The party is ENTERING this room. We don't know "
-            "where they came from last nor do we know how they get into this room "
-            "(i.e., door, opening, etc). Make it feel like they're arriving for the "
-            "first time without describing the entrance way."
-        )
-    else:
-        transition_instruction = (
-            "\n\nNarrative Context: The party is already IN this room, examining it "
-            "more closely. Do NOT describe them entering or transitioning - they're "
-            "already here. Focus on what they observe in the moment."
-        )
+    # POV and style constraints
+    pov_constraint = (
+        "\n\nSTYLE RULES:\n"
+        "- Use third-person, never \"you\" (player controls multiple characters)\n"
+        "- NEVER describe arrival, stepping into, entering, or movement\n"
+        "- Just describe what IS HERE - the space, atmosphere, and contents\n"
+        "- Write as if describing a snapshot, not a transition"
+    )
+
+    # Determine description length based on significance and combat
+    # Combat starting = keep it short, players want to fight
+    if combat_starting:
+        length_instruction = "1-2 sentences max (40 words). Combat is imminent - be brief."
+    elif significance == "minor":
+        length_instruction = "1 sentence (20 words max). This is a transition space."
+    elif significance == "major":
+        length_instruction = "3-4 sentences (80 words max). This is a significant location."
+    else:  # standard
+        length_instruction = "2-3 sentences (50 words max). Sensory details only."
 
     prompt = (
-        f"Enhance this D&D dungeon room description with atmospheric details:\n\n"
+        f"Enhance this D&D room description:\n\n"
         f"Room: {room_type}\n"
         f"Basic description: {base_desc}{monster_context}{lighting_context}"
-        f"{transition_instruction}\n\n"
-        f"Add vivid sensory details (sights, sounds, smells) in 2-3 sentences. "
-        f"Make it immersive but concise.{instruction}\n\n"
-        f"IMPORTANT: If lighting context is provided above, you MUST incorporate it "
-        f"into your description. The lighting level dramatically affects what can be "
-        f"perceived and should be central to the atmosphere."
+        f"{pov_constraint}\n\n"
+        f"LENGTH: {length_instruction}{instruction}"
     )
 
     return prompt
@@ -244,14 +250,19 @@ def build_room_description_prompt(
 
 def build_combat_action_prompt(action_data: dict[str, Any]) -> str:
     """
-    Build prompt for combat action narration.
+    Build prompt for combat action narration with tiered verbosity.
+
+    Uses minimal context for regular hits, more for crits, full context for
+    killing blows. This keeps combat snappy while preserving drama for
+    significant moments.
 
     Args:
         action_data: Combat details including:
-            - attacker, defender, weapon, damage, hit/miss, location
-            - attacker_race, defender_armor, damage_type
-            - combat_history: List of recent action summaries
-            - battlefield_state: Current HP status of all combatants
+            - attacker, defender, weapon, hit/miss, location
+            - is_critical: Whether this was a critical hit
+            - is_killing_blow: Whether this kills the target
+            - combat_history: List of recent action summaries (used for crits+)
+            - battlefield_state: Current HP status (used for killing blows)
 
     Returns:
         Formatted prompt for LLM
@@ -259,43 +270,36 @@ def build_combat_action_prompt(action_data: dict[str, Any]) -> str:
     attacker = action_data.get("attacker", "Someone")
     defender = action_data.get("defender", "something")
     weapon = action_data.get("weapon", "weapon")
-    damage = action_data.get("damage", 0)
     hit = action_data.get("hit", False)
     location = action_data.get("location", "")
 
-    # Combat history and battlefield state
+    # Action significance - determines how much context to include
+    is_critical = action_data.get("is_critical", False)
+    is_killing_blow = action_data.get("is_killing_blow", False)
+
+    # Combat history and battlefield state - only used for significant actions
     combat_history = action_data.get("combat_history", [])
     battlefield_state = action_data.get("battlefield_state", {})
 
     # Additional context for narrative richness
-    attacker_race = action_data.get("attacker_race", "")
-    defender_armor = action_data.get("defender_armor", "")
     damage_type = action_data.get("damage_type", "")
-    round_number = action_data.get("round_number")
 
-    # Build context strings
+    # Build context strings - location always included
     location_context = f"Location: {location}\n" if location else ""
 
-    # Build round context
-    round_context = ""
-    if round_number is not None:
-        if round_number <= 1:
-            round_context = "Combat Stage: Opening exchange\n"
-        else:
-            round_context = f"Combat Stage: Ongoing battle (Round {round_number})\n"
-
-    # Build combat history context
+    # Build combat history context - only for crits and killing blows
     history_context = ""
-    if combat_history:
+    if (is_critical or is_killing_blow) and combat_history:
+        # Crits get last 2 actions, killing blows get last 4
+        history_count = 4 if is_killing_blow else 2
         history_lines = []
-        for i, action in enumerate(combat_history[-8:], 1):  # Last 8 actions
+        for i, action in enumerate(combat_history[-history_count:], 1):
             history_lines.append(f"  {i}. {action}")
-        history_context = "Recent Combat Actions:\n" + "\n".join(history_lines) + "\n\n"
+        history_context = "Recent Actions:\n" + "\n".join(history_lines) + "\n\n"
 
-    # Build battlefield state context
+    # Build battlefield state context - only for killing blows
     battlefield_context = ""
-    if battlefield_state:
-        # BattlefieldState is a dataclass, not a dict - access attributes directly
+    if is_killing_blow and battlefield_state:
         party_combatants = getattr(battlefield_state, "party_combatants", [])
         enemy_combatants = getattr(battlefield_state, "enemy_combatants", [])
 
@@ -318,40 +322,46 @@ def build_combat_action_prompt(action_data: dict[str, Any]) -> str:
                 f"Battlefield: Party [{party_status}] | Enemies [{enemy_status}]\n\n"
             )
 
-    # Build combatant descriptions
-    attacker_desc = attacker
-    if attacker_race:
-        attacker_desc = f"{attacker} (a {attacker_race})"
-
-    defender_desc = defender
-    if defender_armor:
-        defender_desc = f"{defender} (wearing {defender_armor})"
-
+    # Build weapon description
     weapon_desc = weapon
     if damage_type:
-        weapon_desc = f"{weapon} ({damage_type} damage)"
+        weapon_desc = f"{weapon} ({damage_type})"
 
-    # Build the main prompt
+    # Third-person constraint - player controls multiple characters
+    pov_constraint = "Use third-person (character names), never \"you\"."
+
+    # Build the main prompt with tiered instructions
     if hit:
-        prompt = (
-            f"Narrate this D&D combat action vividly:\n\n"
-            f"{location_context}{round_context}{battlefield_context}{history_context}"
-            f"Current Action: {attacker_desc} attacks {defender_desc} with a "
-            f"{weapon_desc} for {damage} damage.\n\n"
-            f"Describe the hit in a single dramatic sentence. Focus on rich detail "
-            f"but maintain brevity so the player isn't bogged down reading. Consider "
-            f"the battlefield state and recent action flow. Focus on the impact and "
-            f"visual details."
-        )
+        if is_killing_blow:
+            prompt = (
+                f"Narrate this killing blow:\n\n"
+                f"{location_context}{battlefield_context}{history_context}"
+                f"{attacker} strikes down {defender} with their {weapon_desc}.\n\n"
+                f"2-3 vivid sentences. {pov_constraint}"
+            )
+        elif is_critical:
+            prompt = (
+                f"Narrate this critical hit:\n\n"
+                f"{location_context}{history_context}"
+                f"{attacker} lands a devastating blow on {defender} "
+                f"with their {weapon_desc}.\n\n"
+                f"One visceral sentence (15-25 words). {pov_constraint}"
+            )
+        else:
+            # Regular hit - minimal context, tight output
+            prompt = (
+                f"Narrate this combat hit:\n\n"
+                f"{location_context}"
+                f"{attacker} hits {defender} with their {weapon_desc}.\n\n"
+                f"One sentence, under 20 words. {pov_constraint}"
+            )
     else:
+        # Misses are always brief - don't dwell on failure
         prompt = (
-            f"Narrate this D&D combat miss:\n\n"
-            f"{location_context}{round_context}{battlefield_context}{history_context}"
-            f"Current Action: {attacker_desc} attacks {defender_desc} with a "
-            f"{weapon_desc} but misses.\n\n"
-            f"Describe the miss in a single sentence. Focus on rich detail but "
-            f"maintain brevity so the player isn't bogged down reading. Consider "
-            f"the battlefield state and recent action flow. Make it cinematic."
+            f"Narrate this combat miss:\n\n"
+            f"{location_context}"
+            f"{attacker} swings at {defender} with their {weapon_desc} but misses.\n\n"
+            f"One sentence, under 15 words. {pov_constraint}"
         )
 
     return prompt
@@ -371,19 +381,23 @@ def build_death_prompt(character_data: dict[str, Any]) -> str:
     is_player = character_data.get("is_player", False)
     how_died = character_data.get("cause", "fell in battle")
 
+    # Third-person constraint
+    pov_constraint = "Use third-person (character names), never \"you\"."
+
     if is_player:
+        # Player deaths deserve more narrative weight
         prompt = (
             f"Narrate a heroic D&D character death:\n\n"
             f"{name} {how_died}.\n\n"
-            f"Write 2-3 sentences about their final moments. Be dramatic but "
-            f"respectful. This is the end of their story."
+            f"2-3 sentences about their final moments. Dramatic but respectful. "
+            f"{pov_constraint}"
         )
     else:
+        # Enemy deaths should be brief - killing blow already described the action
         prompt = (
-            f"Narrate the defeat of an enemy creature:\n\n"
+            f"Narrate the defeat of {name}:\n\n"
             f"{name} {how_died}.\n\n"
-            f"Write 2-3 sentences about their final moments. Be dramatic and "
-            f"satisfying for the victors."
+            f"One brief sentence - the creature falls. {pov_constraint}"
         )
 
     return prompt
