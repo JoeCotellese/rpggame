@@ -112,19 +112,24 @@ def create_party_status_table(party_data: list[dict[str, Any]]) -> Table:
             # Color HP based on status
             hp = char.get("hp", 0)
             max_hp = char.get("max_hp", 1)
-            hp_percent = hp / max_hp if max_hp > 0 else 0
 
-            if hp_percent <= 0.25:
-                hp_color = "red"
-                hp_symbol = "⚠ "
-            elif hp_percent <= 0.5:
-                hp_color = "yellow"
-                hp_symbol = "● "
+            if hp == 0:
+                # Unconscious - at 0 HP but not dead yet (making death saves)
+                hp_text = "[red bold]⚠ UNCONSCIOUS[/red bold]"
             else:
-                hp_color = "green"
-                hp_symbol = "✓ "
+                hp_percent = hp / max_hp if max_hp > 0 else 0
 
-            hp_text = f"[{hp_color}]{hp_symbol}{hp}/{max_hp}[/{hp_color}]"
+                if hp_percent <= 0.25:
+                    hp_color = "red"
+                    hp_symbol = "⚠ "
+                elif hp_percent <= 0.5:
+                    hp_color = "yellow"
+                    hp_symbol = "● "
+                else:
+                    hp_color = "green"
+                    hp_symbol = "✓ "
+
+                hp_text = f"[{hp_color}]{hp_symbol}{hp}/{max_hp}[/{hp_color}]"
 
         # Format active effects and conditions
         effects_text = []
