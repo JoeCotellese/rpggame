@@ -200,7 +200,9 @@ class CLI:
                 "ac": effective_ac,
                 "xp": char.xp,
                 "active_effects": active_effects,
-                "spell_slots": char.get_spell_slots_display() if char.has_spell_slots() else None
+                "spell_slots": char.get_spell_slots_display() if char.has_spell_slots() else None,
+                "is_dead": char.is_dead,
+                "conditions": char.active_conditions
             })
 
         table = create_party_status_table(party_data)
@@ -3861,7 +3863,23 @@ class CLI:
                 if char_result.hp_after == 0:
                     print_message("  ⚠️  Still unconscious (0 HP)")
                 else:
-                    print_message("  Already at full health and resources")
+                    # Check if character has depleted spell slots (not recovered on short rest)
+                    character = self.game_state.party.get_character_by_name(
+                        char_result.character_name
+                    )
+                    has_depleted_slots = False
+                    if character and character.has_spell_slots():
+                        slots = character.spell_slots
+                        has_depleted_slots = any(
+                            slots.get(level, 0) < character.get_max_spell_slots(level)
+                            for level in range(1, 10)
+                            if character.get_max_spell_slots(level) > 0
+                        )
+
+                    if has_depleted_slots and result.rest_type == "short":
+                        print_message("  ✓ HP at full (spell slots require long rest)")
+                    else:
+                        print_message("  Already at full health and resources")
 
             print_message("")
 

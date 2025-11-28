@@ -103,38 +103,53 @@ def create_party_status_table(party_data: list[dict[str, Any]]) -> Table:
     table.add_column("XP", justify="right")
 
     for char in party_data:
-        # Color HP based on status
-        hp = char.get("hp", 0)
-        max_hp = char.get("max_hp", 1)
-        hp_percent = hp / max_hp
+        # Check if character is dead first
+        is_dead = char.get("is_dead", False)
 
-        if hp_percent <= 0.25:
-            hp_color = "red"
-            hp_symbol = "⚠ "
-        elif hp_percent <= 0.5:
-            hp_color = "yellow"
-            hp_symbol = "● "
+        if is_dead:
+            hp_text = "[red bold]💀 DEAD[/red bold]"
         else:
-            hp_color = "green"
-            hp_symbol = "✓ "
+            # Color HP based on status
+            hp = char.get("hp", 0)
+            max_hp = char.get("max_hp", 1)
+            hp_percent = hp / max_hp if max_hp > 0 else 0
 
-        hp_text = f"[{hp_color}]{hp_symbol}{hp}/{max_hp}[/{hp_color}]"
+            if hp_percent <= 0.25:
+                hp_color = "red"
+                hp_symbol = "⚠ "
+            elif hp_percent <= 0.5:
+                hp_color = "yellow"
+                hp_symbol = "● "
+            else:
+                hp_color = "green"
+                hp_symbol = "✓ "
 
-        # Format active effects
+            hp_text = f"[{hp_color}]{hp_symbol}{hp}/{max_hp}[/{hp_color}]"
+
+        # Format active effects and conditions
+        effects_text = []
+
+        # Add spell effects from time_manager
         active_effects = char.get("active_effects", [])
-        if active_effects:
-            effects_text = []
-            for effect in active_effects:
-                # Build effect display: "Name (duration)"
-                effect_name = effect.source
-                time_remaining = effect.get_time_remaining_display()
-                concentration_marker = " 🎯" if effect.concentration else ""
+        for effect in active_effects:
+            # Build effect display: "Name (duration)"
+            effect_name = effect.source
+            time_remaining = effect.get_time_remaining_display()
+            concentration_marker = " 🎯" if effect.concentration else ""
 
-                effects_text.append(f"[magenta]{effect_name}[/magenta] ({time_remaining}){concentration_marker}")
+            effects_text.append(f"[magenta]{effect_name}[/magenta] ({time_remaining}){concentration_marker}")
 
-            effects_display = "\n".join(effects_text)
-        else:
-            effects_display = "—"
+        # Add conditions (paralyzed, stunned, etc.)
+        conditions = char.get("conditions", {})
+        for condition_name, metadata in conditions.items():
+            # Format condition with duration if available
+            duration = metadata.get("duration_remaining")
+            if duration is not None:
+                effects_text.append(f"[red]{condition_name.upper()}[/red] ({duration})")
+            else:
+                effects_text.append(f"[red]{condition_name.upper()}[/red]")
+
+        effects_display = "\n".join(effects_text) if effects_text else "—"
 
         # Build row data
         row_data = [
