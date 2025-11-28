@@ -304,6 +304,9 @@ class TestGameStateCastSpellCombatHpPool:
         from dnd_engine.core.character import Character
         caster = MagicMock(spec=Character)
         caster.name = "TestWizard"
+        caster.level = 1
+        caster.get_available_spell_slots.return_value = 2
+        caster.use_spell_slot.return_value = True
         return caster
 
     def test_cast_spell_combat_routes_to_hp_pool(

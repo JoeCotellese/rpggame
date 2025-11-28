@@ -178,6 +178,9 @@ class CombatSpellResult:
     # Error handling
     error: str | None = None
 
+    # Resources consumed (for middleware auto-refund tracking)
+    resources_consumed: list[tuple[str, int]] = field(default_factory=list)
+
 
 class EnemyTurnAction(Enum):
     """Actions an enemy can take during their turn."""
@@ -272,6 +275,45 @@ class EnemyTurnResult:
 
     # Error handling
     error: str | None = None
+
+
+@dataclass
+class CharacterRestResult:
+    """Result of a single character's rest."""
+    character_name: str
+    hp_recovered: int
+    hp_before: int
+    hp_after: int
+    max_hp: int
+    resources_recovered: dict[str, Any]
+    can_prepare_spells: bool = False
+
+
+@dataclass
+class PartyRestResult:
+    """
+    Result of the party taking a rest.
+
+    Contains all information needed for UI display without requiring
+    the CLI to perform any game logic calculations.
+    """
+    rest_type: str  # "short" or "long"
+    rest_duration_minutes: int  # 60 for short, 480 for long
+    character_results: list[CharacterRestResult]
+
+    @property
+    def rest_duration_display(self) -> str:
+        """Human-readable rest duration."""
+        if self.rest_duration_minutes == 60:
+            return "1 hour"
+        elif self.rest_duration_minutes == 480:
+            return "8 hours"
+        else:
+            hours = self.rest_duration_minutes // 60
+            minutes = self.rest_duration_minutes % 60
+            if minutes == 0:
+                return f"{hours} hours"
+            return f"{hours}h {minutes}m"
 
 
 class GameState:
@@ -1652,8 +1694,10 @@ class GameState:
         """
         Cast a spell during combat.
 
-        Handles spell resolution: routing by type, damage, effects, concentration.
-        Does NOT handle spell slots or action economy (caller responsibility).
+        Handles spell slot validation/consumption, spell resolution (routing by type,
+        damage, effects, concentration).
+
+        Action economy is NOT handled here (caller/middleware responsibility).
 
         Args:
             caster: Character casting the spell
@@ -1662,9 +1706,30 @@ class GameState:
             spellcasting_ability: Ability used for spellcasting (int/wis/cha)
 
         Returns:
-            CombatSpellResult with all information needed for UI display
+            CombatSpellResult with all information needed for UI display.
+            Includes resources_consumed for middleware auto-refund tracking.
         """
         spell_name = spell_data.get("name", "Unknown Spell")
+        spell_level = spell_data.get("level", 0)
+        resources_consumed: list[tuple[str, int]] = []
+
+        # Validate and consume spell slot for leveled spells
+        if spell_level > 0:
+            if caster.get_available_spell_slots(spell_level) <= 0:
+                ordinal = Character._level_to_ordinal(spell_level)
+                return CombatSpellResult(
+                    success=False,
+                    spell_name=spell_name,
+                    caster_name=caster.name,
+                    targets=[],
+                    is_area_effect=False,
+                    spell_type="",
+                    error=f"No {ordinal}-level spell slots available!"
+                )
+            # Consume the spell slot
+            caster.use_spell_slot(spell_level)
+            resources_consumed.append((f"spell_slots_level_{spell_level}", 1))
+
         has_attack = spell_data.get("attack_type") is not None
         has_save = spell_data.get("saving_throw") is not None
         has_hp_pool = spell_data.get("hp_pool") is not None
@@ -1681,7 +1746,8 @@ class GameState:
                     targets=[],
                     is_area_effect=True,
                     spell_type="save",
-                    error="No enemies to target"
+                    error="No enemies to target",
+                    resources_consumed=resources_consumed
                 )
             is_area = True
         else:
@@ -1696,27 +1762,31 @@ class GameState:
                 broke_concentration = previous_spell
                 self.time_manager.remove_concentration_effects(caster.name)
 
-        # Route by spell type
+        # Route by spell type and attach resources_consumed to result
         if has_attack:
-            return self._resolve_combat_attack_spell(
+            result = self._resolve_combat_attack_spell(
                 caster, targets[0], spell_data, spellcasting_ability,
                 spell_name, broke_concentration
             )
         elif has_hp_pool:
-            return self._resolve_combat_hp_pool_spell(
+            result = self._resolve_combat_hp_pool_spell(
                 caster, targets, spell_data, spell_name,
                 is_area, broke_concentration
             )
         elif has_save:
-            return self._resolve_combat_save_spell(
+            result = self._resolve_combat_save_spell(
                 caster, targets, spell_data, spell_name,
                 is_area, broke_concentration
             )
         else:
-            return self._resolve_combat_auto_hit_spell(
+            result = self._resolve_combat_auto_hit_spell(
                 caster, targets[0] if targets else None, spell_data,
                 spell_name, broke_concentration
             )
+
+        # Attach consumed resources for middleware auto-refund tracking
+        result.resources_consumed = resources_consumed
+        return result
 
     def _resolve_combat_attack_spell(
         self,
@@ -3721,4 +3791,80 @@ class GameState:
             effect_amount=effect_result.amount,
             hp_before=hp_before,
             hp_after=hp_after
+        )
+
+    def party_rest(self, rest_type: str) -> PartyRestResult:
+        """
+        Process a rest for the entire party.
+
+        Handles all game logic for resting:
+        - Applies rest to all party members
+        - Emits appropriate events
+        - Advances game time
+
+        Args:
+            rest_type: "short" or "long"
+
+        Returns:
+            PartyRestResult containing all information needed for display
+        """
+        if rest_type not in ("short", "long"):
+            raise ValueError(f"Invalid rest_type: {rest_type}. Must be 'short' or 'long'")
+
+        # Determine rest duration in minutes
+        rest_duration_minutes = 60 if rest_type == "short" else 480
+
+        # Collect results for all party members
+        character_results: list[CharacterRestResult] = []
+        hp_recovered_total: dict[str, int] = {}
+        resources_recovered_total: dict[str, dict[str, Any]] = {}
+
+        for character in self.party.characters:
+            hp_before = character.current_hp
+
+            # Apply rest
+            if rest_type == "short":
+                result = character.take_short_rest()
+            else:
+                result = character.take_long_rest()
+
+            hp_after = character.current_hp
+
+            # Create character result
+            char_result = CharacterRestResult(
+                character_name=result["character"],
+                hp_recovered=result["hp_recovered"],
+                hp_before=hp_before,
+                hp_after=hp_after,
+                max_hp=character.max_hp,
+                resources_recovered=result["resources_recovered"],
+                can_prepare_spells=result.get("can_prepare_spells", False)
+            )
+            character_results.append(char_result)
+
+            # Track for event data
+            hp_recovered_total[character.name] = result["hp_recovered"]
+            resources_recovered_total[character.name] = result["resources_recovered"]
+
+        # Emit rest event
+        event_type = EventType.SHORT_REST if rest_type == "short" else EventType.LONG_REST
+        event = Event(
+            type=event_type,
+            data={
+                "party": [char.name for char in self.party.characters],
+                "rest_type": rest_type,
+                "hp_recovered": hp_recovered_total,
+                "resources_recovered": resources_recovered_total
+            }
+        )
+        self.event_bus.emit(event)
+
+        # Advance game time
+        reason = "short_rest" if rest_type == "short" else "long_rest"
+        self.time_manager.advance_time(rest_duration_minutes, reason=reason)
+
+        return PartyRestResult(
+            rest_type=rest_type,
+            rest_duration_minutes=rest_duration_minutes,
+            character_results=character_results
         )

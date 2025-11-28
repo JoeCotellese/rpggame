@@ -18,7 +18,11 @@ from dnd_engine.llm.npc_chat import NPCChatManager
 from dnd_engine.systems.action_economy import ActionType
 from dnd_engine.systems.ai import EnemyAI
 from dnd_engine.systems.combat_context import CombatContextBuilder
-from dnd_engine.systems.combat_middleware import ActionResult, CombatActionExecutor
+from dnd_engine.systems.combat_middleware import (
+    ActionResult,
+    CombatActionContext,
+    CombatActionExecutor,
+)
 from dnd_engine.systems.condition_manager import ConditionManager
 from dnd_engine.systems.inventory import EquipmentSlot
 from dnd_engine.systems.item_assignment import ItemAssignmentService
@@ -2104,14 +2108,6 @@ class CLI:
             print_error(f"Unknown spell: {spell_name}")
             return
 
-        # Check spell slot availability BEFORE target selection
-        spell_level = spell_data.get("level", 0)
-        if spell_level > 0:
-            if caster.get_available_spell_slots(spell_level) <= 0:
-                ordinal = caster._level_to_ordinal(spell_level)
-                print_error(f"No {ordinal}-level spell slots available!")
-                return
-
         # Get targeting requirements from game engine (not interpreting data directly)
         targeting = get_spell_targeting_requirements(spell_data)
         spell_display_name = spell_data.get("name", spell_id)
@@ -2148,25 +2144,15 @@ class CLI:
         if target == "Cancel" or (target is None and not targeting.is_area_effect):
             return
 
-        # NOW consume spell slot (will be auto-refunded by middleware if action fails)
-        resources_consumed = []
-        if spell_level > 0:
-            if not caster.use_spell_slot(spell_level):
-                ordinal = caster._level_to_ordinal(spell_level)
-                print_error(f"No {ordinal}-level spell slots available!")
-                return
-            # Track for auto-refund
-            resources_consumed.append((f"spell_slots_level_{spell_level}", 1))
-
-        # Execute spell through middleware chain with auto-refund tracking
+        # Execute spell through middleware chain
+        # Spell slot validation/consumption handled by game engine, resources tracked for auto-refund
         context = self.action_executor.execute(
             actor=caster,
             action_type=ActionType.ACTION,
             action_name="cast_spell",
             action_handler=lambda ctx: self._execute_spell(
-                spell_data, spell_id, target, spellcasting_ability
+                ctx, spell_data, spell_id, target, spellcasting_ability
             ),
-            resources_consumed=resources_consumed,
             spell=spell_data.get('name'),
             target=target.name if target else "area"  # "area" for area effect spells
         )
@@ -2192,6 +2178,7 @@ class CLI:
 
     def _execute_spell(
         self,
+        context: CombatActionContext,
         spell_data: dict[str, Any],
         spell_id: str,
         target,
@@ -2202,18 +2189,28 @@ class CLI:
 
         This is called by the middleware after all validation passes.
         Returns True if action completed successfully.
+
+        Args:
+            context: Middleware context for resource tracking
+            spell_data: Spell definition dictionary
+            spell_id: Spell identifier
+            target: Target creature or None for area spells
+            spellcasting_ability: Ability used for spellcasting
         """
         # Get caster from current turn (middleware already validated this)
         current = self.game_state.initiative_tracker.get_current_combatant()
         caster = current.creature
 
-        # Delegate to game engine for all game logic
+        # Delegate to game engine for all game logic (including spell slot handling)
         result = self.game_state.cast_spell_combat(
             caster=caster,
             spell_data=spell_data,
             target=target,
             spellcasting_ability=spellcasting_ability
         )
+
+        # Propagate consumed resources to middleware for auto-refund on failure
+        context.resources_consumed = result.resources_consumed
 
         if not result.success:
             print_error(result.error or "Spell failed")
@@ -3881,9 +3878,9 @@ class CLI:
         Handle rest command to allow party to rest and recover.
 
         Prompts player to choose between short rest or long rest.
+        Game logic is handled by GameState.party_rest().
         """
         from dnd_engine.ui.rich_ui import print_message, print_section, print_status_message
-        from dnd_engine.utils.events import Event, EventType
 
         print_section("Rest")
         print_message("The party takes a moment to rest and recover...")
@@ -3905,93 +3902,56 @@ class CLI:
             return
 
         # Determine rest type
-        if choice == "1":
-            rest_type = "short"
-            rest_duration = "1 hour"
-        else:
-            rest_type = "long"
-            rest_duration = "8 hours"
+        rest_type = "short" if choice == "1" else "long"
 
-        # Perform rest for all party members
-        results = []
-        hp_recovered_total = {}
-        resources_recovered_total = {}
-
-        for character in self.game_state.party.characters:
-            if rest_type == "short":
-                result = character.take_short_rest()
-            else:
-                result = character.take_long_rest()
-            results.append(result)
-            hp_recovered_total[character.name] = result["hp_recovered"]
-            resources_recovered_total[character.name] = result["resources_recovered"]
-
-        # Emit rest event
-        event_type = EventType.SHORT_REST if rest_type == "short" else EventType.LONG_REST
-        event = Event(
-            type=event_type,
-            data={
-                "party": [char.name for char in self.game_state.party.characters],
-                "rest_type": rest_type,
-                "hp_recovered": hp_recovered_total,
-                "resources_recovered": resources_recovered_total
-            }
-        )
-        self.game_state.event_bus.emit(event)
-
-        # Advance time for rest
-        if rest_type == "short":
-            self.game_state.time_manager.advance_time(60, reason="short_rest")  # 1 hour
-        else:
-            self.game_state.time_manager.advance_time(480, reason="long_rest")  # 8 hours
+        # Delegate all game logic to GameState
+        result = self.game_state.party_rest(rest_type)
 
         # Display rest results
-        self._display_rest_results(results, rest_type, rest_duration)
+        self._display_rest_results(result)
 
         # After long rest, offer spell preparation to prepared casters
         if rest_type == "long":
-            for result in results:
-                if result.get("can_prepare_spells"):
-                    character = self.game_state.party.get_character_by_name(result["character"])
+            for char_result in result.character_results:
+                if char_result.can_prepare_spells:
+                    character = self.game_state.party.get_character_by_name(
+                        char_result.character_name
+                    )
                     if character:
                         self._offer_spell_preparation(character)
 
-    def _display_rest_results(self, results: list, rest_type: str, rest_duration: str) -> None:
+    def _display_rest_results(self, result: "PartyRestResult") -> None:
         """
         Display the results of a rest to the player.
 
         Args:
-            results: List of rest result dictionaries from each character
-            rest_type: "short" or "long"
-            rest_duration: Human-readable duration string (e.g., "1 hour", "8 hours")
+            result: PartyRestResult from GameState.party_rest()
         """
+        from dnd_engine.core.game_state import PartyRestResult
         from dnd_engine.ui.rich_ui import print_message, print_section, print_status_message
 
-        print_section(f"{'Short' if rest_type == 'short' else 'Long'} Rest Complete")
-        print_message(f"The party rests for {rest_duration}...")
+        rest_type_display = "Short" if result.rest_type == "short" else "Long"
+        print_section(f"{rest_type_display} Rest Complete")
+        print_message(f"The party rests for {result.rest_duration_display}...")
         print_message("")
 
-        for result in results:
-            char_name = result["character"]
-            hp_recovered = result["hp_recovered"]
-            resources = result["resources_recovered"]
+        for char_result in result.character_results:
+            print_message(f"{char_result.character_name}:")
 
-            # Get the character to check their current HP status
-            character = self.game_state.party.get_character_by_name(char_name)
+            if char_result.hp_recovered > 0:
+                print_message(f"  ❤️  HP recovered: {char_result.hp_recovered}")
 
-            print_message(f"{char_name}:")
-
-            if hp_recovered > 0:
-                print_message(f"  ❤️  HP recovered: {hp_recovered}")
-
-            if resources:
+            if char_result.resources_recovered:
                 # Format resource names nicely
-                formatted_resources = [r.replace("_", " ").title() for r in resources]
+                formatted_resources = [
+                    r.replace("_", " ").title()
+                    for r in char_result.resources_recovered
+                ]
                 print_message(f"  ⚡ Recovered: {', '.join(formatted_resources)}")
 
-            if hp_recovered == 0 and not resources:
+            if char_result.hp_recovered == 0 and not char_result.resources_recovered:
                 # Check if character is at 0 HP (unconscious)
-                if character and character.current_hp == 0:
+                if char_result.hp_after == 0:
                     print_message("  ⚠️  Still unconscious (0 HP)")
                 else:
                     print_message("  Already at full health and resources")
