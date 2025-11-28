@@ -2213,7 +2213,9 @@ class CLI:
         context.resources_consumed = result.resources_consumed
 
         if not result.success:
-            print_error(result.error or "Spell failed")
+            context.result = ActionResult.FAILED
+            context.error_message = result.error or "Spell failed"
+            print_error(context.error_message)
             return False
 
         # Display results (UI responsibility only)

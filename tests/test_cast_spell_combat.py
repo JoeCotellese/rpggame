@@ -364,6 +364,336 @@ class TestConcentration(TestCastSpellCombat):
             assert result.now_concentrating is True
 
 
+class TestSpellSlotManagement(TestCastSpellCombat):
+    """Test spell slot validation and consumption in cast_spell_combat()"""
+
+    def test_leveled_spell_consumes_slot(self, game_state, wizard, goblin, data_loader):
+        """Casting a leveled spell consumes a spell slot"""
+        spell_data = data_loader.load_spells()["burning_hands"]
+        initial_slots = wizard.get_available_spell_slots(1)
+        assert initial_slots > 0, "Test requires available spell slots"
+
+        result = game_state.cast_spell_combat(
+            caster=wizard,
+            spell_data=spell_data,
+            target=goblin,
+            spellcasting_ability="int"
+        )
+
+        assert result.success is True
+        assert wizard.get_available_spell_slots(1) == initial_slots - 1
+
+    def test_leveled_spell_tracks_resources_consumed(self, game_state, wizard, goblin, data_loader):
+        """Casting a leveled spell populates resources_consumed for refund tracking"""
+        spell_data = data_loader.load_spells()["burning_hands"]
+
+        result = game_state.cast_spell_combat(
+            caster=wizard,
+            spell_data=spell_data,
+            target=goblin,
+            spellcasting_ability="int"
+        )
+
+        assert result.success is True
+        assert len(result.resources_consumed) == 1
+        assert result.resources_consumed[0] == ("spell_slots_level_1", 1)
+
+    def test_no_spell_slots_returns_error(self, game_state, wizard, goblin, data_loader):
+        """Casting a leveled spell with no slots returns clear error"""
+        spell_data = data_loader.load_spells()["burning_hands"]
+        # Exhaust all level 1 slots
+        pool = wizard.resource_pools.get("spell_slots_level_1")
+        pool.current = 0
+
+        result = game_state.cast_spell_combat(
+            caster=wizard,
+            spell_data=spell_data,
+            target=goblin,
+            spellcasting_ability="int"
+        )
+
+        assert result.success is False
+        assert result.error is not None
+        assert "1st-level spell slots" in result.error
+
+    def test_no_spell_slots_does_not_consume(self, game_state, wizard, goblin, data_loader):
+        """Failed spell cast due to no slots doesn't consume resources"""
+        spell_data = data_loader.load_spells()["burning_hands"]
+        pool = wizard.resource_pools.get("spell_slots_level_1")
+        pool.current = 0
+
+        result = game_state.cast_spell_combat(
+            caster=wizard,
+            spell_data=spell_data,
+            target=goblin,
+            spellcasting_ability="int"
+        )
+
+        assert result.success is False
+        # No resources should be consumed when validation fails
+        assert len(result.resources_consumed) == 0
+        assert pool.current == 0
+
+    def test_cantrip_does_not_consume_slots(self, game_state, wizard, goblin, data_loader):
+        """Cantrips (level 0) don't consume spell slots"""
+        spell_data = data_loader.load_spells()["fire_bolt"]
+        initial_slots = wizard.get_available_spell_slots(1)
+
+        result = game_state.cast_spell_combat(
+            caster=wizard,
+            spell_data=spell_data,
+            target=goblin,
+            spellcasting_ability="int"
+        )
+
+        assert result.success is True
+        # Spell slots unchanged
+        assert wizard.get_available_spell_slots(1) == initial_slots
+        # No resources consumed for cantrips
+        assert len(result.resources_consumed) == 0
+
+    def test_area_spell_no_enemies_still_tracks_consumed_resources(
+        self, game_state, wizard, data_loader
+    ):
+        """Area spell that fails due to no targets still tracks consumed resources"""
+        spell_data = data_loader.load_spells()["burning_hands"]
+        game_state.active_enemies = []  # No enemies
+        initial_slots = wizard.get_available_spell_slots(1)
+
+        result = game_state.cast_spell_combat(
+            caster=wizard,
+            spell_data=spell_data,
+            target=None,
+            spellcasting_ability="int"
+        )
+
+        assert result.success is False
+        # Slot was consumed before we knew there were no enemies
+        assert wizard.get_available_spell_slots(1) == initial_slots - 1
+        # resources_consumed should be populated for middleware refund
+        assert len(result.resources_consumed) == 1
+        assert result.resources_consumed[0] == ("spell_slots_level_1", 1)
+
+    def test_higher_level_spell_slot_tracking(self, wizard_abilities, event_bus, data_loader, dice_roller, goblin):
+        """Higher level spells track correct slot level in resources_consumed"""
+        # Create wizard with level 2 slots and hold_person spell
+        wizard = Character(
+            name="Gandalf",
+            character_class=CharacterClass.WIZARD,
+            level=5,
+            abilities=wizard_abilities,
+            max_hp=28,
+            ac=12,
+            spellcasting_ability="int",
+            known_spells=["hold_person"],
+            prepared_spells=["hold_person"]
+        )
+        wizard.add_resource_pool(ResourcePool(
+            name="spell_slots_level_2",
+            current=3,
+            maximum=3,
+            recovery_type="long_rest"
+        ))
+        party = Party([wizard])
+        game_state = GameState(
+            party=party,
+            dungeon_name="test_dungeon",
+            event_bus=event_bus,
+            data_loader=data_loader,
+            dice_roller=dice_roller
+        )
+        game_state.active_enemies = [goblin]
+
+        spell_data = data_loader.load_spells().get("hold_person")
+        if not spell_data:
+            pytest.skip("hold_person spell not in data")
+
+        result = game_state.cast_spell_combat(
+            caster=wizard,
+            spell_data=spell_data,
+            target=goblin,
+            spellcasting_ability="int"
+        )
+
+        assert wizard.get_available_spell_slots(2) == 2
+        assert len(result.resources_consumed) == 1
+        assert result.resources_consumed[0] == ("spell_slots_level_2", 1)
+
+
+class TestSpellSlotRefundIntegration(TestCastSpellCombat):
+    """
+    Integration tests for spell slot refund through middleware chain.
+
+    These tests verify that when a spell fails after slot consumption,
+    the middleware correctly refunds the consumed slot.
+    """
+
+    def test_area_spell_no_enemies_slot_refunded_through_middleware(
+        self, wizard, data_loader, event_bus, dice_roller
+    ):
+        """
+        Test that spell slot is refunded when area spell fails due to no enemies.
+
+        Flow:
+        1. Spell slot is consumed in cast_spell_combat()
+        2. Spell fails ("No enemies to target")
+        3. CLI sets context.result = FAILED and propagates resources_consumed
+        4. ResourceCleanupMiddleware refunds the slot
+        """
+        from unittest.mock import Mock, patch
+        from dnd_engine.systems.combat_middleware import (
+            ActionResult,
+            CombatActionContext,
+            CombatActionExecutor,
+        )
+        from dnd_engine.systems.action_economy import ActionType
+
+        # Setup game state with combat active
+        party = Party([wizard])
+        game_state = GameState(
+            party=party,
+            dungeon_name="test_dungeon",
+            event_bus=event_bus,
+            data_loader=data_loader,
+            dice_roller=dice_roller
+        )
+        game_state.active_enemies = []  # No enemies - will cause spell to fail
+
+        # Start combat to enable turn tracking
+        game_state.in_combat = True
+        from dnd_engine.systems.initiative import InitiativeTracker
+        tracker = InitiativeTracker()
+        tracker.add_combatant(wizard)
+        game_state.initiative_tracker = tracker
+
+        # Record initial spell slots
+        initial_slots = wizard.get_available_spell_slots(1)
+        assert initial_slots > 0, "Test requires available spell slots"
+
+        spell_data = data_loader.load_spells()["burning_hands"]
+
+        # Create the action executor
+        executor = CombatActionExecutor(game_state)
+
+        # Simulate what CLI._execute_spell does
+        def execute_spell_action(ctx):
+            result = game_state.cast_spell_combat(
+                caster=wizard,
+                spell_data=spell_data,
+                target=None,  # Area effect
+                spellcasting_ability="int"
+            )
+
+            # Propagate consumed resources for middleware refund
+            ctx.resources_consumed = result.resources_consumed
+
+            if not result.success:
+                ctx.result = ActionResult.FAILED
+                ctx.error_message = result.error or "Spell failed"
+                return False
+
+            return True
+
+        # Execute through middleware chain (patching logging to avoid side effects)
+        with patch('dnd_engine.utils.logging_config.get_logging_config', return_value=None):
+            context = executor.execute(
+                actor=wizard,
+                action_type=ActionType.ACTION,
+                action_name="cast_spell",
+                action_handler=execute_spell_action,
+                spell="Burning Hands",
+                target="area"
+            )
+
+        # Verify the spell failed
+        assert context.result == ActionResult.FAILED
+        assert "No enemies" in context.error_message
+
+        # Verify the spell slot was REFUNDED by middleware
+        final_slots = wizard.get_available_spell_slots(1)
+        assert final_slots == initial_slots, (
+            f"Spell slot should have been refunded. "
+            f"Expected {initial_slots}, got {final_slots}"
+        )
+
+    def test_no_slots_error_no_refund_needed(self, wizard, data_loader, event_bus, dice_roller):
+        """
+        Test that when spell fails due to no slots, nothing is consumed or refunded.
+
+        This is a validation failure - slot consumption should never happen.
+        """
+        from unittest.mock import Mock, patch
+        from dnd_engine.systems.combat_middleware import (
+            ActionResult,
+            CombatActionContext,
+            CombatActionExecutor,
+        )
+        from dnd_engine.systems.action_economy import ActionType
+
+        # Exhaust all level 1 slots
+        pool = wizard.resource_pools.get("spell_slots_level_1")
+        pool.current = 0
+
+        # Setup game state with combat active
+        party = Party([wizard])
+        game_state = GameState(
+            party=party,
+            dungeon_name="test_dungeon",
+            event_bus=event_bus,
+            data_loader=data_loader,
+            dice_roller=dice_roller
+        )
+        game_state.active_enemies = [Creature(
+            name="Goblin", max_hp=7, ac=13,
+            abilities=Abilities(8, 14, 10, 10, 8, 8)
+        )]
+
+        # Start combat
+        game_state.in_combat = True
+        from dnd_engine.systems.initiative import InitiativeTracker
+        tracker = InitiativeTracker()
+        tracker.add_combatant(wizard)
+        game_state.initiative_tracker = tracker
+
+        spell_data = data_loader.load_spells()["burning_hands"]
+        executor = CombatActionExecutor(game_state)
+
+        def execute_spell_action(ctx):
+            result = game_state.cast_spell_combat(
+                caster=wizard,
+                spell_data=spell_data,
+                target=game_state.active_enemies[0],
+                spellcasting_ability="int"
+            )
+
+            ctx.resources_consumed = result.resources_consumed
+
+            if not result.success:
+                ctx.result = ActionResult.FAILED
+                ctx.error_message = result.error or "Spell failed"
+                return False
+
+            return True
+
+        with patch('dnd_engine.utils.logging_config.get_logging_config', return_value=None):
+            context = executor.execute(
+                actor=wizard,
+                action_type=ActionType.ACTION,
+                action_name="cast_spell",
+                action_handler=execute_spell_action,
+                spell="Burning Hands",
+                target="Goblin"
+            )
+
+        # Verify the spell failed due to no slots
+        assert context.result == ActionResult.FAILED
+        assert "spell slots" in context.error_message.lower()
+
+        # Verify no resources were consumed (validation failure, not execution failure)
+        assert len(context.resources_consumed) == 0
+        assert pool.current == 0  # Still zero, nothing to refund
+
+
 class TestErrorCases(TestCastSpellCombat):
     """Test error handling"""
 
