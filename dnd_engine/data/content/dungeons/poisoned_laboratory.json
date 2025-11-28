@@ -1,13 +1,13 @@
 {
   "name": "The Poisoned Laboratory",
   "description": "An abandoned alchemist's workshop filled with dangerous fumes, volatile chemicals, and the mad alchemist's failed experiments",
-  "start_room": "entrance",
+  "start_room": "poisoned_laboratory.entrance",
   "rooms": {
-    "entrance": {
+    "poisoned_laboratory.entrance": {
       "name": "Collapsed Entrance Hall",
       "description": "The entrance to the laboratory is partially collapsed. Broken glass vials litter the floor, and a faint chemical smell hangs in the air. To the north, you hear bubbling liquids and smell acrid smoke.",
       "exits": {
-        "north": "storage"
+        "north": "poisoned_laboratory.storage"
       },
       "enemies": [],
       "items": [
@@ -36,15 +36,15 @@
       "searched": false,
       "searchable": true
     },
-    "storage": {
+    "poisoned_laboratory.storage": {
       "name": "Alchemical Storage",
       "description": "Shelves line the walls, filled with labeled bottles and ingredients. A large iron door to the east is marked with a skull symbol. The western passage leads to what sounds like hissing steam. To the north, a reinforced wooden door bars entry to what appears to be a specimen chamber.",
       "exits": {
-        "south": "entrance",
-        "east": "laboratory",
-        "west": "furnace_room",
+        "south": "poisoned_laboratory.entrance",
+        "east": "poisoned_laboratory.laboratory",
+        "west": "poisoned_laboratory.furnace_room",
         "north": {
-          "destination": "specimen_chamber",
+          "destination": "poisoned_laboratory.specimen_chamber",
           "locked": true,
           "unlock_methods": [
             {
@@ -91,12 +91,12 @@
       "searchable": true,
       "safe_rest": true
     },
-    "laboratory": {
+    "poisoned_laboratory.laboratory": {
       "name": "Main Laboratory",
       "description": "The heart of the alchemist's workshop. Bubbling cauldrons, distillation equipment, and mysterious glowing liquids cover every surface. A sickly green gas seeps from cracked flasks on the northern workbench. Two goblin scavengers lurk among the bubbling equipment, drawn by the smell of alchemical reagents.",
       "exits": {
-        "west": "storage",
-        "north": "sanctum"
+        "west": "poisoned_laboratory.storage",
+        "north": "poisoned_laboratory.sanctum"
       },
       "enemies": ["goblin", "goblin"],
       "items": [
@@ -124,11 +124,11 @@
         "condition": "poisoned"
       }
     },
-    "furnace_room": {
+    "poisoned_laboratory.furnace_room": {
       "name": "Furnace Chamber",
       "description": "A massive furnace roars in the center of this sweltering room, used to heat alchemical reactions. The heat is intense. A large wolf, its fur singed and eyes glowing red, lies near the furnace beside a pile of treasure. The beast's breath carries the acrid smell of sulfur.",
       "exits": {
-        "east": "storage"
+        "east": "poisoned_laboratory.storage"
       },
       "enemies": ["wolf"],
       "items": [
@@ -163,11 +163,11 @@
         "note": "Potion of Fire Resistance prevents this damage"
       }
     },
-    "sanctum": {
+    "poisoned_laboratory.sanctum": {
       "name": "The Mad Alchemist's Sanctum",
       "description": "The alchemist's private laboratory, filled with his most dangerous experiments. The air crackles with volatile energy. Archibald the Mad, a twisted figure in stained robes, stands at his workbench surrounded by volatile vials and bubbling concoctions. His bloodshot eyes gleam with madness as he mutters incomprehensibly over his work.",
       "exits": {
-        "south": "laboratory"
+        "south": "poisoned_laboratory.laboratory"
       },
       "enemies": ["goblin_boss"],
       "items": [
@@ -212,12 +212,12 @@
       "searchable": true,
       "boss_room": true
     },
-    "specimen_chamber": {
+    "poisoned_laboratory.specimen_chamber": {
       "name": "Specimen Preservation Chamber",
       "description": "A cold room lined with glass tanks containing preserved creatures floating in murky alchemical solutions. Ice crystals cover the walls from some failed refrigeration experiment. A skeleton warrior, animated by residual alchemical energies, stands guard among the specimen jars, its bones clicking softly as it patrols.",
       "lighting": "dark",
       "exits": {
-        "south": "storage"
+        "south": "poisoned_laboratory.storage"
       },
       "enemies": ["skeleton"],
       "items": [
