@@ -14,6 +14,7 @@ from dnd_engine.core.game_state import (
     EnemyTurnResult,
     GameState,
     PlayerAttackResult,
+    StabilizeResult,
 )
 from dnd_engine.llm.npc_chat import NPCChatManager
 from dnd_engine.systems.action_economy import ActionType
@@ -2376,34 +2377,18 @@ class CLI:
 
         print_section(f"{helper.name} attempts to stabilize {target.name}")
 
-        # Load skills data
-        skills_data = self.game_state.data_loader.load_skills()
-
-        # Make Medicine skill check (DC 10)
-        check_result = helper.make_skill_check("medicine", 10, skills_data)
+        # Execute stabilize through game engine
+        result = self.game_state.execute_stabilize(helper, target)
 
         # Display check result
-        modifier_str = f"+{check_result['modifier']}" if check_result['modifier'] >= 0 else str(check_result['modifier'])
+        modifier_str = f"+{result.modifier}" if result.modifier >= 0 else str(result.modifier)
         print_status_message(
-            f"Medicine check: {check_result['roll']}{modifier_str} = {check_result['total']} vs DC {check_result['dc']}",
+            f"Medicine check: {result.roll}{modifier_str} = {result.total} vs DC {result.dc}",
             "info"
         )
 
-        if check_result['success']:
-            # Stabilize the target
-            target.stabilize_character()
+        if result.success:
             print_status_message(f"Success! {target.name} is stabilized.", "success")
-
-            # Emit stabilization event
-            from dnd_engine.utils.events import Event, EventType
-            self.game_state.event_bus.emit(Event(
-                type=EventType.CHARACTER_STABILIZED,
-                data={
-                    "helper": helper.name,
-                    "target": target.name,
-                    "check_total": check_result['total']
-                }
-            ))
         else:
             print_error(f"Failed! {target.name} remains unstabilized.")
 
