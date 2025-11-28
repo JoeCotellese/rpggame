@@ -130,107 +130,50 @@ class CLI:
 
     def display_room(self) -> None:
         """Display the current room description with LLM enhancement."""
-        room = self.game_state.get_current_room()
-
-        # Extract room name and basic description
-        room_name = room.get("name", "Unknown Room")
-        basic_desc = room.get("description", self.game_state.get_room_description())
-        exits = self.game_state.get_available_exits()
-
-        # Check for monsters in the room
-        enemy_ids = room.get("enemies", [])
-        monster_names = []
-        if enemy_ids:
-            # Load monster data to get display names
-            monsters_data = self.game_state.data_loader.load_monsters()
-            for enemy_id in enemy_ids:
-                if enemy_id in monsters_data:
-                    monster_names.append(monsters_data[enemy_id]["name"])
-
-        # Detect if combat is about to start
-        # Combat starts if there are enemies and we're not already in combat
-        combat_starting = bool(enemy_ids) and not self.game_state.in_combat
-
-        # Calculate effective lighting for each party member
-        # (used for both LLM enhancement and UI display)
-        # Also track who actually cast Light spells for narrative purposes
-        from dnd_engine.systems.time_manager import EffectType
-        light_casters = []
-        for effect in self.game_state.time_manager.active_effects:
-            if effect.effect_type == EffectType.SPELL and effect.source.lower() == "light":
-                if effect.caster_name and effect.caster_name not in light_casters:
-                    light_casters.append(effect.caster_name)
-
-        party_lighting = []
-        for char in self.game_state.party.characters:
-            lighting = self.game_state.get_effective_lighting(char)
-            party_lighting.append({
-                "character": char.name,
-                "lighting": lighting,
-                "has_darkvision": char.darkvision_range > 0
-            })
+        # Get all room context from game engine
+        context = self.game_state.get_room_display_context()
 
         # Try to get enhanced description from LLM
         enhanced_desc = None
         if self.llm_enhancer:
-            # Load full monster data for creature-aware prompts
-            monsters_data = self.game_state.data_loader.load_monsters()
-            party_size = len(self.game_state.party.characters)
-
-            room_data = {
-                "id": room.get("id", room_name.lower().replace(" ", "_")),
-                "name": room_name,
-                "description": basic_desc,
-                "monsters": monster_names,  # Include monster info for LLM
-                "combat_starting": combat_starting,  # Flag for combat initiation narrative
-                "monsters_data": monsters_data,  # Full monster definitions for creature-aware prompts
-                "party_size": party_size,  # Party size for combat context
-                "base_lighting": room.get("lighting", "bright"),  # Room's base lighting level
-                "party_lighting": party_lighting,  # Effective lighting for each party member
-                "light_casters": light_casters,  # Characters who cast Light spells
-                "previous_room_id": self.game_state.previous_room_id  # Previous room for transition narrative
-            }
             with console.status("", spinner="dots"):
-                enhanced_desc = self.llm_enhancer.get_room_description_sync(room_data, timeout=20.0)
+                enhanced_desc = self.llm_enhancer.get_room_description_sync(
+                    context.to_llm_dict(), timeout=20.0
+                )
 
         # Use enhanced description if available, otherwise use basic
-        room_text = enhanced_desc if enhanced_desc else basic_desc
+        room_text = enhanced_desc if enhanced_desc else context.description
 
-        # Lighting is now shown in the status bar, so we just use the room name
-        print_room_description(room_name, room_text, exits)
+        # Display room description
+        print_room_description(context.room_name, room_text, context.exits)
 
         # Show visible items in the room
-        visible_items = [item for item in room.get("items", []) if item.get("visible", False)]
-        if visible_items and not room.get("searched", False):
+        if context.visible_items and not context.room_searched:
             print_status_message("\nYou notice:", "info")
-            for item in visible_items:
-                if item["type"] == "gold":
-                    print_status_message(f"  • {item['amount']} gold pieces", "info")
-                elif item["type"] == "currency":
+            for item in context.visible_items:
+                if item.item_type == "gold":
+                    print_status_message(f"  • {item.amount} gold pieces", "info")
+                elif item.item_type == "currency":
                     currency_parts = []
-                    if item.get("gold", 0) > 0:
-                        currency_parts.append(f"{item['gold']} gold")
-                    if item.get("silver", 0) > 0:
-                        currency_parts.append(f"{item['silver']} silver")
-                    if item.get("copper", 0) > 0:
-                        currency_parts.append(f"{item['copper']} copper")
-                    if item.get("platinum", 0) > 0:
-                        currency_parts.append(f"{item['platinum']} platinum")
+                    if item.gold > 0:
+                        currency_parts.append(f"{item.gold} gold")
+                    if item.silver > 0:
+                        currency_parts.append(f"{item.silver} silver")
+                    if item.copper > 0:
+                        currency_parts.append(f"{item.copper} copper")
+                    if item.platinum > 0:
+                        currency_parts.append(f"{item.platinum} platinum")
                     print_status_message(f"  • {', '.join(currency_parts)}", "info")
                 else:
-                    item_name = item.get('id', 'an item').replace("_", " ").title()
-                    print_status_message(f"  • {item_name}", "info")
+                    print_status_message(f"  • {item.item_name}", "info")
             print_status_message("Use 'take <item>' or 'take all' to pick up items.", "info")
 
         # Show NPCs in the room
-        if self.game_state.npc_manager:
-            room_id = room.get("id", "")
-            npcs = self.game_state.npc_manager.get_npcs_in_room(room_id)
-            if npcs:
-                print_status_message("\nYou see:", "info")
-                for npc in npcs:
-                    print_status_message(f"  • {npc.display_name}", "info")
-                print_status_message("Use 'talk <name>' to start a conversation.", "info")
+        if context.npc_display_names:
+            print_status_message("\nYou see:", "info")
+            for npc_name in context.npc_display_names:
+                print_status_message(f"  • {npc_name}", "info")
+            print_status_message("Use 'talk <name>' to start a conversation.", "info")
 
         # Mark room as displayed so subsequent "look" commands show "already in room" narrative
         self.game_state.mark_room_displayed()

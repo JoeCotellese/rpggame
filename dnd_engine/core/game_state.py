@@ -316,6 +316,77 @@ class PartyRestResult:
             return f"{hours}h {minutes}m"
 
 
+@dataclass
+class PartyMemberLighting:
+    """Lighting information for a single party member."""
+    character_name: str
+    effective_lighting: str  # "bright", "dim", or "dark"
+    has_darkvision: bool
+
+
+@dataclass
+class VisibleItem:
+    """Item visible in a room."""
+    item_type: str  # "gold", "currency", "item"
+    item_id: str | None = None
+    item_name: str | None = None
+    amount: int | None = None  # For gold type
+    gold: int = 0  # For currency type
+    silver: int = 0
+    copper: int = 0
+    platinum: int = 0
+
+
+@dataclass
+class RoomDisplayContext:
+    """
+    Complete context needed to display a room.
+
+    Encapsulates all game state queries for room display, allowing
+    the CLI to focus purely on presentation logic.
+    """
+    room_id: str
+    room_name: str
+    description: str
+    exits: dict[str, Any]
+    monster_names: list[str]
+    combat_starting: bool
+    base_lighting: str
+    party_lighting: list[PartyMemberLighting]
+    light_casters: list[str]
+    previous_room_id: str | None
+    visible_items: list[VisibleItem]
+    npc_display_names: list[str]
+    room_searched: bool
+
+    # Data for LLM enhancement
+    monsters_data: dict[str, Any]
+    party_size: int
+
+    def to_llm_dict(self) -> dict[str, Any]:
+        """Convert context to dict format for LLM enhancement."""
+        return {
+            "id": self.room_id,
+            "name": self.room_name,
+            "description": self.description,
+            "monsters": self.monster_names,
+            "combat_starting": self.combat_starting,
+            "monsters_data": self.monsters_data,
+            "party_size": self.party_size,
+            "base_lighting": self.base_lighting,
+            "party_lighting": [
+                {
+                    "character": pl.character_name,
+                    "lighting": pl.effective_lighting,
+                    "has_darkvision": pl.has_darkvision
+                }
+                for pl in self.party_lighting
+            ],
+            "light_casters": self.light_casters,
+            "previous_room_id": self.previous_room_id
+        }
+
+
 class GameState:
     """
     Central game state manager.
@@ -2771,6 +2842,184 @@ class GameState:
             current_turn=current_turn,
             in_combat=True
         )
+
+    def get_room_display_context(self) -> RoomDisplayContext:
+        """
+        Get complete context needed to display the current room.
+
+        Encapsulates all game state queries for room display, allowing
+        the CLI to focus purely on presentation logic. Follows the same
+        pattern as get_battlefield_state().
+
+        Returns:
+            RoomDisplayContext with all current room information
+        """
+        room = self.get_current_room()
+        room_id = room.get("id", room.get("name", "unknown").lower().replace(" ", "_"))
+        room_name = room.get("name", "Unknown Room")
+        description = room.get("description", self.get_room_description())
+        exits = self.get_available_exits()
+
+        # Get monster information
+        monster_names, monsters_data = self._get_room_monster_info(room)
+        combat_starting = self._is_combat_starting(room)
+
+        # Get lighting information
+        base_lighting = room.get("lighting", "bright")
+        party_lighting = self._calculate_party_lighting()
+        light_casters = self._get_active_light_casters()
+
+        # Get visible items
+        visible_items = self._get_visible_items(room)
+
+        # Get NPCs
+        npc_display_names = self._get_room_npc_names(room)
+
+        return RoomDisplayContext(
+            room_id=room_id,
+            room_name=room_name,
+            description=description,
+            exits=exits,
+            monster_names=monster_names,
+            combat_starting=combat_starting,
+            base_lighting=base_lighting,
+            party_lighting=party_lighting,
+            light_casters=light_casters,
+            previous_room_id=self.previous_room_id,
+            visible_items=visible_items,
+            npc_display_names=npc_display_names,
+            room_searched=room.get("searched", False),
+            monsters_data=monsters_data,
+            party_size=len(self.party.characters)
+        )
+
+    def _get_room_monster_info(
+        self, room: dict[str, Any]
+    ) -> tuple[list[str], dict[str, Any]]:
+        """
+        Get monster names and data for the current room.
+
+        Args:
+            room: Current room data dict
+
+        Returns:
+            Tuple of (monster_names list, monsters_data dict)
+        """
+        enemy_ids = room.get("enemies", [])
+        monster_names = []
+        monsters_data = {}
+
+        if enemy_ids:
+            monsters_data = self.data_loader.load_monsters()
+            for enemy_id in enemy_ids:
+                if enemy_id in monsters_data:
+                    monster_names.append(monsters_data[enemy_id]["name"])
+
+        return monster_names, monsters_data
+
+    def _is_combat_starting(self, room: dict[str, Any]) -> bool:
+        """
+        Check if combat is about to start in this room.
+
+        Combat starts if there are enemies and we're not already in combat.
+
+        Args:
+            room: Current room data dict
+
+        Returns:
+            True if combat is about to start
+        """
+        enemy_ids = room.get("enemies", [])
+        return bool(enemy_ids) and not self.in_combat
+
+    def _calculate_party_lighting(self) -> list[PartyMemberLighting]:
+        """
+        Calculate effective lighting for each party member.
+
+        Returns:
+            List of PartyMemberLighting for each character
+        """
+        party_lighting = []
+        for char in self.party.characters:
+            lighting = self.get_effective_lighting(char)
+            party_lighting.append(PartyMemberLighting(
+                character_name=char.name,
+                effective_lighting=lighting,
+                has_darkvision=char.darkvision_range > 0
+            ))
+        return party_lighting
+
+    def _get_active_light_casters(self) -> list[str]:
+        """
+        Get names of characters with active Light spells.
+
+        Returns:
+            List of character names who have cast Light
+        """
+        from dnd_engine.systems.time_manager import EffectType
+
+        light_casters = []
+        for effect in self.time_manager.active_effects:
+            if effect.effect_type == EffectType.SPELL and effect.source.lower() == "light":
+                if effect.caster_name and effect.caster_name not in light_casters:
+                    light_casters.append(effect.caster_name)
+        return light_casters
+
+    def _get_visible_items(self, room: dict[str, Any]) -> list[VisibleItem]:
+        """
+        Get visible items in the room.
+
+        Args:
+            room: Current room data dict
+
+        Returns:
+            List of VisibleItem objects
+        """
+        visible_items = []
+        for item in room.get("items", []):
+            if not item.get("visible", False):
+                continue
+
+            item_type = item["type"]
+            if item_type == "gold":
+                visible_items.append(VisibleItem(
+                    item_type="gold",
+                    amount=item.get("amount", 0)
+                ))
+            elif item_type == "currency":
+                visible_items.append(VisibleItem(
+                    item_type="currency",
+                    gold=item.get("gold", 0),
+                    silver=item.get("silver", 0),
+                    copper=item.get("copper", 0),
+                    platinum=item.get("platinum", 0)
+                ))
+            else:
+                item_id = item.get("id", "an item")
+                visible_items.append(VisibleItem(
+                    item_type="item",
+                    item_id=item_id,
+                    item_name=item_id.replace("_", " ").title()
+                ))
+
+        return visible_items
+
+    def _get_room_npc_names(self, room: dict[str, Any]) -> list[str]:
+        """
+        Get display names of NPCs in the current room.
+
+        Args:
+            room: Current room data dict
+
+        Returns:
+            List of NPC display names
+        """
+        if not self.npc_manager:
+            return []
+
+        room_id = room.get("id", "")
+        npcs = self.npc_manager.get_npcs_in_room(room_id)
+        return [npc.display_name for npc in npcs]
 
     def _get_enemy_display_name(self, enemy: Creature) -> str:
         """
