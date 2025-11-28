@@ -3,6 +3,7 @@
 
 import logging
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any
 
 from dnd_engine.core.campaign_progress import CampaignProgress, CampaignProgressTracker
@@ -16,6 +17,8 @@ from dnd_engine.core.quest import QuestManager
 from dnd_engine.core.room_registry import RoomRegistry
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.systems.action_economy import ActionType
+from dnd_engine.systems.ai import EnemyAI
+from dnd_engine.systems.condition_manager import ConditionManager
 from dnd_engine.systems.initiative import InitiativeTracker
 from dnd_engine.systems.time_manager import ActiveEffect, EffectType, TimeManager
 from dnd_engine.utils.events import Event, EventBus, EventType
@@ -176,6 +179,84 @@ class CombatSpellResult:
     error: str | None = None
 
 
+class EnemyTurnAction(Enum):
+    """Actions an enemy can take during their turn."""
+    ATTACK = "attack"
+    CONDITION_REMOVAL = "condition_removal"
+    INCAPACITATED = "incapacitated"
+    DIED_START_OF_TURN = "died_start_of_turn"
+    NO_TARGETS = "no_targets"
+    NO_VALID_ATTACK = "no_valid_attack"
+
+
+@dataclass
+class ConditionRemovalResult:
+    """Result of an enemy attempting to remove a condition."""
+    condition_id: str
+    attempted: bool
+    success: bool
+    message: str
+
+
+@dataclass
+class TurnEffectResult:
+    """Result of a turn-start or turn-end effect."""
+    effect_type: str  # "damage", "condition_expired", etc.
+    condition_id: str
+    message: str
+    damage: int = 0
+    creature_died: bool = False
+
+
+@dataclass
+class EnemyTurnResult:
+    """
+    Result of processing an enemy's turn.
+
+    Contains all information needed for UI display without requiring
+    the CLI to perform any game logic calculations.
+    """
+    enemy_name: str
+    enemy_display_name: str
+    action_taken: EnemyTurnAction
+
+    # Attack details (when action_taken == ATTACK)
+    attack_result: AttackResult | None = None
+    target_name: str | None = None
+    target_killed: bool = False
+    action_data: dict[str, Any] | None = None  # Monster action used
+
+    # Saving throw results from attack (e.g., poison effects)
+    saving_throw_triggered: bool = False
+    save_ability: str | None = None
+    save_dc: int | None = None
+    save_succeeded: bool | None = None
+    conditions_applied: list[str] = field(default_factory=list)
+
+    # Condition removal (when action_taken == CONDITION_REMOVAL)
+    condition_removal: ConditionRemovalResult | None = None
+
+    # Concentration break on target
+    concentration_broken: dict[str, Any] | None = None
+
+    # Turn effects
+    turn_start_effects: list[TurnEffectResult] = field(default_factory=list)
+    turn_end_effects: list[TurnEffectResult] = field(default_factory=list)
+
+    # Incapacitation details
+    incapacitating_conditions: list[str] = field(default_factory=list)
+
+    # Narrative context for LLM enhancement
+    narrative_context: dict[str, Any] = field(default_factory=dict)
+
+    # Turn management
+    turn_advanced: bool = True  # Whether initiative moved to next turn
+    combat_ended: bool = False  # Whether combat ended this turn
+
+    # Error handling
+    error: str | None = None
+
+
 class GameState:
     """
     Central game state manager.
@@ -281,6 +362,13 @@ class GameState:
         self.combat_engine = CombatEngine(self.dice_roller)
         self.combat_history: list[CombatEvent] = []
         self.max_combat_history_size = 50  # Configurable limit
+
+        # Enemy AI and condition management for enemy turn processing
+        self.enemy_ai = EnemyAI()
+        self.condition_manager = ConditionManager(
+            dice_roller=self.dice_roller,
+            event_bus=self.event_bus
+        )
 
         # Navigation tracking for flee mechanic
         self.last_entry_direction: str | None = None
@@ -2595,6 +2683,337 @@ class GameState:
             round_number=self.initiative_tracker.round_number,
             current_turn=current_turn,
             in_combat=True
+        )
+
+    def _get_enemy_display_name(self, enemy: Creature) -> str:
+        """
+        Get the display name for an enemy from the initiative tracker.
+
+        Args:
+            enemy: The enemy creature
+
+        Returns:
+            Display name with combat number if applicable (e.g., "Goblin 2")
+        """
+        if self.initiative_tracker:
+            for entry in self.initiative_tracker.get_all_combatants():
+                if entry.creature == enemy:
+                    return entry.display_name if entry.display_name else enemy.name
+        return enemy.name
+
+    def _should_enemy_attempt_condition_removal(
+        self,
+        enemy: Creature
+    ) -> ConditionRemovalResult | None:
+        """
+        Determine if enemy should attempt condition removal and execute it.
+
+        Args:
+            enemy: The enemy creature
+
+        Returns:
+            ConditionRemovalResult if attempted, None otherwise
+        """
+        for condition_id in list(enemy.conditions):
+            if not self.condition_manager.can_attempt_early_removal(condition_id):
+                continue
+
+            # Use AI to decide if condition should be removed
+            if condition_id == "on_fire" and self.enemy_ai.should_attempt_condition_removal(
+                enemy
+            ):
+                # Attempt removal
+                result = self.condition_manager.attempt_condition_removal(
+                    enemy, condition_id
+                )
+
+                if result:
+                    return ConditionRemovalResult(
+                        condition_id=condition_id,
+                        attempted=True,
+                        success=result.success,
+                        message=result.message
+                    )
+
+                return ConditionRemovalResult(
+                    condition_id=condition_id,
+                    attempted=True,
+                    success=False,
+                    message=f"{enemy.name} failed to remove {condition_id}"
+                )
+
+        return None
+
+    def process_enemy_turn(self) -> EnemyTurnResult | None:
+        """
+        Process the current enemy's turn and return result for display.
+
+        Handles all game logic for enemy turns:
+        - Turn start effects (ongoing damage, etc.)
+        - AI decisions (condition removal vs attack)
+        - Target selection
+        - Attack resolution
+        - Concentration checks
+        - Turn end effects
+
+        Returns:
+            EnemyTurnResult with all information needed for UI display,
+            or None if current turn is not an enemy's turn.
+        """
+        if not self.in_combat or not self.initiative_tracker:
+            return None
+
+        current = self.initiative_tracker.get_current_combatant()
+
+        # Check if it's a party member's turn
+        for character in self.party.characters:
+            if current.creature == character:
+                return None  # Not an enemy turn
+
+        enemy = current.creature
+        enemy_display_name = self._get_enemy_display_name(enemy)
+
+        # Build base result
+        turn_start_effects: list[TurnEffectResult] = []
+        turn_end_effects: list[TurnEffectResult] = []
+
+        # Check if enemy is alive
+        if not enemy.is_alive:
+            self.initiative_tracker.next_turn()
+            return EnemyTurnResult(
+                enemy_name=enemy.name,
+                enemy_display_name=enemy_display_name,
+                action_taken=EnemyTurnAction.DIED_START_OF_TURN,
+                turn_advanced=True
+            )
+
+        # Process turn-start effects (e.g., ongoing fire damage)
+        start_results = self.condition_manager.process_turn_start_effects(enemy)
+        for result in start_results:
+            turn_start_effects.append(TurnEffectResult(
+                effect_type=result.effect_type,
+                condition_id=result.condition_id,
+                message=result.message,
+                damage=result.amount,
+                creature_died=not enemy.is_alive
+            ))
+
+        # Check if enemy died from turn-start effects
+        if not enemy.is_alive:
+            self.initiative_tracker.next_turn()
+            return EnemyTurnResult(
+                enemy_name=enemy.name,
+                enemy_display_name=enemy_display_name,
+                action_taken=EnemyTurnAction.DIED_START_OF_TURN,
+                turn_start_effects=turn_start_effects,
+                turn_advanced=True
+            )
+
+        # Check if enemy can act (not incapacitated or surprised)
+        if not enemy.can_take_actions():
+            incapacitating = [c.upper() for c in enemy.conditions]
+            # Process end-of-turn conditions (will remove surprised, etc.)
+            end_results = enemy.process_end_of_turn_conditions(self.event_bus)
+            for result in end_results:
+                if result["type"] == "condition_expired":
+                    turn_end_effects.append(TurnEffectResult(
+                        effect_type="condition_expired",
+                        condition_id=result["condition"],
+                        message=f"{result['condition'].upper()} on {enemy.name} has expired!"
+                    ))
+
+            self.initiative_tracker.next_turn()
+            return EnemyTurnResult(
+                enemy_name=enemy.name,
+                enemy_display_name=enemy_display_name,
+                action_taken=EnemyTurnAction.INCAPACITATED,
+                incapacitating_conditions=incapacitating,
+                turn_start_effects=turn_start_effects,
+                turn_end_effects=turn_end_effects,
+                turn_advanced=True
+            )
+
+        # Enemy AI: Check if should attempt to remove conditions
+        condition_removal = self._should_enemy_attempt_condition_removal(enemy)
+        if condition_removal:
+            self.initiative_tracker.next_turn()
+            return EnemyTurnResult(
+                enemy_name=enemy.name,
+                enemy_display_name=enemy_display_name,
+                action_taken=EnemyTurnAction.CONDITION_REMOVAL,
+                condition_removal=condition_removal,
+                turn_start_effects=turn_start_effects,
+                turn_advanced=True
+            )
+
+        # Choose target from living party members using AI
+        living_party = self.party.get_living_members()
+        if not living_party:
+            # No conscious targets - check if combat should end
+            self._check_combat_end()
+            if not self.in_combat:
+                return EnemyTurnResult(
+                    enemy_name=enemy.name,
+                    enemy_display_name=enemy_display_name,
+                    action_taken=EnemyTurnAction.NO_TARGETS,
+                    turn_start_effects=turn_start_effects,
+                    combat_ended=True,
+                    turn_advanced=False
+                )
+            # Combat continues (e.g., stabilized characters), advance turn
+            self.initiative_tracker.next_turn()
+            return EnemyTurnResult(
+                enemy_name=enemy.name,
+                enemy_display_name=enemy_display_name,
+                action_taken=EnemyTurnAction.NO_TARGETS,
+                turn_start_effects=turn_start_effects,
+                turn_advanced=True
+            )
+
+        target = self.enemy_ai.select_target(living_party)
+
+        # Get monster data for attack
+        monsters = self.data_loader.load_monsters()
+        monster_data = None
+        for mid, mdata in monsters.items():
+            if mdata["name"] == enemy.name:
+                monster_data = mdata
+                break
+
+        if not monster_data or not monster_data.get("actions"):
+            self.initiative_tracker.next_turn()
+            return EnemyTurnResult(
+                enemy_name=enemy.name,
+                enemy_display_name=enemy_display_name,
+                action_taken=EnemyTurnAction.NO_VALID_ATTACK,
+                target_name=target.name,
+                turn_start_effects=turn_start_effects,
+                error="No monster data or actions found",
+                turn_advanced=True
+            )
+
+        # Find first weapon attack action (skip Multiattack, etc.)
+        action = None
+        for act in monster_data["actions"]:
+            if "attack_bonus" in act and "damage" in act:
+                action = act
+                break
+
+        if not action:
+            self.initiative_tracker.next_turn()
+            return EnemyTurnResult(
+                enemy_name=enemy.name,
+                enemy_display_name=enemy_display_name,
+                action_taken=EnemyTurnAction.NO_VALID_ATTACK,
+                target_name=target.name,
+                turn_start_effects=turn_start_effects,
+                error="No valid attack actions",
+                turn_advanced=True
+            )
+
+        # Track conditions before attack (for saving throw detection)
+        conditions_before = set()
+        if hasattr(target, 'active_conditions'):
+            conditions_before = set(target.active_conditions.keys())
+
+        # Resolve attack
+        attack_result = self.combat_engine.resolve_attack(
+            attacker=enemy,
+            defender=target,
+            attack_bonus=action["attack_bonus"],
+            damage_dice=action["damage"],
+            apply_damage=True,
+            event_bus=self.event_bus,
+            action=action,
+            game_state=self
+        )
+
+        # Check concentration if target was hit and took damage
+        concentration_broken = None
+        if attack_result.hit and attack_result.damage > 0:
+            conc_result = self.check_concentration_from_damage(
+                target.name,
+                attack_result.damage
+            )
+            if conc_result["concentration_broken"]:
+                concentration_broken = conc_result
+
+        # Detect saving throw results
+        saving_throw_triggered = False
+        save_ability = None
+        save_dc = None
+        save_succeeded = None
+        conditions_applied: list[str] = []
+
+        if attack_result.hit and "saving_throw" in action:
+            save_data = action["saving_throw"]
+            save_ability = save_data.get("ability", "constitution").title()
+            save_dc = save_data.get("dc")
+            saving_throw_triggered = True
+
+            # Check if condition was applied (save failed)
+            if hasattr(target, 'active_conditions'):
+                conditions_after = set(target.active_conditions.keys())
+                new_conditions = conditions_after - conditions_before
+                if new_conditions:
+                    save_succeeded = False
+                    conditions_applied = list(new_conditions)
+                else:
+                    save_succeeded = True
+
+        # Process end-of-turn conditions
+        end_results = enemy.process_end_of_turn_conditions(self.event_bus)
+        for result in end_results:
+            if result["type"] == "condition_expired":
+                turn_end_effects.append(TurnEffectResult(
+                    effect_type="condition_expired",
+                    condition_id=result["condition"],
+                    message=f"{result['condition'].upper()} on {enemy.name} has expired!"
+                ))
+
+        # Advance turn
+        self.initiative_tracker.next_turn()
+
+        # Check if party wiped
+        combat_ended = self.party.is_wiped()
+        if combat_ended:
+            self._check_combat_end()
+
+        # Build narrative context for LLM enhancement
+        narrative_context = {
+            "attacker": enemy.name,
+            "attacker_display_name": enemy_display_name,
+            "target": target.name,
+            "action_name": action.get("name", "attack"),
+            "hit": attack_result.hit,
+            "damage": attack_result.damage if attack_result.hit else 0,
+            "critical": attack_result.critical_hit,
+            "target_hp_before": target.current_hp + (
+                attack_result.damage if attack_result.hit else 0
+            ),
+            "target_hp_after": target.current_hp,
+            "target_killed": not target.is_alive,
+        }
+
+        return EnemyTurnResult(
+            enemy_name=enemy.name,
+            enemy_display_name=enemy_display_name,
+            action_taken=EnemyTurnAction.ATTACK,
+            attack_result=attack_result,
+            target_name=target.name,
+            target_killed=not target.is_alive,
+            action_data=action,
+            saving_throw_triggered=saving_throw_triggered,
+            save_ability=save_ability,
+            save_dc=save_dc,
+            save_succeeded=save_succeeded,
+            conditions_applied=conditions_applied,
+            concentration_broken=concentration_broken,
+            turn_start_effects=turn_start_effects,
+            turn_end_effects=turn_end_effects,
+            narrative_context=narrative_context,
+            turn_advanced=True,
+            combat_ended=combat_ended
         )
 
     def flee_combat(self) -> dict[str, Any]:

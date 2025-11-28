@@ -7,7 +7,13 @@ from rich.panel import Panel
 
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.dice import format_dice_with_modifier
-from dnd_engine.core.game_state import CombatEvent, CombatSpellResult, GameState
+from dnd_engine.core.game_state import (
+    CombatEvent,
+    CombatSpellResult,
+    EnemyTurnAction,
+    EnemyTurnResult,
+    GameState,
+)
 from dnd_engine.llm.npc_chat import NPCChatManager
 from dnd_engine.systems.action_economy import ActionType
 from dnd_engine.systems.ai import EnemyAI
@@ -2712,145 +2718,126 @@ class CLI:
     def process_enemy_turns(self) -> None:
         """Process all enemy turns until it's a party member's turn again."""
         while self.game_state.in_combat:
-            current = self.game_state.initiative_tracker.get_current_combatant()
+            # Process one enemy turn via game engine
+            result = self.game_state.process_enemy_turn()
 
-            # If it's a party member's turn, stop
-            is_party_turn = False
-            for character in self.game_state.party.characters:
-                if current.creature == character:
-                    is_party_turn = True
-                    break
-
-            if is_party_turn:
+            # None means it's a party member's turn
+            if result is None:
                 break
 
-            # Enemy turn
-            enemy = current.creature
-            if not enemy.is_alive:
-                self.game_state.initiative_tracker.next_turn()
-                continue
+            # Display the enemy turn result
+            self._display_enemy_turn_result(result)
 
-            print_status_message(f"{enemy.name}'s turn...", "info")
-
-            # Process turn-start effects (e.g., ongoing fire damage)
-            self._process_turn_start_effects(enemy)
-
-            # Check if enemy died from turn-start effects
-            if not enemy.is_alive:
-                self.game_state.initiative_tracker.next_turn()
-                continue
-
-            # Check if enemy can act (not incapacitated or surprised)
-            if not enemy.can_take_actions():
-                conditions = [c.upper() for c in enemy.conditions]
-                condition_text = ", ".join(conditions)
-                print_status_message(f"⚠️  {enemy.name} is {condition_text} and cannot act this turn!", "warning")
-                # Process end-of-turn conditions (will remove surprised, etc.)
-                enemy.process_end_of_turn_conditions(self.game_state.event_bus)
-                self.game_state.initiative_tracker.next_turn()
-                continue
-
-            # Enemy AI: Check if should attempt to remove conditions
-            if self._should_enemy_attempt_condition_removal(enemy):
-                # Enemy attempts to remove condition instead of attacking
-                self.game_state.initiative_tracker.next_turn()
-                continue
-
-            # Choose target from living party members using AI
-            living_party = self.game_state.party.get_living_members()
-            if not living_party:
-                # No conscious targets - check if combat should end (party defeated)
-                self.game_state._check_combat_end()
-                if not self.game_state.in_combat:
-                    break  # Combat ended (party wiped or all stabilized)
-                # Combat continues (e.g., stabilized characters), advance turn
-                self.game_state.initiative_tracker.next_turn()
+            # Check if combat ended
+            if result.combat_ended:
                 break
 
-            target = self.enemy_ai.select_target(living_party)
+            # Check if entire party is dead
+            if self.game_state.party.is_wiped():
+                break
 
-            # Get monster data for attack
-            monsters = self.game_state.data_loader.load_monsters()
-            monster_data = None
-            for mid, mdata in monsters.items():
-                if mdata["name"] == enemy.name:
-                    monster_data = mdata
-                    break
+    def _display_enemy_turn_result(self, result: EnemyTurnResult) -> None:
+        """
+        Display the result of an enemy turn to the player.
 
-            if monster_data and monster_data.get("actions"):
-                # Find first weapon attack action (skip Multiattack, etc.)
-                action = None
-                for act in monster_data["actions"]:
-                    if "attack_bonus" in act and "damage" in act:
-                        action = act
-                        break
+        Handles all UI output based on the action taken and results.
 
-                if not action:
-                    print_error(f"{enemy.name} has no valid attack actions!")
-                    self.game_state.initiative_tracker.next_turn()
-                    continue
+        Args:
+            result: The EnemyTurnResult from game_state.process_enemy_turn()
+        """
+        enemy_name = result.enemy_display_name
 
-                # Track conditions before attack
-                conditions_before = set(target.active_conditions.keys()) if hasattr(target, 'active_conditions') else set()
-
-                result = self.game_state.combat_engine.resolve_attack(
-                    attacker=enemy,
-                    defender=target,
-                    attack_bonus=action["attack_bonus"],
-                    damage_dice=action["damage"],
-                    apply_damage=True,
-                    event_bus=self.game_state.event_bus,
-                    action=action,  # Pass action data for saving throw processing
-                    game_state=self.game_state
+        # Display turn-start effects
+        for effect in result.turn_start_effects:
+            print_status_message(effect.message, "warning")
+            if effect.creature_died:
+                print_status_message(
+                    f"💀 {enemy_name} is killed by {effect.condition_id.replace('_', ' ')}!",
+                    "warning"
                 )
 
-                # Check concentration if target was hit and took damage
-                if result.hit and result.damage > 0:
-                    concentration_result = self.game_state.check_concentration_from_damage(
-                        target.name,
-                        result.damage
+        # Handle different action types
+        if result.action_taken == EnemyTurnAction.DIED_START_OF_TURN:
+            # Already displayed death message above if from effects
+            return
+
+        if result.action_taken == EnemyTurnAction.INCAPACITATED:
+            condition_text = ", ".join(result.incapacitating_conditions)
+            print_status_message(
+                f"⚠️  {enemy_name} is {condition_text} and cannot act this turn!",
+                "warning"
+            )
+            self._display_turn_end_effects(result)
+            return
+
+        if result.action_taken == EnemyTurnAction.CONDITION_REMOVAL:
+            if result.condition_removal:
+                # Display condition removal attempt
+                if result.condition_removal.condition_id == "on_fire":
+                    print_status_message(
+                        f"🔥 {enemy_name} is on fire with low HP! Attempting to extinguish...",
+                        "info"
                     )
-                    if concentration_result["concentration_broken"]:
-                        spell_name = concentration_result["spell_name"]
-                        save_result = concentration_result["save_result"]
-                        dc = concentration_result["dc"]
-                        console.print(
-                            f"[yellow]💫 {target.name}'s concentration on {spell_name} is broken! "
-                            f"(CON save: {save_result['total']} vs DC {dc})[/yellow]"
+                if result.condition_removal.success:
+                    print_status_message(result.condition_removal.message, "success")
+                else:
+                    print_status_message(result.condition_removal.message, "warning")
+            return
+
+        if result.action_taken == EnemyTurnAction.NO_TARGETS:
+            # No display needed - combat will end
+            return
+
+        if result.action_taken == EnemyTurnAction.NO_VALID_ATTACK:
+            if result.error:
+                print_error(f"{enemy_name} has no valid attack actions!")
+            return
+
+        # ATTACK action
+        if result.action_taken == EnemyTurnAction.ATTACK:
+            print_status_message(f"{enemy_name}'s turn...", "info")
+
+            # Display concentration break if applicable
+            if result.concentration_broken:
+                conc = result.concentration_broken
+                console.print(
+                    f"[yellow]💫 {result.target_name}'s concentration on "
+                    f"{conc['spell_name']} is broken! "
+                    f"(CON save: {conc['save_result']['total']} vs DC {conc['dc']})[/yellow]"
+                )
+
+            # Display saving throw results
+            if result.saving_throw_triggered and result.save_ability and result.save_dc:
+                if result.save_succeeded is False and result.conditions_applied:
+                    # Failed save - get duration from target if available
+                    for condition in result.conditions_applied:
+                        # Get the target to check duration metadata
+                        target = self._find_party_member_by_name(result.target_name)
+                        duration = 0
+                        if target and hasattr(target, 'active_conditions'):
+                            metadata = target.active_conditions.get(condition, {})
+                            duration = metadata.get('duration_remaining', 0)
+                        print_status_message(
+                            f"💀 {result.target_name} fails {result.save_ability} save "
+                            f"(DC {result.save_dc}) - {condition.upper()} for {duration} rounds!",
+                            "error"
                         )
+                elif result.save_succeeded is True:
+                    print_status_message(
+                        f"✓ {result.target_name} succeeds on {result.save_ability} save "
+                        f"(DC {result.save_dc})!",
+                        "success"
+                    )
 
-                # Display saving throw results if triggered
-                if result.hit and "saving_throw" in action:
-                    save_data = action["saving_throw"]
-                    ability = save_data.get("ability", "constitution").title()
-                    dc = save_data.get("dc")
+            # Get attack narrative (if LLM enabled and hit)
+            if self.llm_enhancer and result.attack_result and result.attack_result.hit:
+                # Get the enemy and target creatures for context building
+                enemy = self._find_enemy_by_name(result.enemy_name)
+                target = self._find_party_member_by_name(result.target_name)
 
-                    # Check if condition was applied (save failed)
-                    if hasattr(target, 'active_conditions'):
-                        conditions_after = set(target.active_conditions.keys())
-                        new_conditions = conditions_after - conditions_before
-
-                        if new_conditions:
-                            # Failed save
-                            for condition in new_conditions:
-                                metadata = target.active_conditions.get(condition, {})
-                                duration = metadata.get('duration_remaining', 0)
-                                print_status_message(
-                                    f"💀 {target.name} fails {ability} save (DC {dc}) - {condition.upper()} for {duration} rounds!",
-                                    "error"
-                                )
-                        else:
-                            # Passed save
-                            print_status_message(
-                                f"✓ {target.name} succeeds on {ability} save (DC {dc})!",
-                                "success"
-                            )
-
-                # Get and display attack narrative FIRST (if hit)
-                if self.llm_enhancer and result.hit:
-                    # Build complete attack context using service
+                if enemy and target:
                     attack_context = self.context_builder.build_attack_context(
-                        enemy, target, result, action_data=action
+                        enemy, target, result.attack_result, action_data=result.action_data
                     )
 
                     with console.status("", spinner="dots"):
@@ -2861,44 +2848,60 @@ class CLI:
                     if narrative:
                         self.display_narrative_panel(narrative)
 
-                # Record this action in combat history
-                self._record_combat_action(result)
+            # Record combat action in history
+            if result.attack_result:
+                self._record_combat_action(result.attack_result)
 
-                # Display mechanics after narrative
-                console.print(f"[cyan]⚔️  {str(result)}[/cyan]")
+            # Display attack mechanics
+            if result.attack_result:
+                console.print(f"[cyan]⚔️  {str(result.attack_result)}[/cyan]")
 
-                # Check if party member died - show death narrative then message
-                if not target.is_alive:
-                    if self.llm_enhancer:
-                        with console.status("", spinner="dots"):
-                            death_narrative = self.llm_enhancer.get_death_narrative_sync(
-                                character_data={
-                                    "name": target.name,
-                                    "is_player": isinstance(target, Character)
-                                },
-                                timeout=20.0
-                            )
-                        if death_narrative:
-                            self.display_narrative_panel(death_narrative)
-
-                    print_status_message(f"{target.name} has fallen!", "warning")
-
-            # Process end-of-turn conditions (repeat saves, duration countdown, remove surprised)
-            results = enemy.process_end_of_turn_conditions(self.game_state.event_bus)
-            for result in results:
-                if result["type"] == "condition_expired":
-                    if result["condition"] != "surprised":  # Don't announce surprised expiry
-                        print_status_message(
-                            f"⏱ {result['condition'].upper()} on {enemy.name} has expired!",
-                            "info"
+            # Display death if target killed
+            if result.target_killed:
+                target = self._find_party_member_by_name(result.target_name)
+                if self.llm_enhancer and target:
+                    with console.status("", spinner="dots"):
+                        death_narrative = self.llm_enhancer.get_death_narrative_sync(
+                            character_data={
+                                "name": result.target_name,
+                                "is_player": isinstance(target, Character)
+                            },
+                            timeout=20.0
                         )
+                    if death_narrative:
+                        self.display_narrative_panel(death_narrative)
 
-            # Next turn
-            self.game_state.initiative_tracker.next_turn()
+                print_status_message(f"{result.target_name} has fallen!", "warning")
 
-            # Check if entire party is dead
-            if self.game_state.party.is_wiped():
-                break
+            # Display turn-end effects
+            self._display_turn_end_effects(result)
+
+    def _display_turn_end_effects(self, result: EnemyTurnResult) -> None:
+        """Display turn-end condition effects."""
+        for effect in result.turn_end_effects:
+            if effect.effect_type == "condition_expired":
+                # Don't announce surprised expiry
+                if effect.condition_id != "surprised":
+                    print_status_message(
+                        f"⏱ {effect.condition_id.upper()} on {result.enemy_name} has expired!",
+                        "info"
+                    )
+
+    def _find_party_member_by_name(self, name: str | None) -> Character | None:
+        """Find a party member by name."""
+        if not name:
+            return None
+        for char in self.game_state.party.characters:
+            if char.name == name:
+                return char
+        return None
+
+    def _find_enemy_by_name(self, name: str) -> Any | None:
+        """Find an enemy creature by name."""
+        for enemy in self.game_state.active_enemies:
+            if enemy.name == name:
+                return enemy
+        return None
 
     def _get_enemy_display_name(self, enemy: Any) -> str:
         """
