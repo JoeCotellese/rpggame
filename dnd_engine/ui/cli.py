@@ -3764,201 +3764,55 @@ class CLI:
         # Use the item via the direct handler
         self.handle_use_item_direct(target_item_id, target, owner)
 
-    def handle_use_item_combat_direct(self, item_id: str, item_data: dict[str, Any], character: Character) -> None:
-        """
-        Handle using a consumable item during combat with explicit item data.
-
-        Validates action economy, consumes action, and applies item effect.
-
-        Args:
-            item_id: The item ID to use
-            item_data: The item data dictionary
-            character: The character using the item
-        """
-        from dnd_engine.systems.action_economy import ActionType
-        from dnd_engine.systems.item_effects import apply_item_effect
-
-        inventory = character.inventory
-        items_data = self.game_state.data_loader.load_items()
-
-        item_name = item_data.get("name", item_id)
-        action_required_str = item_data.get("action_required", "action")
-
-        # Map string to ActionType
-        action_type_map = {
-            "action": ActionType.ACTION,
-            "bonus_action": ActionType.BONUS_ACTION,
-            "free_object": ActionType.FREE_OBJECT,
-            "no_action": ActionType.NO_ACTION
-        }
-        action_required = action_type_map.get(action_required_str, ActionType.ACTION)
-
-        # Check if action is available
-        turn_state = self.game_state.initiative_tracker.get_current_turn_state()
-        if not turn_state:
-            print_error("Unable to get current turn state!")
-            return
-
-        if not turn_state.is_action_available(action_required):
-            action_name = action_required_str.replace("_", " ").title()
-            print_error(f"You don't have a {action_name} available this turn!")
-            print_status_message(f"Available: {turn_state}", "info")
-            return
-
-        # Consume the action
-        if not turn_state.consume_action(action_required):
-            print_error(f"Failed to consume {action_required_str}!")
-            return
-
-        # Use the item from inventory (removes it)
-        success, used_item_data = inventory.use_item(item_id, items_data)
-
-        if not success:
-            print_error(f"Failed to use {item_name}")
-            # Restore the action since item use failed
-            turn_state.reset()
-            turn_state.consume_action(action_required)  # Put back what we consumed
-            return
-
-        # Apply the item's effect
-        result = apply_item_effect(
-            item_info=used_item_data,
-            target=character,
-            dice_roller=self.game_state.dice_roller,
-            event_bus=self.game_state.event_bus,
-            time_manager=self.game_state.time_manager
-        )
-
-        # Display the result
-        action_cost_msg = f"({action_required_str.replace('_', ' ')})"
-        print_status_message(f"{character.name} uses {item_name} {action_cost_msg}", "info")
-        print_message(result.message)
-
-        # Show remaining actions
-        remaining_actions = str(turn_state)
-        print_status_message(f"Remaining this turn: {remaining_actions}", "info")
-
-        # Suggest ending turn if player wants to skip remaining actions
-        if turn_state.has_any_action():
-            print_status_message("Type 'done' or 'pass' to end your turn", "info")
-
-        # Emit item used event
-        self.game_state.event_bus.emit(Event(
-            type=EventType.ITEM_USED,
-            data={
-                "character": character.name,
-                "item_id": item_id,
-                "item_name": item_name,
-                "effect_type": result.effect_type,
-                "action_cost": action_required_str,
-                "success": result.success
-            }
-        ))
-
     def handle_use_item_combat_with_target(self, item_id: str, item_data: dict[str, Any], user: Character, target: Character) -> None:
         """
         Handle using a consumable item during combat on a specified target.
 
-        Validates action economy, consumes action, and applies item effect to target.
+        Delegates game logic to game_state.use_item_combat() and handles display.
 
         Args:
             item_id: The item ID to use
-            item_data: The item data dictionary
+            item_data: The item data dictionary (unused, kept for API compatibility)
             user: The character using the item
             target: The character receiving the item's effect
         """
-        from dnd_engine.systems.action_economy import ActionType
-        from dnd_engine.systems.item_effects import apply_item_effect
+        # Use the game state method to handle all game logic
+        result = self.game_state.use_item_combat(user, item_id, target)
 
-        inventory = user.inventory
-        items_data = self.game_state.data_loader.load_items()
-
-        item_name = item_data.get("name", item_id)
-        action_required_str = item_data.get("action_required", "action")
-
-        # Map string to ActionType
-        action_type_map = {
-            "action": ActionType.ACTION,
-            "bonus_action": ActionType.BONUS_ACTION,
-            "free_object": ActionType.FREE_OBJECT,
-            "no_action": ActionType.NO_ACTION
-        }
-        action_required = action_type_map.get(action_required_str, ActionType.ACTION)
-
-        # Check if action is available
-        turn_state = self.game_state.initiative_tracker.get_current_turn_state()
-        if not turn_state:
-            print_error("Unable to get current turn state!")
+        # Handle failure cases
+        if not result.success:
+            # Action economy issues - show available actions
+            if result.error_message and "available" in result.error_message.lower():
+                turn_state = self.game_state.initiative_tracker.get_current_turn_state()
+                print_error(f"You don't have a {result.action_type.value.replace('_', ' ')} available this turn!")
+                if turn_state:
+                    print_status_message(f"Available: {turn_state}", "info")
+            else:
+                print_error(result.error_message or "Failed to use item")
             return
-
-        if not turn_state.is_action_available(action_required):
-            action_name = action_required_str.replace("_", " ").title()
-            print_error(f"You don't have a {action_name} available this turn!")
-            print_status_message(f"Available: {turn_state}", "info")
-            return
-
-        # Consume the action
-        if not turn_state.consume_action(action_required):
-            print_error(f"Failed to consume {action_required_str}!")
-            return
-
-        # Show HP before healing (if target is alive or unconscious)
-        hp_before = target.current_hp
-
-        # Use the item from inventory (removes it)
-        success, used_item_data = inventory.use_item(item_id, items_data)
-
-        if not success:
-            print_error(f"Failed to use {item_name}")
-            # Restore the action since item use failed
-            turn_state.reset()
-            turn_state.consume_action(action_required)  # Put back what we consumed
-            return
-
-        # Apply the item's effect to the target
-        result = apply_item_effect(
-            item_info=used_item_data,
-            target=target,
-            dice_roller=self.game_state.dice_roller,
-            event_bus=self.game_state.event_bus,
-            time_manager=self.game_state.time_manager
-        )
 
         # Display the result with target information
-        action_cost_msg = f"({action_required_str.replace('_', ' ')})"
-        if user == target:
-            print_status_message(f"{user.name} uses {item_name} {action_cost_msg}", "info")
+        action_cost_msg = f"({result.action_type.value.replace('_', ' ')})"
+        if result.user_name == result.target_name:
+            print_status_message(f"{result.user_name} uses {result.item_name} {action_cost_msg}", "info")
         else:
-            print_status_message(f"{user.name} uses {item_name} on {target.name} {action_cost_msg}", "info")
+            print_status_message(f"{result.user_name} uses {result.item_name} on {result.target_name} {action_cost_msg}", "info")
 
-        print_message(result.message)
+        if result.effect_message:
+            print_message(result.effect_message)
 
         # Show HP change if healing occurred
-        if result.effect_type == "healing" and target.current_hp > hp_before:
-            hp_gained = target.current_hp - hp_before
-            print_status_message(f"{target.name}: {hp_before} → {target.current_hp} HP (+{hp_gained})", "success")
+        if result.effect_type == "healing" and result.hp_after is not None and result.hp_before is not None:
+            if result.hp_after > result.hp_before:
+                hp_gained = result.hp_after - result.hp_before
+                print_status_message(f"{result.target_name}: {result.hp_before} → {result.hp_after} HP (+{hp_gained})", "success")
 
         # Show remaining actions
-        remaining_actions = str(turn_state)
-        print_status_message(f"Remaining this turn: {remaining_actions}", "info")
-
-        # Suggest ending turn if player wants to skip remaining actions
-        if turn_state.has_any_action():
-            print_status_message("Type 'done' or 'pass' to end your turn", "info")
-
-        # Emit item used event
-        self.game_state.event_bus.emit(Event(
-            type=EventType.ITEM_USED,
-            data={
-                "character": user.name,
-                "target": target.name,
-                "item_id": item_id,
-                "item_name": item_name,
-                "effect_type": result.effect_type,
-                "action_cost": action_required_str,
-                "success": result.success
-            }
-        ))
+        turn_state = self.game_state.initiative_tracker.get_current_turn_state()
+        if turn_state:
+            print_status_message(f"Remaining this turn: {turn_state}", "info")
+            if turn_state.has_any_action():
+                print_status_message("Type 'done' or 'pass' to end your turn", "info")
 
         # End player turn
         self.game_state.initiative_tracker.next_turn()
@@ -4026,127 +3880,6 @@ class CLI:
         if self.game_state.in_combat:
             # Process enemy turns
             self.process_enemy_turns()
-
-    def handle_use_item_combat(self, item_id: str) -> None:
-        """
-        Handle using a consumable item during combat (legacy method).
-
-        Validates action economy, consumes action, and applies item effect.
-
-        Args:
-            item_id: The item to use (ID or name)
-        """
-        from dnd_engine.systems.action_economy import ActionType
-        from dnd_engine.systems.item_effects import apply_item_effect
-
-        # Verify it's the player's turn
-        if not self.game_state.in_combat or not self.game_state.initiative_tracker:
-            print_error("Not in combat!")
-            return
-
-        current = self.game_state.initiative_tracker.get_current_combatant()
-        if not current:
-            print_error("No current combatant!")
-            return
-
-        # Check if current combatant is a party member
-        if current.creature not in self.game_state.party.characters:
-            print_error("It's not a party member's turn!")
-            return
-
-        character = current.creature
-        inventory = character.inventory
-        items_data = self.game_state.data_loader.load_items()
-
-        # Find the item in consumables
-        target_item = None
-        consumables = inventory.get_items_by_category("consumables")
-
-        for inv_item in consumables:
-            item_data = items_data["consumables"].get(inv_item.item_id, {})
-            if inv_item.item_id == item_id or item_data.get("name", "").lower() == item_id.lower():
-                target_item = inv_item.item_id
-                break
-
-        if not target_item:
-            print_error(f"{character.name} doesn't have a consumable '{item_id}' in inventory.")
-            return
-
-        # Get item data to check action cost
-        item_info = items_data["consumables"][target_item]
-        item_name = item_info.get("name", target_item)
-        action_required_str = item_info.get("action_required", "action")
-
-        # Map string to ActionType
-        action_type_map = {
-            "action": ActionType.ACTION,
-            "bonus_action": ActionType.BONUS_ACTION,
-            "free_object": ActionType.FREE_OBJECT,
-            "no_action": ActionType.NO_ACTION
-        }
-        action_required = action_type_map.get(action_required_str, ActionType.ACTION)
-
-        # Check if action is available
-        turn_state = self.game_state.initiative_tracker.get_current_turn_state()
-        if not turn_state:
-            print_error("Unable to get current turn state!")
-            return
-
-        if not turn_state.is_action_available(action_required):
-            action_name = action_required_str.replace("_", " ").title()
-            print_error(f"You don't have a {action_name} available this turn!")
-            print_status_message(f"Available: {turn_state}", "info")
-            return
-
-        # Consume the action
-        if not turn_state.consume_action(action_required):
-            print_error(f"Failed to consume {action_required_str}!")
-            return
-
-        # Use the item from inventory (removes it)
-        success, item_data = inventory.use_item(target_item, items_data)
-
-        if not success:
-            print_error(f"Failed to use {item_id}")
-            # Restore the action since item use failed
-            turn_state.reset()
-            turn_state.consume_action(action_required)  # Put back what we consumed
-            return
-
-        # Apply the item's effect
-        result = apply_item_effect(
-            item_info=item_data,
-            target=character,
-            dice_roller=self.game_state.dice_roller,
-            event_bus=self.game_state.event_bus,
-            time_manager=self.game_state.time_manager
-        )
-
-        # Display the result
-        action_cost_msg = f"({action_required_str.replace('_', ' ')})"
-        print_status_message(f"{character.name} uses {item_name} {action_cost_msg}", "info")
-        print_message(result.message)
-
-        # Show remaining actions
-        remaining_actions = str(turn_state)
-        print_status_message(f"Remaining this turn: {remaining_actions}", "info")
-
-        # Suggest ending turn if player wants to skip remaining actions
-        if turn_state.has_any_action():
-            print_status_message("Type 'done' or 'pass' to end your turn", "info")
-
-        # Emit item used event
-        self.game_state.event_bus.emit(Event(
-            type=EventType.ITEM_USED,
-            data={
-                "character": character.name,
-                "item_id": target_item,
-                "item_name": item_name,
-                "effect_type": result.effect_type,
-                "action_cost": action_required_str,
-                "success": result.success
-            }
-        ))
 
     def handle_save(self) -> None:
         """Handle manual named save command."""
