@@ -1,0 +1,300 @@
+{
+  "id": "cult_hideout",
+  "name": "The Unquiet Dead: Cult Hideout",
+  "campaign_id": "the_unquiet_dead",
+  "description": "The cult of Durgon has set up their hideout in the basement of an abandoned warehouse in the Warrens. This part of town is known to be a den for thieves and cutthroats, making it the perfect place for dark rituals. The cultists are preparing for something big - their leader has already left for the temple to conduct the final ritual.",
+  "start_room": "cult_hideout.entrance",
+  "level_range": "2-3",
+  "estimated_playtime": "45-60 minutes",
+  "focus": "combat, investigation",
+  "notes": "Second part of a three-part campaign. Features cultist encounters with investigation opportunities. The acolyte boss holds the map to the Temple of Durgon. Some module features simplified: surprise mechanics for first room, alchemy jug as trade goods instead.",
+  "rooms": {
+    "cult_hideout.entrance": {
+      "id": "cult_hideout.entrance",
+      "location_type": "dungeon",
+      "parent": "cult_hideout",
+      "name": "Hideout Entrance",
+      "description": "Stone stairs descend from the hidden cellar door into a dimly lit chamber. Various tables and crates have been repurposed as furniture. Candles line the walls, casting flickering shadows. Two hooded, robed figures sit in the corner, deep in hushed conversation. They wear the symbol of a horned skull wreathed in flames.",
+      "lighting": "dim",
+      "hidden_features": [
+        {
+          "type": "passive_perception",
+          "dc": 14,
+          "on_success": "You overhear the cultists discussing the upcoming ritual to summon Durgon, how the expedition to recover the cleric's skull went smoothly, and their worry that their dark magic has been reanimating the dead. They mention someone named Northam who rose as a ghast and had to be locked away.",
+          "on_failure": null,
+          "trigger": "on_enter",
+          "once_per_room": true
+        }
+      ],
+      "exits": {
+        "up": {
+          "destination": "arden.warrens_alley",
+          "label": "Stairs to the Warrens"
+        },
+        "north": "cult_hideout.robing_room",
+        "east": {
+          "destination": "cult_hideout.smugglers_cache",
+          "hidden": true,
+          "examine_checks": [
+            {
+              "skill": "investigation",
+              "dc": 14,
+              "action": "examine the eastern wall",
+              "on_success": "You find a crack in the wall with a slight draft. Searching carefully, you discover a hidden mechanism that opens a secret door.",
+              "on_failure": "The wall appears solid, though there seems to be a slight draft from somewhere."
+            }
+          ]
+        }
+      },
+      "enemies": [
+        "cultist",
+        "cultist"
+      ],
+      "items": [
+        {
+          "type": "currency",
+          "gold": 0,
+          "silver": 18,
+          "copper": 0
+        }
+      ],
+      "searched": false,
+      "searchable": true
+    },
+    "cult_hideout.smugglers_cache": {
+      "id": "cult_hideout.smugglers_cache",
+      "location_type": "dungeon",
+      "parent": "cult_hideout",
+      "name": "Smuggler's Cache",
+      "description": "This hidden chamber is thick with cobwebs and dust. Assorted crates sit against the walls, and a faded map showing various trade routes hangs on the eastern wall. It appears this room predates the cult's occupation - likely a smuggler's stash from the warehouse's earlier days.",
+      "lighting": "dark",
+      "exits": {
+        "west": {
+          "destination": "cult_hideout.entrance",
+          "hidden": true,
+          "label": "Secret Door"
+        }
+      },
+      "enemies": [],
+      "items": [
+        {
+          "type": "currency",
+          "gold": 100,
+          "silver": 0,
+          "copper": 0
+        }
+      ],
+      "searched": false,
+      "searchable": true
+    },
+    "cult_hideout.robing_room": {
+      "id": "cult_hideout.robing_room",
+      "location_type": "dungeon",
+      "parent": "cult_hideout",
+      "name": "Robing Chamber",
+      "description": "This chamber contains racks hung with dark robes of various sizes, and several empty chests sit against the walls. A snuffed lantern lies in the corner, its oil reservoir dry. The cultists apparently change into their ceremonial garb here before proceeding deeper into the hideout.",
+      "lighting": "dark",
+      "exits": {
+        "south": "cult_hideout.entrance",
+        "east": "cult_hideout.meeting_room"
+      },
+      "enemies": [],
+      "items": [],
+      "searched": false,
+      "searchable": false
+    },
+    "cult_hideout.meeting_room": {
+      "id": "cult_hideout.meeting_room",
+      "location_type": "dungeon",
+      "parent": "cult_hideout",
+      "name": "Meeting Chamber",
+      "description": "A large wooden table dominates the center of this room, its surface covered with melted candle wax and scattered parchments. Four hooded figures sit around it, speaking in urgent tones. Maps and diagrams bearing the horned skull symbol are pinned to the walls.",
+      "lighting": "dim",
+      "hidden_features": [
+        {
+          "type": "passive_perception",
+          "dc": 14,
+          "on_success": "You overhear the cultists discussing how the bones of Durgon are sealed away under an abandoned temple, that they need the skull of the cleric Davos to break the wards, and that their leader has already left for the temple. His second-in-command remains with further orders.",
+          "on_failure": null,
+          "trigger": "on_enter",
+          "once_per_room": true
+        }
+      ],
+      "exits": {
+        "west": "cult_hideout.robing_room",
+        "east": "cult_hideout.passage"
+      },
+      "enemies": [
+        "cultist",
+        "cultist",
+        "cultist",
+        "cultist"
+      ],
+      "items": [
+        {
+          "type": "currency",
+          "gold": 0,
+          "silver": 36,
+          "copper": 0
+        }
+      ],
+      "searched": false,
+      "searchable": true
+    },
+    "cult_hideout.passage": {
+      "id": "cult_hideout.passage",
+      "location_type": "dungeon",
+      "parent": "cult_hideout",
+      "name": "Torchlit Passage",
+      "description": "This corridor shows signs of heavy foot traffic - the stone floor is worn smooth from countless boots. Two standing candelabras flicker at the eastern end, casting dancing shadows. From beyond the eastern door, you can hear rhythmic chanting in an unfamiliar tongue.",
+      "lighting": "dim",
+      "hidden_features": [
+        {
+          "type": "passive_perception",
+          "dc": 14,
+          "on_success": "The chanting from the east is in Infernal - a prayer to Durgon, lord of fire and death, asking for wisdom and strength.",
+          "on_failure": null,
+          "trigger": "on_enter",
+          "once_per_room": true
+        }
+      ],
+      "exits": {
+        "west": "cult_hideout.meeting_room",
+        "east": "cult_hideout.dark_altar",
+        "south": "cult_hideout.iron_cages"
+      },
+      "enemies": [],
+      "items": [],
+      "searched": false,
+      "searchable": false
+    },
+    "cult_hideout.dark_altar": {
+      "id": "cult_hideout.dark_altar",
+      "location_type": "dungeon",
+      "parent": "cult_hideout",
+      "name": "Dark Altar",
+      "description": "The focal point of this chamber is a small obsidian altar against the eastern wall, stained dark with old blood. Three figures stand before it in a semicircle, chanting in Infernal. The center figure wears more ornate robes than his companions - clearly someone of importance within the cult hierarchy. Unholy symbols of Durgon are carved into every surface.",
+      "lighting": "dim",
+      "examinable_objects": [
+        {
+          "id": "dark_altar",
+          "name": "obsidian altar",
+          "description": "A small altar carved from black stone, its surface stained with old blood. Unholy symbols are carved into its sides.",
+          "examine_checks": [
+            {
+              "skill": "religion",
+              "dc": 12,
+              "on_success": "The symbols are dedicated to Durgon, a devil of fire and death who terrorized this region centuries ago before being sealed away by the cleric Davos. The cult seeks to resurrect their master.",
+              "on_failure": "The symbols are clearly evil in nature, but their specific meaning eludes you."
+            }
+          ]
+        }
+      ],
+      "exits": {
+        "west": "cult_hideout.passage"
+      },
+      "enemies": [
+        "acolyte",
+        "cultist",
+        "cultist"
+      ],
+      "items": [
+        {
+          "type": "currency",
+          "gold": 25,
+          "silver": 18,
+          "copper": 0
+        },
+        {
+          "type": "item",
+          "id": "cult_map"
+        }
+      ],
+      "searched": false,
+      "searchable": true,
+      "boss_room": true
+    },
+    "cult_hideout.iron_cages": {
+      "id": "cult_hideout.iron_cages",
+      "location_type": "dungeon",
+      "parent": "cult_hideout",
+      "name": "Chamber of Cages",
+      "description": "Three rusted iron cages stand against the southern wall of this grim chamber. Inside each cage lies the corpse of a humanoid, their bodies bearing signs of torture - burn marks, broken bones, and ritual scarification. The cult has been busy with dark work here.",
+      "lighting": "dark",
+      "examinable_objects": [
+        {
+          "id": "iron_cages",
+          "name": "iron cages",
+          "description": "Three rusted cages containing the tortured remains of the cult's victims.",
+          "examine_checks": [
+            {
+              "skill": "medicine",
+              "dc": 12,
+              "on_success": "The victims died from a combination of torture and blood loss. Based on their wounds, they were likely used in dark rituals - their life force drained to power unholy magic.",
+              "on_failure": "The victims clearly suffered greatly before their deaths."
+            }
+          ]
+        }
+      ],
+      "exits": {
+        "north": "cult_hideout.passage",
+        "south": {
+          "destination": "cult_hideout.dead_chamber",
+          "locked": true,
+          "unlock_methods": [
+            {
+              "skill": "sleight_of_hand",
+              "tool_proficiency": "thieves_tools",
+              "dc": 14,
+              "description": "pick the lock",
+              "silent": true
+            }
+          ]
+        }
+      },
+      "enemies": [],
+      "items": [],
+      "searched": false,
+      "searchable": false
+    },
+    "cult_hideout.dead_chamber": {
+      "id": "cult_hideout.dead_chamber",
+      "location_type": "dungeon",
+      "parent": "cult_hideout",
+      "name": "Dead Chamber",
+      "description": "The stench hits you before you even enter - the overwhelming reek of decay and death. This chamber contains the half-chewed bodies of fallen cultists, their robes torn and bloodied. A weathered statue stands at the northern end, its eyes glinting with red gemstones. In the corner, a hunched creature gnaws at a corpse, too focused on its grisly meal to notice your arrival. This was once Brother Northam, but dark magic has twisted him into something far worse.",
+      "lighting": "dark",
+      "examinable_objects": [
+        {
+          "id": "gemstone_statue",
+          "name": "statue with ruby eyes",
+          "description": "A weathered stone statue of a figure in robes. Its eyes are made of gleaming red rubies.",
+          "examine_checks": [
+            {
+              "skill": "sleight_of_hand",
+              "dc": 12,
+              "on_success": "You carefully pry the ruby eyes from the statue. They're worth about 25 gold pieces each.",
+              "on_failure": "The gems are set firmly in the stone - you'd need more delicate tools or technique to remove them without damage."
+            }
+          ]
+        }
+      ],
+      "exits": {
+        "north": "cult_hideout.iron_cages"
+      },
+      "enemies": [
+        "ghast"
+      ],
+      "items": [
+        {
+          "type": "currency",
+          "gold": 50,
+          "silver": 0,
+          "copper": 0
+        }
+      ],
+      "searched": false,
+      "searchable": true
+    }
+  }
+}
