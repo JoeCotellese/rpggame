@@ -6,19 +6,20 @@ from typing import Any, Optional
 from rich.panel import Panel
 
 from dnd_engine.core.character import Character, CharacterClass
-from dnd_engine.llm.npc_chat import NPCChatManager
 from dnd_engine.core.dice import format_dice_with_modifier
 from dnd_engine.core.game_state import CombatEvent, CombatSpellResult, GameState
+from dnd_engine.llm.npc_chat import NPCChatManager
 from dnd_engine.systems.action_economy import ActionType
 from dnd_engine.systems.ai import EnemyAI
 from dnd_engine.systems.combat_context import CombatContextBuilder
 from dnd_engine.systems.combat_middleware import ActionResult, CombatActionExecutor
 from dnd_engine.systems.condition_manager import ConditionManager
 from dnd_engine.systems.inventory import EquipmentSlot
+from dnd_engine.systems.item_assignment import ItemAssignmentService
 from dnd_engine.systems.targeting import (
+    ValidTargets,
     get_item_targeting_requirements,
     get_spell_targeting_requirements,
-    ValidTargets,
 )
 from dnd_engine.ui.debug_console import DebugConsole
 from dnd_engine.ui.rich_ui import (
@@ -83,6 +84,9 @@ class CLI:
 
         # Enemy AI for combat decisions
         self.enemy_ai = EnemyAI()
+
+        # Item assignment service for intelligent item distribution
+        self.item_assignment = ItemAssignmentService()
 
         # Combat context builder for assembling narrative context
         self.context_builder = CombatContextBuilder(game_state.data_loader, game_state)
@@ -1612,6 +1616,9 @@ class CLI:
         """
         Intelligently assign an item to a character based on class and item type.
 
+        Uses ItemAssignmentService for recommendation logic, then handles user
+        interaction if needed.
+
         Args:
             item: The item to assign
             living_members: List of living party members
@@ -1621,64 +1628,22 @@ class CLI:
         """
         item_id = item.get("id", "")
 
-        # If only one character, auto-assign
-        if len(living_members) == 1:
-            return living_members[0]
+        # Get recommendations from the item assignment service
+        recommendations = self.item_assignment.get_recommended_recipients(
+            item_id, living_members
+        )
 
-        # Load items data to get item type
-        from dnd_engine.rules.loader import DataLoader
-        data_loader = DataLoader()
-        items_data = data_loader.load_items()
+        # Check if we can auto-assign
+        auto_recipient = self.item_assignment.should_auto_assign(recommendations)
+        if auto_recipient:
+            return auto_recipient
 
-        # Find item details
-        item_details = None
-        for category, category_items in items_data.items():
-            if item_id in category_items:
-                item_details = category_items[item_id]
-                break
-
-        # Intelligent assignment based on item type
-        best_matches = []
-
-        if item_details:
-            item_type = item_details.get("type", "").lower()
-
-            # Weapons: prefer martial classes
-            if "weapon" in item_type or category == "weapons":
-                for char in living_members:
-                    char_class = char.character_class.value.lower()
-                    if char_class in ["fighter", "barbarian", "ranger", "paladin"]:
-                        best_matches.append(char)
-
-            # Armor: prefer tank classes
-            elif "armor" in item_type or category == "armor":
-                for char in living_members:
-                    char_class = char.character_class.value.lower()
-                    if char_class in ["fighter", "paladin", "cleric"]:
-                        best_matches.append(char)
-
-            # Scrolls/wands: prefer casters
-            elif "scroll" in item_id or "wand" in item_id or "staff" in item_id:
-                for char in living_members:
-                    char_class = char.character_class.value.lower()
-                    if char_class in ["wizard", "sorcerer", "cleric", "druid"]:
-                        best_matches.append(char)
-
-            # Potions/consumables: distribute to anyone who needs them
-            elif "potion" in item_id or category == "consumables":
-                # Prefer characters with lower HP percentage
-                chars_by_hp = sorted(living_members, key=lambda c: c.current_hp / c.max_hp if c.max_hp > 0 else 0)
-                best_matches = chars_by_hp
-
-        # If we have clear best matches, auto-assign to first one
-        if len(best_matches) == 1:
-            return best_matches[0]
-
-        # If multiple good matches or no clear match, prompt user
+        # Multiple good matches or no clear match: prompt user
         import questionary
 
         choices = []
-        for character in living_members:
+        for rec in recommendations:
+            character = rec.character
             choice_text = f"{character.name} ({character.character_class.value.title()})"
             choices.append(questionary.Choice(title=choice_text, value=character))
 
