@@ -418,6 +418,58 @@ class Inventory:
 
         return True, item_info
 
+    def get_compatible_ammo(
+        self,
+        weapon_id: str,
+        items_data: dict[str, dict[str, Any]]
+    ) -> str | None:
+        """
+        Find compatible ammunition for a weapon in inventory.
+
+        Looks through the ammunition category in items_data to find ammo
+        that lists this weapon in its compatible_weapons field, then checks
+        if the inventory has any of that ammo type.
+
+        Args:
+            weapon_id: ID of the weapon to find ammo for
+            items_data: Full items data loaded from items.json
+
+        Returns:
+            ID of compatible ammo found in inventory, or None if none available
+        """
+        ammo_data = items_data.get("ammunition", {})
+
+        for ammo_id, ammo_info in ammo_data.items():
+            compatible_weapons = ammo_info.get("compatible_weapons", [])
+            if weapon_id in compatible_weapons and self.has_item(ammo_id):
+                return ammo_id
+
+        return None
+
+    def consume_ammo(self, ammo_id: str) -> bool:
+        """
+        Consume one unit of ammunition.
+
+        Args:
+            ammo_id: ID of the ammunition to consume
+
+        Returns:
+            True if ammo was consumed, False if none available
+        """
+        return self.remove_item(ammo_id, quantity=1)
+
+    def get_ammo_count(self, ammo_id: str) -> int:
+        """
+        Get current ammunition count.
+
+        Args:
+            ammo_id: ID of the ammunition to check
+
+        Returns:
+            Current quantity of the ammunition (0 if not in inventory)
+        """
+        return self.get_item_quantity(ammo_id)
+
     def __str__(self) -> str:
         """String representation of the inventory"""
         if self.is_empty() and self.currency.is_zero():

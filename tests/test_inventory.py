@@ -416,3 +416,150 @@ class TestInventoryIntegration:
         # Remove an item, then can add new one
         inventory.remove_item("longsword")
         assert inventory.add_item("dagger", "weapons") is True
+
+
+class TestAmmunitionTracking:
+    """Test ammunition-specific inventory methods"""
+
+    def setup_method(self):
+        """Set up test fixtures with sample items data"""
+        self.inventory = Inventory()
+        self.items_data = {
+            "weapons": {
+                "shortbow": {
+                    "name": "Shortbow",
+                    "type": "weapon",
+                    "category": "ranged",
+                    "properties": ["ammunition", "two-handed"],
+                },
+                "longbow": {
+                    "name": "Longbow",
+                    "type": "weapon",
+                    "category": "ranged",
+                    "properties": ["ammunition", "heavy", "two-handed"],
+                },
+                "light_crossbow": {
+                    "name": "Light Crossbow",
+                    "type": "weapon",
+                    "category": "ranged",
+                    "properties": ["ammunition", "loading", "two-handed"],
+                },
+                "longsword": {
+                    "name": "Longsword",
+                    "type": "weapon",
+                    "category": "melee",
+                    "properties": ["versatile"],
+                },
+            },
+            "ammunition": {
+                "arrows": {
+                    "name": "Arrows",
+                    "type": "ammunition",
+                    "quantity": 20,
+                    "compatible_weapons": ["shortbow", "longbow"],
+                },
+                "bolts": {
+                    "name": "Crossbow Bolts",
+                    "type": "ammunition",
+                    "quantity": 20,
+                    "compatible_weapons": ["light_crossbow", "heavy_crossbow"],
+                },
+            },
+        }
+
+    def test_get_compatible_ammo_finds_arrows_for_shortbow(self):
+        """Test that arrows are found as compatible ammo for shortbow"""
+        self.inventory.add_item("arrows", "ammunition", quantity=20)
+
+        ammo_id = self.inventory.get_compatible_ammo("shortbow", self.items_data)
+        assert ammo_id == "arrows"
+
+    def test_get_compatible_ammo_finds_arrows_for_longbow(self):
+        """Test that arrows are found as compatible ammo for longbow"""
+        self.inventory.add_item("arrows", "ammunition", quantity=20)
+
+        ammo_id = self.inventory.get_compatible_ammo("longbow", self.items_data)
+        assert ammo_id == "arrows"
+
+    def test_get_compatible_ammo_finds_bolts_for_crossbow(self):
+        """Test that bolts are found as compatible ammo for crossbow"""
+        self.inventory.add_item("bolts", "ammunition", quantity=20)
+
+        ammo_id = self.inventory.get_compatible_ammo("light_crossbow", self.items_data)
+        assert ammo_id == "bolts"
+
+    def test_get_compatible_ammo_returns_none_when_no_ammo(self):
+        """Test that None is returned when no compatible ammo is in inventory"""
+        ammo_id = self.inventory.get_compatible_ammo("shortbow", self.items_data)
+        assert ammo_id is None
+
+    def test_get_compatible_ammo_returns_none_for_wrong_ammo_type(self):
+        """Test that None is returned when only incompatible ammo is available"""
+        self.inventory.add_item("bolts", "ammunition", quantity=20)
+
+        # Bolts are not compatible with shortbow
+        ammo_id = self.inventory.get_compatible_ammo("shortbow", self.items_data)
+        assert ammo_id is None
+
+    def test_get_compatible_ammo_returns_none_for_melee_weapon(self):
+        """Test that None is returned for weapons without ammunition property"""
+        self.inventory.add_item("arrows", "ammunition", quantity=20)
+
+        ammo_id = self.inventory.get_compatible_ammo("longsword", self.items_data)
+        assert ammo_id is None
+
+    def test_consume_ammo_reduces_quantity(self):
+        """Test that consume_ammo reduces ammunition quantity by 1"""
+        self.inventory.add_item("arrows", "ammunition", quantity=20)
+
+        result = self.inventory.consume_ammo("arrows")
+        assert result is True
+        assert self.inventory.get_ammo_count("arrows") == 19
+
+    def test_consume_ammo_removes_item_at_zero(self):
+        """Test that consuming last ammo removes it from inventory"""
+        self.inventory.add_item("arrows", "ammunition", quantity=1)
+
+        result = self.inventory.consume_ammo("arrows")
+        assert result is True
+        assert self.inventory.get_ammo_count("arrows") == 0
+        assert not self.inventory.has_item("arrows")
+
+    def test_consume_ammo_fails_when_none_available(self):
+        """Test that consume_ammo returns False when no ammo available"""
+        result = self.inventory.consume_ammo("arrows")
+        assert result is False
+
+    def test_get_ammo_count_returns_correct_quantity(self):
+        """Test that get_ammo_count returns the current quantity"""
+        self.inventory.add_item("arrows", "ammunition", quantity=15)
+        assert self.inventory.get_ammo_count("arrows") == 15
+
+    def test_get_ammo_count_returns_zero_for_missing_ammo(self):
+        """Test that get_ammo_count returns 0 for ammo not in inventory"""
+        assert self.inventory.get_ammo_count("arrows") == 0
+
+    def test_multiple_ammo_types_tracked_separately(self):
+        """Test that different ammo types are tracked independently"""
+        self.inventory.add_item("arrows", "ammunition", quantity=20)
+        self.inventory.add_item("bolts", "ammunition", quantity=15)
+
+        assert self.inventory.get_ammo_count("arrows") == 20
+        assert self.inventory.get_ammo_count("bolts") == 15
+
+        self.inventory.consume_ammo("arrows")
+        assert self.inventory.get_ammo_count("arrows") == 19
+        assert self.inventory.get_ammo_count("bolts") == 15  # Unchanged
+
+    def test_consume_multiple_ammo_in_sequence(self):
+        """Test consuming ammunition over multiple attacks"""
+        self.inventory.add_item("arrows", "ammunition", quantity=5)
+
+        for expected_remaining in [4, 3, 2, 1, 0]:
+            result = self.inventory.consume_ammo("arrows")
+            assert result is True
+            assert self.inventory.get_ammo_count("arrows") == expected_remaining
+
+        # Now out of ammo
+        result = self.inventory.consume_ammo("arrows")
+        assert result is False
