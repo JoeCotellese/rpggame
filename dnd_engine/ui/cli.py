@@ -1936,15 +1936,12 @@ class CLI:
             # Not a player turn
             return
 
-        # Get spellcasting ability from class data
-        classes_data = self.game_state.data_loader.load_classes()
-        class_data = classes_data.get(caster.character_class.value, {})
-        spellcasting = class_data.get("spellcasting", {})
-        spellcasting_ability = spellcasting.get("ability")
-
-        if not spellcasting_ability:
+        # Check if character can cast spells
+        if not caster.spellcasting_ability:
             print_error(f"{caster.character_class.value.title()} cannot cast spells!")
             return
+
+        spellcasting_ability = caster.spellcasting_ability
 
         # Load spells data
         spells_data = self.game_state.data_loader.load_spells()
