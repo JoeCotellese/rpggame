@@ -190,12 +190,29 @@ class EnemyTurnAction(Enum):
 
 
 @dataclass
+class ConditionRemovalOption:
+    """
+    Option for a creature to attempt removing a condition.
+
+    Contains all information needed for UI to display the removal prompt
+    without requiring the CLI to query the game engine multiple times.
+    """
+    condition_id: str
+    condition_name: str
+    ability: str
+    dc: int
+    action_cost: ActionType
+    description: str
+
+
+@dataclass
 class ConditionRemovalResult:
-    """Result of an enemy attempting to remove a condition."""
+    """Result of attempting to remove a condition."""
     condition_id: str
     attempted: bool
     success: bool
     message: str
+    action_consumed: ActionType | None = None
 
 
 @dataclass
@@ -2743,6 +2760,167 @@ class GameState:
                 )
 
         return None
+
+    def get_removable_conditions(
+        self,
+        creature: Character | Creature
+    ) -> list[ConditionRemovalOption]:
+        """
+        Get conditions that can be removed this turn.
+
+        Checks each condition on the creature for early removal options
+        and validates that the required action is available.
+
+        Args:
+            creature: The creature with conditions to check
+
+        Returns:
+            List of ConditionRemovalOption for conditions that can be removed
+        """
+        options: list[ConditionRemovalOption] = []
+
+        # Get turn state for action availability check
+        turn_state = (
+            self.initiative_tracker.get_current_turn_state()
+            if self.initiative_tracker else None
+        )
+
+        for condition_id in list(creature.conditions):
+            if not self.condition_manager.can_attempt_early_removal(condition_id):
+                continue
+
+            prompt_info = self.condition_manager.get_removal_prompt_info(condition_id)
+            if not prompt_info:
+                continue
+
+            # Map action_cost string to ActionType
+            action_cost_str = prompt_info.get("action_cost", "action")
+            action_type_map = {
+                "action": ActionType.ACTION,
+                "bonus_action": ActionType.BONUS_ACTION,
+                "free_object": ActionType.FREE_OBJECT,
+                "no_action": ActionType.NO_ACTION
+            }
+            action_cost = action_type_map.get(action_cost_str, ActionType.ACTION)
+
+            # Check if the required action is available
+            if turn_state and not turn_state.is_action_available(action_cost):
+                continue
+
+            options.append(ConditionRemovalOption(
+                condition_id=condition_id,
+                condition_name=prompt_info.get("condition_name", condition_id),
+                ability=prompt_info.get("ability", "dexterity"),
+                dc=prompt_info.get("dc", 10),
+                action_cost=action_cost,
+                description=prompt_info.get("description", "")
+            ))
+
+        return options
+
+    def attempt_player_condition_removal(
+        self,
+        creature: Character | Creature,
+        condition_id: str
+    ) -> ConditionRemovalResult:
+        """
+        Attempt to remove a condition from a player character.
+
+        Handles the complete flow:
+        1. Validates the condition can be removed
+        2. Validates and consumes the required action
+        3. Executes the ability check via ConditionManager
+        4. Returns result with all information for UI display
+
+        Args:
+            creature: The creature attempting to remove the condition
+            condition_id: The condition to attempt to remove
+
+        Returns:
+            ConditionRemovalResult with attempt outcome
+        """
+        # Check if condition can be removed
+        if not self.condition_manager.can_attempt_early_removal(condition_id):
+            return ConditionRemovalResult(
+                condition_id=condition_id,
+                attempted=False,
+                success=False,
+                message=f"Condition {condition_id} cannot be removed early"
+            )
+
+        prompt_info = self.condition_manager.get_removal_prompt_info(condition_id)
+        if not prompt_info:
+            return ConditionRemovalResult(
+                condition_id=condition_id,
+                attempted=False,
+                success=False,
+                message=f"No removal information for {condition_id}"
+            )
+
+        # Determine action cost
+        action_cost_str = prompt_info.get("action_cost", "action")
+        action_type_map = {
+            "action": ActionType.ACTION,
+            "bonus_action": ActionType.BONUS_ACTION,
+            "free_object": ActionType.FREE_OBJECT,
+            "no_action": ActionType.NO_ACTION
+        }
+        action_cost = action_type_map.get(action_cost_str, ActionType.ACTION)
+
+        # Validate and consume action
+        turn_state = (
+            self.initiative_tracker.get_current_turn_state()
+            if self.initiative_tracker else None
+        )
+
+        if not turn_state:
+            return ConditionRemovalResult(
+                condition_id=condition_id,
+                attempted=False,
+                success=False,
+                message="Unable to get current turn state"
+            )
+
+        if not turn_state.is_action_available(action_cost):
+            action_name = action_cost_str.replace("_", " ").title()
+            return ConditionRemovalResult(
+                condition_id=condition_id,
+                attempted=False,
+                success=False,
+                message=f"No {action_name} available this turn"
+            )
+
+        # Consume the action
+        if not turn_state.consume_action(action_cost):
+            return ConditionRemovalResult(
+                condition_id=condition_id,
+                attempted=False,
+                success=False,
+                message=f"Failed to consume {action_cost_str}"
+            )
+
+        # Attempt the removal via ConditionManager
+        ability_result = self.condition_manager.attempt_condition_removal(
+            creature, condition_id
+        )
+
+        if ability_result:
+            return ConditionRemovalResult(
+                condition_id=condition_id,
+                attempted=True,
+                success=ability_result.success,
+                message=ability_result.message,
+                action_consumed=action_cost
+            )
+
+        # Fallback if ConditionManager returns None
+        return ConditionRemovalResult(
+            condition_id=condition_id,
+            attempted=True,
+            success=False,
+            message=f"{creature.name} failed to remove {condition_id}",
+            action_consumed=action_cost
+        )
 
     def process_enemy_turn(self) -> EnemyTurnResult | None:
         """

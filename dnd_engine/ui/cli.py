@@ -2620,100 +2620,48 @@ class CLI:
         """
         Prompt the player to attempt removing a condition via ability check.
 
+        Delegates game logic to game_state and handles display/prompting.
+
         Args:
             creature: The creature with conditions
 
         Returns:
             True if an action was consumed attempting to remove a condition
         """
-        # Check each condition for removal options
-        for condition_id in list(creature.conditions):
-            if not self.condition_manager.can_attempt_early_removal(condition_id):
-                continue
+        # Get removable conditions from game engine
+        options = self.game_state.get_removable_conditions(creature)
 
-            # Get removal prompt info
-            prompt_info = self.condition_manager.get_removal_prompt_info(condition_id)
-            if not prompt_info:
-                continue
-
-            # Check if action is required and available
-            turn_state = self.game_state.initiative_tracker.get_current_turn_state()
-            if not turn_state or not turn_state.action_available:
-                continue  # No action available
-
-            # Prompt player
-            condition_name = prompt_info["condition_name"]
-            ability = prompt_info["ability"].upper()
-            dc = prompt_info["dc"]
-            description = prompt_info["description"]
-
+        for option in options:
+            # Display condition and prompt
             print_status_message(
-                f"🔥 {creature.name} has condition: {condition_name}!",
+                f"🔥 {creature.name} has condition: {option.condition_name}!",
                 "warning"
             )
-            print_message(f"   {description}")
-            print_message(f"   Use your action to attempt a DC {dc} {ability} check to remove it? [Y/N]")
+            print_message(f"   {option.description}")
+            print_message(
+                f"   Use your action to attempt a DC {option.dc} "
+                f"{option.ability.upper()} check to remove it? [Y/N]"
+            )
 
             response = input("   > ").strip().lower()
 
             if response in ['y', 'yes']:
-                # Consume action
-                from dnd_engine.systems.action_economy import ActionType
-                turn_state.consume_action(ActionType.ACTION)
+                # Attempt removal via game engine
+                result = self.game_state.attempt_player_condition_removal(
+                    creature, option.condition_id
+                )
 
-                # Attempt removal
-                result = self.condition_manager.attempt_condition_removal(creature, condition_id)
-
-                if result:
+                if result.attempted:
                     if result.success:
                         print_status_message(result.message, "success")
                     else:
                         print_status_message(result.message, "warning")
-
-                return True  # Action was consumed
+                    return True  # Action was consumed
+                else:
+                    # Shouldn't happen if get_removable_conditions filtered properly
+                    print_error(result.message)
 
         return False  # No action consumed
-
-    def _should_enemy_attempt_condition_removal(self, enemy) -> bool:
-        """
-        Determine if an enemy should attempt to remove a condition using AI logic.
-
-        Args:
-            enemy: The enemy creature
-
-        Returns:
-            True if enemy should attempt to remove condition (consumes turn)
-        """
-        # Check each condition for removal options
-        for condition_id in list(enemy.conditions):
-            if not self.condition_manager.can_attempt_early_removal(condition_id):
-                continue
-
-            # Use AI system to decide if condition should be removed
-            if condition_id == "on_fire" and self.enemy_ai.should_attempt_condition_removal(enemy):
-                print_status_message(
-                    f"🔥 {enemy.name} is on fire with low HP! Attempting to extinguish...",
-                    "info"
-                )
-
-                # Attempt removal
-                result = self.condition_manager.attempt_condition_removal(enemy, condition_id)
-
-                if result:
-                    if result.success:
-                        print_status_message(result.message, "success")
-                    else:
-                        print_status_message(result.message, "warning")
-
-                return True  # Turn was used
-            elif condition_id == "on_fire":
-                # Enemy chooses to ignore the flames and attack instead
-                print_status_message(
-                    f"🔥 {enemy.name} is on fire ({enemy.current_hp}/{enemy.max_hp} HP) but chooses to press the attack rather than extinguish the flames!",
-                    "info"
-                )
-
-        return False  # No condition removal attempted
 
     def process_enemy_turns(self) -> None:
         """Process all enemy turns until it's a party member's turn again."""

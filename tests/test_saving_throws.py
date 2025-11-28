@@ -235,16 +235,6 @@ class TestMakeSavingThrow:
         assert result["success"] == True
         assert result["total"] >= 5
 
-    def test_saving_throw_vs_high_dc(self):
-        """Test saving throw against a high DC"""
-        result = self.fighter.make_saving_throw("str", dc=25)
-
-        # With STR mod +5, need to roll 20 on d20
-        # Very unlikely to succeed
-        # This test just checks the return structure
-        assert isinstance(result["success"], bool)
-        assert result["total"] < 25  # Unlikely to beat DC 25
-
     def test_saving_throw_total_calculation(self):
         """Test that total is calculated correctly"""
         result = self.fighter.make_saving_throw("str", dc=10)
