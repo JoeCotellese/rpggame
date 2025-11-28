@@ -1935,6 +1935,7 @@ class GameState:
         items_data = self.data_loader.load_items()
 
         # Calculate attack/damage bonuses and get weapon info
+        ammo_id = None  # Track ammo for consumption after attack
         if equipped_weapon:
             attack_bonus = attacker.get_attack_bonus(equipped_weapon, items_data)
             damage_bonus = attacker.get_damage_bonus(equipped_weapon, items_data)
@@ -1942,6 +1943,33 @@ class GameState:
             damage_dice = weapon_data.get("damage", "1d8")
             damage_dice = format_dice_with_modifier(damage_dice, damage_bonus)
             weapon_name = weapon_data.get("name", equipped_weapon)
+
+            # Check if weapon requires ammunition
+            weapon_properties = weapon_data.get("properties", [])
+            if "ammunition" in weapon_properties:
+                ammo_id = attacker.inventory.get_compatible_ammo(
+                    equipped_weapon, items_data
+                )
+                if not ammo_id:
+                    return PlayerAttackResult(
+                        success=False,
+                        attack_result=AttackResult(
+                            attacker_name=attacker.name,
+                            defender_name=target.name,
+                            attack_roll=0,
+                            attack_bonus=attack_bonus,
+                            target_ac=target.ac,
+                            hit=False,
+                            critical_hit=False,
+                            damage=0,
+                            advantage=False,
+                            disadvantage=False
+                        ),
+                        attacker_name=attacker.name,
+                        target_name=target.name,
+                        weapon_name=weapon_name,
+                        error="No ammunition available for this weapon"
+                    )
         else:
             # Fallback to unarmed strike
             attack_bonus = attacker.melee_attack_bonus
@@ -1958,6 +1986,10 @@ class GameState:
             apply_damage=True,
             game_state=self
         )
+
+        # Consume ammunition after the attack (hit or miss, the ammo is still used)
+        if ammo_id:
+            attacker.inventory.consume_ammo(ammo_id)
 
         # Check concentration if target was hit and took damage
         concentration_broken = None

@@ -568,6 +568,28 @@
       "notes": "This quest item unlocks the Temple of Durgon dungeon location."
     }
   },
+  "ammunition": {
+    "arrows": {
+      "name": "Arrows",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "ammunition",
+      "description": "A quiver of 20 arrows for use with shortbows and longbows.",
+      "value": 1,
+      "weight": 1,
+      "quantity": 20,
+      "compatible_weapons": ["shortbow", "longbow"]
+    },
+    "bolts": {
+      "name": "Crossbow Bolts",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "ammunition",
+      "description": "A case of 20 crossbow bolts for use with light and heavy crossbows.",
+      "value": 1,
+      "weight": 1.5,
+      "quantity": 20,
+      "compatible_weapons": ["light_crossbow", "heavy_crossbow"]
+    }
+  },
   "magical_items": {
     "profane_skull": {
       "name": "Profane Skull",

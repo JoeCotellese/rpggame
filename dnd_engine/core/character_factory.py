@@ -365,6 +365,9 @@ class CharacterFactory:
         """
         Add starting equipment to character inventory and equip.
 
+        Automatically includes appropriate ammunition for ranged weapons
+        that have the "ammunition" property.
+
         Args:
             character: Character object
             class_data: Class definition with starting_equipment
@@ -373,8 +376,10 @@ class CharacterFactory:
         Side Effects:
             - Adds items to character.inventory
             - Equips weapon and armor automatically
+            - Adds ammunition for ranged weapons
         """
         starting_equipment = class_data.get("starting_equipment", [])
+        weapons_needing_ammo: list[str] = []
 
         for item_id in starting_equipment:
             # Determine category
@@ -387,20 +392,70 @@ class CharacterFactory:
                 category = "consumables"
             elif item_id in items_data.get("tools", {}):
                 category = "tools"
+            elif item_id in items_data.get("ammunition", {}):
+                category = "ammunition"
 
             if category:
-                character.inventory.add_item(item_id, category, quantity=1)
+                # Get default quantity for ammunition items
+                quantity = 1
+                if category == "ammunition":
+                    ammo_data = items_data.get("ammunition", {}).get(item_id, {})
+                    quantity = ammo_data.get("quantity", 20)
+
+                character.inventory.add_item(item_id, category, quantity=quantity)
 
                 # Auto-equip weapon and armor
-                if category == "weapons" and character.inventory.get_equipped_item(EquipmentSlot.WEAPON) is None:
-                    character.inventory.equip_item(item_id, EquipmentSlot.WEAPON)
+                if category == "weapons":
+                    if character.inventory.get_equipped_item(EquipmentSlot.WEAPON) is None:
+                        character.inventory.equip_item(item_id, EquipmentSlot.WEAPON)
+                    # Track weapons that need ammunition
+                    weapon_data = items_data.get("weapons", {}).get(item_id, {})
+                    if "ammunition" in weapon_data.get("properties", []):
+                        weapons_needing_ammo.append(item_id)
                 elif category == "armor" and character.inventory.get_equipped_item(EquipmentSlot.ARMOR) is None:
                     character.inventory.equip_item(item_id, EquipmentSlot.ARMOR)
+
+        # Auto-add ammunition for weapons that require it
+        CharacterFactory._add_starting_ammunition(
+            character, weapons_needing_ammo, items_data
+        )
 
         # Add starting gold
         starting_gold = class_data.get("starting_gold", 0)
         if starting_gold > 0:
             character.inventory.add_gold(starting_gold)
+
+    @staticmethod
+    def _add_starting_ammunition(
+        character: Character,
+        weapons_needing_ammo: list[str],
+        items_data: dict[str, Any]
+    ) -> None:
+        """
+        Add starting ammunition for ranged weapons.
+
+        Searches the ammunition category for ammo compatible with each weapon
+        and adds the default quantity if not already in inventory.
+
+        Args:
+            character: Character to add ammunition to
+            weapons_needing_ammo: List of weapon IDs that require ammunition
+            items_data: Full items.json data
+        """
+        ammo_data = items_data.get("ammunition", {})
+
+        for weapon_id in weapons_needing_ammo:
+            # Find compatible ammunition for this weapon
+            for ammo_id, ammo_info in ammo_data.items():
+                compatible_weapons = ammo_info.get("compatible_weapons", [])
+                if weapon_id in compatible_weapons:
+                    # Only add if character doesn't already have this ammo type
+                    if not character.inventory.has_item(ammo_id):
+                        quantity = ammo_info.get("quantity", 20)
+                        character.inventory.add_item(
+                            ammo_id, "ammunition", quantity=quantity
+                        )
+                    break  # Only need one type of compatible ammo per weapon
 
     @staticmethod
     def select_spells(
