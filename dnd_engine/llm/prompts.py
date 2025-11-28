@@ -341,32 +341,23 @@ def build_combat_action_prompt(action_data: dict[str, Any]) -> str:
             )
         elif is_critical:
             # Critical hit but NOT a killing blow - enemy still alive
+            # More dramatic than regular hit, but still concise
             prompt = (
-                f"Narrate this critical hit:\n\n"
-                f"{location_context}{history_context}"
-                f"{attacker} lands a devastating blow on {defender} "
-                f"with their {weapon_desc}. The {defender} staggers but remains standing.\n\n"
-                f"One visceral sentence (15-25 words). Do NOT describe {defender} as "
-                f"defeated, dying, or dead. {pov_constraint}"
+                f"CRITICAL HIT! {attacker} devastates {defender} with {weapon_desc}. "
+                f"One visceral sentence, 15-20 words. Enemy staggers but survives. {pov_constraint}"
             )
         else:
-            # Regular hit - minimal context, tight output
+            # Regular hit - ultra-tight output for fast-paced combat
             # IMPORTANT: Explicitly state enemy survives to prevent death-like language
             prompt = (
-                f"Narrate this combat hit:\n\n"
-                f"{location_context}"
-                f"{attacker} hits {defender} with their {weapon_desc}. "
-                f"The {defender} is wounded but still fighting.\n\n"
-                f"One sentence, under 20 words. Do NOT describe {defender} as "
-                f"defeated, dying, or dead. {pov_constraint}"
+                f"{attacker} hits {defender} with {weapon_desc}. "
+                f"One punchy sentence, max 12 words. No death language. {pov_constraint}"
             )
     else:
         # Misses are always brief - don't dwell on failure
         prompt = (
-            f"Narrate this combat miss:\n\n"
-            f"{location_context}"
-            f"{attacker} swings at {defender} with their {weapon_desc} but misses.\n\n"
-            f"One sentence, under 15 words. {pov_constraint}"
+            f"{attacker} misses {defender} with {weapon_desc}. "
+            f"One brief sentence, max 10 words. {pov_constraint}"
         )
 
     return prompt
