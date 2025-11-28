@@ -513,7 +513,21 @@
       "quest_item": true,
       "description": "A leather-bound journal recovered from the corpse of a cultist in Davos's tomb. The pages are filled with frantic scrawlings in Common. Reading it reveals: The cultist's name was Gorgus. He was a member of the Cult of Durgon, an ancient devil-worshipping sect. The cult is working to bring their master back from the dead. They needed the skull of the cleric Davos to complete their resurrection ritual. Tucked in the back is a crude map showing a route to the cult's hideout - a basement beneath an abandoned warehouse in the city. The symbol of the Cult of Durgon (a horned skull wreathed in flames) is drawn repeatedly in the margins.",
       "value": 0,
-      "notes": "This is a quest item that should unlock the 'Cult Hideout' dungeon location. Multi-dungeon campaign progression not yet implemented."
+      "notes": "This quest item unlocks the Cult Hideout dungeon location."
+    },
+    "cult_map": {
+      "name": "Cult Leader's Map",
+      "source": "The Unquiet Dead (Adventures Await Studios, OGL)",
+      "type": "consumable",
+      "rarity": "common",
+      "effect_type": "information",
+      "action_required": "free",
+      "target_type": "self",
+      "range": 0,
+      "quest_item": true,
+      "description": "A rough map found among the belongings of the cult's second-in-command. It shows a route to an abandoned temple outside of town, along with notes about 'the final ritual' and 'the bones of Durgon sealed beneath.' A letter accompanying it requests the acolyte join the cult leader at the temple the following night. The symbol of Durgon - a horned skull wreathed in flames - is stamped in red wax at the bottom.",
+      "value": 0,
+      "notes": "This quest item unlocks the Temple of Durgon dungeon location."
     }
   }
 }

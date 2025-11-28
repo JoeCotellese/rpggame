@@ -304,6 +304,210 @@
       }
     ]
   },
+  "cultist": {
+    "name": "Cultist",
+    "source": "D&D 5E SRD (CC BY 4.0) / The Unquiet Dead (Adventures Await Studios, OGL)",
+    "size": "medium",
+    "type": "humanoid (any race)",
+    "alignment": "any non-good",
+    "ac": 12,
+    "ac_source": "leather armor",
+    "hp": "2d8",
+    "hp_average": 9,
+    "speed": 30,
+    "abilities": {
+      "str": 11,
+      "dex": 12,
+      "con": 10,
+      "int": 10,
+      "wis": 11,
+      "cha": 10
+    },
+    "skills": {
+      "deception": 2,
+      "religion": 2
+    },
+    "senses": "passive Perception 10",
+    "passive_perception": 10,
+    "languages": [
+      "Common"
+    ],
+    "cr": "1/8",
+    "xp": 25,
+    "loot": {
+      "silver": 10
+    },
+    "traits": [
+      {
+        "name": "Dark Devotion",
+        "description": "The cultist has advantage on saving throws against being charmed or frightened."
+      }
+    ],
+    "actions": [
+      {
+        "name": "Scimitar",
+        "type": "melee-weapon-attack",
+        "attack_bonus": 3,
+        "reach": "5 ft.",
+        "damage": "1d6+1",
+        "damage_average": 4,
+        "damage_type": "slashing"
+      }
+    ]
+  },
+  "acolyte": {
+    "name": "Acolyte",
+    "source": "D&D 5E SRD (CC BY 4.0) / The Unquiet Dead (Adventures Await Studios, OGL)",
+    "size": "medium",
+    "type": "humanoid (any race)",
+    "alignment": "any alignment",
+    "ac": 10,
+    "ac_source": "unarmored",
+    "hp": "2d8",
+    "hp_average": 9,
+    "speed": 30,
+    "abilities": {
+      "str": 10,
+      "dex": 10,
+      "con": 10,
+      "int": 10,
+      "wis": 14,
+      "cha": 11
+    },
+    "skills": {
+      "medicine": 4,
+      "religion": 2
+    },
+    "senses": "passive Perception 12",
+    "passive_perception": 12,
+    "languages": [
+      "Common"
+    ],
+    "cr": "1/4",
+    "xp": 50,
+    "is_boss": true,
+    "loot": {
+      "gold": 15
+    },
+    "traits": [],
+    "spellcasting": {
+      "ability": "wisdom",
+      "spell_dc": 12,
+      "spell_attack": 4,
+      "slots": {
+        "1": 3
+      },
+      "cantrips": ["sacred_flame"],
+      "spells_known": ["bless", "cure_wounds", "sanctuary"]
+    },
+    "actions": [
+      {
+        "name": "Club",
+        "type": "melee-weapon-attack",
+        "attack_bonus": 2,
+        "reach": "5 ft.",
+        "damage": "1d4",
+        "damage_average": 2,
+        "damage_type": "bludgeoning"
+      },
+      {
+        "name": "Sacred Flame",
+        "type": "spell-attack",
+        "range": "60 ft.",
+        "damage": "1d8",
+        "damage_average": 4,
+        "damage_type": "radiant",
+        "special": "Target must succeed on a DC 12 Dexterity saving throw or take the damage. The target gains no benefit from cover for this saving throw."
+      }
+    ]
+  },
+  "ghast": {
+    "name": "Ghast",
+    "source": "D&D 5E SRD (CC BY 4.0) / The Unquiet Dead (Adventures Await Studios, OGL)",
+    "size": "medium",
+    "type": "undead",
+    "alignment": "chaotic evil",
+    "ac": 13,
+    "ac_source": "natural armor",
+    "hp": "8d8",
+    "hp_average": 36,
+    "speed": 30,
+    "abilities": {
+      "str": 16,
+      "dex": 17,
+      "con": 10,
+      "int": 11,
+      "wis": 10,
+      "cha": 8
+    },
+    "skills": {},
+    "damage_resistances": [
+      "necrotic"
+    ],
+    "damage_immunities": [
+      "poison"
+    ],
+    "condition_immunities": [
+      "charmed",
+      "exhaustion",
+      "poisoned"
+    ],
+    "senses": "darkvision 60 ft., passive Perception 10",
+    "passive_perception": 10,
+    "languages": [
+      "Common"
+    ],
+    "cr": "2",
+    "xp": 450,
+    "is_boss": true,
+    "loot": {
+      "gold": 5,
+      "silver": 20
+    },
+    "traits": [
+      {
+        "name": "Stench",
+        "description": "Any creature that starts its turn within 5 feet of the ghast must succeed on a DC 10 Constitution saving throw or be poisoned until the start of its next turn. On a successful saving throw, the creature is immune to the ghast's Stench for 24 hours."
+      },
+      {
+        "name": "Turn Defiance",
+        "description": "The ghast and any ghouls within 30 feet of it have advantage on saving throws against effects that turn undead."
+      }
+    ],
+    "actions": [
+      {
+        "name": "Bite",
+        "type": "melee-weapon-attack",
+        "attack_bonus": 5,
+        "reach": "5 ft.",
+        "damage": "2d8+3",
+        "damage_average": 12,
+        "damage_type": "piercing"
+      },
+      {
+        "name": "Claws",
+        "type": "melee-weapon-attack",
+        "attack_bonus": 5,
+        "reach": "5 ft.",
+        "damage": "2d6+3",
+        "damage_average": 10,
+        "damage_type": "slashing",
+        "special": "If the target is a creature other than an undead, it must succeed on a DC 10 Constitution saving throw or be paralyzed for 1 minute. The target can repeat the saving throw at the end of each of its turns, ending the effect on itself on a success.",
+        "saving_throw": {
+          "trigger": "on_hit",
+          "ability": "constitution",
+          "dc": 10,
+          "on_fail": {
+            "condition": "paralyzed",
+            "duration_type": "rounds",
+            "duration": 10,
+            "allow_repeat_save": true,
+            "repeat_timing": "end_of_turn"
+          }
+        }
+      }
+    ]
+  },
   "ghoul": {
     "name": "Ghoul",
     "source": "D&D 5E SRD (CC BY 4.0) / The Unquiet Dead (Adventures Await Studios, OGL)",
