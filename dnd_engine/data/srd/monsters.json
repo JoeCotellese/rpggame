@@ -582,5 +582,420 @@
         "damage_type": "piercing"
       }
     ]
+  },
+  "animated_armor": {
+    "name": "Animated Armor",
+    "source": "D&D 5E SRD (CC BY 4.0)",
+    "size": "medium",
+    "type": "construct",
+    "alignment": "unaligned",
+    "ac": 18,
+    "ac_source": "natural armor",
+    "hp": "6d8+6",
+    "hp_average": 33,
+    "speed": 25,
+    "abilities": {
+      "str": 14,
+      "dex": 11,
+      "con": 13,
+      "int": 1,
+      "wis": 3,
+      "cha": 1
+    },
+    "skills": {},
+    "damage_immunities": [
+      "poison",
+      "psychic"
+    ],
+    "condition_immunities": [
+      "blinded",
+      "charmed",
+      "deafened",
+      "exhaustion",
+      "frightened",
+      "paralyzed",
+      "petrified",
+      "poisoned"
+    ],
+    "senses": "blindsight 60 ft. (blind beyond this radius), passive Perception 6",
+    "passive_perception": 6,
+    "languages": [],
+    "cr": "1",
+    "xp": 200,
+    "loot": {
+      "gold": 0,
+      "silver": 0
+    },
+    "traits": [
+      {
+        "name": "Antimagic Susceptibility",
+        "description": "The armor is incapacitated while in the area of an antimagic field. If targeted by dispel magic, the armor must succeed on a Constitution saving throw against the caster's spell save DC or fall unconscious for 1 minute."
+      },
+      {
+        "name": "False Appearance",
+        "description": "While the armor remains motionless, it is indistinguishable from a normal suit of armor."
+      }
+    ],
+    "actions": [
+      {
+        "name": "Multiattack",
+        "description": "The armor makes two melee attacks."
+      },
+      {
+        "name": "Slam",
+        "type": "melee-weapon-attack",
+        "attack_bonus": 4,
+        "reach": "5 ft.",
+        "damage": "1d6+2",
+        "damage_average": 5,
+        "damage_type": "bludgeoning"
+      }
+    ]
+  },
+  "spy": {
+    "name": "Spy",
+    "source": "D&D 5E SRD (CC BY 4.0)",
+    "size": "medium",
+    "type": "humanoid (any race)",
+    "alignment": "any alignment",
+    "ac": 12,
+    "ac_source": "natural armor",
+    "hp": "6d8",
+    "hp_average": 27,
+    "speed": 30,
+    "abilities": {
+      "str": 10,
+      "dex": 15,
+      "con": 10,
+      "int": 12,
+      "wis": 14,
+      "cha": 16
+    },
+    "skills": {
+      "deception": 5,
+      "insight": 4,
+      "investigation": 5,
+      "perception": 6,
+      "persuasion": 5,
+      "sleight_of_hand": 4,
+      "stealth": 4
+    },
+    "senses": "passive Perception 16",
+    "passive_perception": 16,
+    "languages": [
+      "any two languages"
+    ],
+    "cr": "1",
+    "xp": 200,
+    "loot": {
+      "gold": 5,
+      "silver": 15
+    },
+    "traits": [
+      {
+        "name": "Cunning Action",
+        "description": "On each of its turns, the spy can use a bonus action to take the Dash, Disengage, or Hide action."
+      },
+      {
+        "name": "Sneak Attack (1/Turn)",
+        "description": "The spy deals an extra 7 (2d6) damage when it hits a target with a weapon attack and has advantage on the attack roll, or when the target is within 5 feet of an ally of the spy that isn't incapacitated and the spy doesn't have disadvantage on the attack roll."
+      }
+    ],
+    "actions": [
+      {
+        "name": "Multiattack",
+        "description": "The spy makes two melee attacks."
+      },
+      {
+        "name": "Shortsword",
+        "type": "melee-weapon-attack",
+        "attack_bonus": 4,
+        "reach": "5 ft.",
+        "damage": "1d6+2",
+        "damage_average": 5,
+        "damage_type": "piercing"
+      },
+      {
+        "name": "Hand Crossbow",
+        "type": "ranged-weapon-attack",
+        "attack_bonus": 4,
+        "range": "30/120 ft.",
+        "damage": "1d6+2",
+        "damage_average": 5,
+        "damage_type": "piercing"
+      }
+    ]
+  },
+  "cult_fanatic": {
+    "name": "Cult Fanatic",
+    "source": "D&D 5E SRD (CC BY 4.0)",
+    "size": "medium",
+    "type": "humanoid (any race)",
+    "alignment": "any non-good alignment",
+    "ac": 13,
+    "ac_source": "leather armor",
+    "hp": "6d8+6",
+    "hp_average": 33,
+    "speed": 30,
+    "abilities": {
+      "str": 11,
+      "dex": 14,
+      "con": 12,
+      "int": 10,
+      "wis": 13,
+      "cha": 14
+    },
+    "skills": {
+      "deception": 4,
+      "persuasion": 4,
+      "religion": 2
+    },
+    "senses": "passive Perception 11",
+    "passive_perception": 11,
+    "languages": [
+      "any one language (usually Common)"
+    ],
+    "cr": "2",
+    "xp": 450,
+    "is_boss": true,
+    "loot": {
+      "gold": 10,
+      "silver": 25
+    },
+    "traits": [
+      {
+        "name": "Dark Devotion",
+        "description": "The fanatic has advantage on saving throws against being charmed or frightened."
+      }
+    ],
+    "spellcasting": {
+      "ability": "wisdom",
+      "spell_dc": 11,
+      "spell_attack": 3,
+      "slots": {
+        "1": 4,
+        "2": 3
+      },
+      "cantrips": [
+        "light",
+        "sacred_flame",
+        "thaumaturgy"
+      ],
+      "spells_known": [
+        "command",
+        "inflict_wounds",
+        "shield_of_faith",
+        "hold_person",
+        "spiritual_weapon"
+      ]
+    },
+    "actions": [
+      {
+        "name": "Multiattack",
+        "description": "The fanatic makes two melee attacks."
+      },
+      {
+        "name": "Dagger",
+        "type": "melee-weapon-attack",
+        "attack_bonus": 4,
+        "reach": "5 ft.",
+        "damage": "1d4+2",
+        "damage_average": 4,
+        "damage_type": "piercing"
+      },
+      {
+        "name": "Sacred Flame",
+        "type": "spell-attack",
+        "range": "60 ft.",
+        "damage": "1d8",
+        "damage_average": 4,
+        "damage_type": "radiant",
+        "special": "Target must succeed on a DC 11 Dexterity saving throw or take the damage. The target gains no benefit from cover for this saving throw."
+      }
+    ]
+  },
+  "mage_weakened": {
+    "name": "Mage (Weakened)",
+    "source": "D&D 5E SRD (CC BY 4.0) / The Unquiet Dead (Adventures Await Studios, OGL)",
+    "size": "medium",
+    "type": "humanoid (any race)",
+    "alignment": "any alignment",
+    "ac": 12,
+    "ac_source": "15 with mage armor",
+    "hp": "4d8",
+    "hp_average": 30,
+    "speed": 30,
+    "abilities": {
+      "str": 9,
+      "dex": 14,
+      "con": 11,
+      "int": 17,
+      "wis": 12,
+      "cha": 11
+    },
+    "skills": {
+      "arcana": 6,
+      "history": 6
+    },
+    "senses": "passive Perception 11",
+    "passive_perception": 11,
+    "languages": [
+      "any four languages"
+    ],
+    "cr": "2",
+    "xp": 450,
+    "loot": {
+      "gold": 15,
+      "silver": 30
+    },
+    "traits": [
+      {
+        "name": "Exhausted",
+        "description": "This mage has expended most of their magical power and can only cast 1st-level spells."
+      }
+    ],
+    "spellcasting": {
+      "ability": "intelligence",
+      "spell_dc": 14,
+      "spell_attack": 6,
+      "slots": {
+        "1": 4
+      },
+      "cantrips": [
+        "fire_bolt",
+        "light",
+        "mage_hand",
+        "prestidigitation"
+      ],
+      "spells_known": [
+        "detect_magic",
+        "mage_armor",
+        "magic_missile",
+        "shield"
+      ]
+    },
+    "actions": [
+      {
+        "name": "Dagger",
+        "type": "melee-or-ranged-weapon-attack",
+        "attack_bonus": 5,
+        "reach": "5 ft.",
+        "range": "20/60 ft.",
+        "damage": "1d4+2",
+        "damage_average": 4,
+        "damage_type": "piercing"
+      },
+      {
+        "name": "Fire Bolt",
+        "type": "spell-attack",
+        "range": "120 ft.",
+        "damage": "2d10",
+        "damage_average": 11,
+        "damage_type": "fire",
+        "special": "Ranged spell attack against the target."
+      }
+    ]
+  },
+  "bearded_devil": {
+    "name": "Bearded Devil",
+    "source": "D&D 5E SRD (CC BY 4.0)",
+    "size": "medium",
+    "type": "fiend (devil)",
+    "alignment": "lawful evil",
+    "ac": 13,
+    "ac_source": "natural armor",
+    "hp": "8d8+24",
+    "hp_average": 52,
+    "speed": 30,
+    "abilities": {
+      "str": 16,
+      "dex": 15,
+      "con": 15,
+      "int": 9,
+      "wis": 11,
+      "cha": 11
+    },
+    "skills": {},
+    "saving_throws": {
+      "str": 5,
+      "con": 4,
+      "wis": 2
+    },
+    "damage_resistances": [
+      "cold",
+      "bludgeoning, piercing, and slashing from nonmagical attacks that aren't silvered"
+    ],
+    "damage_immunities": [
+      "fire",
+      "poison"
+    ],
+    "condition_immunities": [
+      "poisoned"
+    ],
+    "senses": "darkvision 120 ft., passive Perception 10",
+    "passive_perception": 10,
+    "languages": [
+      "Infernal",
+      "telepathy 120 ft."
+    ],
+    "cr": "3",
+    "xp": 700,
+    "is_boss": true,
+    "loot": {
+      "gold": 25,
+      "silver": 0
+    },
+    "traits": [
+      {
+        "name": "Devil's Sight",
+        "description": "Magical darkness doesn't impede the devil's darkvision."
+      },
+      {
+        "name": "Magic Resistance",
+        "description": "The devil has advantage on saving throws against spells and other magical effects."
+      },
+      {
+        "name": "Steadfast",
+        "description": "The devil can't be frightened while it can see an allied creature within 30 feet of it."
+      }
+    ],
+    "actions": [
+      {
+        "name": "Multiattack",
+        "description": "The devil makes two attacks: one with its beard and one with its glaive."
+      },
+      {
+        "name": "Beard",
+        "type": "melee-weapon-attack",
+        "attack_bonus": 5,
+        "reach": "5 ft.",
+        "damage": "1d8+2",
+        "damage_average": 6,
+        "damage_type": "piercing",
+        "special": "If the target is a creature other than an undead or a construct, it must succeed on a DC 12 Constitution saving throw or be poisoned for 1 minute. While poisoned in this way, the target can't regain hit points. The target can repeat the saving throw at the end of each of its turns, ending the effect on itself on a success.",
+        "saving_throw": {
+          "trigger": "on_hit",
+          "ability": "constitution",
+          "dc": 12,
+          "on_fail": {
+            "condition": "poisoned",
+            "duration_type": "rounds",
+            "duration": 10,
+            "allow_repeat_save": true,
+            "repeat_timing": "end_of_turn"
+          }
+        }
+      },
+      {
+        "name": "Glaive",
+        "type": "melee-weapon-attack",
+        "attack_bonus": 5,
+        "reach": "10 ft.",
+        "damage": "1d10+3",
+        "damage_average": 8,
+        "damage_type": "slashing",
+        "special": "If the target is a creature other than an undead or a construct, it must succeed on a DC 12 Constitution saving throw or lose 5 (1d10) hit points at the start of each of its turns due to an infernal wound. Each time the devil hits the wounded target with this attack, the damage dealt by the wound increases by 5 (1d10). Any creature can take an action to stanch the wound with a successful DC 12 Wisdom (Medicine) check. The wound also closes if the target receives magical healing."
+      }
+    ]
   }
 }
