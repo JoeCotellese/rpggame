@@ -340,20 +340,25 @@ def build_combat_action_prompt(action_data: dict[str, Any]) -> str:
                 f"2-3 vivid sentences. {pov_constraint}"
             )
         elif is_critical:
+            # Critical hit but NOT a killing blow - enemy still alive
             prompt = (
                 f"Narrate this critical hit:\n\n"
                 f"{location_context}{history_context}"
                 f"{attacker} lands a devastating blow on {defender} "
-                f"with their {weapon_desc}.\n\n"
-                f"One visceral sentence (15-25 words). {pov_constraint}"
+                f"with their {weapon_desc}. The {defender} staggers but remains standing.\n\n"
+                f"One visceral sentence (15-25 words). Do NOT describe {defender} as "
+                f"defeated, dying, or dead. {pov_constraint}"
             )
         else:
             # Regular hit - minimal context, tight output
+            # IMPORTANT: Explicitly state enemy survives to prevent death-like language
             prompt = (
                 f"Narrate this combat hit:\n\n"
                 f"{location_context}"
-                f"{attacker} hits {defender} with their {weapon_desc}.\n\n"
-                f"One sentence, under 20 words. {pov_constraint}"
+                f"{attacker} hits {defender} with their {weapon_desc}. "
+                f"The {defender} is wounded but still fighting.\n\n"
+                f"One sentence, under 20 words. Do NOT describe {defender} as "
+                f"defeated, dying, or dead. {pov_constraint}"
             )
     else:
         # Misses are always brief - don't dwell on failure
