@@ -43,7 +43,7 @@ class TestProviderFactory:
                 assert isinstance(provider, OpenAIProvider)
                 assert provider.model == "gpt-4o-mini"  # Default
                 assert provider.timeout == 20.0  # Factory default from LLM_TIMEOUT env var
-                assert provider.max_tokens == 150
+                assert provider.max_tokens == 1000
 
     def test_create_openai_provider_missing_key(self) -> None:
         """Test that missing API key returns None."""

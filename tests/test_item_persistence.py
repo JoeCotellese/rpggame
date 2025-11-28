@@ -101,7 +101,7 @@ def test_items_persist_after_save_load(save_manager, game_state_with_items, samp
     )
 
     # Load the game
-    loaded_game_state = save_manager.load_game(
+    loaded_game_state, _ = save_manager.load_game(
         slot_number=1,
         event_bus=game_state_with_items.event_bus,
         data_loader=game_state_with_items.data_loader,
@@ -134,7 +134,7 @@ def test_items_persist_across_multiple_save_load_cycles(save_manager, game_state
     save_manager.save_game(slot_number=2, game_state=game_state_with_items)
 
     # Load and verify
-    loaded_gs = save_manager.load_game(
+    loaded_gs, _ = save_manager.load_game(
         slot_number=2,
         event_bus=game_state_with_items.event_bus,
         data_loader=game_state_with_items.data_loader,
@@ -147,7 +147,7 @@ def test_items_persist_across_multiple_save_load_cycles(save_manager, game_state
     save_manager.save_game(slot_number=2, game_state=loaded_gs)
 
     # Load and verify
-    loaded_gs2 = save_manager.load_game(
+    loaded_gs2, _ = save_manager.load_game(
         slot_number=2,
         event_bus=game_state_with_items.event_bus,
         data_loader=game_state_with_items.data_loader,
@@ -160,7 +160,7 @@ def test_items_persist_across_multiple_save_load_cycles(save_manager, game_state
     save_manager.save_game(slot_number=2, game_state=loaded_gs2)
 
     # Final load and verify - room should be completely empty
-    final_gs = save_manager.load_game(
+    final_gs, _ = save_manager.load_game(
         slot_number=2,
         event_bus=game_state_with_items.event_bus,
         data_loader=game_state_with_items.data_loader,
@@ -187,7 +187,7 @@ def test_searched_flag_and_items_both_persist(save_manager, game_state_with_item
     save_manager.save_game(slot_number=3, game_state=game_state_with_items)
 
     # Load
-    loaded_gs = save_manager.load_game(
+    loaded_gs, _ = save_manager.load_game(
         slot_number=3,
         event_bus=game_state_with_items.event_bus,
         data_loader=game_state_with_items.data_loader,
