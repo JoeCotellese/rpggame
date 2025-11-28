@@ -10,7 +10,7 @@ from dnd_engine.core.campaign_progress import CampaignProgress, CampaignProgress
 from dnd_engine.core.character import Character
 from dnd_engine.core.combat import AttackResult, CombatEngine
 from dnd_engine.core.creature import Creature
-from dnd_engine.core.dice import DiceRoller
+from dnd_engine.core.dice import DiceRoller, format_dice_with_modifier
 from dnd_engine.core.party import Party
 from dnd_engine.core.npc_manager import NPCManager
 from dnd_engine.core.quest import QuestManager
@@ -20,6 +20,7 @@ from dnd_engine.systems.action_economy import ActionType
 from dnd_engine.systems.ai import EnemyAI
 from dnd_engine.systems.condition_manager import ConditionManager
 from dnd_engine.systems.initiative import InitiativeTracker
+from dnd_engine.systems.inventory import EquipmentSlot
 from dnd_engine.systems.time_manager import ActiveEffect, EffectType, TimeManager
 from dnd_engine.utils.events import Event, EventBus, EventType
 
@@ -180,6 +181,33 @@ class CombatSpellResult:
 
     # Resources consumed (for middleware auto-refund tracking)
     resources_consumed: list[tuple[str, int]] = field(default_factory=list)
+
+
+@dataclass
+class PlayerAttackResult:
+    """
+    Result of a player executing an attack with their equipped weapon.
+
+    Contains all information needed for UI display without requiring
+    the CLI to perform any game logic calculations.
+    """
+    success: bool
+    attack_result: AttackResult
+    attacker_name: str
+    target_name: str
+    weapon_name: str  # "unarmed strike" if no weapon equipped
+
+    # Concentration break info (if target was concentrating)
+    concentration_broken: dict[str, Any] | None = None
+
+    # Target death
+    target_killed: bool = False
+
+    # Context for LLM narrative enhancement
+    narrative_context: dict[str, Any] = field(default_factory=dict)
+
+    # Error handling
+    error: str | None = None
 
 
 class EnemyTurnAction(Enum):
@@ -1858,6 +1886,96 @@ class GameState:
         # Attach consumed resources for middleware auto-refund tracking
         result.resources_consumed = resources_consumed
         return result
+
+    def execute_player_attack(
+        self,
+        attacker: Character,
+        target: Creature
+    ) -> "PlayerAttackResult":
+        """
+        Execute a player's attack with their equipped weapon.
+
+        Handles the complete flow of a player attack:
+        1. Gets equipped weapon data and properties
+        2. Calculates attack and damage bonuses
+        3. Resolves the attack via combat engine
+        4. Checks target concentration if applicable
+        5. Returns comprehensive result for UI display
+
+        Args:
+            attacker: Character making the attack
+            target: Target creature
+
+        Returns:
+            PlayerAttackResult with all information needed for UI display.
+        """
+        # Get equipped weapon
+        equipped_weapon = attacker.inventory.get_equipped_item(EquipmentSlot.WEAPON)
+
+        # Load item data for weapon lookup
+        items_data = self.data_loader.load_items()
+
+        # Calculate attack/damage bonuses and get weapon info
+        if equipped_weapon:
+            attack_bonus = attacker.get_attack_bonus(equipped_weapon, items_data)
+            damage_bonus = attacker.get_damage_bonus(equipped_weapon, items_data)
+            weapon_data = items_data.get("weapons", {}).get(equipped_weapon, {})
+            damage_dice = weapon_data.get("damage", "1d8")
+            damage_dice = format_dice_with_modifier(damage_dice, damage_bonus)
+            weapon_name = weapon_data.get("name", equipped_weapon)
+        else:
+            # Fallback to unarmed strike
+            attack_bonus = attacker.melee_attack_bonus
+            damage_bonus = attacker.melee_damage_bonus
+            damage_dice = format_dice_with_modifier("1d8", damage_bonus)
+            weapon_name = "unarmed strike"
+
+        # Resolve attack via combat engine
+        attack_result = self.combat_engine.resolve_attack(
+            attacker=attacker,
+            defender=target,
+            attack_bonus=attack_bonus,
+            damage_dice=damage_dice,
+            apply_damage=True,
+            game_state=self
+        )
+
+        # Check concentration if target was hit and took damage
+        concentration_broken = None
+        if attack_result.hit and attack_result.damage > 0 and isinstance(target, Character):
+            conc_result = self.check_concentration_from_damage(
+                target.name,
+                attack_result.damage
+            )
+            if conc_result["concentration_broken"]:
+                concentration_broken = conc_result
+
+        # Build narrative context for LLM enhancement
+        narrative_context = {
+            "attacker_name": attacker.name,
+            "target_name": target.name,
+            "weapon_name": weapon_name,
+            "hit": attack_result.hit,
+            "critical": attack_result.critical_hit,
+            "damage": attack_result.damage,
+            "target_hp_before": (
+                target.current_hp + attack_result.damage if attack_result.hit
+                else target.current_hp
+            ),
+            "target_hp_after": target.current_hp,
+            "target_killed": not target.is_alive
+        }
+
+        return PlayerAttackResult(
+            success=True,
+            attack_result=attack_result,
+            attacker_name=attacker.name,
+            target_name=target.name,
+            weapon_name=weapon_name,
+            concentration_broken=concentration_broken,
+            target_killed=not target.is_alive,
+            narrative_context=narrative_context
+        )
 
     def _resolve_combat_attack_spell(
         self,
