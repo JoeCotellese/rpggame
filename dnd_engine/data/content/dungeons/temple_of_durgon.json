@@ -1,0 +1,452 @@
+{
+  "id": "temple_of_durgon",
+  "name": "The Unquiet Dead: Temple of Durgon",
+  "campaign_id": "the_unquiet_dead",
+  "description": "An abandoned temple in the swamps outside of town, sealed away centuries ago by the cleric Davos. The cult leader has fled here to complete the ritual to resurrect the devil Durgon using Davos's stolen skull.",
+  "start_room": "temple_of_durgon.entrance_hall",
+  "level_range": "2-3",
+  "estimated_playtime": "60-90 minutes",
+  "focus": "combat, exploration, final boss",
+  "notes": "Final part of The Unquiet Dead campaign. Features the resurrection ritual and confrontation with Durgon. Pitch black throughout - players need light sources or darkvision. Silvered weapons found in reliquaries are effective against Durgon.",
+  "rooms": {
+    "temple_of_durgon.entrance_hall": {
+      "id": "temple_of_durgon.entrance_hall",
+      "location_type": "dungeon",
+      "parent": "temple_of_durgon",
+      "name": "Entrance Hall",
+      "description": "Massive stone doors hang partially open, revealing a grand entrance hall choked with centuries of decay. Cobwebs hang from the vaulted ceiling like tattered curtains, and the air is thick with moisture from the surrounding swamp. The stone floor is slick with moss and condensation. Faded murals on the walls depict angelic figures locked in combat with horned devils.",
+      "lighting": "dark",
+      "hidden_features": [
+        {
+          "type": "passive_perception",
+          "dc": 12,
+          "on_success": "Fresh footprints in the moss lead deeper into the temple - the cultists passed through here recently.",
+          "on_failure": null,
+          "trigger": "on_enter",
+          "once_per_room": true
+        }
+      ],
+      "exits": {
+        "south": {
+          "destination": "cult_hideout.dark_altar",
+          "label": "Back to Cult Hideout",
+          "locked": true,
+          "unlock_methods": [
+            {
+              "skill": "athletics",
+              "dc": 12,
+              "description": "force open the heavy stone door"
+            }
+          ]
+        },
+        "north": "temple_of_durgon.northern_chamber",
+        "east": "temple_of_durgon.southern_chamber"
+      },
+      "enemies": [],
+      "items": [],
+      "searched": false,
+      "searchable": false
+    },
+    "temple_of_durgon.northern_chamber": {
+      "id": "temple_of_durgon.northern_chamber",
+      "location_type": "dungeon",
+      "parent": "temple_of_durgon",
+      "name": "Northern Chamber",
+      "description": "This circular chamber features elaborate murals depicting robed clerics battling shadowy creatures. The paint has faded but the artistry remains impressive. Three passages lead away from this room - to the west, north, and east. The northern passage shows signs of recent use.",
+      "lighting": "dark",
+      "examinable_objects": [
+        {
+          "id": "northern_murals",
+          "name": "murals",
+          "description": "Faded murals showing robed clerics in battle against dark creatures.",
+          "examine_checks": [
+            {
+              "skill": "religion",
+              "dc": 12,
+              "on_success": "The murals depict the Order of the Silver Dawn, holy warriors who sealed Durgon away centuries ago. The central figure appears to be Davos himself, wielding a silver mace against a bearded devil.",
+              "on_failure": "The murals show some kind of holy order fighting against devils, but the specific details are unclear."
+            }
+          ]
+        }
+      ],
+      "exits": {
+        "south": "temple_of_durgon.entrance_hall",
+        "west": "temple_of_durgon.chamber_of_warrior",
+        "north": "temple_of_durgon.chamber_of_thief",
+        "east": "temple_of_durgon.chamber_of_cleric"
+      },
+      "enemies": [],
+      "items": [],
+      "searched": false,
+      "searchable": false
+    },
+    "temple_of_durgon.chamber_of_warrior": {
+      "id": "temple_of_durgon.chamber_of_warrior",
+      "location_type": "dungeon",
+      "parent": "temple_of_durgon",
+      "name": "Chamber of the Warrior",
+      "description": "A suit of ornate plate armor stands on a pedestal in the center of this chamber, posed as if ready for battle. Ancient weapon racks line the walls, though most have long since rotted away. As you enter, the armor begins to move, animated by ancient magic to defend this sacred place.",
+      "lighting": "dark",
+      "exits": {
+        "east": "temple_of_durgon.northern_chamber",
+        "north": "temple_of_durgon.reliquary_of_warrior"
+      },
+      "enemies": [
+        "animated_armor"
+      ],
+      "items": [],
+      "searched": false,
+      "searchable": false
+    },
+    "temple_of_durgon.reliquary_of_warrior": {
+      "id": "temple_of_durgon.reliquary_of_warrior",
+      "location_type": "dungeon",
+      "parent": "temple_of_durgon",
+      "name": "Reliquary of the Warrior",
+      "description": "This small chamber served as a shrine to martial prowess. A stone altar bears the faded symbol of a crossed sword and shield. Behind the altar, a silver longsword rests in a crystal case, untouched by time. The weapon gleams with an inner light.",
+      "lighting": "dark",
+      "exits": {
+        "south": "temple_of_durgon.chamber_of_warrior"
+      },
+      "enemies": [],
+      "items": [
+        {
+          "type": "item",
+          "id": "silvered_longsword"
+        }
+      ],
+      "searched": false,
+      "searchable": true
+    },
+    "temple_of_durgon.chamber_of_thief": {
+      "id": "temple_of_durgon.chamber_of_thief",
+      "location_type": "dungeon",
+      "parent": "temple_of_durgon",
+      "name": "Chamber of the Thief",
+      "description": "Shadow seems to cling to the corners of this chamber despite any light source. The walls are carved with intricate patterns that seem to shift when viewed from the corner of your eye. A hooded figure emerges from the darkness, blade drawn - a guardian spirit taking the form of a master spy.",
+      "lighting": "dark",
+      "exits": {
+        "south": "temple_of_durgon.northern_chamber",
+        "north": "temple_of_durgon.reliquary_of_thief"
+      },
+      "enemies": [
+        "spy"
+      ],
+      "items": [],
+      "searched": false,
+      "searchable": false
+    },
+    "temple_of_durgon.reliquary_of_thief": {
+      "id": "temple_of_durgon.reliquary_of_thief",
+      "location_type": "dungeon",
+      "parent": "temple_of_durgon",
+      "name": "Reliquary of the Thief",
+      "description": "This chamber is dedicated to cunning and stealth. Faded tapestries depict hooded figures moving through shadows. On a velvet cushion atop a marble pedestal rests a silver dagger, its blade etched with prayers against evil.",
+      "lighting": "dark",
+      "exits": {
+        "south": "temple_of_durgon.chamber_of_thief"
+      },
+      "enemies": [],
+      "items": [
+        {
+          "type": "item",
+          "id": "silvered_dagger"
+        }
+      ],
+      "searched": false,
+      "searchable": true
+    },
+    "temple_of_durgon.southern_chamber": {
+      "id": "temple_of_durgon.southern_chamber",
+      "location_type": "dungeon",
+      "parent": "temple_of_durgon",
+      "name": "Southern Chamber",
+      "description": "This chamber mirrors the northern one, with murals depicting clerics summoning celestial beings to aid in their battle against darkness. A sense of faded holiness lingers here. Passages lead west and north.",
+      "lighting": "dark",
+      "examinable_objects": [
+        {
+          "id": "southern_murals",
+          "name": "murals",
+          "description": "Murals showing clerics summoning angels and celestial beings.",
+          "examine_checks": [
+            {
+              "skill": "religion",
+              "dc": 12,
+              "on_success": "These murals show the final battle against Durgon. The clerics called upon celestial aid to bind the devil beneath this very temple. The binding required three sacred weapons - a sword, a dagger, and a mace - all coated in silver.",
+              "on_failure": "The murals depict some kind of summoning ritual, but the details are unclear."
+            }
+          ]
+        }
+      ],
+      "exits": {
+        "west": "temple_of_durgon.entrance_hall",
+        "north": "temple_of_durgon.chamber_of_cleric"
+      },
+      "enemies": [],
+      "items": [],
+      "searched": false,
+      "searchable": false
+    },
+    "temple_of_durgon.chamber_of_cleric": {
+      "id": "temple_of_durgon.chamber_of_cleric",
+      "location_type": "dungeon",
+      "parent": "temple_of_durgon",
+      "name": "Chamber of the Cleric",
+      "description": "An altar to forgotten gods dominates this chamber. Candles have been recently lit - the cult has been here. A robed acolyte leads a prayer to dark powers, surrounded by six spectral cultists whose forms flicker like dying flames. They turn as you enter, eyes blazing with unholy light.",
+      "lighting": "dim",
+      "exits": {
+        "west": "temple_of_durgon.northern_chamber",
+        "south": "temple_of_durgon.southern_chamber",
+        "north": "temple_of_durgon.reliquary_of_cleric"
+      },
+      "enemies": [
+        "acolyte",
+        "cultist",
+        "cultist",
+        "cultist",
+        "cultist",
+        "cultist",
+        "cultist"
+      ],
+      "items": [
+        {
+          "type": "currency",
+          "gold": 0,
+          "silver": 25,
+          "copper": 0
+        }
+      ],
+      "searched": false,
+      "searchable": true,
+      "notes": "The six cultists are 'spirit cultists' with only 1 HP each per the module."
+    },
+    "temple_of_durgon.reliquary_of_cleric": {
+      "id": "temple_of_durgon.reliquary_of_cleric",
+      "location_type": "dungeon",
+      "parent": "temple_of_durgon",
+      "name": "Reliquary of the Cleric",
+      "description": "This sacred chamber holds the weapons of faith. A silver mace rests upon the altar, its head shaped like a clenched fist. Holy symbols of long-forgotten gods are carved into every surface. A passage to the north leads deeper into the temple.",
+      "lighting": "dark",
+      "exits": {
+        "south": "temple_of_durgon.chamber_of_cleric",
+        "north": "temple_of_durgon.chamber_of_mage"
+      },
+      "enemies": [],
+      "items": [
+        {
+          "type": "item",
+          "id": "silvered_mace"
+        }
+      ],
+      "searched": false,
+      "searchable": true
+    },
+    "temple_of_durgon.chamber_of_mage": {
+      "id": "temple_of_durgon.chamber_of_mage",
+      "location_type": "dungeon",
+      "parent": "temple_of_durgon",
+      "name": "Chamber of the Mage",
+      "description": "Arcane symbols cover the walls and floor of this chamber, forming complex magical diagrams. Bookshelves line the walls, though most volumes have crumbled to dust. A haggard mage in tattered robes stands among the ruins, clearly exhausted from casting powerful spells. He raises his hands defensively as you approach.",
+      "lighting": "dark",
+      "exits": {
+        "south": "temple_of_durgon.reliquary_of_cleric",
+        "north": "temple_of_durgon.reliquary_of_mage"
+      },
+      "enemies": [
+        "mage_weakened"
+      ],
+      "items": [
+        {
+          "type": "currency",
+          "gold": 15,
+          "silver": 0,
+          "copper": 0
+        }
+      ],
+      "searched": false,
+      "searchable": true
+    },
+    "temple_of_durgon.reliquary_of_mage": {
+      "id": "temple_of_durgon.reliquary_of_mage",
+      "location_type": "dungeon",
+      "parent": "temple_of_durgon",
+      "name": "Reliquary of the Mage",
+      "description": "This chamber once held arcane treasures, but it has been thoroughly ransacked. Broken glass and scattered papers cover the floor. A hidden door in the north wall stands slightly ajar - the cultists came through here. Shards of glass from broken vials crunch underfoot.",
+      "lighting": "dark",
+      "hidden_features": [
+        {
+          "type": "passive_perception",
+          "dc": 12,
+          "on_success": "The glass shards on the floor will make noise if walked upon carelessly. You could try to move quietly (DC 12 Stealth) to avoid alerting anyone in the next room.",
+          "on_failure": null,
+          "trigger": "on_enter",
+          "once_per_room": true
+        }
+      ],
+      "exits": {
+        "south": "temple_of_durgon.chamber_of_mage",
+        "north": {
+          "destination": "temple_of_durgon.antechamber",
+          "hidden": true,
+          "label": "Hidden Door"
+        }
+      },
+      "enemies": [],
+      "items": [],
+      "searched": false,
+      "searchable": false,
+      "notes": "Moving through this room without DC 12 Stealth check alerts Room 12 (antechamber)."
+    },
+    "temple_of_durgon.antechamber": {
+      "id": "temple_of_durgon.antechamber",
+      "location_type": "dungeon",
+      "parent": "temple_of_durgon",
+      "name": "Antechamber",
+      "description": "This narrow passage serves as the final approach to the inner sanctum. Torches in iron sconces have been recently lit. A single cultist stands guard, alert for any intruders. Beyond the northern door, you can hear chanting in Infernal.",
+      "lighting": "dim",
+      "exits": {
+        "south": "temple_of_durgon.reliquary_of_mage",
+        "north": "temple_of_durgon.hidden_shrine"
+      },
+      "enemies": [
+        "cultist"
+      ],
+      "items": [],
+      "searched": false,
+      "searchable": false
+    },
+    "temple_of_durgon.hidden_shrine": {
+      "id": "temple_of_durgon.hidden_shrine",
+      "location_type": "dungeon",
+      "parent": "temple_of_durgon",
+      "name": "Hidden Shrine",
+      "description": "The cult leader stands before a blood-stained altar, the skull of Davos clutched in his hands. Two robed cultists flank him, chanting in Infernal. The air crackles with dark energy as the ritual nears completion. The cult leader turns, his eyes blazing with fanatical fervor. 'You're too late! The seal is breaking!'",
+      "lighting": "dim",
+      "examinable_objects": [
+        {
+          "id": "ritual_altar",
+          "name": "blood-stained altar",
+          "description": "An obsidian altar covered in infernal inscriptions and fresh blood.",
+          "examine_checks": [
+            {
+              "skill": "arcana",
+              "dc": 14,
+              "on_success": "The ritual is nearly complete. The skull of Davos is the final component needed to break the seal on Durgon's prison below. Destroying the skull or killing the cult leader would stop the ritual.",
+              "on_failure": "Dark magic is clearly at work here, but the specifics elude you."
+            }
+          ]
+        }
+      ],
+      "exits": {
+        "south": "temple_of_durgon.antechamber",
+        "down": {
+          "destination": "temple_of_durgon.main_chamber",
+          "hidden": true,
+          "label": "Descending Stairs",
+          "examine_checks": [
+            {
+              "skill": "investigation",
+              "dc": 12,
+              "action": "search the altar area",
+              "on_success": "Behind the altar, you find a hidden trapdoor leading down into darkness. Ancient stairs descend into the depths.",
+              "on_failure": "Nothing unusual catches your eye."
+            }
+          ]
+        }
+      },
+      "enemies": [
+        "cult_fanatic",
+        "cultist",
+        "cultist"
+      ],
+      "items": [
+        {
+          "type": "item",
+          "id": "profane_skull"
+        },
+        {
+          "type": "currency",
+          "gold": 42,
+          "silver": 0,
+          "copper": 0
+        }
+      ],
+      "searched": false,
+      "searchable": true,
+      "boss_room": true
+    },
+    "temple_of_durgon.main_chamber": {
+      "id": "temple_of_durgon.main_chamber",
+      "location_type": "dungeon",
+      "parent": "temple_of_durgon",
+      "name": "Main Chamber",
+      "description": "The stairs descend into a vast underground chamber. The walls glow with infernal runes, and the temperature rises noticeably. In the center of the chamber, a pillar of hellfire erupts from a broken seal in the floor. Within the flames, a bearded devil takes shape - Durgon himself, finally freed from centuries of imprisonment. The devil appears disoriented, still reforming after so long in magical stasis.",
+      "lighting": "bright",
+      "hidden_features": [
+        {
+          "type": "passive_perception",
+          "dc": 10,
+          "on_success": "Durgon seems disoriented from his long imprisonment. He might be vulnerable to negotiation or intimidation, or you could press the attack while he's still recovering.",
+          "on_failure": null,
+          "trigger": "on_enter",
+          "once_per_room": true
+        }
+      ],
+      "examinable_objects": [
+        {
+          "id": "broken_seal",
+          "name": "broken seal",
+          "description": "The magical seal that imprisoned Durgon for centuries, now shattered.",
+          "examine_checks": [
+            {
+              "skill": "arcana",
+              "dc": 16,
+              "on_success": "The seal was created by Davos using the three silvered weapons as anchors. Though Durgon is free, he is weakened and disoriented. His first round of attacks will be at disadvantage.",
+              "on_failure": "The seal's magic is beyond your understanding."
+            }
+          ]
+        }
+      ],
+      "exits": {
+        "up": "temple_of_durgon.hidden_shrine",
+        "east": "temple_of_durgon.treasure_chamber"
+      },
+      "enemies": [
+        "bearded_devil"
+      ],
+      "items": [],
+      "searched": false,
+      "searchable": false,
+      "boss_room": true,
+      "notes": "Durgon (bearded devil) attacks at disadvantage on his first round due to disorientation. DC 18 Charisma check can negotiate or intimidate to avoid combat."
+    },
+    "temple_of_durgon.treasure_chamber": {
+      "id": "temple_of_durgon.treasure_chamber",
+      "location_type": "dungeon",
+      "parent": "temple_of_durgon",
+      "name": "Treasure Chamber",
+      "description": "This chamber served as the temple's vault. Ancient treasure sits in piles - offerings to the gods who once protected this place. Among the valuables, you spot a strange iron rod and a collection of silver coins. A holy symbol hangs on the wall, still radiating faint divine energy after all these centuries.",
+      "lighting": "dark",
+      "exits": {
+        "west": "temple_of_durgon.main_chamber"
+      },
+      "enemies": [],
+      "items": [
+        {
+          "type": "item",
+          "id": "immovable_rod"
+        },
+        {
+          "type": "currency",
+          "gold": 50,
+          "silver": 200,
+          "copper": 0
+        }
+      ],
+      "searched": false,
+      "searchable": true,
+      "safe_rest": true,
+      "notes": "Holy symbol worth 50gp. Campaign completion bonus of 250gp awarded upon returning to town."
+    }
+  }
+}

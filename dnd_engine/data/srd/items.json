@@ -179,6 +179,44 @@
       "rarity": "uncommon",
       "value": 150,
       "description": "You have a +1 bonus to attack and damage rolls made with this magic weapon. This weapon was found in the coffin of Davos the cleric, and still carries a faint divine aura."
+    },
+    "silvered_longsword": {
+      "name": "Silvered Longsword",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "weapon",
+      "weapon_type": "martial",
+      "category": "melee",
+      "damage": "1d8",
+      "damage_type": "slashing",
+      "properties": ["versatile", "silvered"],
+      "versatile_damage": "1d10",
+      "value": 115,
+      "description": "This longsword has been coated with silver, making it effective against creatures with resistance to non-silvered weapons such as devils and werewolves."
+    },
+    "silvered_dagger": {
+      "name": "Silvered Dagger",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "weapon",
+      "weapon_type": "simple",
+      "category": "melee",
+      "damage": "1d4",
+      "damage_type": "piercing",
+      "properties": ["finesse", "light", "thrown", "silvered"],
+      "range": "20/60",
+      "value": 102,
+      "description": "This dagger has been coated with silver, making it effective against creatures with resistance to non-silvered weapons such as devils and werewolves."
+    },
+    "silvered_mace": {
+      "name": "Silvered Mace",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "weapon",
+      "weapon_type": "simple",
+      "category": "melee",
+      "damage": "1d6",
+      "damage_type": "bludgeoning",
+      "properties": ["silvered"],
+      "value": 105,
+      "description": "This mace has been coated with silver, making it effective against creatures with resistance to non-silvered weapons such as devils and werewolves."
     }
   },
   "armor": {
@@ -528,6 +566,38 @@
       "description": "A rough map found among the belongings of the cult's second-in-command. It shows a route to an abandoned temple outside of town, along with notes about 'the final ritual' and 'the bones of Durgon sealed beneath.' A letter accompanying it requests the acolyte join the cult leader at the temple the following night. The symbol of Durgon - a horned skull wreathed in flames - is stamped in red wax at the bottom.",
       "value": 0,
       "notes": "This quest item unlocks the Temple of Durgon dungeon location."
+    }
+  },
+  "magical_items": {
+    "profane_skull": {
+      "name": "Profane Skull",
+      "source": "The Unquiet Dead (Adventures Await Studios, OGL)",
+      "type": "wondrous_item",
+      "rarity": "uncommon",
+      "requires_attunement": true,
+      "description": "This bone-white humanoid skull is inscribed with infernal runes that glow faintly red in darkness. The skull radiates an aura of malevolence. While attuned to this item, you can use a bonus action to sacrifice one of your Hit Dice, taking necrotic damage equal to the roll, to recover one expended spell slot of 3rd level or lower. Once you use this property, you can't use it again until you finish a long rest. The skull can be purified by soaking it in holy water for 24 hours, which destroys its magical properties.",
+      "value": 250,
+      "weight": 2
+    },
+    "immovable_rod": {
+      "name": "Immovable Rod",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "wondrous_item",
+      "rarity": "uncommon",
+      "requires_attunement": false,
+      "description": "This flat iron rod has a button on one end. You can use an action to press the button, which causes the rod to become magically fixed in place. Until you or another creature uses an action to push the button again, the rod doesn't move, even if it is defying gravity. The rod can hold up to 8,000 pounds of weight. More weight causes the rod to deactivate and fall. A creature can use an action to make a DC 30 Strength check, moving the fixed rod up to 10 feet on a success.",
+      "value": 500,
+      "weight": 2
+    },
+    "jar_of_ointment": {
+      "name": "Jar of Ointment",
+      "source": "The Unquiet Dead (Adventures Await Studios, OGL)",
+      "type": "wondrous_item",
+      "rarity": "common",
+      "requires_attunement": false,
+      "description": "This small clay jar contains a pungent healing salve. The jar has 5 uses. As an action, you can apply the ointment to a creature within 5 feet, restoring 2d8+2 hit points. The jar regains 1d4+1 uses daily at dawn.",
+      "value": 100,
+      "weight": 0.5
     }
   }
 }
