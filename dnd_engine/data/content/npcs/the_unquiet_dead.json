@@ -160,6 +160,58 @@
         "night": "arden.guard_barracks"
       },
       "services": null
+    },
+    "lord_davos": {
+      "id": "lord_davos",
+      "name": "Lord Davos",
+      "display_name": "Lord Aldric Davos",
+      "home_location": "arden.manor_interior",
+      "current_location": "arden.manor_interior",
+      "can_move": false,
+      "personality": {
+        "traits": ["elderly", "dignified", "melancholic", "grateful"],
+        "speech_style": "formal and aristocratic, speaks slowly and deliberately, voice weakened by age",
+        "attitude_default": "reserved",
+        "suspicion_of_strangers": "mild"
+      },
+      "knowledge": {
+        "general": [
+          "Last living heir of the Davos bloodline",
+          "Too old and frail to investigate the crypt himself",
+          "Deeply troubled by the disturbances at the family crypt",
+          "Has offered a reward for those who can put his ancestors to rest"
+        ],
+        "quest_hooks": ["investigate_crypt"],
+        "local_lore": [
+          "His ancestor, the original Lord Davos, was a mighty cleric who defeated the devil Durgon",
+          "The family has protected Arden for generations",
+          "The skull of his ancestor holds great significance to the family",
+          "Possesses a jar of blessed ointment passed down through generations"
+        ]
+      },
+      "shop": {
+        "enabled": false,
+        "shop_type": "none",
+        "inventory": [],
+        "buy_rate": 0.0
+      },
+      "dialogue": {
+        "greeting": "Ah... visitors. Forgive me if I do not rise. These old bones do not cooperate as they once did. What brings you to Davos Manor?",
+        "farewell": "Go with the blessing of House Davos. May you fare better than my ancestors.",
+        "hostile_greeting": "I have no quarrel with you. Please... leave an old man in peace."
+      },
+      "reputation_modifiers": {
+        "friendly_threshold": 5,
+        "hostile_threshold": -15
+      },
+      "schedule": null,
+      "services": null,
+      "quest_rewards": {
+        "skull_of_davos": {
+          "dialogue": "My ancestor's skull... you found it. You have done House Davos a great service. Please, take this ointment - it has been in my family for generations, blessed by my ancestor himself. Use it well.",
+          "reward_item": "jar_of_ointment"
+        }
+      }
     }
   }
 }

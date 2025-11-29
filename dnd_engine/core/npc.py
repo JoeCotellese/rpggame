@@ -247,6 +247,13 @@ class NPC:
                 "- Let players infer it's an opportunity to help - don't label it a 'quest'",
                 "- Use the 'hint' field for how YOUR CHARACTER would describe the situation",
                 "- Keep responses conversational and in-character",
+                "",
+                "QUEST REWARDS AND ITEM EXCHANGE:",
+                "- Call get_pending_rewards to check if player has quests to turn in to you",
+                "- When player reports completing a task, call turn_in_quest to give them gold",
+                "- When player offers to give/return an item, call receive_item_from_player",
+                "- If receive_item_from_player returns bonus_reward=true, describe giving them the reward",
+                "- React naturally to receiving items - express gratitude for important returns",
             ]
         )
 

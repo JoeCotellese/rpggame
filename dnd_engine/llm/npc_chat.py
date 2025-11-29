@@ -99,6 +99,57 @@ NPC_TOOLS = [
             "parameters": {"type": "object", "properties": {}},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "receive_item_from_player",
+            "description": (
+                "Accept an item from the player. Use when player offers to give "
+                "or return an item. Check if this triggers a quest bonus reward."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "item_id": {
+                        "type": "string",
+                        "description": "ID of the item being offered",
+                    },
+                },
+                "required": ["item_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "turn_in_quest",
+            "description": (
+                "Complete a quest turn-in and give the player their gold reward. "
+                "Use when the player reports completing a task you asked them to do."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "quest_id": {
+                        "type": "string",
+                        "description": "ID of the quest being turned in",
+                    },
+                },
+                "required": ["quest_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_pending_rewards",
+            "description": (
+                "Check if the player has any completed quests they can turn in "
+                "to this NPC for rewards."
+            ),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
 ]
 
 
@@ -150,6 +201,9 @@ class NPCChatManager:
             "get_player_gold": self._handle_get_player_gold,
             "give_item": self._handle_give_item,
             "check_reputation": self._handle_check_reputation,
+            "receive_item_from_player": self._handle_receive_item_from_player,
+            "turn_in_quest": self._handle_turn_in_quest,
+            "get_pending_rewards": self._handle_get_pending_rewards,
         }
 
     def _start_event_loop(self) -> None:
@@ -532,6 +586,120 @@ class NPCChatManager:
         return {
             "reputation": npc.player_reputation,
             "disposition": disposition.value,
+        }
+
+    def _handle_receive_item_from_player(self, item_id: str) -> dict[str, Any]:
+        """Accept an item from the player, checking for bonus rewards."""
+        if not self._current_conversation:
+            return {"success": False, "error": "No active conversation"}
+
+        npc = self._current_conversation.npc
+        quest_manager = self.game_state.quest_manager
+
+        # Check if any character in party has this item
+        item_holder = None
+        for char in self.game_state.party.characters:
+            if char.inventory.has_item(item_id):
+                item_holder = char
+                break
+
+        if not item_holder:
+            return {
+                "success": False,
+                "error": f"Party does not have item: {item_id}",
+            }
+
+        # Check if this triggers a bonus reward
+        quest, bonus = quest_manager.check_bonus_reward(npc.id, item_id)
+
+        if quest and bonus:
+            # Remove item from player inventory
+            item_holder.inventory.remove_item(item_id)
+
+            # Give reward item to player
+            reward_recipient = self.game_state.party.characters[0]
+
+            print_status_message(
+                f"🎁 Gave {item_id} to {npc.display_name}", "success"
+            )
+            print_status_message(
+                f"🎁 Received: {bonus.reward_item}", "success"
+            )
+
+            return {
+                "success": True,
+                "item_received": item_id,
+                "bonus_reward": True,
+                "reward_item": bonus.reward_item,
+                "reward_recipient": reward_recipient.name,
+                "npc_dialogue_hint": bonus.description,
+            }
+
+        # NPC accepts the item but no special reward
+        item_holder.inventory.remove_item(item_id)
+        print_status_message(
+            f"🎁 Gave {item_id} to {npc.display_name}", "success"
+        )
+
+        return {
+            "success": True,
+            "item_received": item_id,
+            "bonus_reward": False,
+        }
+
+    def _handle_turn_in_quest(self, quest_id: str) -> dict[str, Any]:
+        """Turn in a completed quest and claim the gold reward."""
+        if not self._current_conversation:
+            return {"success": False, "error": "No active conversation"}
+
+        npc = self._current_conversation.npc
+        quest_manager = self.game_state.quest_manager
+
+        # Attempt to claim reward
+        result = quest_manager.claim_quest_reward(quest_id, npc.id)
+
+        if result["success"]:
+            # Award gold to party
+            reward_gold = result["reward_gold"]
+            if reward_gold > 0 and self.game_state.party.characters:
+                # Add gold to first character (party leader)
+                leader = self.game_state.party.characters[0]
+                leader.inventory.gold += reward_gold
+
+                print_status_message(
+                    f"💰 Received {reward_gold} gold for completing "
+                    f"'{result['quest_name']}'",
+                    "success",
+                )
+
+            return {
+                "success": True,
+                "quest_id": quest_id,
+                "quest_name": result["quest_name"],
+                "reward_gold": reward_gold,
+            }
+
+        return result
+
+    def _handle_get_pending_rewards(self) -> dict[str, Any]:
+        """Get quests that can be turned in to this NPC."""
+        if not self._current_conversation:
+            return {"pending_rewards": []}
+
+        npc = self._current_conversation.npc
+        quest_manager = self.game_state.quest_manager
+
+        pending = quest_manager.get_quests_awaiting_reward(npc.id)
+
+        return {
+            "pending_rewards": [
+                {
+                    "quest_id": q.id,
+                    "quest_name": q.name,
+                    "reward_gold": q.reward_gold,
+                }
+                for q in pending
+            ]
         }
 
     # === Fallback Methods ===

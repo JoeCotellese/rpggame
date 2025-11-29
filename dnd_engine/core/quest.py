@@ -15,6 +15,29 @@ class QuestState(Enum):
     AVAILABLE = "available"
     ACTIVE = "active"
     COMPLETED = "completed"
+    REWARDED = "rewarded"  # Quest completed AND reward claimed
+
+
+@dataclass
+class BonusReward:
+    """A bonus reward that can be claimed by returning an item to an NPC."""
+
+    condition: str  # e.g., "return_item"
+    item_id: str  # Item that must be given to NPC
+    turn_in_npc: str  # NPC who accepts the item
+    reward_item: str  # Item received as reward
+    description: str  # Human-readable description
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "BonusReward":
+        """Create a BonusReward from a dictionary."""
+        return cls(
+            condition=data.get("condition", "return_item"),
+            item_id=data["item_id"],
+            turn_in_npc=data["turn_in_npc"],
+            reward_item=data["reward_item"],
+            description=data.get("description", ""),
+        )
 
 
 @dataclass
@@ -34,6 +57,10 @@ class Quest:
     target_dungeon: str | None = None
     completion_criteria: dict[str, Any] = field(default_factory=dict)
     unlocks_quests: list[str] = field(default_factory=list)
+    quest_giver: str | None = None  # NPC who gives quest and receives turn-in
+    reward_gold: int = 0  # Gold reward for completing quest
+    bonus_rewards: list[BonusReward] = field(default_factory=list)
+    final_quest: bool = False
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Quest":
@@ -46,6 +73,9 @@ class Quest:
         Returns:
             Quest instance
         """
+        bonus_rewards = [
+            BonusReward.from_dict(br) for br in data.get("bonus_rewards", [])
+        ]
         return cls(
             id=data["id"],
             name=data["name"],
@@ -54,7 +84,11 @@ class Quest:
             unlock_requirements=data.get("unlock_requirements"),
             target_dungeon=data.get("target_dungeon"),
             completion_criteria=data.get("completion_criteria", {}),
-            unlocks_quests=data.get("unlocks_quests", [])
+            unlocks_quests=data.get("unlocks_quests", []),
+            quest_giver=data.get("quest_giver"),
+            reward_gold=data.get("reward_gold", 0),
+            bonus_rewards=bonus_rewards,
+            final_quest=data.get("final_quest", False),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -72,7 +106,10 @@ class Quest:
             "unlock_requirements": self.unlock_requirements,
             "target_dungeon": self.target_dungeon,
             "completion_criteria": self.completion_criteria,
-            "unlocks_quests": self.unlocks_quests
+            "unlocks_quests": self.unlocks_quests,
+            "quest_giver": self.quest_giver,
+            "reward_gold": self.reward_gold,
+            "final_quest": self.final_quest,
         }
 
 
@@ -215,10 +252,11 @@ class QuestManager:
         if not requirements:
             return True
 
-        # Check quest_completed requirement
+        # Check quest_completed requirement (COMPLETED or REWARDED both count)
         if "quest_completed" in requirements:
             required_quest = requirements["quest_completed"]
-            if self._quest_states.get(required_quest) != QuestState.COMPLETED:
+            required_state = self._quest_states.get(required_quest)
+            if required_state not in (QuestState.COMPLETED, QuestState.REWARDED):
                 return False
 
         return True
@@ -251,7 +289,7 @@ class QuestManager:
 
     def get_completed_quests(self) -> list[Quest]:
         """
-        Get all quests in the completed state.
+        Get all quests in the completed state (not yet rewarded).
 
         Returns:
             List of completed Quest objects
@@ -261,6 +299,81 @@ class QuestManager:
             for qid, state in self._quest_states.items()
             if state == QuestState.COMPLETED
         ]
+
+    def get_quests_awaiting_reward(self, npc_id: str) -> list[Quest]:
+        """
+        Get completed quests that can be turned in to a specific NPC.
+
+        Args:
+            npc_id: ID of the NPC to check for turn-ins
+
+        Returns:
+            List of Quest objects that are completed and have this NPC as quest_giver
+        """
+        return [
+            self.quests[qid]
+            for qid, state in self._quest_states.items()
+            if state == QuestState.COMPLETED
+            and self.quests[qid].quest_giver == npc_id
+            and self.quests[qid].reward_gold > 0
+        ]
+
+    def claim_quest_reward(self, quest_id: str, npc_id: str) -> dict[str, Any]:
+        """
+        Claim the reward for a completed quest from the quest giver.
+
+        Args:
+            quest_id: ID of the quest to claim reward for
+            npc_id: ID of the NPC claiming from (must match quest_giver)
+
+        Returns:
+            Dictionary with success status and reward details
+        """
+        if quest_id not in self.quests:
+            return {"success": False, "error": "Unknown quest"}
+
+        quest = self.quests[quest_id]
+        current_state = self._quest_states[quest_id]
+
+        if current_state != QuestState.COMPLETED:
+            if current_state == QuestState.REWARDED:
+                return {"success": False, "error": "Reward already claimed"}
+            return {"success": False, "error": "Quest not completed"}
+
+        if quest.quest_giver != npc_id:
+            return {
+                "success": False,
+                "error": f"Wrong NPC - quest giver is {quest.quest_giver}",
+            }
+
+        # Mark as rewarded
+        self._quest_states[quest_id] = QuestState.REWARDED
+
+        return {
+            "success": True,
+            "quest_id": quest_id,
+            "quest_name": quest.name,
+            "reward_gold": quest.reward_gold,
+        }
+
+    def check_bonus_reward(
+        self, npc_id: str, item_id: str
+    ) -> tuple[Quest | None, BonusReward | None]:
+        """
+        Check if an NPC accepts an item for a bonus reward.
+
+        Args:
+            npc_id: ID of the NPC receiving the item
+            item_id: ID of the item being offered
+
+        Returns:
+            Tuple of (Quest, BonusReward) if valid, (None, None) otherwise
+        """
+        for quest in self.quests.values():
+            for bonus in quest.bonus_rewards:
+                if bonus.turn_in_npc == npc_id and bonus.item_id == item_id:
+                    return quest, bonus
+        return None, None
 
     def serialize_states(self) -> dict[str, str]:
         """

@@ -114,6 +114,9 @@ class DebugConsole:
             "help": self.cmd_help,
             "reset": self.cmd_reset,
             "disablellm": self.cmd_disable_llm,
+
+            # Quest Management
+            "quest": self.cmd_quest,
         }
 
         # God mode tracking (character name -> invulnerable)
@@ -1461,6 +1464,12 @@ class DebugConsole:
             "/help, /reset, /disablellm"
         )
 
+        # Quest Management
+        table.add_row(
+            "Quests",
+            "/quest"
+        )
+
         console.print(table)
         print_message("\nUse '/help <command>' for detailed help on a specific command")
 
@@ -1498,6 +1507,87 @@ class DebugConsole:
             print_status_message("LLM switched to debug mode (shows prompts)", "warning")
             print_message("LLM will now display prompts instead of calling the API")
             self._llm_debug_mode = True
+
+    # =====================================================================
+    # Quest Commands
+    # =====================================================================
+
+    def cmd_quest(self, args: list[str]) -> None:
+        """
+        Manage quest states for testing.
+
+        Usage:
+            /quest list - Show all quests and their states
+            /quest activate <quest_id> - Activate a quest
+            /quest complete <quest_id> - Complete a quest
+            /quest reward <quest_id> - Mark quest as rewarded
+        """
+        if not self.game_state.quest_manager:
+            print_error("No quest manager available (not in a campaign)")
+            return
+
+        qm = self.game_state.quest_manager
+
+        if not args:
+            print_message("Usage: /quest list|activate|complete|reward [quest_id]")
+            return
+
+        subcommand = args[0].lower()
+
+        if subcommand == "list":
+            table = Table(title="Quest States")
+            table.add_column("Quest ID")
+            table.add_column("Name")
+            table.add_column("State")
+            table.add_column("Quest Giver")
+            table.add_column("Reward")
+
+            for quest_id, quest in qm.quests.items():
+                state = qm.get_quest_state(quest_id)
+                table.add_row(
+                    quest_id,
+                    quest.name,
+                    state.value,
+                    quest.quest_giver or "—",
+                    f"{quest.reward_gold} gp" if quest.reward_gold else "—",
+                )
+            console.print(table)
+
+        elif subcommand == "activate":
+            if len(args) < 2:
+                print_error("Usage: /quest activate <quest_id>")
+                return
+            quest_id = args[1]
+            if qm.activate_quest(quest_id):
+                print_status_message(f"Quest '{quest_id}' activated", "success")
+            else:
+                print_error(f"Could not activate quest '{quest_id}'")
+
+        elif subcommand == "complete":
+            if len(args) < 2:
+                print_error("Usage: /quest complete <quest_id>")
+                return
+            quest_id = args[1]
+            unlocked = qm.complete_quest(quest_id)
+            print_status_message(f"Quest '{quest_id}' completed", "success")
+            if unlocked:
+                print_message(f"Unlocked quests: {', '.join(unlocked)}")
+
+        elif subcommand == "reward":
+            if len(args) < 2:
+                print_error("Usage: /quest reward <quest_id>")
+                return
+            quest_id = args[1]
+            if quest_id in qm.quests:
+                from dnd_engine.core.quest import QuestState
+
+                qm._quest_states[quest_id] = QuestState.REWARDED
+                print_status_message(f"Quest '{quest_id}' marked as rewarded", "success")
+            else:
+                print_error(f"Unknown quest: {quest_id}")
+
+        else:
+            print_error(f"Unknown subcommand: {subcommand}")
 
     # =====================================================================
     # Helper Methods

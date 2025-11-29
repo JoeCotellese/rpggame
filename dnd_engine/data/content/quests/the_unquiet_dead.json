@@ -14,6 +14,7 @@
         "dungeon_completed": "the_unquiet_dead_crypt"
       },
       "unlocks_quests": ["cult_conspiracy"],
+      "quest_giver": "father_aldric",
       "reward_gold": 50,
       "npc_hints": {
         "available": {
@@ -39,7 +40,8 @@
         "dungeon_completed": "cult_hideout"
       },
       "unlocks_quests": ["temple_assault"],
-      "reward_gold": 100,
+      "quest_giver": null,
+      "reward_gold": 0,
       "npc_hints": {
         "available": "That journal you found... it speaks of cultists hiding somewhere in the Warrens. Dark business, that. Be careful if you go looking.",
         "active": "Still hunting those cultists? Watch yourself in the Warrens - not everyone there is what they seem.",
@@ -61,7 +63,17 @@
       },
       "unlocks_quests": [],
       "final_quest": true,
-      "reward_gold": 200,
+      "quest_giver": "father_aldric",
+      "reward_gold": 250,
+      "bonus_rewards": [
+        {
+          "condition": "return_item",
+          "item_id": "skull_of_davos",
+          "turn_in_npc": "lord_davos",
+          "reward_item": "jar_of_ointment",
+          "description": "Return the skull of Davos to his family at the manor"
+        }
+      ],
       "npc_hints": {
         "available": "The Temple of Durgon... I'd hoped that place was just a legend. If the cult truly means to complete their ritual there, all of Arden is in danger.",
         "active": "The fate of us all rests on your shoulders now. May the Light guide you in that dark place.",
