@@ -1123,6 +1123,88 @@ class CLI:
             print_status_message("Cancelled.", "warning")
             return None
 
+    def _prompt_character_for_skill_check(
+        self,
+        action_desc: str,
+        skill: str,
+        dc: int
+    ) -> Character | None:
+        """
+        Prompt player to select a character for a skill check, sorted by modifier.
+
+        Characters are sorted by their skill modifier (highest first) to help
+        players make informed decisions.
+
+        Args:
+            action_desc: Description of the action (e.g., "examine the murals")
+            skill: The skill being used (e.g., "religion", "investigation")
+            dc: The difficulty class for the check
+
+        Returns:
+            Selected Character or None if cancelled
+        """
+        import questionary
+
+        # Load skills data
+        skills_data = self.game_state.data_loader.load_skills()
+
+        # Build header
+        header = f"Choose a character to {action_desc} ({skill.upper()} DC {dc}):"
+
+        # Build character list with skill modifiers
+        living_chars = [c for c in self.game_state.party.characters if c.is_alive]
+        char_data = []
+
+        for char in living_chars:
+            # Get skill modifier
+            skill_mod = char.get_skill_modifier(skill, skills_data)
+
+            # Check for proficiency/expertise
+            prof_str = ""
+            if hasattr(char, 'skill_proficiencies') and skill.lower() in char.skill_proficiencies:
+                if hasattr(char, 'skill_expertise') and skill.lower() in char.skill_expertise:
+                    prof_str = " (Expertise)"
+                else:
+                    prof_str = " (Proficient)"
+
+            # Format modifier with sign
+            mod_sign = "+" if skill_mod >= 0 else ""
+            display = f"{char.name} - {skill.upper()} {mod_sign}{skill_mod}{prof_str}"
+
+            char_data.append({
+                'character': char,
+                'skill_mod': skill_mod,
+                'display': display
+            })
+
+        # Sort by skill modifier (highest first)
+        char_data.sort(key=lambda x: -x['skill_mod'])
+
+        # Build choices for questionary
+        choices = []
+        for data in char_data:
+            choices.append(questionary.Choice(title=data['display'], value=data['character']))
+
+        # Add cancel option
+        choices.append(questionary.Choice(title="← Cancel", value=None))
+
+        try:
+            result = questionary.select(
+                header,
+                choices=choices,
+                use_arrow_keys=True
+            ).ask()
+
+            if result is None:
+                print_status_message("Cancelled.", "warning")
+                return None
+
+            return result
+
+        except (EOFError, KeyboardInterrupt):
+            print_status_message("Cancelled.", "warning")
+            return None
+
     def handle_search(self) -> None:
         """Handle search command with optional skill checks."""
         room = self.game_state.get_current_room()
@@ -1239,7 +1321,15 @@ class CLI:
             print_status_message("\nCancelled.", "warning")
 
     def handle_examine_menu(self) -> None:
-        """Show what can be examined in the current room."""
+        """
+        Show interactive questionary menu for examining objects/exits.
+
+        Uses progressive disclosure:
+        1. Select what to examine (with skill/DC info)
+        2. Select who examines it (sorted by skill modifier)
+        """
+        import questionary
+
         objects = self.game_state.get_examinable_objects()
         exits = self.game_state.get_examinable_exits()
 
@@ -1247,17 +1337,71 @@ class CLI:
             print_status_message("There's nothing to examine here.", "info")
             return
 
-        print_status_message("You can examine:", "info")
+        # Build choices for questionary
+        choices = []
 
-        if objects:
-            print_status_message("\n  Objects:", "header")
-            for obj in objects:
-                print_status_message(f"    • {obj['name']} - use: examine {obj['id']}", "info")
+        # Add objects with skill/DC info
+        for obj in objects:
+            examine_checks = obj.get("examine_checks", [])
+            if examine_checks:
+                # Show first check's skill and DC
+                check = examine_checks[0]
+                skill = check.get("skill", "").upper()
+                dc = check.get("dc", 10)
+                display = f"{obj['name']} ({skill} DC {dc})"
+            else:
+                display = obj['name']
 
-        if exits:
-            print_status_message("\n  Exits:", "header")
-            for direction in exits:
-                print_status_message(f"    • {direction} door - use: examine {direction}", "info")
+            choices.append(questionary.Choice(
+                title=display,
+                value=("object", obj)
+            ))
+
+        # Add exits
+        room = self.game_state.get_current_room()
+        exits_data = room.get("exits", {})
+        for direction in exits:
+            exit_data = exits_data.get(direction, {})
+            if isinstance(exit_data, dict):
+                examine_checks = exit_data.get("examine_checks", [])
+                if examine_checks:
+                    check = examine_checks[0]
+                    skill = check.get("skill", "").upper()
+                    dc = check.get("dc", 10)
+                    display = f"{direction.capitalize()} door ({skill} DC {dc})"
+                elif exit_data.get("locked"):
+                    display = f"{direction.capitalize()} door (locked)"
+                else:
+                    display = f"{direction.capitalize()} door"
+            else:
+                display = f"{direction.capitalize()} door"
+
+            choices.append(questionary.Choice(
+                title=display,
+                value=("exit", direction)
+            ))
+
+        # Add cancel option
+        choices.append(questionary.Choice(title="← Cancel", value=None))
+
+        try:
+            result = questionary.select(
+                "What would you like to examine?",
+                choices=choices,
+                use_arrow_keys=True
+            ).ask()
+
+            if result is None:
+                return
+
+            item_type, item_data = result
+            if item_type == "object":
+                self._examine_object(item_data["id"], item_data)
+            else:
+                self._examine_exit(item_data)
+
+        except (EOFError, KeyboardInterrupt):
+            print_status_message("Cancelled.", "warning")
 
     def handle_examine(self, target: str) -> None:
         """
@@ -1287,12 +1431,32 @@ class CLI:
         """
         Examine an object with skill check.
 
+        Uses skill-sorted character selection when a skill check is required.
+
         Args:
             object_id: ID of the object
             obj_data: Object data dict
         """
-        # Select character
-        character = self._prompt_simple_character_selection(f"Who will examine the {obj_data['name']}?")
+        examine_checks = obj_data.get("examine_checks", [])
+
+        if examine_checks:
+            # Get skill and DC from first check
+            check = examine_checks[0]
+            skill = check.get("skill", "investigation")
+            dc = check.get("dc", 10)
+
+            # Use skill-sorted character selection
+            character = self._prompt_character_for_skill_check(
+                action_desc=f"examine the {obj_data['name']}",
+                skill=skill,
+                dc=dc
+            )
+        else:
+            # No skill check - simple selection
+            character = self._prompt_simple_character_selection(
+                f"Who will examine the {obj_data['name']}?"
+            )
+
         if not character:
             return
 
@@ -1308,11 +1472,38 @@ class CLI:
         """
         Examine an exit (listen at door, etc.).
 
+        Uses skill-sorted character selection when a skill check is required.
+
         Args:
             direction: Direction of the exit
         """
-        # Select character
-        character = self._prompt_simple_character_selection(f"Who will examine the {direction} exit?")
+        # Get exit data to check for skill requirements
+        room = self.game_state.get_current_room()
+        exits_data = room.get("exits", {})
+        exit_data = exits_data.get(direction, {})
+
+        examine_checks = []
+        if isinstance(exit_data, dict):
+            examine_checks = exit_data.get("examine_checks", [])
+
+        if examine_checks:
+            # Get skill and DC from first check
+            check = examine_checks[0]
+            skill = check.get("skill", "perception")
+            dc = check.get("dc", 10)
+
+            # Use skill-sorted character selection
+            character = self._prompt_character_for_skill_check(
+                action_desc=f"examine the {direction} door",
+                skill=skill,
+                dc=dc
+            )
+        else:
+            # No skill check - simple selection
+            character = self._prompt_simple_character_selection(
+                f"Who will examine the {direction} exit?"
+            )
+
         if not character:
             return
 
