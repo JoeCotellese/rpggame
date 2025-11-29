@@ -2456,10 +2456,10 @@ class GameState:
             item_id: ID of the item
 
         Returns:
-            Category name ("weapons", "armor", "consumables") or None if not found
+            Category name or None if not found
         """
         items_data = self.data_loader.load_items()
-        for category in ["weapons", "armor", "consumables"]:
+        for category in ["weapons", "armor", "consumables", "magical_items"]:
             if item_id in items_data.get(category, {}):
                 return category
         return None

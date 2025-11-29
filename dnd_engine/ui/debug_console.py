@@ -11,6 +11,7 @@ from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.character_factory import CharacterFactory
 from dnd_engine.core.creature import Abilities, Creature
 from dnd_engine.core.game_state import GameState
+from dnd_engine.core.quest import QuestState
 from dnd_engine.ui.rich_ui import (
     console,
     print_error,
@@ -1579,8 +1580,6 @@ class DebugConsole:
                 return
             quest_id = args[1]
             if quest_id in qm.quests:
-                from dnd_engine.core.quest import QuestState
-
                 qm._quest_states[quest_id] = QuestState.REWARDED
                 print_status_message(f"Quest '{quest_id}' marked as rewarded", "success")
             else:

@@ -6,7 +6,7 @@ from pathlib import Path
 import tempfile
 import json
 
-from dnd_engine.core.quest import Quest, QuestState, QuestManager
+from dnd_engine.core.quest import BonusReward, Quest, QuestState, QuestManager
 
 
 class TestQuestState:
@@ -481,3 +481,328 @@ class TestTheUnquietDeadCampaign:
 
         # All completed
         assert len(manager.get_completed_quests()) == 3
+
+
+class TestBonusReward:
+    """Test the BonusReward dataclass."""
+
+    def test_bonus_reward_creation(self):
+        """BonusReward should be creatable with all fields."""
+        bonus = BonusReward(
+            condition="return_item",
+            item_id="skull_of_davos",
+            turn_in_npc="lord_davos",
+            reward_item="jar_of_ointment",
+            description="Return the skull to Lord Davos",
+        )
+        assert bonus.condition == "return_item"
+        assert bonus.item_id == "skull_of_davos"
+        assert bonus.turn_in_npc == "lord_davos"
+        assert bonus.reward_item == "jar_of_ointment"
+        assert bonus.description == "Return the skull to Lord Davos"
+
+    def test_bonus_reward_from_dict(self):
+        """BonusReward should be creatable from dictionary."""
+        data = {
+            "condition": "return_item",
+            "item_id": "skull_of_davos",
+            "turn_in_npc": "lord_davos",
+            "reward_item": "jar_of_ointment",
+            "description": "Return the skull to Lord Davos",
+        }
+        bonus = BonusReward.from_dict(data)
+        assert bonus.condition == "return_item"
+        assert bonus.item_id == "skull_of_davos"
+        assert bonus.turn_in_npc == "lord_davos"
+
+    def test_bonus_reward_from_dict_default_condition(self):
+        """BonusReward should use default condition when not provided."""
+        data = {
+            "item_id": "skull",
+            "turn_in_npc": "npc",
+            "reward_item": "reward",
+        }
+        bonus = BonusReward.from_dict(data)
+        assert bonus.condition == "return_item"
+        assert bonus.description == ""
+
+    def test_bonus_reward_to_dict(self):
+        """BonusReward should be serializable to dictionary."""
+        bonus = BonusReward(
+            condition="return_item",
+            item_id="skull_of_davos",
+            turn_in_npc="lord_davos",
+            reward_item="jar_of_ointment",
+            description="Return the skull to Lord Davos",
+        )
+        data = bonus.to_dict()
+        assert data["condition"] == "return_item"
+        assert data["item_id"] == "skull_of_davos"
+        assert data["turn_in_npc"] == "lord_davos"
+        assert data["reward_item"] == "jar_of_ointment"
+        assert data["description"] == "Return the skull to Lord Davos"
+
+    def test_bonus_reward_roundtrip(self):
+        """BonusReward should survive roundtrip serialization."""
+        original = BonusReward(
+            condition="return_item",
+            item_id="skull_of_davos",
+            turn_in_npc="lord_davos",
+            reward_item="jar_of_ointment",
+            description="Return the skull to Lord Davos",
+        )
+        data = original.to_dict()
+        restored = BonusReward.from_dict(data)
+        assert restored.condition == original.condition
+        assert restored.item_id == original.item_id
+        assert restored.turn_in_npc == original.turn_in_npc
+        assert restored.reward_item == original.reward_item
+        assert restored.description == original.description
+
+
+class TestQuestWithBonusRewards:
+    """Test Quest with bonus_rewards functionality."""
+
+    def test_quest_with_bonus_rewards(self):
+        """Quest should support bonus_rewards field."""
+        bonus = BonusReward(
+            condition="return_item",
+            item_id="skull",
+            turn_in_npc="npc",
+            reward_item="reward",
+            description="Test",
+        )
+        quest = Quest(
+            id="test_quest",
+            name="Test Quest",
+            description="A test quest",
+            bonus_rewards=[bonus],
+        )
+        assert len(quest.bonus_rewards) == 1
+        assert quest.bonus_rewards[0].item_id == "skull"
+
+    def test_quest_to_dict_includes_bonus_rewards(self):
+        """Quest.to_dict() should serialize bonus_rewards."""
+        bonus = BonusReward(
+            condition="return_item",
+            item_id="skull",
+            turn_in_npc="npc",
+            reward_item="reward",
+            description="Test bonus",
+        )
+        quest = Quest(
+            id="test_quest",
+            name="Test Quest",
+            description="A test quest",
+            bonus_rewards=[bonus],
+        )
+        data = quest.to_dict()
+        assert "bonus_rewards" in data
+        assert len(data["bonus_rewards"]) == 1
+        assert data["bonus_rewards"][0]["item_id"] == "skull"
+
+    def test_quest_roundtrip_with_bonus_rewards(self):
+        """Quest should survive roundtrip with bonus_rewards."""
+        bonus = BonusReward(
+            condition="return_item",
+            item_id="skull",
+            turn_in_npc="npc",
+            reward_item="reward",
+            description="Test",
+        )
+        original = Quest(
+            id="test_quest",
+            name="Test Quest",
+            description="A test quest",
+            bonus_rewards=[bonus],
+        )
+        data = original.to_dict()
+        restored = Quest.from_dict(data)
+        assert len(restored.bonus_rewards) == 1
+        assert restored.bonus_rewards[0].item_id == "skull"
+
+
+class TestQuestManagerRewards:
+    """Test QuestManager reward functionality."""
+
+    @pytest.fixture
+    def quest_data_with_rewards(self):
+        """Sample quest definitions with rewards."""
+        return {
+            "quests": [
+                {
+                    "id": "crypt_quest",
+                    "name": "The Crypt Problem",
+                    "description": "Investigate the crypt",
+                    "unlocked_by_default": True,
+                    "quest_giver": "father_aldric",
+                    "reward_gold": 50,
+                    "unlocks_quests": ["cult_quest"],
+                    "bonus_rewards": [
+                        {
+                            "condition": "return_item",
+                            "item_id": "skull_of_davos",
+                            "turn_in_npc": "lord_davos",
+                            "reward_item": "jar_of_ointment",
+                            "description": "Return skull to Lord Davos",
+                        }
+                    ],
+                },
+                {
+                    "id": "cult_quest",
+                    "name": "The Cult Conspiracy",
+                    "description": "Stop the cult",
+                    "unlocked_by_default": False,
+                    "unlock_requirements": {"quest_completed": "crypt_quest"},
+                    "quest_giver": "sister_maeve",
+                    "reward_gold": 0,
+                    "unlocks_quests": ["temple_quest"],
+                },
+                {
+                    "id": "temple_quest",
+                    "name": "Temple of Doom",
+                    "description": "Final assault",
+                    "unlocked_by_default": False,
+                    "unlock_requirements": {"quest_completed": "cult_quest"},
+                    "quest_giver": "father_aldric",
+                    "reward_gold": 250,
+                },
+            ]
+        }
+
+    @pytest.fixture
+    def quest_manager(self, quest_data_with_rewards):
+        """Create a QuestManager with reward test data."""
+        manager = QuestManager()
+        manager.load_quests_from_dict(quest_data_with_rewards)
+        return manager
+
+    def test_rewarded_state_exists(self):
+        """REWARDED quest state should be defined."""
+        assert QuestState.REWARDED.value == "rewarded"
+
+    def test_claim_quest_reward_success(self, quest_manager):
+        """Should claim reward from correct quest giver."""
+        quest_manager.activate_quest("crypt_quest")
+        quest_manager.complete_quest("crypt_quest")
+
+        result = quest_manager.claim_quest_reward("crypt_quest", "father_aldric")
+
+        assert result["success"] is True
+        assert result["quest_id"] == "crypt_quest"
+        assert result["quest_name"] == "The Crypt Problem"
+        assert result["reward_gold"] == 50
+        assert quest_manager.get_quest_state("crypt_quest") == QuestState.REWARDED
+
+    def test_claim_quest_reward_wrong_npc(self, quest_manager):
+        """Should fail when claiming from wrong NPC."""
+        quest_manager.activate_quest("crypt_quest")
+        quest_manager.complete_quest("crypt_quest")
+
+        result = quest_manager.claim_quest_reward("crypt_quest", "wrong_npc")
+
+        assert result["success"] is False
+        assert "Wrong NPC" in result["error"]
+        assert quest_manager.get_quest_state("crypt_quest") == QuestState.COMPLETED
+
+    def test_claim_quest_reward_not_completed(self, quest_manager):
+        """Should fail when quest not completed."""
+        quest_manager.activate_quest("crypt_quest")
+
+        result = quest_manager.claim_quest_reward("crypt_quest", "father_aldric")
+
+        assert result["success"] is False
+        assert "not completed" in result["error"]
+
+    def test_claim_quest_reward_already_rewarded(self, quest_manager):
+        """Should fail when reward already claimed."""
+        quest_manager.activate_quest("crypt_quest")
+        quest_manager.complete_quest("crypt_quest")
+        quest_manager.claim_quest_reward("crypt_quest", "father_aldric")
+
+        result = quest_manager.claim_quest_reward("crypt_quest", "father_aldric")
+
+        assert result["success"] is False
+        assert "already claimed" in result["error"]
+
+    def test_claim_quest_reward_unknown_quest(self, quest_manager):
+        """Should fail for unknown quest ID."""
+        result = quest_manager.claim_quest_reward("unknown_quest", "father_aldric")
+
+        assert result["success"] is False
+        assert "Unknown quest" in result["error"]
+
+    def test_get_quests_awaiting_reward(self, quest_manager):
+        """Should return quests completed but not yet rewarded for an NPC."""
+        quest_manager.activate_quest("crypt_quest")
+        quest_manager.complete_quest("crypt_quest")
+
+        awaiting = quest_manager.get_quests_awaiting_reward("father_aldric")
+
+        assert len(awaiting) == 1
+        assert awaiting[0].id == "crypt_quest"
+
+    def test_get_quests_awaiting_reward_empty_after_claim(self, quest_manager):
+        """Should return empty after reward is claimed."""
+        quest_manager.activate_quest("crypt_quest")
+        quest_manager.complete_quest("crypt_quest")
+        quest_manager.claim_quest_reward("crypt_quest", "father_aldric")
+
+        awaiting = quest_manager.get_quests_awaiting_reward("father_aldric")
+
+        assert len(awaiting) == 0
+
+    def test_get_quests_awaiting_reward_wrong_npc(self, quest_manager):
+        """Should return empty for NPC who isn't the quest giver."""
+        quest_manager.activate_quest("crypt_quest")
+        quest_manager.complete_quest("crypt_quest")
+
+        awaiting = quest_manager.get_quests_awaiting_reward("wrong_npc")
+
+        assert len(awaiting) == 0
+
+    def test_get_quests_awaiting_reward_excludes_zero_gold(self, quest_manager):
+        """Should exclude quests with zero gold reward."""
+        quest_manager.activate_quest("crypt_quest")
+        quest_manager.complete_quest("crypt_quest")
+        quest_manager.activate_quest("cult_quest")
+        quest_manager.complete_quest("cult_quest")
+
+        awaiting = quest_manager.get_quests_awaiting_reward("sister_maeve")
+
+        assert len(awaiting) == 0
+
+    def test_check_bonus_reward_found(self, quest_manager):
+        """Should find bonus reward for matching NPC and item."""
+        quest, bonus = quest_manager.check_bonus_reward("lord_davos", "skull_of_davos")
+
+        assert quest is not None
+        assert bonus is not None
+        assert quest.id == "crypt_quest"
+        assert bonus.reward_item == "jar_of_ointment"
+
+    def test_check_bonus_reward_wrong_npc(self, quest_manager):
+        """Should return None for wrong NPC."""
+        quest, bonus = quest_manager.check_bonus_reward("wrong_npc", "skull_of_davos")
+
+        assert quest is None
+        assert bonus is None
+
+    def test_check_bonus_reward_wrong_item(self, quest_manager):
+        """Should return None for wrong item."""
+        quest, bonus = quest_manager.check_bonus_reward("lord_davos", "wrong_item")
+
+        assert quest is None
+        assert bonus is None
+
+    def test_rewarded_state_still_unlocks_quests(self, quest_manager):
+        """REWARDED state should count as completed for unlock conditions."""
+        quest_manager.activate_quest("crypt_quest")
+        quest_manager.complete_quest("crypt_quest")
+        quest_manager.claim_quest_reward("crypt_quest", "father_aldric")
+
+        # Verify crypt_quest is REWARDED
+        assert quest_manager.get_quest_state("crypt_quest") == QuestState.REWARDED
+
+        # cult_quest should still be available (REWARDED counts as completed)
+        assert quest_manager.get_quest_state("cult_quest") == QuestState.AVAILABLE

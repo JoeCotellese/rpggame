@@ -39,6 +39,16 @@ class BonusReward:
             description=data.get("description", ""),
         )
 
+    def to_dict(self) -> dict[str, Any]:
+        """Convert BonusReward to a dictionary."""
+        return {
+            "condition": self.condition,
+            "item_id": self.item_id,
+            "turn_in_npc": self.turn_in_npc,
+            "reward_item": self.reward_item,
+            "description": self.description,
+        }
+
 
 @dataclass
 class Quest:
@@ -109,6 +119,7 @@ class Quest:
             "unlocks_quests": self.unlocks_quests,
             "quest_giver": self.quest_giver,
             "reward_gold": self.reward_gold,
+            "bonus_rewards": [br.to_dict() for br in self.bonus_rewards],
             "final_quest": self.final_quest,
         }
 

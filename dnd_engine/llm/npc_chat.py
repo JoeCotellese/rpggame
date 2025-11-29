@@ -557,8 +557,6 @@ class NPCChatManager:
         if not self._current_conversation:
             return {"success": False, "error": "No active conversation"}
 
-        npc = self._current_conversation.npc
-
         # Check if NPC has the item in personal inventory or shop
         # For now, just acknowledge the gift
         # TODO: Integrate with full inventory system
@@ -597,11 +595,11 @@ class NPCChatManager:
         quest_manager = self.game_state.quest_manager
 
         # Check if any character in party has this item
-        item_holder = None
-        for char in self.game_state.party.characters:
-            if char.inventory.has_item(item_id):
-                item_holder = char
-                break
+        item_holder = next(
+            (char for char in self.game_state.party.characters
+             if char.inventory.has_item(item_id)),
+            None
+        )
 
         if not item_holder:
             return {
@@ -618,6 +616,9 @@ class NPCChatManager:
 
             # Give reward item to player
             reward_recipient = self.game_state.party.characters[0]
+            reward_category = self.game_state._get_item_category(bonus.reward_item)
+            if reward_category:
+                reward_recipient.inventory.add_item(bonus.reward_item, reward_category)
 
             print_status_message(
                 f"🎁 Gave {item_id} to {npc.display_name}", "success"
