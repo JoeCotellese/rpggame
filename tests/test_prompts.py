@@ -277,8 +277,8 @@ class TestCombatActionPrompt:
         assert "Goblin" in prompt
         assert "longsword" in prompt
         assert "hit" in prompt.lower()
-        # Regular hits should request brief output
-        assert "under 20 words" in prompt or "one sentence" in prompt.lower()
+        # Regular hits should request brief output (max 12 words, punchy sentence)
+        assert "max 12 words" in prompt or "punchy sentence" in prompt.lower()
         # Should enforce third-person POV (player controls multiple characters)
         assert "third-person" in prompt.lower() or 'never "you"' in prompt.lower()
 
@@ -297,8 +297,8 @@ class TestCombatActionPrompt:
         assert "Orc" in prompt
         assert "battleaxe" in prompt
         assert "miss" in prompt.lower()
-        # Misses should be extra brief
-        assert "under 15 words" in prompt
+        # Misses should be extra brief (max 10 words)
+        assert "max 10 words" in prompt
 
     def test_build_combat_action_minimal_data(self) -> None:
         """Test building combat action with minimal data."""
@@ -310,12 +310,16 @@ class TestCombatActionPrompt:
         assert len(prompt) > 0
 
     def test_build_combat_action_with_location(self) -> None:
-        """Test building combat action prompt with location context."""
+        """Test building combat action prompt with location context.
+
+        Location is only included for killing blows (tiered verbosity).
+        """
         action_data = {
             "attacker": "Gandalf",
             "defender": "Balrog",
             "weapon": "staff",
             "hit": True,
+            "is_killing_blow": True,
             "location": "Bridge of Khazad-dûm"
         }
 
@@ -323,11 +327,16 @@ class TestCombatActionPrompt:
 
         assert "Gandalf" in prompt
         assert "Balrog" in prompt
+        # Location is included for killing blows
         assert "Bridge of Khazad-dûm" in prompt
         assert "Location:" in prompt
 
     def test_build_combat_action_critical_hit(self) -> None:
-        """Test building combat action prompt for a critical hit."""
+        """Test building combat action prompt for a critical hit.
+
+        Critical hits (non-killing) are more concise - no location or history
+        context. They request visceral but brief output (15-20 words).
+        """
         action_data = {
             "attacker": "Thorin",
             "defender": "Goblin",
@@ -345,11 +354,10 @@ class TestCombatActionPrompt:
         assert "Goblin" in prompt
         assert "Longsword" in prompt
         assert "slashing" in prompt
-        assert "Goblin Warren" in prompt
-        # Critical hits should include recent history
-        assert "Recent Actions:" in prompt
-        # Critical hits should request visceral output
-        assert "visceral" in prompt.lower() or "15-25 words" in prompt
+        # Critical hits should request visceral output (15-20 words)
+        assert "visceral" in prompt.lower() or "15-20 words" in prompt
+        # Critical hits emphasize enemy survives
+        assert "survives" in prompt.lower() or "staggers" in prompt.lower()
 
     def test_build_combat_action_killing_blow(self) -> None:
         """Test building combat action prompt for a killing blow."""
