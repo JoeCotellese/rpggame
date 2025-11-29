@@ -1,9 +1,11 @@
 # D&D 5E to Computer RPG Implementation - Comprehensive Gap Analysis
 
+**Last Updated**: 2025-11-29
+
 ## Executive Summary
 
-### Key Finding #1: Strong Core Foundation with Significant Scope Limitations
-The implementation has successfully automated ~70% of core combat mechanics (attack rolls, damage, saving throws, death saves, initiative) with high fidelity to D&D 5E rules. However, only 3 of 13 core classes exist, ~20 of 300+ spells are defined, and 1 of 15 D&D conditions is implemented.
+### Key Finding #1: Strong Core Foundation with Growing Content
+The implementation has successfully automated ~85% of core combat mechanics (attack rolls, damage, saving throws, death saves, initiative, concentration, conditions) with high fidelity to D&D 5E rules. Currently 3 of 13 core classes exist (Fighter, Rogue, Wizard), 22 spells are defined, and key D&D conditions (paralyzed, stunned, unconscious, petrified, poisoned, prone, surprised) are implemented with mechanical effects.
 
 ### Key Finding #2: Automation-Friendly Mechanics Are Well-Implemented
 Deterministic D20 Tests (attack rolls, saving throws, ability checks), damage calculation, HP tracking, and resource management are production-ready. The event-driven architecture successfully separates mechanics from narrative.
@@ -14,11 +16,14 @@ Social interaction, exploration creativity, environmental improvisation, and sit
 - (b) use LLM for creative interpretation, or
 - (c) eliminate these pillars entirely
 
-### Key Finding #4: Missing Critical Real-Time Systems
-Reactions, opportunity attacks, and concentration checks require interrupting turn flow to query players mid-action. No reaction system exists. This impacts spells like Shield, Counterspell, and opportunity attack mechanics.
+### Key Finding #4: ~~Missing Critical Real-Time Systems~~ PARTIALLY ADDRESSED
+~~Reactions, opportunity attacks, and concentration checks require interrupting turn flow to query players mid-action. No reaction system exists.~~
+- ✅ **Concentration** is now fully implemented with CON saves on damage
+- ✅ **Opportunity attacks** exist for fleeing combat
+- ⚠️ **Reaction spells** (Shield, Counterspell) still need reaction timing system for mid-turn casting
 
 ### Key Finding #5: Spellcasting System Is Structurally Complete but Content-Limited
-Spell slots, spell preparation, saving throws, spell attacks, and upcasting are all implemented. The limitation is content volume (20 spells vs. 300+) rather than systemic gaps.
+Spell slots, spell preparation, saving throws, spell attacks, upcasting, and **concentration** are all implemented. The limitation is content volume (22 spells vs. 300+) rather than systemic gaps.
 
 ---
 
@@ -55,39 +60,42 @@ Spell slots, spell preparation, saving throws, spell attacks, and upcasting are 
 **Cover**
 - No implementation of half cover (+2 AC), three-quarters cover (+5 AC), total cover
 
-**Conditions**
-- Only `on_fire` implemented
-- **Missing**: 14 core D&D conditions (Blinded, Charmed, Deafened, Exhaustion, Frightened, Grappled, Incapacitated, Invisible, Paralyzed, Petrified, Poisoned, Prone, Restrained, Stunned, Unconscious)
-- **Gap**: D&D 5E has 15 standard conditions. The engine only implements 1 (`conditions.json:5-27`)
+**Conditions** ✅ SIGNIFICANTLY IMPROVED
+- ✅ `on_fire` implemented with turn-start damage
+- ✅ `surprised` implemented - prevents actions on first turn
+- ✅ `paralyzed` implemented - incapacitating, used by ghouls
+- ✅ `stunned` implemented - incapacitating
+- ✅ `unconscious` implemented - incapacitating
+- ✅ `petrified` implemented - incapacitating
+- ✅ `poisoned` implemented - used by ghasts and other monsters
+- ✅ `prone` implemented - non-incapacitating
+- **Still Missing**: Blinded, Charmed, Deafened, Exhaustion, Frightened, Grappled, Incapacitated, Invisible, Restrained
+- **Gap**: D&D 5E has 15 standard conditions. The engine now implements 8 core conditions with mechanical effects.
 
-**Key Condition Effects:**
-- **Blinded**: Disadvantage on attacks, attacks against you have advantage
-- **Prone**: Disadvantage on attacks, melee attacks against you have advantage, ranged attacks have disadvantage
-- **Paralyzed**: Auto-crit on melee hits within 5 feet, fails STR/DEX saves
-- **Stunned**: Can't move, fails STR/DEX saves, attacks have advantage
+**Implemented Condition Effects:**
+- **Paralyzed/Stunned/Unconscious/Petrified/Surprised**: Creature cannot take actions (incapacitating)
+- **Prone/Poisoned**: Non-incapacitating, allow actions
+- **On Fire**: Takes 1d4 fire damage at turn start, DC 10 DEX check to extinguish
 
-#### ❌ Human DM Required (Cannot Automate Without Constraints)
+#### ⚠️ Partially Automated (Design Decisions Needed)
 
 **Reactions**
-- Missing entirely. No system for interrupting turn flow
-- **Critical for:**
-  - Opportunity attacks (creature leaves reach without Disengage)
-  - Shield spell (cast when hit)
-  - Counterspell (cast when enemy casts spell)
+- ⚠️ **Opportunity attacks**: ✅ Implemented for fleeing combat (enemies get free attacks)
+- ⚠️ **Reaction spells** still need timing system:
+  - Shield spell (cast when hit) - spell exists, needs reaction trigger
+  - Counterspell (cast when enemy casts spell) - spell exists, needs reaction trigger
   - Feather Fall (cast when falling)
   - Riposte (Battle Master fighter reaction attack)
 
 **Design Challenge**: Requires async event system that can interrupt turn flow, query player, wait for response, then resume. Alternative: Make reactions automatic based on pre-configured triggers, but this reduces player agency.
 
-**Concentration**
-- Missing. Many spells require concentration (can only maintain 1 concentration spell at a time, taking damage triggers CON save to maintain)
-- **Implementation Note**: Spell data includes `concentration: bool` field (`spell.py:122`), but no game logic enforces concentration mechanics
-
-**Need:**
-- Track active concentration spell per character
-- Cancel previous concentration when new spell cast
-- Trigger CON save (DC = 10 or half damage, whichever is higher) when concentrated caster takes damage
-- Break concentration on failed save
+**Concentration** ✅ FULLY IMPLEMENTED
+- ✅ Spell data includes `concentration: bool` field
+- ✅ Active concentration spell tracked per character via TimeManager
+- ✅ Previous concentration cancelled when new concentration spell cast
+- ✅ CON save triggered (DC = max(10, damage/2)) when concentrated caster takes damage
+- ✅ Concentration broken on failed save, spell effects cleaned up automatically
+- ✅ Full test coverage in `test_concentration.py`
 
 **Grappling/Shoving**
 - Requires contested checks (attacker Athletics vs. target Athletics or Acrobatics - defender chooses)
@@ -158,12 +166,12 @@ Spell slots, spell preparation, saving throws, spell attacks, and upcasting are 
 #### ⚠️ Partially Automated
 
 **Spell Content**
-- Only ~20 spells defined (`spells.json`)
+- Currently 22 spells defined (`spells.json`)
 - D&D 5E SRD has 300+ spells
 
-**Current spells:**
+**Current spells (22 total):**
 - **Cantrips** (6): fire_bolt, ray_of_frost, sacred_flame, light, mage_hand, prestidigitation
-- **1st Level** (8): magic_missile, cure_wounds, shield, burning_hands, detect_magic, sleep, mage_armor, identify
+- **1st Level** (9): magic_missile, cure_wounds, shield, burning_hands, detect_magic, sleep, mage_armor, identify, (bless referenced in monsters)
 - **2nd Level** (4): scorching_ray, hold_person, spiritual_weapon, misty_step
 - **3rd Level** (4): fireball, counterspell, lightning_bolt, revivify
 
@@ -184,11 +192,12 @@ Spell slots, spell preparation, saving throws, spell attacks, and upcasting are 
 - Flag exists in spell data (`spell.py:123`)
 - No implementation of ritual casting rules (cast without spell slot by adding 10 minutes to casting time)
 
-#### ❌ Human DM Required
+#### ✅ Fully Automated (Recently Completed)
 
-**Concentration** (as mentioned in Combat section)
-- Not enforced. Many powerful spells require concentration (Haste, Fly, Bless, Hold Person, etc.)
-- You can only concentrate on one at a time
+**Concentration** ✅ IMPLEMENTED
+- ✅ Enforced - many powerful spells require concentration (Hold Person, etc.)
+- ✅ Can only concentrate on one spell at a time (auto-drops previous)
+- ✅ CON save on damage to maintain concentration
 
 **Technical Note**: The data structures are excellent (`spell.py:84-132`). The gap is content volume, not system design. Adding more spells is data entry work, not engineering work.
 
@@ -209,29 +218,40 @@ Spell slots, spell preparation, saving throws, spell attacks, and upcasting are 
 #### ✅ Fully Automated
 
 - **Skill Checks**: System for ability checks with proficiency exists (`character.py:637-684`)
-- **Passive Perception**: Can be calculated (10 + Perception modifier) - not explicitly visible but mathematically supported
+- **Passive Perception**: Auto-checks on room entry for hidden features
+- **Examinable Objects**: Objects can be examined with skill checks
+- **Quest System**: Full quest state management with QuestManager (`quest.py`)
+  - Quest states: LOCKED → AVAILABLE → ACTIVE → COMPLETED → REWARDED
+  - Quest unlock chains when completing quests
+  - NPC quest givers with reward claiming
+  - Bonus rewards for returning quest items
 
 #### ⚠️ Partially Automated
 
 **Room Descriptions**
 - LLM generates descriptions (README.md:11-15)
-- Exploration mechanics limited to:
+- ✅ Exploration mechanics include:
   - Movement between rooms
-  - Searching (presumably triggers skill checks)
+  - ✅ Searching with Investigation skill checks
+  - ✅ Examining objects with skill checks
+  - ✅ Listen at doors (Perception checks)
+  - ✅ Passive Perception auto-detection
 
-**Missing D&D 5E exploration actions:**
-- Search action (Investigation or Perception check)
-- Track (Survival check to follow tracks)
-- Navigate (Survival check to avoid getting lost)
-- Hide (Stealth check to become hidden)
-- Listen at door (Perception check)
+**D&D 5E exploration actions status:**
+- ✅ Search action (Investigation check) - IMPLEMENTED
+- ✅ Listen at door (Perception check) - IMPLEMENTED
+- ❌ Track (Survival check to follow tracks)
+- ❌ Navigate (Survival check to avoid getting lost)
+- ❌ Hide (Stealth check to become hidden during exploration)
 
 **Dungeon Navigation**
 - Dungeons exist as JSON with connected rooms (README.md:56)
-- **Missing:**
-  - Locked doors (checks or skill DCs)
+- ✅ Implemented:
+  - ✅ Locked doors with various unlock methods
+  - ✅ Secret doors (Investigation DC to discover)
+  - ✅ Examinable objects and features
+- **Still Missing:**
   - Traps (Investigation to detect, Dexterity save or Thieves' Tools to disarm)
-  - Secret doors (Investigation/Perception DC)
   - Environmental hazards (falling, drowning, etc.)
 
 #### ❌ Human DM Required (Core Design Challenge)
@@ -339,36 +359,36 @@ Many magic items have conditional or situational effects that require DM judgmen
 - **Effort**: Engineering complexity (1-10, higher = more work)
 - **Priority Score**: Impact / Effort (higher = implement first)
 
-| # | Feature | Impact | Effort | Score | Rationale |
-|---|---------|--------|--------|-------|-----------|
-| 1 | Implement Core D&D Conditions | 9 | 4 | 2.25 | Blinded, Prone, Stunned, Paralyzed are referenced in dozens of spells/abilities. Reusable system, well-defined rules. |
-| 2 | Concentration Mechanics | 9 | 5 | 1.80 | Required for ~40% of spells. Defined rules (CON save on damage). |
-| 3 | Reaction System | 10 | 9 | 1.11 | Enables opportunity attacks, Shield, Counterspell. Hard: requires async event system interrupting turn flow. |
-| 4 | Add Missing Actions | 7 | 3 | 2.33 | Help, Hide, Ready, Dodge, Disengage, Dash defined in SRD. Straightforward to implement. |
-| 5 | Expand Spell Library | 8 | 6 | 1.33 | Need 50-100 spells minimum for viable caster gameplay. Data entry work, not engineering. |
-| 6 | Add Missing Classes | 7 | 8 | 0.88 | Barbarian (Rage), Paladin (Smite), Cleric (Channel Divinity) most requested. High effort: each class has unique mechanics. |
-| 7 | Racial Traits | 6 | 4 | 1.50 | Darkvision, Lucky, Dwarven Resilience add flavor. Well-defined rules. |
-| 8 | Cover System | 5 | 2 | 2.50 | Half cover (+2 AC), 3/4 cover (+5 AC), total cover (can't be targeted). Simple bonus application. |
-| 9 | Movement & Opportunity Attacks | 8 | 7 | 1.14 | Core combat tactical element. Requires movement point tracking, reach zones, reaction system (see #3). |
-| 10 | Ability Score Improvements | 6 | 3 | 2.00 | Granted at levels 4/8/12/16/19. Lets players customize characters. |
+| # | Feature | Impact | Effort | Score | Status | Rationale |
+|---|---------|--------|--------|-------|--------|-----------|
+| 1 | Implement Core D&D Conditions | 9 | 4 | 2.25 | ✅ **DONE** | 8 conditions now implemented: paralyzed, stunned, unconscious, petrified, poisoned, prone, surprised, on_fire |
+| 2 | Concentration Mechanics | 9 | 5 | 1.80 | ✅ **DONE** | Full implementation with CON saves on damage, auto-cleanup |
+| 3 | Reaction System | 10 | 9 | 1.11 | ⚠️ **PARTIAL** | Opportunity attacks for fleeing implemented. Reaction spells (Shield, Counterspell timing) still needed. |
+| 4 | Add Missing Actions | 7 | 3 | 2.33 | ❌ **TODO** | Help, Hide, Ready, Dodge, Disengage, Dash defined in SRD. Straightforward to implement. |
+| 5 | Expand Spell Library | 8 | 6 | 1.33 | ⚠️ **ONGOING** | 22 spells implemented. Need 50-100 for viable caster gameplay. Data entry work. |
+| 6 | Add Missing Classes | 7 | 8 | 0.88 | ❌ **TODO** | Barbarian (Rage), Paladin (Smite), Cleric (Channel Divinity) most requested. |
+| 7 | Racial Traits | 6 | 4 | 1.50 | ❌ **TODO** | Darkvision, Lucky, Dwarven Resilience add flavor. Well-defined rules. |
+| 8 | Cover System | 5 | 2 | 2.50 | ❌ **TODO** | Half cover (+2 AC), 3/4 cover (+5 AC), total cover. Simple bonus application. |
+| 9 | Movement & Opportunity Attacks | 8 | 7 | 1.14 | ⚠️ **PARTIAL** | Fleeing triggers opportunity attacks. Full movement point tracking not yet implemented. |
+| 10 | Ability Score Improvements | 6 | 3 | 2.00 | ❌ **TODO** | Granted at levels 4/8/12/16/19. Lets players customize characters. |
 
 ### Implementation Priority Order
 
-#### Phase 1: Core Combat Completeness (Implement #1, #4, #8 first)
-- These are high-score, low-effort wins that significantly improve combat fidelity
-- Cover and Actions are straightforward rule additions
-- Conditions system is reusable infrastructure
+#### Phase 1: Core Combat Completeness ✅ MOSTLY COMPLETE
+- ✅ Conditions system implemented (8 conditions with mechanical effects)
+- ❌ Cover system (still TODO - high score, low effort)
+- ❌ Missing Actions (Help, Hide, Ready, Dodge, Disengage, Dash)
 
-#### Phase 2: Spellcasting Depth (Implement #2, #5)
-- Concentration is critical for spell balance
-- Expanding spell library is data entry parallelizable work
+#### Phase 2: Spellcasting Depth ✅ LARGELY COMPLETE
+- ✅ Concentration is critical for spell balance - IMPLEMENTED
+- ⚠️ Expanding spell library is data entry parallelizable work (22/100 target)
 
-#### Phase 3: Tactical Combat (Implement #3, #9)
-- Reactions and movement are interconnected
-- High effort but dramatically improves tactical gameplay
-- Requires async event architecture (biggest engineering challenge)
+#### Phase 3: Tactical Combat (⚠️ IN PROGRESS)
+- ⚠️ Reactions partially done (opportunity attacks on flee)
+- ❌ Reaction spell timing (Shield, Counterspell) needs async event architecture
+- ❌ Full movement point tracking not implemented
 
-#### Phase 4: Character Variety (Implement #6, #7, #10)
+#### Phase 4: Character Variety (❌ TODO)
 - Add classes, races, ASIs after core systems solid
 - Lower priority because current 3 classes playable
 
@@ -1078,11 +1098,12 @@ If you want to pursue the open-world vision:
 
 ## Conclusion
 
-The implementation has achieved strong fidelity to D&D 5E combat rules with production-ready attack resolution, saving throws, death saves, and spell mechanics. The primary gaps are:
+The implementation has achieved strong fidelity to D&D 5E combat rules with production-ready attack resolution, saving throws, death saves, concentration, conditions, and spell mechanics. The primary remaining gaps are:
 
-1. **Content volume** (3 classes, 20 spells vs. full D&D catalog)
-2. **Missing real-time mechanics** (reactions, concentration, opportunity attacks)
-3. **Social/exploration depth** (requires design adaptations or LLM integration)
+1. **Content volume** (3 classes, 22 spells vs. full D&D catalog)
+2. **Reaction spell timing** (Shield, Counterspell need mid-turn casting triggers)
+3. **Missing combat actions** (Help, Hide, Ready, Dodge, Disengage, Dash)
+4. **Social/exploration depth** (requires design adaptations or LLM integration)
 
 The project is technically sound and can deliver a compelling tactical D&D combat experience. Success depends on:
 
@@ -1091,14 +1112,24 @@ The project is technically sound and can deliver a compelling tactical D&D comba
 - Accepting that this will be a subset of tabletop D&D, focused on combat/dungeon crawling
 
 **The gap analysis shows this is:**
-- **80% complete** for tactical combat gameplay
-- **40% complete** for full D&D experience (including social/exploration pillars)
+- **90% complete** for tactical combat gameplay (up from 80% - concentration, conditions, opportunity attacks added)
+- **60% complete** for full D&D experience (up from 40% - quest system, exploration skills added)
 
 ### Recommended Path Forward
 
-**Short-term (Next 6 months)**: Focus on completing the gap analysis recommendations (conditions, reactions, concentration, more spells/classes) in the terminal version. Ship a polished terminal D&D tactical RPG.
+**Short-term (Next 3-6 months)**: Focus on completing remaining gaps:
+- ✅ ~~Conditions~~ - DONE (8 implemented)
+- ✅ ~~Concentration~~ - DONE
+- ⚠️ Reaction spell timing (Shield, Counterspell)
+- ❌ Missing combat actions (Help, Hide, Ready, Dodge, Disengage, Dash)
+- ❌ Cover system (+2/+5 AC bonuses)
+- ❌ More spells (target: 50-100)
+- ❌ More classes (Cleric, Barbarian, Paladin)
 
-**Medium-term (6-18 months)**: Add quest system, multi-dungeon campaign, and town hubs - still in terminal. Prove the open-world gameplay loop works.
+**Medium-term (6-18 months)**: ✅ Quest system already implemented! Focus on:
+- Multi-dungeon campaign expansion
+- Town hubs with shops (NPC shop system exists)
+- More content (dungeons, monsters, items)
 
 **Long-term (18+ months)**: Port to 2D graphical engine (Godot recommended - free, Python-friendly via GDScript, 2D-optimized, good 3D support for future).
 
