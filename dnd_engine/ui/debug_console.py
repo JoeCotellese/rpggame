@@ -12,6 +12,7 @@ from dnd_engine.core.character_factory import CharacterFactory
 from dnd_engine.core.creature import Abilities, Creature
 from dnd_engine.core.game_state import GameState
 from dnd_engine.core.quest import QuestState
+from dnd_engine.systems.currency import Currency
 from dnd_engine.ui.rich_ui import (
     console,
     print_error,
@@ -658,10 +659,13 @@ class DebugConsole:
         )
 
     def cmd_gold(self, args: list[str]) -> None:
-        """Add or remove gold from party."""
+        """Add or remove gold from character inventory."""
         if not args:
-            print_error("Usage: /gold <amount>")
-            print_message("Use negative values to remove gold")
+            print_error("Usage: /gold <amount> [character_name]")
+            print_message("Examples:")
+            print_message("  /gold 100 Larry   - Give 100 gold to Larry")
+            print_message("  /gold 100         - Split 100 gold among all party members")
+            print_message("  /gold -50 Larry   - Remove 50 gold from Larry")
             return
 
         try:
@@ -670,24 +674,76 @@ class DebugConsole:
             print_error("Amount must be a number")
             return
 
-        old_gold = self.game_state.party.currency.gold
-
-        if amount > 0:
-            # Add gold directly
-            self.game_state.party.currency.gold += amount
-            print_status_message(f"Added {amount} gold to party", "success")
-        else:
-            # Remove gold
-            gold_to_remove = abs(amount)
-            if self.game_state.party.currency.gold >= gold_to_remove:
-                self.game_state.party.currency.gold -= gold_to_remove
-                print_status_message(f"Removed {gold_to_remove} gold from party", "success")
-            else:
-                print_error(f"Not enough gold. Party has {self.game_state.party.currency.gold} gold.")
+        # Check if character name provided
+        if len(args) > 1:
+            char_name = " ".join(args[1:])
+            character = self._find_character(char_name)
+            if not character:
                 return
 
-        new_gold = self.game_state.party.currency.gold
-        print_message(f"Party gold: {old_gold} → {new_gold}")
+            old_gold = character.inventory.currency.gold
+            if amount > 0:
+                gold_currency = Currency(gold=amount)
+                character.inventory.currency.add(gold_currency)
+                print_status_message(f"Added {amount} gold to {character.name}", "success")
+            else:
+                gold_to_remove = abs(amount)
+                current_gold = character.inventory.currency.gold
+                if current_gold >= gold_to_remove:
+                    character.inventory.currency.gold -= gold_to_remove
+                    print_status_message(
+                        f"Removed {gold_to_remove} gold from {character.name}",
+                        "success"
+                    )
+                else:
+                    print_error(
+                        f"Not enough gold. {character.name} has {current_gold} gold."
+                    )
+                    return
+            new_gold = character.inventory.currency.gold
+            print_message(f"{character.name}'s gold: {old_gold} → {new_gold}")
+        else:
+            # Split among all party members
+            party_size = len(self.game_state.party.characters)
+            if party_size == 0:
+                print_error("No party members to distribute gold to")
+                return
+
+            per_char = amount // party_size
+            if per_char == 0 and amount != 0:
+                print_error(
+                    f"Amount {amount} too small to split among {party_size} characters"
+                )
+                return
+
+            for character in self.game_state.party.characters:
+                old_gold = character.inventory.currency.gold
+                if per_char > 0:
+                    gold_currency = Currency(gold=per_char)
+                    character.inventory.currency.add(gold_currency)
+                elif per_char < 0:
+                    gold_to_remove = abs(per_char)
+                    if character.inventory.currency.gold >= gold_to_remove:
+                        character.inventory.currency.gold -= gold_to_remove
+                    else:
+                        print_error(
+                            f"Not enough gold. {character.name} has "
+                            f"{character.inventory.currency.gold} gold."
+                        )
+                        return
+                new_gold = character.inventory.currency.gold
+                print_message(f"  {character.name}: {old_gold} → {new_gold}")
+
+            if per_char > 0:
+                print_status_message(
+                    f"Added {per_char} gold to each of {party_size} characters",
+                    "success"
+                )
+            else:
+                print_status_message(
+                    f"Removed {abs(per_char)} gold from each of {party_size} characters",
+                    "success"
+                )
 
     def cmd_clear_inventory(self, args: list[str]) -> None:
         """Clear a character's inventory."""
