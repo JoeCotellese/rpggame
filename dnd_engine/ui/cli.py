@@ -34,6 +34,7 @@ from dnd_engine.systems.targeting import (
     get_spell_targeting_requirements,
 )
 from dnd_engine.ui.shop_ui import ShopUI
+from dnd_engine.ui.inventory_ui import InventoryUI
 from dnd_engine.ui.debug_console import DebugConsole
 from dnd_engine.ui.rich_ui import (
     console,
@@ -539,7 +540,12 @@ class CLI:
                 filter_arg = " ".join(parts[1:])
                 self.display_inventory(filter_arg)
             else:
-                self.display_inventory()
+                # Launch interactive inventory management UI
+                inventory_ui = InventoryUI(
+                    party=self.game_state.party.characters,
+                    data_loader=self.game_state.data_loader
+                )
+                inventory_ui.run()
             return
 
         if command == "equip" or command.startswith("equip "):
@@ -4767,7 +4773,7 @@ class CLI:
             ("shop [npc]", "Open shop UI (e.g., 'shop gareth' or just 'shop' for menu)"),
             ("search", "Search the room for items"),
             ("take/get/pickup <item>", "Pick up an item (e.g., 'take dagger', 'get gold')"),
-            ("inventory / i [filter]", "Show inventory. Filter: summary, player name/number, or item type"),
+            ("inventory / i [filter]", "Manage inventory. No args: interactive UI. Filter: summary, player, item type"),
             ("equip <item> [on <player>]", "Equip weapon/armor (e.g., 'equip sword on 2')"),
             ("unequip <slot> [on <player>]", "Unequip weapon/armor (e.g., 'unequip weapon on gandalf')"),
             ("use <item> [on <player>]", "Use consumable (e.g., 'use potion on 2')"),
