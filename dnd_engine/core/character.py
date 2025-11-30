@@ -51,7 +51,8 @@ class Character(Creature):
         armor_proficiencies: list[str] | None = None,
         spellcasting_ability: str | None = None,
         known_spells: list[str] | None = None,
-        prepared_spells: list[str] | None = None
+        prepared_spells: list[str] | None = None,
+        vault_id: str | None = None
     ):
         """
         Initialize a player character.
@@ -76,6 +77,7 @@ class Character(Creature):
             spellcasting_ability: The ability used for spellcasting (e.g., "int", "wis", "cha")
             known_spells: List of spell IDs the character knows
             prepared_spells: List of spell IDs the character has prepared
+            vault_id: UUID linking this character to their vault entry (for syncing progression)
         """
         super().__init__(
             name=name,
@@ -103,6 +105,9 @@ class Character(Creature):
         self.spellcasting_ability = spellcasting_ability
         self.known_spells = known_spells if known_spells is not None else []
         self.prepared_spells = prepared_spells if prepared_spells is not None else []
+
+        # Vault tracking for syncing character progression across campaigns
+        self.vault_id = vault_id
 
         # Death saving throw state
         self.death_save_successes: int = 0
@@ -473,6 +478,48 @@ class Character(Creature):
             amount: XP to add
         """
         self.xp += amount
+
+    def prepare_for_new_campaign(self) -> dict[str, list[str]]:
+        """
+        Prepare character for a new campaign by resetting transient state.
+
+        Following traditional D&D conventions, characters are restored between
+        adventures as if they took a long rest:
+        - HP restored to max
+        - All resource pools restored (spell slots, rage, ki, etc.)
+        - Conditions cleared
+        - Quest items removed (campaign-specific items don't transfer)
+
+        XP, level, gold, and permanent items are preserved.
+
+        Returns:
+            Dictionary with lists of removed items by category:
+            {"quest_items": [...], "conditions": [...]}
+        """
+        removed = {"quest_items": [], "conditions": []}
+
+        # Restore HP to max
+        self.current_hp = self.max_hp
+
+        # Restore all resource pools (spell slots, rage, ki, etc.)
+        for pool in self.resource_pools.values():
+            pool.recover()  # Recovers to maximum
+
+        # Clear conditions
+        conditions_to_remove = list(self.conditions)
+        for condition in conditions_to_remove:
+            self.remove_condition(condition)
+            removed["conditions"].append(condition)
+
+        # Reset death saves
+        self.death_save_successes = 0
+        self.death_save_failures = 0
+        self.stabilized = False
+
+        # Remove quest items
+        removed["quest_items"] = self.inventory.remove_quest_items()
+
+        return removed
 
     def check_for_level_up(self, data_loader, event_bus=None) -> bool:
         """

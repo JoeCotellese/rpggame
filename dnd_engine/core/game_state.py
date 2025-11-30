@@ -1580,8 +1580,11 @@ class GameState:
             if not category:
                 return False  # Unknown item category
 
+            # Check if this is a quest item (doesn't transfer between campaigns)
+            is_quest_item = item_to_take.get("quest_item", False)
+
             # Add item to the specified character's inventory
-            character.inventory.add_item(item_id, category)
+            character.inventory.add_item(item_id, category, quest_item=is_quest_item)
 
             # Emit item acquired event
             self.event_bus.emit(Event(

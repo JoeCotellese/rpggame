@@ -1,11 +1,16 @@
 # ABOUTME: Save slot manager for the new 10-slot save system
 # ABOUTME: Handles save/load operations, slot management, and game state persistence
 
+from __future__ import annotations
+
 import json
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from dnd_engine.core.character_vault_v2 import CharacterVaultV2
 
 from dnd_engine.core.campaign_progress import CampaignProgress
 from dnd_engine.core.character import Character, CharacterClass
@@ -149,7 +154,8 @@ class SaveSlotManager:
         slot_number: int,
         game_state: GameState,
         playtime_delta: int = 0,
-        campaign_progress: CampaignProgress | None = None
+        campaign_progress: CampaignProgress | None = None,
+        character_vault: CharacterVaultV2 | None = None
     ) -> Path:
         """
         Save game state to a specific slot.
@@ -159,6 +165,7 @@ class SaveSlotManager:
             game_state: Current game state to save
             playtime_delta: Seconds to add to playtime (for this session)
             campaign_progress: Optional campaign progress for multi-dungeon campaigns
+            character_vault: Optional vault to sync character progression to
 
         Returns:
             Path to the saved file
@@ -189,6 +196,10 @@ class SaveSlotManager:
         # Extract party info
         slot.party_composition = [char.name for char in game_state.party.characters]
         slot.party_levels = [char.level for char in game_state.party.characters]
+
+        # Sync character progression to vault if provided
+        if character_vault:
+            self._sync_characters_to_vault(game_state, character_vault)
 
         # Save to file
         return self._save_slot_file(slot_number, slot, game_state, campaign_progress)
@@ -414,7 +425,8 @@ class SaveSlotManager:
             "resource_pools": self._serialize_resource_pools(character),
             "spellcasting_ability": character.spellcasting_ability,
             "known_spells": character.known_spells,
-            "prepared_spells": character.prepared_spells
+            "prepared_spells": character.prepared_spells,
+            "vault_id": character.vault_id
         }
 
     def _serialize_inventory(self, inventory: Inventory) -> dict[str, Any]:
@@ -424,7 +436,8 @@ class SaveSlotManager:
                 {
                     "item_id": item.item_id,
                     "category": item.category,
-                    "quantity": item.quantity
+                    "quantity": item.quantity,
+                    "quest_item": item.quest_item
                 }
                 for item in inventory.items.values()
             ],
@@ -526,7 +539,8 @@ class SaveSlotManager:
             subclass=char_data.get("subclass"),
             spellcasting_ability=char_data.get("spellcasting_ability"),
             known_spells=char_data.get("known_spells"),
-            prepared_spells=char_data.get("prepared_spells")
+            prepared_spells=char_data.get("prepared_spells"),
+            vault_id=char_data.get("vault_id")
         )
 
         # Restore conditions
@@ -549,7 +563,8 @@ class SaveSlotManager:
             inventory.add_item(
                 item_id=item_data["item_id"],
                 category=item_data["category"],
-                quantity=item_data["quantity"]
+                quantity=item_data["quantity"],
+                quest_item=item_data.get("quest_item", False)
             )
 
         # Restore equipped items
@@ -564,6 +579,29 @@ class SaveSlotManager:
         inventory.currency = Currency(**currency_data)
 
         return inventory
+
+    def _sync_characters_to_vault(
+        self,
+        game_state: GameState,
+        character_vault: CharacterVaultV2
+    ) -> None:
+        """
+        Sync character progression to the vault.
+
+        Updates vault entries for characters that have vault_ids with their
+        current XP, level, gold, and permanent items.
+
+        Args:
+            game_state: Current game state with party
+            character_vault: Vault to sync to
+        """
+        for character in game_state.party.characters:
+            if character.vault_id:
+                try:
+                    character_vault.update_character(character.vault_id, character)
+                except FileNotFoundError:
+                    # Character was deleted from vault, skip sync
+                    pass
 
     def _validate_slot_data(self, slot_data: dict[str, Any]) -> None:
         """

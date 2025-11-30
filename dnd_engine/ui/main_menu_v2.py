@@ -327,12 +327,13 @@ class MainMenuV2:
             # Override to start at the campaign's specific starting room
             game_state.current_room_id = starting_room
 
-            # Step 5: Save to slot with campaign progress
+            # Step 5: Save to slot with campaign progress and sync vault
             self.slot_manager.save_game(
                 slot_number=slot_num,
                 game_state=game_state,
                 playtime_delta=0,
-                campaign_progress=campaign_progress
+                campaign_progress=campaign_progress,
+                character_vault=self.vault
             )
 
             # Step 6: Record character usage in vault
@@ -397,6 +398,13 @@ class MainMenuV2:
                 if selected_ids:
                     for char_id in selected_ids:
                         character = self.vault.get_character(char_id)
+                        # Prepare character for new campaign (reset HP, resources, etc.)
+                        removed = character.prepare_for_new_campaign()
+                        if removed["quest_items"]:
+                            print_status_message(
+                                f"{character.name}: Quest items removed: {', '.join(removed['quest_items'])}",
+                                "info"
+                            )
                         selected_characters.append(character)
 
             except (EOFError, KeyboardInterrupt):

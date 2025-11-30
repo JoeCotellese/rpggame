@@ -31,6 +31,18 @@ class TestInventoryItem:
         assert "potion_of_healing" in str(item2)
         assert "x3" in str(item2)
 
+    def test_inventory_item_default_quest_item_false(self):
+        """Test that default quest_item is False"""
+        item = InventoryItem(item_id="sword", category="weapons")
+        assert item.quest_item is False
+
+    def test_inventory_item_quest_item_true(self):
+        """Test creating a quest item"""
+        item = InventoryItem(
+            item_id="ancient_key", category="consumables", quest_item=True
+        )
+        assert item.quest_item is True
+
 
 class TestInventory:
     """Test the Inventory class"""
@@ -96,6 +108,23 @@ class TestInventory:
         # But adding more of existing item should work
         assert limited_inventory.add_item("longsword", "weapons", 5) is True
         assert limited_inventory.get_item_quantity("longsword") == 6
+
+    def test_add_item_with_quest_item_flag(self):
+        """Test adding an item marked as a quest item"""
+        result = self.inventory.add_item(
+            "ancient_key", "consumables", 1, quest_item=True
+        )
+        assert result is True
+
+        item = self.inventory.items["ancient_key"]
+        assert item.quest_item is True
+
+    def test_add_item_without_quest_item_flag(self):
+        """Test that items default to non-quest items"""
+        self.inventory.add_item("potion_of_healing", "consumables", 1)
+
+        item = self.inventory.items["potion_of_healing"]
+        assert item.quest_item is False
 
     def test_remove_item(self):
         """Test removing an item"""
@@ -563,3 +592,102 @@ class TestAmmunitionTracking:
         # Now out of ammo
         result = self.inventory.consume_ammo("arrows")
         assert result is False
+
+
+class TestQuestItemRemoval:
+    """Test quest item removal functionality."""
+
+    def setup_method(self):
+        """Set up test fixtures"""
+        self.inventory = Inventory()
+
+    def test_remove_quest_items_removes_only_quest_items(self):
+        """Test that remove_quest_items only removes items with quest_item=True."""
+        # Add regular items
+        self.inventory.add_item("longsword", "weapons", 1)
+        self.inventory.add_item("potion_of_healing", "consumables", 3)
+
+        # Add quest items
+        self.inventory.add_item("ancient_key", "consumables", 1, quest_item=True)
+        self.inventory.add_item("magic_orb", "consumables", 1, quest_item=True)
+
+        removed = self.inventory.remove_quest_items()
+
+        # Regular items should remain
+        assert self.inventory.has_item("longsword")
+        assert self.inventory.has_item("potion_of_healing")
+        assert self.inventory.get_item_quantity("potion_of_healing") == 3
+
+        # Quest items should be gone
+        assert not self.inventory.has_item("ancient_key")
+        assert not self.inventory.has_item("magic_orb")
+
+        # Return value should list removed item IDs
+        assert "ancient_key" in removed
+        assert "magic_orb" in removed
+        assert len(removed) == 2
+
+    def test_remove_quest_items_returns_empty_list_when_none(self):
+        """Test that remove_quest_items returns empty list when no quest items."""
+        self.inventory.add_item("longsword", "weapons", 1)
+        self.inventory.add_item("potion_of_healing", "consumables", 3)
+
+        removed = self.inventory.remove_quest_items()
+
+        assert removed == []
+        assert self.inventory.has_item("longsword")
+        assert self.inventory.has_item("potion_of_healing")
+
+    def test_remove_quest_items_on_empty_inventory(self):
+        """Test that remove_quest_items works on empty inventory."""
+        removed = self.inventory.remove_quest_items()
+        assert removed == []
+
+    def test_remove_quest_items_unequips_equipped_quest_item(self):
+        """Test that equipped quest items are unequipped before removal."""
+        # Add and equip a quest weapon
+        self.inventory.add_item("cursed_blade", "weapons", 1, quest_item=True)
+        self.inventory.equip_item("cursed_blade", EquipmentSlot.WEAPON)
+
+        # Verify it's equipped
+        assert self.inventory.get_equipped_item(EquipmentSlot.WEAPON) == "cursed_blade"
+
+        removed = self.inventory.remove_quest_items()
+
+        # Item should be removed
+        assert "cursed_blade" in removed
+        assert not self.inventory.has_item("cursed_blade")
+
+        # Equipment slot should be empty
+        assert self.inventory.get_equipped_item(EquipmentSlot.WEAPON) is None
+
+    def test_remove_quest_items_preserves_equipped_non_quest_items(self):
+        """Test that equipped non-quest items remain equipped."""
+        # Add and equip regular items
+        self.inventory.add_item("longsword", "weapons", 1)
+        self.inventory.add_item("chain_mail", "armor", 1)
+        self.inventory.equip_item("longsword", EquipmentSlot.WEAPON)
+        self.inventory.equip_item("chain_mail", EquipmentSlot.ARMOR)
+
+        # Add a quest item
+        self.inventory.add_item("ancient_key", "consumables", 1, quest_item=True)
+
+        self.inventory.remove_quest_items()
+
+        # Regular equipment should remain equipped
+        assert self.inventory.get_equipped_item(EquipmentSlot.WEAPON) == "longsword"
+        assert self.inventory.get_equipped_item(EquipmentSlot.ARMOR) == "chain_mail"
+
+    def test_remove_quest_items_handles_multiple_equipped_slots(self):
+        """Test removal when both weapon and armor are quest items."""
+        # Add and equip quest items in both slots
+        self.inventory.add_item("quest_sword", "weapons", 1, quest_item=True)
+        self.inventory.add_item("quest_armor", "armor", 1, quest_item=True)
+        self.inventory.equip_item("quest_sword", EquipmentSlot.WEAPON)
+        self.inventory.equip_item("quest_armor", EquipmentSlot.ARMOR)
+
+        removed = self.inventory.remove_quest_items()
+
+        assert len(removed) == 2
+        assert self.inventory.get_equipped_item(EquipmentSlot.WEAPON) is None
+        assert self.inventory.get_equipped_item(EquipmentSlot.ARMOR) is None

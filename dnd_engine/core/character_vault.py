@@ -444,7 +444,8 @@ class CharacterVault:
                 {
                     "item_id": item.item_id,
                     "category": item.category,
-                    "quantity": item.quantity
+                    "quantity": item.quantity,
+                    "quest_item": item.quest_item
                 }
                 for item in inventory.items.values()
             ],
@@ -541,7 +542,8 @@ class CharacterVault:
             inventory.add_item(
                 item_id=item_data["item_id"],
                 category=item_data["category"],
-                quantity=item_data["quantity"]
+                quantity=item_data["quantity"],
+                quest_item=item_data.get("quest_item", False)
             )
 
         # Restore equipped items

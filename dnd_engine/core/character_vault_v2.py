@@ -147,7 +147,7 @@ class CharacterVaultV2:
             character_id: UUID of the character
 
         Returns:
-            Character instance
+            Character instance with vault_id set for progression tracking
 
         Raises:
             FileNotFoundError: If character doesn't exist
@@ -159,7 +159,9 @@ class CharacterVaultV2:
             raise FileNotFoundError(f"Character not found: {character_id}")
 
         character_entry = vault_data["characters"][character_id]
-        return self._deserialize_character(character_entry["character"])
+        character = self._deserialize_character(character_entry["character"])
+        character.vault_id = character_id
+        return character
 
     def update_character(self, character_id: str, character: Character) -> None:
         """
@@ -410,7 +412,8 @@ class CharacterVaultV2:
                 {
                     "item_id": item.item_id,
                     "category": item.category,
-                    "quantity": item.quantity
+                    "quantity": item.quantity,
+                    "quest_item": item.quest_item
                 }
                 for item in inventory.items.values()
             ],
@@ -496,7 +499,8 @@ class CharacterVaultV2:
             inventory.add_item(
                 item_id=item_data["item_id"],
                 category=item_data["category"],
-                quantity=item_data["quantity"]
+                quantity=item_data["quantity"],
+                quest_item=item_data.get("quest_item", False)
             )
 
         # Restore equipped items

@@ -352,3 +352,32 @@ class TestCharacterVaultV2:
         # Verify can load character
         retrieved = vault2.get_character(char_id)
         assert retrieved.name == sample_character.name
+
+    def test_get_character_sets_vault_id(self, vault, sample_character):
+        """Test that get_character sets vault_id on the returned character."""
+        char_id = vault.add_character(sample_character)
+
+        retrieved = vault.get_character(char_id)
+
+        assert retrieved.vault_id == char_id
+
+    def test_vault_id_is_none_before_adding_to_vault(self, sample_character):
+        """Test that new characters don't have a vault_id by default."""
+        assert sample_character.vault_id is None
+
+    def test_vault_id_persists_across_updates(self, vault, sample_character):
+        """Test that vault_id remains consistent after character updates."""
+        char_id = vault.add_character(sample_character)
+
+        # Get character (sets vault_id)
+        retrieved = vault.get_character(char_id)
+        assert retrieved.vault_id == char_id
+
+        # Update character
+        retrieved.level = 10
+        vault.update_character(char_id, retrieved)
+
+        # Get again and verify vault_id is still set correctly
+        retrieved_again = vault.get_character(char_id)
+        assert retrieved_again.vault_id == char_id
+        assert retrieved_again.level == 10
