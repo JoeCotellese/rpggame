@@ -2,10 +2,13 @@
 # ABOUTME: Handles multi-step campaign creation with party building and dungeon selection
 
 
+import questionary
+from questionary import Choice
 from rich import box
 from rich.table import Table
 
 from dnd_engine.core.campaign_manager import CampaignManager
+from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.character_factory import CharacterFactory
 from dnd_engine.core.character_vault import CharacterState, CharacterVault
 from dnd_engine.rules.loader import DataLoader
@@ -15,6 +18,7 @@ from dnd_engine.ui.rich_ui import (
     print_banner,
     print_choice_menu,
     print_error,
+    print_message,
     print_section,
     print_status_message,
 )
@@ -234,6 +238,9 @@ class CampaignCreationWizard:
             # Recalculate HP for higher levels
             # TODO: Implement proper leveling system
 
+        # Offer spell preparation for prepared casters
+        self._offer_initial_spell_preparation(character)
+
         # Save to vault
         char_id = self.character_vault.save_character(
             character,
@@ -314,6 +321,16 @@ class CampaignCreationWizard:
                     ).strip().lower()
                     if confirm not in ["y", "yes"]:
                         return
+
+                # Load character and offer spell preparation for prepared casters
+                character = self.character_vault.load_character(char_id)
+                self._offer_initial_spell_preparation(character)
+                # Save any spell preparation changes back to vault
+                self.character_vault.save_character(
+                    character,
+                    state=CharacterState(char_info.get("state", "available")),
+                    campaign_name=char_info.get("campaign_name")
+                )
 
                 # Add to party
                 self.party_character_ids.append(char_id)
@@ -438,3 +455,130 @@ class CampaignCreationWizard:
         print_status_message(f"✓ Campaign '{self.campaign_name}' created successfully!", "success")
 
         return self.campaign_name
+
+    def _offer_initial_spell_preparation(self, character: Character) -> None:
+        """
+        Offer spell preparation UI for prepared caster classes.
+
+        For wizards and clerics, shows the spell preparation interface so they
+        can select which spells to prepare (up to INT/WIS mod + level).
+
+        Args:
+            character: Character to potentially prepare spells for
+        """
+        # Only offer for prepared caster classes
+        prepared_caster_classes = {CharacterClass.WIZARD, CharacterClass.CLERIC}
+        if character.character_class not in prepared_caster_classes:
+            return
+
+        # Check if character has leveled spells to prepare
+        if not character.known_spells:
+            return
+
+        # Load spell data
+        spells_data = self.data_loader.load_spells()
+
+        # Get preparable spells
+        cantrips, leveled_spells = character.get_preparable_spells(spells_data)
+
+        if not leveled_spells:
+            return
+
+        # Calculate preparation limit
+        max_prepared = character.get_max_prepared_spells()
+
+        console.print()
+        print_section(f"Spell Preparation - {character.name}")
+        print_message(f"Select up to [cyan]{max_prepared}[/cyan] spells to prepare.")
+        print_message("")
+
+        # Show cantrips (always prepared, not selectable)
+        if cantrips:
+            print_message("[green]Cantrips (always prepared):[/green]")
+            for cantrip_id in cantrips:
+                cantrip = spells_data.get(cantrip_id, {})
+                print_message(f"  • {cantrip.get('name', cantrip_id)}")
+            print_message("")
+
+        # Filter to only spells of levels for which character has spell slots
+        available_leveled_spells = []
+        for spell_id, spell_data in leveled_spells:
+            spell_level = spell_data.get("level", 1)
+            pool_name = f"spell_slots_level_{spell_level}"
+            pool = character.resource_pools.get(pool_name)
+            if pool and pool.maximum > 0:
+                available_leveled_spells.append((spell_id, spell_data))
+
+        if not available_leveled_spells:
+            print_status_message("No leveled spells available to prepare.", "warning")
+            return
+
+        # Build checkbox choices organized by spell level
+        choices = []
+        current_level = 0
+
+        for spell_id, spell_data in available_leveled_spells:
+            spell_level = spell_data.get("level", 1)
+            spell_name = spell_data.get("name", spell_id)
+            school = spell_data.get("school", "")
+
+            # Add level separator
+            if spell_level != current_level:
+                current_level = spell_level
+                level_ordinal = character._level_to_ordinal(spell_level)
+                pool = character.resource_pools.get(f"spell_slots_level_{spell_level}")
+                max_slots = pool.maximum if pool else 0
+                choices.append(questionary.Separator(f"── {level_ordinal.capitalize()} Level ({max_slots} slots) ──"))
+
+            # Build choice with spell info
+            if spell_data.get("damage"):
+                effect = f"{spell_data['damage'].get('dice', '')} {spell_data['damage'].get('type', '')}"
+            elif spell_data.get("healing"):
+                effect = f"healing {spell_data['healing'].get('dice', '')}"
+            else:
+                desc = spell_data.get("description", "utility")
+                effect = desc[:30] + "..." if len(desc) > 30 else desc
+
+            choice_title = f"{spell_name} ({school}) - {effect}"
+            # Don't pre-check any spells for initial preparation
+            choices.append(Choice(
+                title=choice_title,
+                value=spell_id,
+                checked=False
+            ))
+
+        # Custom validator to enforce max selection
+        def validate_selection(selected):
+            if len(selected) > max_prepared:
+                return f"Too many spells! Select at most {max_prepared} (you selected {len(selected)})"
+            return True
+
+        try:
+            selected_spell_ids = questionary.checkbox(
+                f"Select spells to prepare (max {max_prepared}):",
+                choices=choices,
+                validate=validate_selection,
+                instruction="(Space to toggle, Enter to confirm)"
+            ).ask()
+
+            # Handle cancellation - prepare all if cancelled
+            if selected_spell_ids is None:
+                print_message("No selection made. All known spells will be prepared.")
+                return
+
+        except (EOFError, KeyboardInterrupt):
+            print_message("Preparation cancelled. All known spells will be prepared.")
+            return
+
+        # Update prepared spells (cantrips + selected leveled spells)
+        character.prepared_spells = list(cantrips) + selected_spell_ids
+
+        if selected_spell_ids:
+            spell_names = []
+            for sid in selected_spell_ids:
+                spell = spells_data.get(sid, {})
+                spell_names.append(spell.get("name", sid))
+            print_status_message(
+                f"Prepared {len(selected_spell_ids)} spell(s): {', '.join(spell_names)}",
+                "success"
+            )

@@ -10,10 +10,10 @@ from rich.panel import Panel
 from rich.style import Style
 from rich.table import Table
 
-from dnd_engine.utils.logging_config import init_logging
+from dnd_engine.utils.logging_config import init_logging, MAX_CONSOLE_WIDTH
 
 # Global console instance - initialized via init_console()
-console = Console()
+console = Console(width=MAX_CONSOLE_WIDTH)
 
 
 def init_console(debug_mode: bool = False) -> None:
