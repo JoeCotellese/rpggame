@@ -20,6 +20,9 @@
 10. [Extension Points](#extension-points)
 11. [Future Considerations](#future-considerations)
 
+**📚 Related Documentation**:
+- **[DESIGN_PATTERNS.md](./DESIGN_PATTERNS.md)**: Comprehensive audit of architectural and design patterns (Factory, Builder, Strategy, Observer, Middleware, etc.)
+
 ---
 
 ## System Purpose
