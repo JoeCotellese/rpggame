@@ -214,3 +214,91 @@ def test_area_effect_detection():
 
     assert "area_of_effect" in burning_hands
     assert "area_of_effect" not in shield
+
+
+@pytest.fixture
+def thunderwave_spell():
+    """Thunderwave spell data - CON save, thunder damage."""
+    return {
+        "id": "thunderwave",
+        "name": "Thunderwave",
+        "level": 1,
+        "school": "evocation",
+        "casting_time": "1 action",
+        "range_ft": 0,
+        "damage": {
+            "dice": "2d8",
+            "damage_type": "thunder"
+        },
+        "saving_throw": {
+            "ability": "constitution",
+            "on_success": "half"
+        },
+        "area_of_effect": "15-foot cube",
+        "classes": ["wizard", "sorcerer", "bard", "druid"]
+    }
+
+
+def test_thunderwave_hits_multiple_enemies(wizard, thunderwave_spell, skeletons):
+    """Test that Thunderwave damages all enemies in area with CON save."""
+    combat = CombatEngine()
+    event_bus = EventBus()
+
+    # Cast Thunderwave on both skeletons
+    result = combat.resolve_spell_save(
+        caster=wizard,
+        targets=skeletons,
+        spell=thunderwave_spell,
+        apply_damage=True,
+        event_bus=event_bus
+    )
+
+    # Verify spell details in result
+    assert result["spell_name"] == "Thunderwave"
+    assert result["caster"] == "Tim"
+    assert result["save_dc"] == 13  # 8 + 2 (prof) + 3 (INT)
+    assert result["save_ability"] == "constitution"
+
+    # Verify both targets got hit
+    assert len(result["targets"]) == 2
+
+    # Each target should have results with thunder damage
+    for target_result in result["targets"]:
+        assert target_result["name"] == "Skeleton"
+        assert target_result["damage"] > 0
+        assert target_result["damage_type"] == "thunder"
+
+    # Verify damage was applied to both skeletons
+    for skeleton in skeletons:
+        assert skeleton.current_hp < skeleton.max_hp
+
+
+def test_thunderwave_uses_constitution_save(wizard, thunderwave_spell):
+    """Test that Thunderwave uses CON saves (different from Burning Hands DEX)."""
+    combat = CombatEngine()
+
+    # Create enemy with high CON but low DEX
+    tough_enemy = Creature(
+        name="Ogre",
+        max_hp=59,
+        ac=11,
+        abilities=Abilities(
+            strength=19,
+            dexterity=8,   # -1 DEX modifier
+            constitution=16,  # +3 CON modifier
+            intelligence=5,
+            wisdom=7,
+            charisma=7
+        )
+    )
+
+    result = combat.resolve_spell_save(
+        caster=wizard,
+        targets=[tough_enemy],
+        spell=thunderwave_spell,
+        apply_damage=False
+    )
+
+    # Verify the save used CON modifier (+3)
+    target_result = result["targets"][0]
+    assert target_result["modifier"] == 3  # CON modifier
