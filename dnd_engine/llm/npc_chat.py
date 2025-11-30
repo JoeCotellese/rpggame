@@ -54,19 +54,13 @@ NPC_TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "buy_item",
+            "name": "open_shop",
             "description": (
-                "Process a purchase when the player wants to buy something. "
-                "The game validates gold. Common prices: ale 2gp, meal 5gp, room 8gp."
+                "Call this when the player wants to shop, browse, buy, sell, "
+                "see your inventory, or do any commerce. This opens a visual shop "
+                "interface for the player to interact with."
             ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "item_name": {"type": "string", "description": "Item being purchased"},
-                    "price": {"type": "integer", "description": "Price in gold"},
-                },
-                "required": ["item_name", "price"],
-            },
+            "parameters": {"type": "object", "properties": {}},
         },
     },
     {
@@ -186,6 +180,7 @@ class NPCChatManager:
         self.provider = provider
         self.game_state = game_state
         self._current_conversation: ConversationState | None = None
+        self.shop_requested: bool = False  # Flag to signal shop UI should open
 
         # Background event loop (same pattern as LLMEnhancer)
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -197,7 +192,7 @@ class NPCChatManager:
         self._tool_handlers: dict[str, Callable[..., dict[str, Any]]] = {
             "activate_quest": self._handle_activate_quest,
             "get_available_quests": self._handle_get_available_quests,
-            "buy_item": self._handle_buy_item,
+            "open_shop": self._handle_open_shop,
             "get_player_gold": self._handle_get_player_gold,
             "give_item": self._handle_give_item,
             "check_reputation": self._handle_check_reputation,
@@ -400,20 +395,7 @@ class NPCChatManager:
         self, tool_name: str, arguments: dict[str, Any], result: dict[str, Any]
     ) -> None:
         """Show visible feedback to user when tools execute (like dice rolls)."""
-        if tool_name == "buy_item":
-            item = arguments.get("item_name", "item")
-            price = arguments.get("price", 0)
-            if result.get("success"):
-                remaining = result.get("remaining_gold", 0)
-                print_status_message(
-                    f"💰 Purchased {item} for {price} gold ({remaining} gold remaining)",
-                    "success",
-                )
-            else:
-                error = result.get("error", "Transaction failed")
-                print_status_message(f"💰 Purchase failed: {error}", "error")
-
-        elif tool_name == "activate_quest":
+        if tool_name == "activate_quest":
             quest_id = arguments.get("quest_id", "quest")
             if result.get("success"):
                 quest_name = result.get("quest_name", quest_id)
@@ -507,44 +489,22 @@ class NPCChatManager:
 
         return ""
 
-    def _handle_buy_item(self, item_name: str, price: int) -> dict[str, Any]:
-        """Process item purchase."""
-        # Get party gold total
-        total_gold = sum(
-            char.inventory.gold for char in self.game_state.party.characters
-        )
+    def _handle_open_shop(self) -> dict[str, Any]:
+        """Signal that the shop UI should be opened."""
+        if not self._current_conversation:
+            return {"success": False, "error": "No active conversation"}
 
-        if total_gold < price:
-            return {
-                "success": False,
-                "error": "Not enough gold",
-                "player_gold": total_gold,
-            }
+        npc = self._current_conversation.npc
+        if not npc.shop or not npc.shop.enabled:
+            return {"success": False, "error": "This NPC doesn't have a shop"}
 
-        # Deduct from first character with enough gold
-        for char in self.game_state.party.characters:
-            if char.inventory.gold >= price:
-                char.inventory.gold -= price
-                break
-        else:
-            # Spread across characters if needed
-            remaining = price
-            for char in self.game_state.party.characters:
-                if remaining <= 0:
-                    break
-                deduct = min(char.inventory.gold, remaining)
-                char.inventory.gold -= deduct
-                remaining -= deduct
-
-        # For consumables like food/drink, we don't add to inventory
-        # For actual items, would add here
+        # Set flag to signal CLI should open shop UI
+        self.shop_requested = True
 
         return {
             "success": True,
-            "item": item_name,
-            "remaining_gold": sum(
-                c.inventory.gold for c in self.game_state.party.characters
-            ),
+            "message": "Opening shop interface",
+            "shop_type": npc.shop.shop_type,
         }
 
     def _handle_get_player_gold(self) -> dict[str, Any]:
