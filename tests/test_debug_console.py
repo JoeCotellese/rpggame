@@ -439,33 +439,51 @@ class TestInventoryManipulation:
     """Test inventory manipulation commands"""
 
     def test_gold_add(self):
-        """Test /gold command adds gold to party"""
-        party = Party([])
+        """Test /gold command adds gold to character inventory"""
+        # Create a character to receive gold
+        character = Character(
+            name="TestHero",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=Abilities(10, 10, 10, 10, 10, 10),
+            max_hp=10,
+            ac=10
+        )
+        party = Party([character])
         game_state = GameState(party, "test_dungeon")
         console = DebugConsole(game_state, enabled=True)
 
-        initial_gold = game_state.party.currency.gold
+        initial_gold = character.inventory.currency.gold
 
-        # Add gold
+        # Add gold (distributed to party members)
         console.cmd_gold(["500"])
 
-        new_gold = game_state.party.currency.gold
+        new_gold = character.inventory.currency.gold
         assert new_gold == initial_gold + 500
 
     def test_gold_remove(self):
         """Test /gold command with negative value removes gold"""
-        party = Party([])
+        # Create a character with gold
+        character = Character(
+            name="TestHero",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=Abilities(10, 10, 10, 10, 10, 10),
+            max_hp=10,
+            ac=10
+        )
+        party = Party([character])
         game_state = GameState(party, "test_dungeon")
-        # Add some gold first
-        game_state.party.currency.gold = 1000
+        # Add some gold to the character first
+        character.inventory.currency.gold = 1000
         console = DebugConsole(game_state, enabled=True)
 
-        initial_gold = game_state.party.currency.gold
+        initial_gold = character.inventory.currency.gold
 
         # Remove gold
         console.cmd_gold(["-200"])
 
-        new_gold = game_state.party.currency.gold
+        new_gold = character.inventory.currency.gold
         assert new_gold == initial_gold - 200
 
 

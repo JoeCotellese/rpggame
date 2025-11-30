@@ -322,3 +322,175 @@ class TestSaveSlotManager:
         for filename, expected in test_cases:
             result = save_manager._get_adventure_display_name(filename)
             assert result == expected
+
+
+class TestVaultSync:
+    """Test vault sync functionality during save_game()."""
+
+    @pytest.fixture
+    def temp_vault_path(self, temp_saves_dir):
+        """Create a temporary path for vault file alongside saves."""
+        return temp_saves_dir.parent / "character_vault.json"
+
+    @pytest.fixture
+    def vault(self, temp_vault_path):
+        """Create a CharacterVaultV2 with temporary file."""
+        from dnd_engine.core.character_vault_v2 import CharacterVaultV2
+        return CharacterVaultV2(vault_path=temp_vault_path)
+
+    def test_save_game_syncs_characters_with_vault_id(
+        self, save_manager, vault, sample_character
+    ):
+        """Test that save_game syncs characters with vault_id to the vault."""
+        # Add character to vault and get the vault_id
+        char_id = vault.add_character(sample_character)
+        retrieved = vault.get_character(char_id)
+
+        # Create game state with the vault-linked character
+        party = Party([retrieved])
+        data_loader = DataLoader()
+        game_state = GameState(
+            party=party,
+            dungeon_name="test_dungeon",
+            data_loader=data_loader
+        )
+
+        # Modify character in game
+        game_state.party.characters[0].level = 10
+        game_state.party.characters[0].xp = 50000
+
+        # Save with vault sync
+        save_manager.save_game(
+            slot_number=1,
+            game_state=game_state,
+            character_vault=vault
+        )
+
+        # Verify vault was updated
+        vault_char = vault.get_character(char_id)
+        assert vault_char.level == 10
+        assert vault_char.xp == 50000
+
+    def test_save_game_without_vault_skips_sync(
+        self, save_manager, sample_character
+    ):
+        """Test that save_game works without vault (no sync)."""
+        party = Party([sample_character])
+        data_loader = DataLoader()
+        game_state = GameState(
+            party=party,
+            dungeon_name="test_dungeon",
+            data_loader=data_loader
+        )
+
+        # Save without vault - should not raise
+        slot_path = save_manager.save_game(
+            slot_number=2,
+            game_state=game_state
+        )
+
+        assert slot_path.exists()
+
+    def test_save_game_ignores_characters_without_vault_id(
+        self, save_manager, vault, sample_character
+    ):
+        """Test that characters without vault_id are not synced."""
+        # Add one character to vault
+        char_id = vault.add_character(sample_character)
+        vault_char = vault.get_character(char_id)
+
+        # Create a new character not in vault
+        new_char = Character(
+            name="New Hero",
+            character_class=CharacterClass.ROGUE,
+            level=5,
+            abilities=Abilities(10, 18, 12, 14, 10, 12),
+            max_hp=35,
+            ac=15,
+            current_hp=35,
+            xp=6500,
+            race="Halfling"
+        )
+
+        # Create party with both
+        party = Party([vault_char, new_char])
+        data_loader = DataLoader()
+        game_state = GameState(
+            party=party,
+            dungeon_name="test_dungeon",
+            data_loader=data_loader
+        )
+
+        # Save with vault sync
+        save_manager.save_game(
+            slot_number=3,
+            game_state=game_state,
+            character_vault=vault
+        )
+
+        # Vault should still only have one character
+        chars = vault.list_characters()
+        assert len(chars) == 1
+
+    def test_save_game_handles_deleted_vault_character(
+        self, save_manager, vault, sample_character
+    ):
+        """Test that sync handles characters deleted from vault gracefully."""
+        # Add and get character with vault_id
+        char_id = vault.add_character(sample_character)
+        retrieved = vault.get_character(char_id)
+
+        # Create game state
+        party = Party([retrieved])
+        data_loader = DataLoader()
+        game_state = GameState(
+            party=party,
+            dungeon_name="test_dungeon",
+            data_loader=data_loader
+        )
+
+        # Delete character from vault
+        vault.delete_character(char_id)
+
+        # Save should not raise error even though vault char is deleted
+        save_manager.save_game(
+            slot_number=4,
+            game_state=game_state,
+            character_vault=vault
+        )
+
+        # Slot should still be saved
+        slot = save_manager.get_slot(4)
+        assert not slot.is_empty()
+
+    def test_save_game_syncs_inventory_changes(
+        self, save_manager, vault, sample_character
+    ):
+        """Test that inventory changes are synced to vault."""
+        char_id = vault.add_character(sample_character)
+        retrieved = vault.get_character(char_id)
+
+        party = Party([retrieved])
+        data_loader = DataLoader()
+        game_state = GameState(
+            party=party,
+            dungeon_name="test_dungeon",
+            data_loader=data_loader
+        )
+
+        # Add items to character's inventory
+        game_state.party.characters[0].inventory.add_item(
+            "longsword", "weapons", 1
+        )
+        game_state.party.characters[0].inventory.add_gold(500)
+
+        save_manager.save_game(
+            slot_number=5,
+            game_state=game_state,
+            character_vault=vault
+        )
+
+        # Verify vault character has the items
+        vault_char = vault.get_character(char_id)
+        assert vault_char.inventory.has_item("longsword")
+        assert vault_char.inventory.gold == 500

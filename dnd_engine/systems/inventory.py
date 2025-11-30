@@ -25,6 +25,7 @@ class InventoryItem:
     item_id: str
     category: str  # "weapons", "armor", "consumables"
     quantity: int = 1
+    quest_item: bool = False  # Quest items don't transfer between campaigns
 
     def __str__(self) -> str:
         """String representation of the inventory item"""
@@ -66,7 +67,8 @@ class Inventory:
         self,
         item_id: str,
         category: str,
-        quantity: int = 1
+        quantity: int = 1,
+        quest_item: bool = False
     ) -> bool:
         """
         Add an item to the inventory.
@@ -78,6 +80,7 @@ class Inventory:
             item_id: ID of the item from items.json
             category: Item category ("weapons", "armor", "consumables")
             quantity: Number to add (default 1)
+            quest_item: Whether this item is campaign-specific (won't transfer)
 
         Returns:
             True if item was added, False if inventory full
@@ -101,7 +104,8 @@ class Inventory:
         self.items[item_id] = InventoryItem(
             item_id=item_id,
             category=category,
-            quantity=quantity
+            quantity=quantity,
+            quest_item=quest_item
         )
         return True
 
@@ -144,6 +148,30 @@ class Inventory:
                     self.equipped[slot] = None
 
         return True
+
+    def remove_quest_items(self) -> list[str]:
+        """
+        Remove all quest items from inventory.
+
+        Called when preparing a character for a new campaign. Quest items
+        are campaign-specific and don't transfer between adventures.
+
+        Returns:
+            List of item IDs that were removed
+        """
+        quest_item_ids = [
+            item_id for item_id, item in self.items.items()
+            if item.quest_item
+        ]
+
+        for item_id in quest_item_ids:
+            # Unequip if it was equipped
+            for slot, equipped_id in self.equipped.items():
+                if equipped_id == item_id:
+                    self.equipped[slot] = None
+            del self.items[item_id]
+
+        return quest_item_ids
 
     def has_item(self, item_id: str, quantity: int = 1) -> bool:
         """

@@ -8,6 +8,7 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
+from dnd_engine.core.character_vault_v2 import CharacterVaultV2
 from dnd_engine.core.game_state import GameState
 from dnd_engine.core.save_slot_manager import SaveSlotManager
 from dnd_engine.llm.enhancer import LLMEnhancer
@@ -98,7 +99,13 @@ class SaveSlotCLIAdapter:
     This provides a compatible interface for CLI while using the new save slot system.
     """
 
-    def __init__(self, slot_manager: SaveSlotManager, slot_number: int, session_start: datetime):
+    def __init__(
+        self,
+        slot_manager: SaveSlotManager,
+        slot_number: int,
+        session_start: datetime,
+        character_vault: CharacterVaultV2 | None = None
+    ):
         """
         Initialize the adapter.
 
@@ -106,10 +113,12 @@ class SaveSlotCLIAdapter:
             slot_manager: SaveSlotManager instance
             slot_number: Current slot number (1-10)
             session_start: When the game session started (for playtime tracking)
+            character_vault: Optional vault to sync character progression to
         """
         self.slot_manager = slot_manager
         self.slot_number = slot_number
         self.session_start = session_start
+        self.character_vault = character_vault
 
     def save_campaign_state(
         self,
@@ -130,11 +139,12 @@ class SaveSlotCLIAdapter:
         # Calculate session playtime
         playtime_delta = int((datetime.now() - self.session_start).total_seconds())
 
-        # Save to current slot
+        # Save to current slot and sync character progression to vault
         self.slot_manager.save_game(
             slot_number=self.slot_number,
             game_state=game_state,
-            playtime_delta=playtime_delta
+            playtime_delta=playtime_delta,
+            character_vault=self.character_vault
         )
 
 
@@ -195,9 +205,12 @@ def main() -> None:
         game_state, slot_number = result
 
         # Create save slot adapter for CLI compatibility
+        # Use menu's vault to sync character progression on save
         session_start = datetime.now()
         slot_manager = SaveSlotManager()
-        save_adapter = SaveSlotCLIAdapter(slot_manager, slot_number, session_start)
+        save_adapter = SaveSlotCLIAdapter(
+            slot_manager, slot_number, session_start, character_vault=menu.vault
+        )
 
         # Initialize CLI with adapter (compatible with old interface)
         # Note: CLI expects campaign_manager and campaign_name, we provide adapter and slot number
