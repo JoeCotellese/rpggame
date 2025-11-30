@@ -494,3 +494,196 @@ class TestVaultSync:
         vault_char = vault.get_character(char_id)
         assert vault_char.inventory.has_item("longsword")
         assert vault_char.inventory.gold == 500
+
+
+class TestProficiencySerialization:
+    """Test that character proficiencies are correctly saved and loaded."""
+
+    @pytest.fixture
+    def character_with_proficiencies(self):
+        """Create a character with full proficiency data."""
+        abilities = Abilities(
+            strength=17,
+            dexterity=16,
+            constitution=15,
+            intelligence=13,
+            wisdom=14,
+            charisma=12
+        )
+
+        char = Character(
+            name="Larry the Fighter",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=abilities,
+            max_hp=12,
+            ac=16,
+            current_hp=12,
+            xp=0,
+            race="Human",
+            weapon_proficiencies=["simple", "martial"],
+            armor_proficiencies=["light", "medium", "heavy", "shields"],
+            skill_proficiencies=["athletics", "perception"],
+            expertise_skills=[],
+            saving_throw_proficiencies=["strength", "constitution"]
+        )
+        char.darkvision_range = 60
+        return char
+
+    def test_serialize_character_includes_proficiencies(
+        self, save_manager, character_with_proficiencies
+    ):
+        """Test that _serialize_character includes all proficiency fields."""
+        serialized = save_manager._serialize_character(character_with_proficiencies)
+
+        assert serialized["weapon_proficiencies"] == ["simple", "martial"]
+        assert serialized["armor_proficiencies"] == ["light", "medium", "heavy", "shields"]
+        assert serialized["skill_proficiencies"] == ["athletics", "perception"]
+        assert serialized["expertise_skills"] == []
+        assert serialized["saving_throw_proficiencies"] == ["strength", "constitution"]
+        assert serialized["darkvision_range"] == 60
+
+    def test_deserialize_character_restores_proficiencies(
+        self, save_manager, character_with_proficiencies
+    ):
+        """Test that _deserialize_character restores all proficiency fields."""
+        serialized = save_manager._serialize_character(character_with_proficiencies)
+        deserialized = save_manager._deserialize_character(serialized)
+
+        assert deserialized.weapon_proficiencies == ["simple", "martial"]
+        assert deserialized.armor_proficiencies == ["light", "medium", "heavy", "shields"]
+        assert deserialized.skill_proficiencies == ["athletics", "perception"]
+        assert deserialized.expertise_skills == []
+        assert deserialized.saving_throw_proficiencies == ["strength", "constitution"]
+        assert deserialized.darkvision_range == 60
+
+    def test_save_and_load_preserves_proficiencies(
+        self, save_manager, character_with_proficiencies
+    ):
+        """Test full save/load cycle preserves proficiencies."""
+        party = Party([character_with_proficiencies])
+        data_loader = DataLoader()
+        game_state = GameState(
+            party=party,
+            dungeon_name="test_dungeon",
+            data_loader=data_loader
+        )
+
+        # Save
+        save_manager.save_game(slot_number=1, game_state=game_state)
+
+        # Load
+        loaded_state, _ = save_manager.load_game(slot_number=1)
+        loaded_char = loaded_state.party.characters[0]
+
+        # Verify all proficiencies preserved
+        assert loaded_char.weapon_proficiencies == ["simple", "martial"]
+        assert loaded_char.armor_proficiencies == ["light", "medium", "heavy", "shields"]
+        assert loaded_char.skill_proficiencies == ["athletics", "perception"]
+        assert loaded_char.expertise_skills == []
+        assert loaded_char.saving_throw_proficiencies == ["strength", "constitution"]
+        assert loaded_char.darkvision_range == 60
+
+    def test_deserialize_handles_missing_proficiencies_gracefully(self, save_manager):
+        """Test that loading old saves without proficiencies uses defaults."""
+        # Simulate an old save format without proficiency fields
+        old_format_char = {
+            "name": "Old Character",
+            "character_class": "fighter",
+            "level": 1,
+            "race": "Human",
+            "subclass": None,
+            "xp": 0,
+            "max_hp": 10,
+            "current_hp": 10,
+            "ac": 16,
+            "abilities": {
+                "strength": 15,
+                "dexterity": 14,
+                "constitution": 13,
+                "intelligence": 12,
+                "wisdom": 10,
+                "charisma": 8
+            },
+            "inventory": {
+                "items": [],
+                "equipped": {"weapon": None, "armor": None},
+                "currency": {"gold": 0, "silver": 0, "copper": 0, "electrum": 0, "platinum": 0}
+            },
+            "conditions": [],
+            "resource_pools": [],
+            "spellcasting_ability": None,
+            "known_spells": [],
+            "prepared_spells": [],
+            "vault_id": None
+            # Note: No proficiency fields - simulating old save format
+        }
+
+        deserialized = save_manager._deserialize_character(old_format_char)
+
+        # Should have empty defaults, not crash
+        assert deserialized.weapon_proficiencies == []
+        assert deserialized.armor_proficiencies == []
+        assert deserialized.skill_proficiencies == []
+        assert deserialized.expertise_skills == []
+        assert deserialized.saving_throw_proficiencies == []
+        assert deserialized.darkvision_range == 0
+
+    def test_rogue_expertise_skills_preserved(self, save_manager):
+        """Test that Rogue expertise skills are correctly saved and loaded."""
+        abilities = Abilities(10, 18, 12, 14, 10, 12)
+        rogue = Character(
+            name="Sneaky Pete",
+            character_class=CharacterClass.ROGUE,
+            level=1,
+            abilities=abilities,
+            max_hp=10,
+            ac=14,
+            race="Halfling",
+            weapon_proficiencies=["simple"],
+            armor_proficiencies=["light"],
+            skill_proficiencies=["stealth", "sleight_of_hand", "acrobatics", "perception"],
+            expertise_skills=["stealth", "sleight_of_hand"],
+            saving_throw_proficiencies=["dexterity", "intelligence"]
+        )
+
+        party = Party([rogue])
+        data_loader = DataLoader()
+        game_state = GameState(
+            party=party,
+            dungeon_name="test_dungeon",
+            data_loader=data_loader
+        )
+
+        save_manager.save_game(slot_number=2, game_state=game_state)
+        loaded_state, _ = save_manager.load_game(slot_number=2)
+        loaded_rogue = loaded_state.party.characters[0]
+
+        assert loaded_rogue.expertise_skills == ["stealth", "sleight_of_hand"]
+        assert loaded_rogue.skill_proficiencies == ["stealth", "sleight_of_hand", "acrobatics", "perception"]
+
+    def test_slot_file_contains_proficiencies(
+        self, save_manager, character_with_proficiencies, temp_saves_dir
+    ):
+        """Test that the JSON save file contains proficiency data."""
+        party = Party([character_with_proficiencies])
+        data_loader = DataLoader()
+        game_state = GameState(
+            party=party,
+            dungeon_name="test_dungeon",
+            data_loader=data_loader
+        )
+
+        save_manager.save_game(slot_number=3, game_state=game_state)
+
+        # Read the raw JSON file
+        slot_path = temp_saves_dir / "slot_03.json"
+        with open(slot_path) as f:
+            data = json.load(f)
+
+        char_data = data["party"][0]
+        assert char_data["weapon_proficiencies"] == ["simple", "martial"]
+        assert char_data["armor_proficiencies"] == ["light", "medium", "heavy", "shields"]
+        assert char_data["skill_proficiencies"] == ["athletics", "perception"]
+        assert char_data["saving_throw_proficiencies"] == ["strength", "constitution"]
+        assert char_data["darkvision_range"] == 60

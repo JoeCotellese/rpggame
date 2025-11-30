@@ -423,10 +423,16 @@ class SaveSlotManager:
             "inventory": self._serialize_inventory(character.inventory),
             "conditions": list(character.conditions),
             "resource_pools": self._serialize_resource_pools(character),
+            "saving_throw_proficiencies": character.saving_throw_proficiencies,
+            "skill_proficiencies": character.skill_proficiencies,
+            "expertise_skills": character.expertise_skills,
+            "weapon_proficiencies": character.weapon_proficiencies,
+            "armor_proficiencies": character.armor_proficiencies,
             "spellcasting_ability": character.spellcasting_ability,
             "known_spells": character.known_spells,
             "prepared_spells": character.prepared_spells,
-            "vault_id": character.vault_id
+            "vault_id": character.vault_id,
+            "darkvision_range": character.darkvision_range
         }
 
     def _serialize_inventory(self, inventory: Inventory) -> dict[str, Any]:
@@ -537,11 +543,19 @@ class SaveSlotManager:
             inventory=inventory,
             race=char_data["race"],
             subclass=char_data.get("subclass"),
+            saving_throw_proficiencies=char_data.get("saving_throw_proficiencies", []),
+            skill_proficiencies=char_data.get("skill_proficiencies", []),
+            expertise_skills=char_data.get("expertise_skills", []),
+            weapon_proficiencies=char_data.get("weapon_proficiencies", []),
+            armor_proficiencies=char_data.get("armor_proficiencies", []),
             spellcasting_ability=char_data.get("spellcasting_ability"),
             known_spells=char_data.get("known_spells"),
             prepared_spells=char_data.get("prepared_spells"),
             vault_id=char_data.get("vault_id")
         )
+
+        # Restore darkvision range
+        character.darkvision_range = char_data.get("darkvision_range", 0)
 
         # Restore conditions
         for condition in char_data.get("conditions", []):
