@@ -331,33 +331,39 @@ def build_combat_action_prompt(action_data: dict[str, Any]) -> str:
     pov_constraint = "Use third-person (character names), never \"you\"."
 
     # Build the main prompt with tiered instructions
+    # Note: Always include explicit name instruction to prevent LLM hallucination
+    # from prior context (e.g., mixing up attacker names from previous turns)
     if hit:
         if is_killing_blow:
             prompt = (
                 f"Narrate this killing blow:\n\n"
                 f"{location_context}{battlefield_context}{history_context}"
                 f"{attacker} strikes down {defender} with their {weapon_desc}.\n\n"
-                f"2-3 vivid sentences. {pov_constraint}"
+                f"2-3 vivid sentences. {pov_constraint}\n"
+                f"IMPORTANT: The attacker is {attacker} - use this exact name."
             )
         elif is_critical:
             # Critical hit but NOT a killing blow - enemy still alive
             # More dramatic than regular hit, but still concise
             prompt = (
                 f"CRITICAL HIT! {attacker} devastates {defender} with {weapon_desc}. "
-                f"One visceral sentence, 15-20 words. Enemy staggers but survives. {pov_constraint}"
+                f"One visceral sentence, 15-20 words. Enemy staggers but survives. {pov_constraint}\n"
+                f"IMPORTANT: The attacker is {attacker} - use this exact name."
             )
         else:
             # Regular hit - ultra-tight output for fast-paced combat
             # IMPORTANT: Explicitly state enemy survives to prevent death-like language
             prompt = (
                 f"{attacker} hits {defender} with {weapon_desc}. "
-                f"One punchy sentence, max 12 words. No death language. {pov_constraint}"
+                f"One punchy sentence, max 12 words. No death language. {pov_constraint}\n"
+                f"IMPORTANT: The attacker is {attacker} - use this exact name."
             )
     else:
         # Misses are always brief - don't dwell on failure
         prompt = (
             f"{attacker} misses {defender} with {weapon_desc}. "
-            f"One brief sentence, max 10 words. {pov_constraint}"
+            f"One brief sentence, max 10 words. {pov_constraint}\n"
+            f"IMPORTANT: The attacker is {attacker} - use this exact name."
         )
 
     return prompt
