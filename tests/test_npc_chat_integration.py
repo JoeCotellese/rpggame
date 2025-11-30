@@ -46,7 +46,7 @@ class TestNPCTools:
 
         assert "activate_quest" in tool_names
         assert "get_available_quests" in tool_names
-        assert "buy_item" in tool_names
+        assert "open_shop" in tool_names
         assert "get_player_gold" in tool_names
         assert "give_item" in tool_names
         assert "check_reputation" in tool_names
@@ -207,22 +207,22 @@ class TestNPCChatManagerToolHandlers:
 
         assert result["gold"] == 100
 
-    def test_handle_buy_item_success(self, manager, mock_character):
-        """Test successful item purchase."""
-        result = manager._handle_buy_item("ale", 2)
-
-        assert result["success"] is True
-        assert result["item"] == "ale"
-        assert result["remaining_gold"] == 98
-
-    def test_handle_buy_item_insufficient_gold(self, manager, mock_character):
-        """Test purchase with insufficient gold."""
-        mock_character.inventory.gold = 1
-
-        result = manager._handle_buy_item("expensive_item", 100)
+    def test_handle_open_shop_no_conversation(self, manager, mock_character):
+        """Test open_shop fails without active conversation."""
+        result = manager._handle_open_shop()
 
         assert result["success"] is False
-        assert "Not enough gold" in result["error"]
+        assert "No active conversation" in result["error"]
+
+    def test_handle_open_shop_npc_has_no_shop(self, manager, sample_npc):
+        """Test open_shop fails if NPC has no shop."""
+        from dnd_engine.llm.npc_chat import ConversationState
+        manager._current_conversation = ConversationState(npc=sample_npc)
+
+        result = manager._handle_open_shop()
+
+        assert result["success"] is False
+        assert "doesn't have a shop" in result["error"]
 
     def test_handle_check_reputation(self, manager, sample_npc):
         """Test checking reputation."""

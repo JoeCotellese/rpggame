@@ -33,6 +33,7 @@ from dnd_engine.systems.targeting import (
     get_item_targeting_requirements,
     get_spell_targeting_requirements,
 )
+from dnd_engine.ui.shop_ui import ShopUI
 from dnd_engine.ui.debug_console import DebugConsole
 from dnd_engine.ui.rich_ui import (
     console,
@@ -492,6 +493,10 @@ class CLI:
             "south": "south", "s": "south",
             "east": "east", "e": "east",
             "west": "west", "w": "west",
+            "northeast": "northeast", "ne": "northeast",
+            "northwest": "northwest", "nw": "northwest",
+            "southeast": "southeast", "se": "southeast",
+            "southwest": "southwest", "sw": "southwest",
             "up": "up", "u": "up",
             "down": "down", "d": "down"
         }
@@ -670,6 +675,15 @@ class CLI:
             else:
                 npc_name = " ".join(parts)
                 self.handle_talk(npc_name)
+            return
+
+        if command == "shop" or command.startswith("shop "):
+            parts = command.split()[1:]
+            if not parts:
+                self.handle_shop_menu()
+            else:
+                npc_name = " ".join(parts)
+                self.handle_shop(npc_name)
             return
 
         print_status_message("Unknown command. Type 'help' for available commands.", "warning")
@@ -1956,6 +1970,20 @@ class CLI:
                 # Get NPC response
                 if self.npc_chat_manager:
                     response, ended = self.npc_chat_manager.send_message_sync(player_input)
+
+                    # Check if shop UI was requested
+                    if self.npc_chat_manager.shop_requested:
+                        self.npc_chat_manager.shop_requested = False  # Reset flag
+                        if response:
+                            console.print()
+                            console.print(Panel(
+                                response,
+                                title=f"[bold cyan]{npc.display_name}[/bold cyan]",
+                                border_style="cyan"
+                            ))
+                        # Open shop UI
+                        self._open_shop(npc)
+                        continue  # Return to conversation after shopping
                 else:
                     response = "Hmm, I'm not sure what to say to that."
                     ended = False
@@ -1981,6 +2009,95 @@ class CLI:
                 console.print()
                 print_status_message("You walk away.", "info")
                 break
+
+    def handle_shop_menu(self) -> None:
+        """Show a menu of NPCs with shops in the current room."""
+        import questionary
+
+        # Check if NPC manager is available
+        if not self.game_state.npc_manager:
+            print_error("No NPCs available in this campaign.")
+            return
+
+        # Get NPCs in current room
+        current_room = self.game_state.get_current_room()
+        room_id = current_room.get("id", "")
+        npcs = self.game_state.npc_manager.get_npcs_in_room(room_id)
+
+        # Filter to shopkeepers
+        shopkeeper_npcs = []
+        for npc in npcs:
+            if npc.shop and npc.shop.enabled:
+                shopkeeper_npcs.append(npc)
+
+        if not shopkeeper_npcs:
+            print_status_message("There are no shops here.", "warning")
+            return
+
+        if len(shopkeeper_npcs) == 1:
+            # Only one shopkeeper, open directly
+            self._open_shop(shopkeeper_npcs[0])
+            return
+
+        # Multiple shopkeepers - let user choose
+        choices = []
+        for npc in shopkeeper_npcs:
+            choices.append(questionary.Choice(title=npc.display_name, value=npc))
+        choices.append(questionary.Choice(title="Cancel", value=None))
+
+        try:
+            result = questionary.select(
+                "Which shop would you like to visit?",
+                choices=choices,
+            ).ask()
+            if result:
+                self._open_shop(result)
+        except (EOFError, KeyboardInterrupt):
+            print_status_message("Cancelled.", "warning")
+
+    def handle_shop(self, npc_name: str) -> None:
+        """Open shop for a specific NPC by name."""
+        # Check if NPC manager is available
+        if not self.game_state.npc_manager:
+            print_error("No NPCs available in this campaign.")
+            return
+
+        # Get NPCs in current room
+        current_room = self.game_state.get_current_room()
+        room_id = current_room.get("id", "")
+        npcs = self.game_state.npc_manager.get_npcs_in_room(room_id)
+
+        # Find NPC by name (case-insensitive partial match)
+        target_npc = None
+        npc_name_lower = npc_name.lower()
+
+        for npc in npcs:
+            if (
+                npc_name_lower in npc.name.lower()
+                or npc_name_lower in npc.display_name.lower()
+            ):
+                target_npc = npc
+                break
+
+        if not target_npc:
+            print_error(f"No one named '{npc_name}' is here.")
+            return
+
+        if not target_npc.shop or not target_npc.shop.enabled:
+            print_status_message(f"{target_npc.display_name} doesn't run a shop.", "warning")
+            return
+
+        self._open_shop(target_npc)
+
+    def _open_shop(self, npc: Any) -> None:
+        """Open the shop UI for an NPC."""
+        party = self.game_state.party.characters
+        if not party:
+            print_error("No party members available.")
+            return
+
+        shop_ui = ShopUI(npc, party)
+        shop_ui.run()
 
     def handle_attack(self, target_name: str) -> None:
         """Handle attack command during combat."""
@@ -4642,11 +4759,12 @@ class CLI:
     def display_help_exploration(self) -> None:
         """Display help for exploration commands."""
         commands = [
-            ("north/n, south/s, east/e, west/w", "Move in a direction (shorthand)"),
-            ("move/go <direction>", "Move in a direction (e.g., 'go north')"),
+            ("n/s/e/w/ne/nw/se/sw", "Move in a direction (cardinal or diagonal)"),
+            ("move/go <direction>", "Move in a direction (e.g., 'go north', 'go northeast')"),
             ("look or l", "Look around the current room"),
             ("examine / x [target]", "Examine objects or listen at doors (e.g., 'examine corpse')"),
             ("talk [npc]", "Talk to an NPC (e.g., 'talk marta' or just 'talk' for menu)"),
+            ("shop [npc]", "Open shop UI (e.g., 'shop gareth' or just 'shop' for menu)"),
             ("search", "Search the room for items"),
             ("take/get/pickup <item>", "Pick up an item (e.g., 'take dagger', 'get gold')"),
             ("inventory / i [filter]", "Show inventory. Filter: summary, player name/number, or item type"),
