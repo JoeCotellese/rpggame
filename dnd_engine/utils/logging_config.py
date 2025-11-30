@@ -9,6 +9,9 @@ from typing import TextIO
 
 from rich.console import Console
 
+# Maximum console width for readable output
+MAX_CONSOLE_WIDTH = 100
+
 
 class TeeFile:
     """
@@ -169,13 +172,14 @@ class LoggingConfig:
             self.tee_console = Console(
                 file=tee_file,
                 force_terminal=True,  # Keep colors for terminal
-                legacy_windows=False
+                legacy_windows=False,
+                width=MAX_CONSOLE_WIDTH
             )
 
             return self.tee_console
         else:
             # Normal console without file logging
-            return Console()
+            return Console(width=MAX_CONSOLE_WIDTH)
 
     def log_event(self, event_type: str, data: dict) -> None:
         """

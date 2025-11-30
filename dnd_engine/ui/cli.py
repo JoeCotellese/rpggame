@@ -4514,12 +4514,12 @@ class CLI:
             spell_name = spell_data.get("name", spell_id)
             spell_level = spell_data.get("level", 0)
 
-            # Show slot information
+            # Show slot information (plain text for questionary)
             if spell_level == 0:
-                slot_info = "[green](cantrip)[/green]"
+                slot_info = "(cantrip)"
             else:
                 available_slots = caster.get_available_spell_slots(spell_level)
-                slot_info = f"[cyan](level {spell_level}, {available_slots} slots)[/cyan]"
+                slot_info = f"(level {spell_level}, {available_slots} slots)"
 
             # Show spell type (healing, ritual, utility)
             spell_types = []
