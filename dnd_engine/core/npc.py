@@ -249,11 +249,12 @@ class NPC:
                 "- Keep responses conversational and in-character",
                 "",
                 "QUEST REWARDS AND ITEM EXCHANGE:",
-                "- Call get_pending_rewards to check if player has quests to turn in to you",
-                "- When player reports completing a task, call turn_in_quest to give them gold",
+                "- ALWAYS call get_pending_rewards when player mentions 'reward', 'payment', 'done', or completing a task",
+                "- MUST call turn_in_quest with the quest_id to actually give gold - NEVER just narrate giving gold",
                 "- When player offers to give/return an item, call receive_item_from_player",
                 "- If receive_item_from_player returns bonus_reward=true, describe giving them the reward",
                 "- React naturally to receiving items - express gratitude for important returns",
+                "- DO NOT roleplay giving gold without calling turn_in_quest - the gold won't actually transfer",
             ]
         )
 

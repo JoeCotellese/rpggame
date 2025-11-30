@@ -36,24 +36,35 @@ class TestQuest:
         assert quest.unlocked_by_default is False
         assert quest.unlock_requirements is None
         assert quest.target_dungeon is None
-        assert quest.completion_criteria == {}
+        assert quest.objectives == []
         assert quest.unlocks_quests == []
 
     def test_quest_creation_with_all_fields(self):
         """Quest should support all optional fields."""
+        from dnd_engine.core.quest import QuestObjective, ObjectiveType
+
+        objectives = [
+            QuestObjective(
+                id="defeat_boss",
+                type=ObjectiveType.KILL,
+                target="ghoul",
+                description="Defeat the undead guardian"
+            )
+        ]
         quest = Quest(
             id="investigate_crypt",
             name="The Crypt Problem",
             description="Investigate the disturbances at the old cemetery",
+            objectives=objectives,
             unlocked_by_default=True,
             unlock_requirements=None,
             target_dungeon="the_unquiet_dead_crypt",
-            completion_criteria={"dungeon_completed": "the_unquiet_dead_crypt"},
             unlocks_quests=["cult_conspiracy"]
         )
         assert quest.unlocked_by_default is True
         assert quest.target_dungeon == "the_unquiet_dead_crypt"
-        assert quest.completion_criteria == {"dungeon_completed": "the_unquiet_dead_crypt"}
+        assert len(quest.objectives) == 1
+        assert quest.objectives[0].type == ObjectiveType.KILL
         assert quest.unlocks_quests == ["cult_conspiracy"]
 
     def test_quest_from_dict(self):
@@ -95,39 +106,54 @@ class TestQuestManager:
                     "id": "investigate_crypt",
                     "name": "The Crypt Problem",
                     "description": "Investigate the disturbances at the old cemetery",
+                    "objectives": [
+                        {
+                            "id": "defeat_guardian",
+                            "type": "kill",
+                            "target": "ghoul",
+                            "description": "Defeat the undead guardian"
+                        }
+                    ],
                     "unlocked_by_default": True,
                     "target_dungeon": "the_unquiet_dead_crypt",
-                    "completion_criteria": {
-                        "dungeon_completed": "the_unquiet_dead_crypt"
-                    },
                     "unlocks_quests": ["cult_conspiracy"]
                 },
                 {
                     "id": "cult_conspiracy",
                     "name": "The Cult Conspiracy",
                     "description": "Follow the trail to the cult hideout",
+                    "objectives": [
+                        {
+                            "id": "defeat_cult_leader",
+                            "type": "kill",
+                            "target": "acolyte",
+                            "description": "Defeat the cult leader"
+                        }
+                    ],
                     "unlocked_by_default": False,
                     "unlock_requirements": {
                         "quest_completed": "investigate_crypt"
                     },
                     "target_dungeon": "cult_hideout",
-                    "completion_criteria": {
-                        "dungeon_completed": "cult_hideout"
-                    },
                     "unlocks_quests": ["temple_assault"]
                 },
                 {
                     "id": "temple_assault",
                     "name": "Temple of Durgon",
                     "description": "Assault the temple and stop the ritual",
+                    "objectives": [
+                        {
+                            "id": "defeat_devil",
+                            "type": "kill",
+                            "target": "bearded_devil",
+                            "description": "Defeat the devil Durgon"
+                        }
+                    ],
                     "unlocked_by_default": False,
                     "unlock_requirements": {
                         "quest_completed": "cult_conspiracy"
                     },
                     "target_dungeon": "temple_of_durgon",
-                    "completion_criteria": {
-                        "dungeon_completed": "temple_of_durgon"
-                    },
                     "unlocks_quests": []
                 }
             ]
@@ -806,3 +832,359 @@ class TestQuestManagerRewards:
 
         # cult_quest should still be available (REWARDED counts as completed)
         assert quest_manager.get_quest_state("cult_quest") == QuestState.AVAILABLE
+
+
+class TestEventDrivenObjectiveTracking:
+    """Test event-driven objective completion via EventBus."""
+
+    @pytest.fixture
+    def quest_data_with_objectives(self):
+        """Quest definitions with various objective types."""
+        return {
+            "quests": [
+                {
+                    "id": "investigate_crypt",
+                    "name": "The Crypt Problem",
+                    "description": "Investigate the crypt",
+                    "unlocked_by_default": True,
+                    "quest_giver": "father_aldric",
+                    "reward_gold": 50,
+                    "target_dungeon": "the_unquiet_dead_crypt",
+                    "unlocks_quests": ["follow_up_quest"],
+                    "objectives": [
+                        {
+                            "id": "defeat_guardian",
+                            "type": "kill",
+                            "target": "ghoul",
+                            "description": "Defeat the undead guardian",
+                        },
+                        {
+                            "id": "read_journal",
+                            "type": "use",
+                            "target": "gorgus_journal",
+                            "description": "Read the cultist's journal",
+                        },
+                    ],
+                },
+                {
+                    "id": "follow_up_quest",
+                    "name": "Follow-up Quest",
+                    "description": "Next quest",
+                    "unlocked_by_default": False,
+                    "unlock_requirements": {"quest_completed": "investigate_crypt"},
+                    "reward_gold": 100,
+                },
+            ]
+        }
+
+    @pytest.fixture
+    def event_bus(self):
+        """Create an EventBus for testing."""
+        from dnd_engine.utils.events import EventBus
+        return EventBus()
+
+    @pytest.fixture
+    def quest_manager_with_events(self, quest_data_with_objectives, event_bus):
+        """Create a QuestManager wired to an EventBus."""
+        manager = QuestManager()
+        manager.load_quests_from_dict(quest_data_with_objectives)
+        manager.set_event_bus(event_bus)
+        return manager
+
+    def test_boss_defeated_event_completes_kill_objective(
+        self, quest_manager_with_events, event_bus
+    ):
+        """BOSS_DEFEATED event should complete kill objectives."""
+        from dnd_engine.utils.events import Event, EventType
+
+        quest_manager_with_events.activate_quest("investigate_crypt")
+
+        # Emit boss defeated event with matching monster_id
+        event_bus.emit(
+            Event(
+                EventType.BOSS_DEFEATED,
+                {"monster_id": "ghoul", "dungeon_id": "crypt"},
+            )
+        )
+
+        # Check objective is completed
+        quest = quest_manager_with_events.quests["investigate_crypt"]
+        defeat_objective = next(
+            obj for obj in quest.objectives if obj.id == "defeat_guardian"
+        )
+        assert defeat_objective.completed is True
+
+    def test_item_used_event_completes_use_objective(
+        self, quest_manager_with_events, event_bus
+    ):
+        """ITEM_USED event should complete use objectives."""
+        from dnd_engine.utils.events import Event, EventType
+
+        quest_manager_with_events.activate_quest("investigate_crypt")
+
+        # Emit item used event
+        event_bus.emit(
+            Event(
+                EventType.ITEM_USED,
+                {"item_id": "gorgus_journal", "character": "Bob"},
+            )
+        )
+
+        # Check objective is completed
+        quest = quest_manager_with_events.quests["investigate_crypt"]
+        read_objective = next(
+            obj for obj in quest.objectives if obj.id == "read_journal"
+        )
+        assert read_objective.completed is True
+
+    def test_all_objectives_complete_triggers_quest_completion(
+        self, quest_manager_with_events, event_bus
+    ):
+        """Quest should auto-complete when all required objectives are done."""
+        from dnd_engine.utils.events import Event, EventType
+
+        quest_manager_with_events.activate_quest("investigate_crypt")
+
+        # Complete both objectives via events
+        event_bus.emit(
+            Event(EventType.BOSS_DEFEATED, {"monster_id": "ghoul"})
+        )
+        event_bus.emit(
+            Event(EventType.ITEM_USED, {"item_id": "gorgus_journal"})
+        )
+
+        # Quest should now be COMPLETED
+        state = quest_manager_with_events.get_quest_state("investigate_crypt")
+        assert state == QuestState.COMPLETED
+
+    def test_quest_completion_unlocks_dependent_quests(
+        self, quest_manager_with_events, event_bus
+    ):
+        """Completing a quest via events should unlock dependent quests."""
+        from dnd_engine.utils.events import Event, EventType
+
+        quest_manager_with_events.activate_quest("investigate_crypt")
+
+        # Complete both objectives
+        event_bus.emit(
+            Event(EventType.BOSS_DEFEATED, {"monster_id": "ghoul"})
+        )
+        event_bus.emit(
+            Event(EventType.ITEM_USED, {"item_id": "gorgus_journal"})
+        )
+
+        # Follow-up quest should now be AVAILABLE
+        state = quest_manager_with_events.get_quest_state("follow_up_quest")
+        assert state == QuestState.AVAILABLE
+
+    def test_events_only_affect_active_quests(
+        self, quest_manager_with_events, event_bus
+    ):
+        """Events should not affect quests that aren't active."""
+        from dnd_engine.utils.events import Event, EventType
+
+        # Quest is AVAILABLE but not ACTIVE
+        assert (
+            quest_manager_with_events.get_quest_state("investigate_crypt")
+            == QuestState.AVAILABLE
+        )
+
+        # Emit events
+        event_bus.emit(
+            Event(EventType.BOSS_DEFEATED, {"monster_id": "ghoul"})
+        )
+        event_bus.emit(
+            Event(EventType.ITEM_USED, {"item_id": "gorgus_journal"})
+        )
+
+        # Quest should still be AVAILABLE, not COMPLETED
+        assert (
+            quest_manager_with_events.get_quest_state("investigate_crypt")
+            == QuestState.AVAILABLE
+        )
+
+        # Objectives should not be completed
+        quest = quest_manager_with_events.quests["investigate_crypt"]
+        for obj in quest.objectives:
+            assert obj.completed is False
+
+    def test_non_matching_events_are_ignored(
+        self, quest_manager_with_events, event_bus
+    ):
+        """Events with non-matching targets should be ignored."""
+        from dnd_engine.utils.events import Event, EventType
+
+        quest_manager_with_events.activate_quest("investigate_crypt")
+
+        # Emit events with wrong targets
+        event_bus.emit(
+            Event(EventType.BOSS_DEFEATED, {"monster_id": "wrong_monster"})
+        )
+        event_bus.emit(
+            Event(EventType.ITEM_ACQUIRED, {"item_id": "wrong_item"})
+        )
+
+        # Objectives should not be completed
+        quest = quest_manager_with_events.quests["investigate_crypt"]
+        for obj in quest.objectives:
+            assert obj.completed is False
+
+    def test_quest_completed_event_is_emitted(
+        self, quest_manager_with_events, event_bus
+    ):
+        """QUEST_COMPLETED event should be emitted when quest completes."""
+        from dnd_engine.utils.events import Event, EventType
+
+        quest_manager_with_events.activate_quest("investigate_crypt")
+
+        # Track emitted events
+        emitted_events = []
+        event_bus.subscribe(
+            EventType.QUEST_COMPLETED,
+            lambda e: emitted_events.append(e),
+        )
+
+        # Complete the quest
+        event_bus.emit(
+            Event(EventType.BOSS_DEFEATED, {"monster_id": "ghoul"})
+        )
+        event_bus.emit(
+            Event(EventType.ITEM_USED, {"item_id": "gorgus_journal"})
+        )
+
+        # Check QUEST_COMPLETED was emitted
+        assert len(emitted_events) == 1
+        assert emitted_events[0].data["quest_id"] == "investigate_crypt"
+        assert emitted_events[0].data["quest_name"] == "The Crypt Problem"
+
+    def test_objective_progress_tracking(
+        self, quest_manager_with_events, event_bus
+    ):
+        """Objectives with count_required > 1 should track progress."""
+        from dnd_engine.core.quest import ObjectiveType, QuestObjective
+        from dnd_engine.utils.events import Event, EventType
+
+        # Manually add a quest with count objective
+        from dnd_engine.core.quest import Quest
+
+        quest_manager_with_events.quests["kill_goblins"] = Quest(
+            id="kill_goblins",
+            name="Goblin Slayer",
+            description="Kill 3 goblins",
+            objectives=[
+                QuestObjective(
+                    id="kill_three",
+                    type=ObjectiveType.KILL,
+                    target="goblin",
+                    description="Kill 3 goblins",
+                    count_required=3,
+                )
+            ],
+        )
+        quest_manager_with_events._quest_states["kill_goblins"] = QuestState.ACTIVE
+
+        # Kill first goblin
+        event_bus.emit(Event(EventType.BOSS_DEFEATED, {"monster_id": "goblin"}))
+        obj = quest_manager_with_events.quests["kill_goblins"].objectives[0]
+        assert obj.count_current == 1
+        assert obj.completed is False
+
+        # Kill second goblin
+        event_bus.emit(Event(EventType.BOSS_DEFEATED, {"monster_id": "goblin"}))
+        assert obj.count_current == 2
+        assert obj.completed is False
+
+        # Kill third goblin
+        event_bus.emit(Event(EventType.BOSS_DEFEATED, {"monster_id": "goblin"}))
+        assert obj.count_current == 3
+        assert obj.completed is True
+
+    def test_quest_auto_activates_on_dungeon_enter(
+        self, quest_manager_with_events, event_bus
+    ):
+        """Available quests should auto-activate when entering their target dungeon."""
+        from dnd_engine.utils.events import Event, EventType
+
+        # Quest starts as AVAILABLE
+        assert (
+            quest_manager_with_events.get_quest_state("investigate_crypt")
+            == QuestState.AVAILABLE
+        )
+
+        # Emit room enter event with matching dungeon_id
+        event_bus.emit(
+            Event(
+                EventType.ROOM_ENTER,
+                {
+                    "room_id": "crypt.graveyard_entrance",
+                    "room_name": "Overgrown Graveyard",
+                    "dungeon_id": "the_unquiet_dead_crypt",
+                },
+            )
+        )
+
+        # Quest should now be ACTIVE
+        assert (
+            quest_manager_with_events.get_quest_state("investigate_crypt")
+            == QuestState.ACTIVE
+        )
+
+    def test_quest_does_not_auto_activate_for_wrong_dungeon(
+        self, quest_manager_with_events, event_bus
+    ):
+        """Quests should not auto-activate for non-matching dungeons."""
+        from dnd_engine.utils.events import Event, EventType
+
+        # Quest starts as AVAILABLE
+        assert (
+            quest_manager_with_events.get_quest_state("investigate_crypt")
+            == QuestState.AVAILABLE
+        )
+
+        # Emit room enter event with non-matching dungeon_id
+        event_bus.emit(
+            Event(
+                EventType.ROOM_ENTER,
+                {
+                    "room_id": "town.inn",
+                    "room_name": "The Rusty Nail Inn",
+                    "dungeon_id": "town_of_arden",
+                },
+            )
+        )
+
+        # Quest should still be AVAILABLE
+        assert (
+            quest_manager_with_events.get_quest_state("investigate_crypt")
+            == QuestState.AVAILABLE
+        )
+
+    def test_quest_activated_event_is_emitted(
+        self, quest_manager_with_events, event_bus
+    ):
+        """QUEST_ACTIVATED event should be emitted when quest auto-activates."""
+        from dnd_engine.utils.events import Event, EventType
+
+        # Track emitted events
+        emitted_events = []
+        event_bus.subscribe(
+            EventType.QUEST_ACTIVATED,
+            lambda e: emitted_events.append(e),
+        )
+
+        # Emit room enter event with matching dungeon_id
+        event_bus.emit(
+            Event(
+                EventType.ROOM_ENTER,
+                {
+                    "room_id": "crypt.graveyard_entrance",
+                    "dungeon_id": "the_unquiet_dead_crypt",
+                },
+            )
+        )
+
+        # Check QUEST_ACTIVATED was emitted
+        assert len(emitted_events) == 1
+        assert emitted_events[0].data["quest_id"] == "investigate_crypt"
+        assert emitted_events[0].data["quest_name"] == "The Crypt Problem"
+        assert emitted_events[0].data["dungeon_id"] == "the_unquiet_dead_crypt"

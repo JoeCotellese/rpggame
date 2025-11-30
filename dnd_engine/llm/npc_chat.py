@@ -419,6 +419,8 @@ class NPCChatManager:
             print_status_message(f"💰 Party gold: {gold}", "info")
 
         # Note: get_available_quests has no user feedback - NPC describes quests naturally
+        # Note: turn_in_quest feedback is handled in _handle_turn_in_quest directly
+        # Note: get_pending_rewards has no user feedback - NPC describes rewards naturally
 
     # === Tool Handlers ===
 
@@ -473,19 +475,23 @@ class NPCChatManager:
         # Try to get hint from quest data
         if self.game_state.quest_manager:
             quest = self.game_state.quest_manager.quests.get(quest_id)
-            if quest and hasattr(quest, "npc_hints"):
-                # Check if npc_hints exists in completion_criteria (where we store it)
-                hints = quest.completion_criteria.get("npc_hints", {})
+            if quest and quest.npc_hints:
                 state = self.game_state.quest_manager.get_quest_state(quest_id)
-                state_hints = hints.get(state.value, {})
-                if npc_id in state_hints:
-                    return state_hints[npc_id]
-                # Try by NPC role
-                npc = self._current_conversation.npc if self._current_conversation else None
-                if npc:
-                    role = npc.id.split("_")[-1]  # e.g., "innkeeper" from "marta_innkeeper"
-                    if role in state_hints:
-                        return state_hints[role]
+                state_hints = quest.npc_hints.get(state.value, {})
+
+                # state_hints can be a string (same for all NPCs) or dict (NPC-specific)
+                if isinstance(state_hints, str):
+                    return state_hints
+
+                if isinstance(state_hints, dict):
+                    if npc_id in state_hints:
+                        return state_hints[npc_id]
+                    # Try by NPC role
+                    npc = self._current_conversation.npc if self._current_conversation else None
+                    if npc:
+                        role = npc.id.split("_")[-1]  # e.g., "innkeeper" from "marta_innkeeper"
+                        if role in state_hints:
+                            return state_hints[role]
 
         return ""
 
@@ -547,7 +553,7 @@ class NPCChatManager:
         }
 
     def _handle_receive_item_from_player(self, item_id: str) -> dict[str, Any]:
-        """Accept an item from the player, checking for bonus rewards."""
+        """Accept an item from the player, checking for deliver objectives and bonus rewards."""
         if not self._current_conversation:
             return {"success": False, "error": "No active conversation"}
 
@@ -565,6 +571,22 @@ class NPCChatManager:
             return {
                 "success": False,
                 "error": f"Party does not have item: {item_id}",
+            }
+
+        # Check if this completes a deliver objective
+        deliver_result = quest_manager.complete_deliver_objective(npc.id, item_id)
+        if deliver_result.get("success"):
+            # Remove item from player inventory
+            item_holder.inventory.remove_item(item_id)
+            print_status_message(
+                f"🎁 Gave {item_id} to {npc.display_name}", "success"
+            )
+            return {
+                "success": True,
+                "item_received": item_id,
+                "deliver_objective_completed": True,
+                "quest_id": deliver_result.get("quest_id"),
+                "quest_name": deliver_result.get("quest_name"),
             }
 
         # Check if this triggers a bonus reward

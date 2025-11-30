@@ -7,14 +7,27 @@
       "id": "investigate_crypt",
       "name": "The Crypt Problem",
       "description": "Strange lights and sounds emanate from the old Davos family crypt. The townsfolk are frightened, and Father Aldric is beside himself. Someone must investigate the disturbances.",
+      "objectives": [
+        {
+          "id": "defeat_guardian",
+          "type": "kill",
+          "target": "ghoul",
+          "description": "Defeat the undead guardian"
+        },
+        {
+          "id": "read_journal",
+          "type": "use",
+          "target": "gorgus_journal",
+          "description": "Read the cultist's journal"
+        }
+      ],
       "unlocked_by_default": true,
       "unlock_requirements": null,
       "target_dungeon": "the_unquiet_dead_crypt",
-      "completion_criteria": {
-        "dungeon_completed": "the_unquiet_dead_crypt"
-      },
       "unlocks_quests": ["cult_conspiracy"],
+      "unlocks_dungeons": ["cult_hideout"],
       "quest_giver": "father_aldric",
+      "turn_in_npc": "father_aldric",
       "reward_gold": 50,
       "npc_hints": {
         "available": {
@@ -29,18 +42,30 @@
     {
       "id": "cult_conspiracy",
       "name": "The Cult Conspiracy",
-      "description": "The journal found in the crypt reveals a sinister plot. Cultists of Durgon operate from a hidden lair somewhere in the Warrens. The map tucked inside shows the way.",
+      "description": "The journal found in the crypt reveals a sinister plot. Cultists of Durgon operate from a hidden lair somewhere in the Warrens. The map tucked inside shows the way. Their leader has already left for the temple - his second-in-command remains behind.",
+      "objectives": [
+        {
+          "id": "defeat_second_in_command",
+          "type": "kill",
+          "target": "acolyte",
+          "description": "Defeat the cult's second-in-command"
+        },
+        {
+          "id": "find_map",
+          "type": "fetch",
+          "target": "cult_map",
+          "description": "Find the cult's map to their temple"
+        }
+      ],
       "unlocked_by_default": false,
       "unlock_requirements": {
-        "quest_completed": "investigate_crypt",
-        "quest_item": "gorgus_journal"
+        "quest_completed": "investigate_crypt"
       },
       "target_dungeon": "cult_hideout",
-      "completion_criteria": {
-        "dungeon_completed": "cult_hideout"
-      },
       "unlocks_quests": ["temple_assault"],
+      "unlocks_dungeons": ["temple_of_durgon"],
       "quest_giver": null,
+      "turn_in_npc": null,
       "reward_gold": 0,
       "npc_hints": {
         "available": "That journal you found... it speaks of cultists hiding somewhere in the Warrens. Dark business, that. Be careful if you go looking.",
@@ -52,18 +77,24 @@
       "id": "temple_assault",
       "name": "Temple of Durgon",
       "description": "The cult's true lair lies in an ancient temple hidden beneath the old ruins outside town. Their leader prepares the final ritual to resurrect the devil Durgon. This must be stopped.",
+      "objectives": [
+        {
+          "id": "defeat_devil",
+          "type": "kill",
+          "target": "bearded_devil",
+          "description": "Defeat the devil Durgon"
+        }
+      ],
       "unlocked_by_default": false,
       "unlock_requirements": {
-        "quest_completed": "cult_conspiracy",
-        "quest_item": "cult_map"
+        "quest_completed": "cult_conspiracy"
       },
       "target_dungeon": "temple_of_durgon",
-      "completion_criteria": {
-        "dungeon_completed": "temple_of_durgon"
-      },
       "unlocks_quests": [],
+      "unlocks_dungeons": [],
       "final_quest": true,
       "quest_giver": "father_aldric",
+      "turn_in_npc": "father_aldric",
       "reward_gold": 250,
       "bonus_rewards": [
         {

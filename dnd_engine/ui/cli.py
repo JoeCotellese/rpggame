@@ -127,6 +127,8 @@ class CLI:
         self.game_state.event_bus.subscribe(EventType.FEATURE_GRANTED, self._on_feature_granted)
         self.game_state.event_bus.subscribe(EventType.LONG_REST, self._on_long_rest)
         self.game_state.event_bus.subscribe(EventType.SKILL_CHECK, self._on_skill_check)
+        self.game_state.event_bus.subscribe(EventType.QUEST_ACTIVATED, self._on_quest_activated)
+        self.game_state.event_bus.subscribe(EventType.QUEST_COMPLETED, self._on_quest_completed)
 
     def display_banner(self) -> None:
         """Display the game banner."""
@@ -1921,10 +1923,7 @@ class CLI:
         Args:
             npc: The NPC to converse with
         """
-        from rich.console import Console
         from rich.panel import Panel
-
-        console = Console()
 
         # Start conversation
         if self.npc_chat_manager:
@@ -5146,6 +5145,24 @@ class CLI:
                 print_status_message(f"   → {data['success_text']}", "info")
             elif not data["success"] and data.get("failure_text"):
                 print_status_message(f"   → {data['failure_text']}", "info")
+
+    def _on_quest_activated(self, event: Event) -> None:
+        """Handle quest activation event."""
+        quest_name = event.data.get("quest_name", "Unknown Quest")
+        print_status_message(f"📜 Quest Started: {quest_name}", "success")
+
+    def _on_quest_completed(self, event: Event) -> None:
+        """Handle quest completion event."""
+        quest_name = event.data.get("quest_name", "Unknown Quest")
+        reward_gold = event.data.get("reward_gold", 0)
+        turn_in_npc = event.data.get("turn_in_npc")
+
+        print_status_message(f"🏆 Quest Complete: {quest_name}", "success")
+        if reward_gold > 0 and turn_in_npc:
+            print_status_message(
+                f"   Return to {turn_in_npc} to claim your reward ({reward_gold} gold)",
+                "info",
+            )
 
     def _auto_save(self, trigger: str) -> None:
         """
