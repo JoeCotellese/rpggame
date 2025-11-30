@@ -1,7 +1,7 @@
 # D&D 5E Terminal Game - Architecture Documentation
 
-**Version:** 0.3.0
-**Last Updated:** 2025-11-24
+**Version:** 0.4.0
+**Last Updated:** 2025-11-30
 **Status:** Active Development (Beyond MVP)
 
 ---
@@ -1204,9 +1204,9 @@ These refactorings strengthen the core architectural principles:
 - **More Classes**: Wizard, Ranger, Paladin
 
 #### Phase 2: Content Expansion (Mid-Term)
-- **Campaign System**: Multi-dungeon storylines
+- ~~**Campaign System**: Multi-dungeon storylines~~
 - **Quest Tracking**: Objectives, branching outcomes
-- **Merchant NPCs**: Buy/sell items, reputation
+- ~~**Merchant NPCs**: Buy/sell items, reputation~~
 - **More Dungeons**: 10+ dungeons with varied themes
 
 #### Phase 3: Advanced Features (Long-Term)
@@ -1252,5 +1252,3 @@ The system has evolved from MVP to a robust, feature-rich terminal game while ma
 **For New Contributors**: Start with `../README.md` for setup, then read this document for architecture. The codebase follows the structure documented here. See `../CLAUDE.md` for development standards.
 
 ---
-
-*Last Updated: 2025-11-24 by Claude Code (Architecture Evolution Documentation)*
