@@ -212,6 +212,95 @@
           "reward_item": "jar_of_ointment"
         }
       }
+    },
+    "gareth_shopkeeper": {
+      "id": "gareth_shopkeeper",
+      "name": "Gareth",
+      "display_name": "Gareth, the Shopkeeper",
+      "home_location": "arden.general_store",
+      "current_location": "arden.general_store",
+      "can_move": false,
+      "personality": {
+        "traits": ["pragmatic", "shrewd", "fair", "talkative"],
+        "speech_style": "businesslike but friendly, enjoys haggling, knows the value of everything",
+        "attitude_default": "neutral",
+        "suspicion_of_strangers": "low"
+      },
+      "knowledge": {
+        "general": [
+          "Runs the general store in Arden for 12 years",
+          "Supplies adventurers and townsfolk alike",
+          "Has connections with merchants from larger cities",
+          "Knows what gear sells and what sits on shelves"
+        ],
+        "quest_hooks": [],
+        "local_lore": [
+          "Trade has been slow lately with the troubles",
+          "Adventurers have been buying more weapons and healing supplies",
+          "The roads are getting dangerous"
+        ]
+      },
+      "shop": {
+        "enabled": true,
+        "shop_type": "general",
+        "inventory": [
+          {"item_id": "dagger", "price": 2, "stock": 5},
+          {"item_id": "shortsword", "price": 10, "stock": 3},
+          {"item_id": "longsword", "price": 15, "stock": 2},
+          {"item_id": "handaxe", "price": 5, "stock": 4},
+          {"item_id": "mace", "price": 5, "stock": 3},
+          {"item_id": "shortbow", "price": 25, "stock": 2},
+          {"item_id": "light_crossbow", "price": 25, "stock": 2},
+          {"item_id": "leather_armor", "price": 10, "stock": 3},
+          {"item_id": "studded_leather", "price": 45, "stock": 1},
+          {"item_id": "chain_shirt", "price": 50, "stock": 1},
+          {"item_id": "potion_of_healing", "price": 50, "stock": 5},
+          {"item_id": "antitoxin", "price": 50, "stock": 3},
+          {"item_id": "torch", "price": 1, "stock": -1},
+          {"item_id": "candle", "price": 1, "stock": -1},
+          {"item_id": "arrows", "price": 1, "stock": -1},
+          {"item_id": "bolts", "price": 1, "stock": -1},
+          {"item_id": "bullets_sling", "price": 1, "stock": -1},
+          {"item_id": "needles", "price": 1, "stock": -1},
+          {"item_id": "backpack", "price": 2, "stock": 5},
+          {"item_id": "bedroll", "price": 1, "stock": 5},
+          {"item_id": "rope_hempen", "price": 1, "stock": 10},
+          {"item_id": "rations", "price": 1, "stock": -1},
+          {"item_id": "waterskin", "price": 1, "stock": 10},
+          {"item_id": "tinderbox", "price": 1, "stock": 5},
+          {"item_id": "oil_flask", "price": 1, "stock": -1},
+          {"item_id": "lantern_hooded", "price": 5, "stock": 3},
+          {"item_id": "crowbar", "price": 2, "stock": 3},
+          {"item_id": "grappling_hook", "price": 2, "stock": 2},
+          {"item_id": "healer_kit", "price": 5, "stock": 3},
+          {"item_id": "caltrops", "price": 1, "stock": 5},
+          {"item_id": "ball_bearings", "price": 1, "stock": 5},
+          {"item_id": "piton", "price": 1, "stock": -1},
+          {"item_id": "hammer", "price": 1, "stock": 5},
+          {"item_id": "tent", "price": 2, "stock": 2},
+          {"item_id": "holy_water", "price": 25, "stock": 3},
+          {"item_id": "alchemists_fire", "price": 50, "stock": 2},
+          {"item_id": "acid_vial", "price": 25, "stock": 3}
+        ],
+        "buy_rate": 0.5,
+        "sell_dialogue": "Looking to buy? I've got quality goods at fair prices.",
+        "insufficient_funds_dialogue": "Hmm, looks like your purse is a bit light. Come back when you've got the coin."
+      },
+      "dialogue": {
+        "greeting": "Welcome to Gareth's Goods! Best supplies in Arden - well, the only supplies in Arden, but still the best. What can I get you?",
+        "farewell": "Safe travels! Come back when you need to restock.",
+        "hostile_greeting": "I don't do business with troublemakers. Out."
+      },
+      "reputation_modifiers": {
+        "friendly_threshold": 10,
+        "hostile_threshold": -15,
+        "disposition_effects": {
+          "friendly": {"price_modifier": 0.9, "extra_hints": false},
+          "hostile": {"refuses_service": true}
+        }
+      },
+      "schedule": null,
+      "services": null
     }
   }
 }

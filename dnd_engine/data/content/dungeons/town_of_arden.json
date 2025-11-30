@@ -15,13 +15,14 @@
       "parent": "town_of_arden",
       "safe_zone": true,
       "name": "Town Square",
-      "description": "You stand in the heart of Arden. Cobblestones worn smooth by generations of foot traffic spread beneath you. A weathered post displays a map of the town and a notice board covered in parchments - one catches your eye, something about trouble at the old Davos crypt. A stone fountain burbles at the square's center, its basin green with moss. To the north, the warm glow of the Crooked Tankard beckons weary travelers. The iron gates of Davos Manor stand to the west, while the spire of a chapel rises to the east. Southward, the main road leads toward the town gate.",
+      "description": "You stand in the heart of Arden. Cobblestones worn smooth by generations of foot traffic spread beneath you. A weathered post displays a map of the town and a notice board covered in parchments - one catches your eye, something about trouble at the old Davos crypt. A stone fountain burbles at the square's center, its basin green with moss. To the north, the warm glow of the Crooked Tankard beckons weary travelers. The iron gates of Davos Manor stand to the west, while the spire of a chapel rises to the east. A sturdy timber building with a sign reading 'Gareth's Goods' stands to the northeast. Southward, the main road leads toward the town gate.",
       "lighting": "bright",
       "exits": {
         "north": "arden.outside_inn",
         "south": "arden.town_road",
         "east": "arden.outside_chapel",
-        "west": "arden.outside_manor"
+        "west": "arden.outside_manor",
+        "northeast": "arden.outside_general_store"
       },
       "enemies": [],
       "items": [],
@@ -201,6 +202,45 @@
             "quest_item": "gorgus_journal"
           },
           "hidden_until_unlocked": true
+        }
+      },
+      "enemies": [],
+      "items": [],
+      "searched": false,
+      "searchable": false
+    },
+    "arden.outside_general_store": {
+      "id": "arden.outside_general_store",
+      "location_type": "settlement",
+      "parent": "town_of_arden",
+      "safe_zone": true,
+      "name": "Outside Gareth's Goods",
+      "description": "A sturdy two-story building of timber and stone stands before you, its construction more practical than decorative. A painted wooden sign above the door depicts a sword crossed with a potion bottle beneath the words 'Gareth's Goods - Supplies for the Discerning Adventurer'. Crates and barrels are stacked neatly against one wall, and a notice board beside the door advertises various wares and their prices. The door stands open during business hours, inviting customers within.",
+      "lighting": "bright",
+      "exits": {
+        "southwest": "arden.town_square",
+        "north": {
+          "destination": "arden.general_store",
+          "label": "Enter the Shop"
+        }
+      },
+      "enemies": [],
+      "items": [],
+      "searched": false,
+      "searchable": false
+    },
+    "arden.general_store": {
+      "id": "arden.general_store",
+      "location_type": "settlement",
+      "parent": "town_of_arden",
+      "safe_zone": true,
+      "name": "Gareth's Goods - Interior",
+      "description": "The interior of the shop is a well-organized maze of merchandise. Weapons hang on the walls - swords, axes, and bows of various sizes. Armor stands display leather jerkins and mail shirts. Shelves hold potions, torches, rope, and countless other adventuring necessities. A glass-fronted cabinet near the counter contains more valuable items under lock and key. Behind a worn wooden counter stands Gareth himself, a middle-aged man with sharp eyes and ink-stained fingers from keeping his ledgers. He looks up as you enter, ready to do business.",
+      "lighting": "bright",
+      "exits": {
+        "south": {
+          "destination": "arden.outside_general_store",
+          "label": "Exit to Street"
         }
       },
       "enemies": [],
