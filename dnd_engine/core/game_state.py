@@ -2462,9 +2462,23 @@ class GameState:
             Category name or None if not found
         """
         items_data = self.data_loader.load_items()
-        for category in ["weapons", "armor", "consumables", "magical_items"]:
+
+        # Direct category matches
+        for category in [
+            "weapons",
+            "armor",
+            "consumables",
+            "magical_items",
+            "tools",
+            "equipment",
+        ]:
             if item_id in items_data.get(category, {}):
                 return category
+
+        # Ammunition is stored in inventory as consumables (arrows/bolts are consumed)
+        if item_id in items_data.get("ammunition", {}):
+            return "consumables"
+
         return None
 
     def get_room_description(self) -> str:
