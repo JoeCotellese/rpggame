@@ -3588,7 +3588,13 @@ class GameState:
                 turn_advanced=True
             )
 
-        target = self.enemy_ai.select_target(living_party)
+        # Use smart targeting based on enemy intelligence and combat history
+        target = self.enemy_ai.select_target_smart(
+            available_targets=living_party,
+            enemy_intelligence=enemy.abilities.intelligence,
+            combat_history=self.combat_history,
+            enemy_name=enemy.name,
+        )
 
         # Get monster data for attack
         monsters = self.data_loader.load_monsters()
