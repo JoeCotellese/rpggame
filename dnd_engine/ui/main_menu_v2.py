@@ -141,6 +141,95 @@ class MainMenuV2:
 
         return choice_map.get(choice)
 
+    def _build_slot_choice_display(self, slot) -> str:
+        """
+        Build a display string for a save slot choice.
+
+        Args:
+            slot: SaveSlot instance
+
+        Returns:
+            Formatted display string for questionary choice
+        """
+        if slot.is_empty():
+            return f"Slot {slot.slot_number}: [Empty]"
+
+        # Build compact display: "Slot 1: Adventure - Party (Lvl X) - 2h 30m"
+        parts = [f"Slot {slot.slot_number}:"]
+
+        # Adventure name
+        if slot.adventure_name:
+            parts.append(slot.adventure_name)
+        else:
+            parts.append("Unknown Adventure")
+
+        # Party composition with levels
+        if slot.party_composition:
+            party_str = ", ".join(slot.party_composition)
+            if slot.party_levels:
+                avg_level = sum(slot.party_levels) // len(slot.party_levels)
+                party_str += f" (Lvl {avg_level})"
+            parts.append(f"- {party_str}")
+
+        # Playtime
+        parts.append(f"- {slot._format_playtime()}")
+
+        return " ".join(parts)
+
+    def _select_save_slot(
+        self,
+        prompt: str,
+        filter_empty: bool = False,
+        allow_empty: bool = True
+    ) -> int | None:
+        """
+        Select a save slot using questionary.
+
+        Args:
+            prompt: The selection prompt to display
+            filter_empty: If True, only show non-empty slots
+            allow_empty: If True, empty slots can be selected (for new game)
+
+        Returns:
+            Selected slot number (1-10) or None if cancelled
+        """
+        slots = self.slot_manager.list_slots()
+
+        if filter_empty:
+            slots = [s for s in slots if not s.is_empty()]
+
+        if not slots:
+            print_status_message("No saved games found.", "warning")
+            return None
+
+        # Build choices
+        choices = []
+        for slot in slots:
+            display = self._build_slot_choice_display(slot)
+            disabled = None
+
+            # Disable empty slots if not allowed
+            if not allow_empty and slot.is_empty():
+                disabled = "empty slot"
+
+            choices.append(questionary.Choice(
+                title=display,
+                value=slot.slot_number,
+                disabled=disabled
+            ))
+
+        choices.append(questionary.Choice(title="← Back", value=None))
+
+        try:
+            selected = questionary.select(
+                prompt,
+                choices=choices,
+                use_arrow_keys=True
+            ).ask()
+            return selected
+        except (EOFError, KeyboardInterrupt):
+            return None
+
     def show_save_slot_list(self, filter_empty: bool = False) -> None:
         """
         Display all save slots with their current state.
@@ -197,33 +286,20 @@ class MainMenuV2:
         Returns:
             Tuple of (GameState, slot_number) if successful, None otherwise
         """
-        self.show_save_slot_list(filter_empty=True)
-
-        slots = self.slot_manager.list_slots()
-        used_slots = [s for s in slots if not s.is_empty()]
-
-        if not used_slots:
-            console.print("\n[yellow]No saved games found.[/yellow]")
-            return None
-
         console.print()
-        choice = console.input("[bold cyan]Select slot number (1-10) or [B]ack:[/bold cyan] ").strip()
+        print_section("LOAD GAME")
 
-        if choice.lower() in ['b', 'back']:
+        slot_num = self._select_save_slot(
+            "Select a saved game to load:",
+            filter_empty=True,
+            allow_empty=False
+        )
+
+        if slot_num is None:
             return None
 
         try:
-            slot_num = int(choice)
-
-            if not 1 <= slot_num <= 10:
-                print_error("Invalid slot number. Must be between 1 and 10.")
-                return None
-
             slot = self.slot_manager.get_slot(slot_num)
-
-            if slot.is_empty():
-                print_error(f"Slot {slot_num} is empty.")
-                return None
 
             # Load game state - returns tuple of (game_state, campaign_progress)
             game_state, campaign_progress = self.slot_manager.load_game(slot_num)
@@ -239,9 +315,6 @@ class MainMenuV2:
 
             return (game_state, slot_num)
 
-        except ValueError:
-            print_error("Invalid input. Please enter a number.")
-            return None
         except Exception as e:
             print_error(f"Failed to load game: {e}")
             return None
@@ -279,43 +352,47 @@ class MainMenuV2:
         # Step 3: Select save slot
         console.print()
         print_section("SELECT SAVE SLOT")
-        self.show_save_slot_list(filter_empty=False)
-        console.print()
 
-        choice = console.input("[bold cyan]Select slot number (1-10):[/bold cyan] ").strip()
+        slot_num = self._select_save_slot(
+            "Select a save slot for your new game:",
+            filter_empty=False,
+            allow_empty=True
+        )
+
+        if slot_num is None:
+            return None
+
+        slot = self.slot_manager.get_slot(slot_num)
+
+        # Confirm overwrite if not empty
+        if not slot.is_empty():
+            try:
+                confirm = questionary.confirm(
+                    f"Slot {slot_num} contains: {slot.get_display_name()}. Overwrite?",
+                    default=False
+                ).ask()
+            except (EOFError, KeyboardInterrupt):
+                return None
+
+            if not confirm:
+                console.print("\n[yellow]Cancelled.[/yellow]")
+                return None
+
+        # Step 4: Create game state with campaign progress
+        party = Party(party_characters)
+        campaign_progress = campaign_info.get("campaign_progress")
+
+        # Use room registry to find the dungeon containing the starting room
+        starting_room = campaign_info["starting_room"]
+        dungeons_path = self.data_loader.data_path / "content" / "dungeons"
+        room_registry = RoomRegistry(dungeons_path)
+        starting_dungeon = room_registry.get_dungeon_for_room(starting_room)
+
+        if not starting_dungeon:
+            print_error(f"Could not find dungeon for room: {starting_room}")
+            return None
 
         try:
-            slot_num = int(choice)
-
-            if not 1 <= slot_num <= 10:
-                print_error("Invalid slot number. Must be between 1 and 10.")
-                return None
-
-            slot = self.slot_manager.get_slot(slot_num)
-
-            # Confirm overwrite if not empty
-            if not slot.is_empty():
-                console.print(f"\n[yellow]⚠  Slot {slot_num} contains:[/yellow] {slot.get_display_name()}")
-                confirm = console.input("[bold red]Overwrite this slot? (yes/no):[/bold red] ").strip().lower()
-
-                if confirm != 'yes':
-                    console.print("\n[yellow]Cancelled.[/yellow]")
-                    return None
-
-            # Step 4: Create game state with campaign progress
-            party = Party(party_characters)
-            campaign_progress = campaign_info.get("campaign_progress")
-
-            # Use room registry to find the dungeon containing the starting room
-            starting_room = campaign_info["starting_room"]
-            dungeons_path = self.data_loader.data_path / "content" / "dungeons"
-            room_registry = RoomRegistry(dungeons_path)
-            starting_dungeon = room_registry.get_dungeon_for_room(starting_room)
-
-            if not starting_dungeon:
-                print_error(f"Could not find dungeon for room: {starting_room}")
-                return None
-
             game_state = GameState(
                 party=party,
                 dungeon_name=starting_dungeon,
@@ -352,9 +429,6 @@ class MainMenuV2:
 
             return (game_state, slot_num)
 
-        except ValueError:
-            print_error("Invalid input. Please enter a number.")
-            return None
         except Exception as e:
             print_error(f"Failed to create game: {e}")
             return None
@@ -634,45 +708,64 @@ class MainMenuV2:
         """Handle save slot management menu."""
         while True:
             console.print()
-            self.show_save_slot_list(filter_empty=False)
+            print_section("MANAGE SAVE SLOTS")
 
-            console.print("\n[bold]Actions:[/bold]")
-            console.print("  [R] Rename slot")
-            console.print("  [C] Clear slot")
-            console.print("  [B] Back to main menu")
+            # Action selection
+            action_choices = [
+                questionary.Choice(title="Rename slot", value="rename"),
+                questionary.Choice(title="Clear slot", value="clear"),
+                questionary.Choice(title="← Back to main menu", value=None),
+            ]
 
-            console.print()
-            choice = console.input("[bold cyan]Select action:[/bold cyan] ").strip().upper()
-
-            if choice == 'B':
+            try:
+                action = questionary.select(
+                    "What would you like to do?",
+                    choices=action_choices,
+                    use_arrow_keys=True
+                ).ask()
+            except (EOFError, KeyboardInterrupt):
                 break
-            elif choice == 'R':
-                slot_num = console.input("\n[bold cyan]Slot number to rename:[/bold cyan] ").strip()
-                try:
-                    num = int(slot_num)
-                    if 1 <= num <= 10:
-                        new_name = console.input("[bold cyan]Enter custom name (empty for auto-name):[/bold cyan] ").strip()
-                        self.slot_manager.rename_slot(num, new_name)
-                        print_status_message(f"Renamed Slot {num}", "success")
-                except ValueError:
-                    print_error("Invalid slot number.")
-            elif choice == 'C':
-                slot_num = console.input("\n[bold cyan]Slot number to clear:[/bold cyan] ").strip()
-                try:
-                    num = int(slot_num)
-                    if 1 <= num <= 10:
-                        slot = self.slot_manager.get_slot(num)
-                        if slot.is_empty():
-                            print_status_message("Slot is already empty.", "info")
-                        else:
-                            confirm = console.input(f"[bold red]Clear slot {num}? This cannot be undone! (yes/no):[/bold red] ").strip().lower()
-                            if confirm == 'yes':
-                                self.slot_manager.clear_slot(num)
-                                print_status_message(f"Cleared Slot {num}", "success")
-                except ValueError:
-                    print_error("Invalid slot number.")
-            else:
-                print_error("Invalid action.")
+
+            if action is None:
+                break
+
+            elif action == "rename":
+                slot_num = self._select_save_slot(
+                    "Select slot to rename:",
+                    filter_empty=False,
+                    allow_empty=False
+                )
+
+                if slot_num is not None:
+                    new_name = console.input(
+                        "[bold cyan]Enter custom name (empty for auto-name):[/bold cyan] "
+                    ).strip()
+                    self.slot_manager.rename_slot(slot_num, new_name)
+                    print_status_message(f"Renamed Slot {slot_num}", "success")
+
+            elif action == "clear":
+                slot_num = self._select_save_slot(
+                    "Select slot to clear:",
+                    filter_empty=False,
+                    allow_empty=False
+                )
+
+                if slot_num is not None:
+                    slot = self.slot_manager.get_slot(slot_num)
+                    if slot.is_empty():
+                        print_status_message("Slot is already empty.", "info")
+                    else:
+                        try:
+                            confirm = questionary.confirm(
+                                f"Clear slot {slot_num}? This cannot be undone!",
+                                default=False
+                            ).ask()
+                        except (EOFError, KeyboardInterrupt):
+                            continue
+
+                        if confirm:
+                            self.slot_manager.clear_slot(slot_num)
+                            print_status_message(f"Cleared Slot {slot_num}", "success")
 
             console.print("\n[dim]Press Enter to continue...[/dim]")
             console.input()
