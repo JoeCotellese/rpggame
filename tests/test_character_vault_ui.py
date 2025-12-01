@@ -12,13 +12,13 @@ from dnd_engine.ui.main_menu_v2 import MainMenuV2
 def basic_character_info():
     """Create basic character info dict."""
     return {
-        'id': 'char-123',
-        'name': 'Thorin',
-        'class': 'Fighter',
-        'level': 5,
-        'race': 'Dwarf',
-        'times_used': 0,
-        'save_slots_used': [],
+        "id": "char-123",
+        "name": "Thorin",
+        "class": "Fighter",
+        "level": 5,
+        "race": "Dwarf",
+        "times_used": 0,
+        "save_slots_used": [],
     }
 
 
@@ -26,13 +26,13 @@ def basic_character_info():
 def used_character_info():
     """Create character info dict for character in active saves."""
     return {
-        'id': 'char-456',
-        'name': 'Elara',
-        'class': 'Wizard',
-        'level': 7,
-        'race': 'Elf',
-        'times_used': 3,
-        'save_slots_used': [1, 3],
+        "id": "char-456",
+        "name": "Elara",
+        "class": "Wizard",
+        "level": 7,
+        "race": "Elf",
+        "times_used": 3,
+        "save_slots_used": [1, 3],
     }
 
 
@@ -45,7 +45,7 @@ def character_list(basic_character_info, used_character_info):
 class TestBuildCharacterChoiceDisplay:
     """Test character choice display string building."""
 
-    @patch.object(MainMenuV2, '__init__', lambda x: None)
+    @patch.object(MainMenuV2, "__init__", lambda x: None)
     def test_basic_character_display(self, basic_character_info):
         """Test display string for character not in any saves."""
         menu = MainMenuV2()
@@ -58,7 +58,7 @@ class TestBuildCharacterChoiceDisplay:
         # Should not show slot info when not used
         assert "slots" not in result.lower()
 
-    @patch.object(MainMenuV2, '__init__', lambda x: None)
+    @patch.object(MainMenuV2, "__init__", lambda x: None)
     def test_used_character_display(self, used_character_info):
         """Test display string for character in active saves."""
         menu = MainMenuV2()
@@ -77,11 +77,9 @@ class TestBuildCharacterChoiceDisplay:
 class TestSelectCharacterForDeletion:
     """Test questionary-based character selection for deletion."""
 
-    @patch.object(MainMenuV2, '__init__', lambda x: None)
-    @patch('dnd_engine.ui.main_menu_v2.questionary')
-    def test_select_character_shows_all_characters(
-        self, mock_questionary, character_list
-    ):
+    @patch.object(MainMenuV2, "__init__", lambda x: None)
+    @patch("dnd_engine.ui.main_menu_v2.questionary")
+    def test_select_character_shows_all_characters(self, mock_questionary, character_list):
         """Test that all characters are shown in selection."""
         menu = MainMenuV2()
 
@@ -96,11 +94,9 @@ class TestSelectCharacterForDeletion:
         choice_calls = mock_questionary.Choice.call_args_list
         assert len(choice_calls) == 3
 
-    @patch.object(MainMenuV2, '__init__', lambda x: None)
-    @patch('dnd_engine.ui.main_menu_v2.questionary')
-    def test_select_character_returns_none_on_back(
-        self, mock_questionary, character_list
-    ):
+    @patch.object(MainMenuV2, "__init__", lambda x: None)
+    @patch("dnd_engine.ui.main_menu_v2.questionary")
+    def test_select_character_returns_none_on_back(self, mock_questionary, character_list):
         """Test that selecting back returns None."""
         menu = MainMenuV2()
 
@@ -111,11 +107,9 @@ class TestSelectCharacterForDeletion:
 
         assert result is None
 
-    @patch.object(MainMenuV2, '__init__', lambda x: None)
-    @patch('dnd_engine.ui.main_menu_v2.questionary')
-    def test_select_character_handles_keyboard_interrupt(
-        self, mock_questionary, character_list
-    ):
+    @patch.object(MainMenuV2, "__init__", lambda x: None)
+    @patch("dnd_engine.ui.main_menu_v2.questionary")
+    def test_select_character_handles_keyboard_interrupt(self, mock_questionary, character_list):
         """Test that keyboard interrupt returns None."""
         menu = MainMenuV2()
 
@@ -126,11 +120,9 @@ class TestSelectCharacterForDeletion:
 
         assert result is None
 
-    @patch.object(MainMenuV2, '__init__', lambda x: None)
-    @patch('dnd_engine.ui.main_menu_v2.questionary')
-    def test_select_character_handles_eof_error(
-        self, mock_questionary, character_list
-    ):
+    @patch.object(MainMenuV2, "__init__", lambda x: None)
+    @patch("dnd_engine.ui.main_menu_v2.questionary")
+    def test_select_character_handles_eof_error(self, mock_questionary, character_list):
         """Test that EOF error returns None."""
         menu = MainMenuV2()
 
@@ -141,8 +133,8 @@ class TestSelectCharacterForDeletion:
 
         assert result is None
 
-    @patch.object(MainMenuV2, '__init__', lambda x: None)
-    @patch('dnd_engine.ui.main_menu_v2.print_status_message')
+    @patch.object(MainMenuV2, "__init__", lambda x: None)
+    @patch("dnd_engine.ui.main_menu_v2.print_status_message")
     def test_select_character_shows_warning_when_empty(self, mock_print):
         """Test warning message when no characters in vault."""
         menu = MainMenuV2()
@@ -156,13 +148,11 @@ class TestSelectCharacterForDeletion:
 class TestHandleCharacterVault:
     """Test character vault management flow."""
 
-    @patch.object(MainMenuV2, '__init__', lambda x: None)
-    @patch('dnd_engine.ui.main_menu_v2.questionary')
-    @patch('dnd_engine.ui.main_menu_v2.print_section')
-    @patch('dnd_engine.ui.main_menu_v2.console')
-    def test_vault_shows_action_menu(
-        self, mock_console, mock_print_section, mock_questionary
-    ):
+    @patch.object(MainMenuV2, "__init__", lambda x: None)
+    @patch("dnd_engine.ui.main_menu_v2.questionary")
+    @patch("dnd_engine.ui.main_menu_v2.print_section")
+    @patch("dnd_engine.ui.main_menu_v2.console")
+    def test_vault_shows_action_menu(self, mock_console, mock_print_section, mock_questionary):
         """Test that vault shows action selection."""
         menu = MainMenuV2()
         menu.vault = Mock()
@@ -178,12 +168,12 @@ class TestHandleCharacterVault:
         call_args = mock_questionary.select.call_args
         assert "What would you like to do?" in str(call_args)
 
-    @patch.object(MainMenuV2, '__init__', lambda x: None)
-    @patch.object(MainMenuV2, '_create_character_interactive')
-    @patch('dnd_engine.ui.main_menu_v2.questionary')
-    @patch('dnd_engine.ui.main_menu_v2.print_section')
-    @patch('dnd_engine.ui.main_menu_v2.print_status_message')
-    @patch('dnd_engine.ui.main_menu_v2.console')
+    @patch.object(MainMenuV2, "__init__", lambda x: None)
+    @patch.object(MainMenuV2, "_create_character_interactive")
+    @patch("dnd_engine.ui.main_menu_v2.questionary")
+    @patch("dnd_engine.ui.main_menu_v2.print_section")
+    @patch("dnd_engine.ui.main_menu_v2.print_status_message")
+    @patch("dnd_engine.ui.main_menu_v2.console")
     def test_vault_create_action_calls_wizard(
         self,
         mock_console,
@@ -210,12 +200,12 @@ class TestHandleCharacterVault:
         mock_create.assert_called_once()
         menu.vault.add_character.assert_called_once_with(mock_char)
 
-    @patch.object(MainMenuV2, '__init__', lambda x: None)
-    @patch.object(MainMenuV2, '_select_character_for_deletion')
-    @patch('dnd_engine.ui.main_menu_v2.questionary')
-    @patch('dnd_engine.ui.main_menu_v2.print_section')
-    @patch('dnd_engine.ui.main_menu_v2.print_status_message')
-    @patch('dnd_engine.ui.main_menu_v2.console')
+    @patch.object(MainMenuV2, "__init__", lambda x: None)
+    @patch.object(MainMenuV2, "_select_character_for_deletion")
+    @patch("dnd_engine.ui.main_menu_v2.questionary")
+    @patch("dnd_engine.ui.main_menu_v2.print_section")
+    @patch("dnd_engine.ui.main_menu_v2.print_status_message")
+    @patch("dnd_engine.ui.main_menu_v2.console")
     def test_vault_delete_uses_character_selector(
         self,
         mock_console,
@@ -240,13 +230,13 @@ class TestHandleCharacterVault:
         menu.handle_character_vault()
 
         mock_select.assert_called_once()
-        menu.vault.delete_character.assert_called_once_with(basic_character_info['id'])
+        menu.vault.delete_character.assert_called_once_with(basic_character_info["id"])
 
-    @patch.object(MainMenuV2, '__init__', lambda x: None)
-    @patch.object(MainMenuV2, '_select_character_for_deletion')
-    @patch('dnd_engine.ui.main_menu_v2.questionary')
-    @patch('dnd_engine.ui.main_menu_v2.print_section')
-    @patch('dnd_engine.ui.main_menu_v2.console')
+    @patch.object(MainMenuV2, "__init__", lambda x: None)
+    @patch.object(MainMenuV2, "_select_character_for_deletion")
+    @patch("dnd_engine.ui.main_menu_v2.questionary")
+    @patch("dnd_engine.ui.main_menu_v2.print_section")
+    @patch("dnd_engine.ui.main_menu_v2.console")
     def test_vault_delete_respects_cancel_confirmation(
         self,
         mock_console,
@@ -272,11 +262,11 @@ class TestHandleCharacterVault:
         mock_questionary.confirm.assert_called_once()
         menu.vault.delete_character.assert_not_called()
 
-    @patch.object(MainMenuV2, '__init__', lambda x: None)
-    @patch.object(MainMenuV2, '_select_character_for_deletion')
-    @patch('dnd_engine.ui.main_menu_v2.questionary')
-    @patch('dnd_engine.ui.main_menu_v2.print_section')
-    @patch('dnd_engine.ui.main_menu_v2.console')
+    @patch.object(MainMenuV2, "__init__", lambda x: None)
+    @patch.object(MainMenuV2, "_select_character_for_deletion")
+    @patch("dnd_engine.ui.main_menu_v2.questionary")
+    @patch("dnd_engine.ui.main_menu_v2.print_section")
+    @patch("dnd_engine.ui.main_menu_v2.console")
     def test_vault_delete_cancel_at_selection(
         self,
         mock_console,
@@ -302,10 +292,10 @@ class TestHandleCharacterVault:
         mock_questionary.confirm.assert_not_called()
         menu.vault.delete_character.assert_not_called()
 
-    @patch.object(MainMenuV2, '__init__', lambda x: None)
-    @patch('dnd_engine.ui.main_menu_v2.questionary')
-    @patch('dnd_engine.ui.main_menu_v2.print_section')
-    @patch('dnd_engine.ui.main_menu_v2.console')
+    @patch.object(MainMenuV2, "__init__", lambda x: None)
+    @patch("dnd_engine.ui.main_menu_v2.questionary")
+    @patch("dnd_engine.ui.main_menu_v2.print_section")
+    @patch("dnd_engine.ui.main_menu_v2.console")
     def test_vault_hides_delete_when_empty(
         self, mock_console, mock_print_section, mock_questionary
     ):
@@ -321,13 +311,13 @@ class TestHandleCharacterVault:
 
         # Check choice calls - should not include delete
         choice_calls = mock_questionary.Choice.call_args_list
-        choice_titles = [call.kwargs.get('title', '') for call in choice_calls]
-        assert not any('delete' in title.lower() for title in choice_titles)
+        choice_titles = [call.kwargs.get("title", "") for call in choice_calls]
+        assert not any("delete" in title.lower() for title in choice_titles)
 
-    @patch.object(MainMenuV2, '__init__', lambda x: None)
-    @patch('dnd_engine.ui.main_menu_v2.questionary')
-    @patch('dnd_engine.ui.main_menu_v2.print_section')
-    @patch('dnd_engine.ui.main_menu_v2.console')
+    @patch.object(MainMenuV2, "__init__", lambda x: None)
+    @patch("dnd_engine.ui.main_menu_v2.questionary")
+    @patch("dnd_engine.ui.main_menu_v2.print_section")
+    @patch("dnd_engine.ui.main_menu_v2.console")
     def test_vault_shows_delete_when_has_characters(
         self, mock_console, mock_print_section, mock_questionary, character_list
     ):
@@ -343,13 +333,13 @@ class TestHandleCharacterVault:
 
         # Check choice calls - should include delete
         choice_calls = mock_questionary.Choice.call_args_list
-        choice_titles = [call.kwargs.get('title', '') for call in choice_calls]
-        assert any('delete' in title.lower() for title in choice_titles)
+        choice_titles = [call.kwargs.get("title", "") for call in choice_calls]
+        assert any("delete" in title.lower() for title in choice_titles)
 
-    @patch.object(MainMenuV2, '__init__', lambda x: None)
-    @patch('dnd_engine.ui.main_menu_v2.questionary')
-    @patch('dnd_engine.ui.main_menu_v2.print_section')
-    @patch('dnd_engine.ui.main_menu_v2.console')
+    @patch.object(MainMenuV2, "__init__", lambda x: None)
+    @patch("dnd_engine.ui.main_menu_v2.questionary")
+    @patch("dnd_engine.ui.main_menu_v2.print_section")
+    @patch("dnd_engine.ui.main_menu_v2.console")
     def test_vault_handles_keyboard_interrupt(
         self, mock_console, mock_print_section, mock_questionary
     ):
@@ -364,13 +354,11 @@ class TestHandleCharacterVault:
         # Should not raise
         menu.handle_character_vault()
 
-    @patch.object(MainMenuV2, '__init__', lambda x: None)
-    @patch('dnd_engine.ui.main_menu_v2.questionary')
-    @patch('dnd_engine.ui.main_menu_v2.print_section')
-    @patch('dnd_engine.ui.main_menu_v2.console')
-    def test_vault_handles_eof_error(
-        self, mock_console, mock_print_section, mock_questionary
-    ):
+    @patch.object(MainMenuV2, "__init__", lambda x: None)
+    @patch("dnd_engine.ui.main_menu_v2.questionary")
+    @patch("dnd_engine.ui.main_menu_v2.print_section")
+    @patch("dnd_engine.ui.main_menu_v2.console")
+    def test_vault_handles_eof_error(self, mock_console, mock_print_section, mock_questionary):
         """Test that EOF error exits gracefully."""
         menu = MainMenuV2()
         menu.vault = Mock()

@@ -65,19 +65,25 @@ class MainMenuV2:
         console.print(f"[cyan]Will migrate:[/cyan] {info['migratable_campaigns']} most recent")
         console.print(f"[cyan]Will extract:[/cyan] {info['total_characters']} unique character(s)")
 
-        if info['campaigns_to_migrate']:
+        if info["campaigns_to_migrate"]:
             console.print("\n[bold]Campaigns to migrate:[/bold]")
-            for i, camp in enumerate(info['campaigns_to_migrate'][:5], 1):
+            for i, camp in enumerate(info["campaigns_to_migrate"][:5], 1):
                 console.print(f"  {i}. {camp['name']} ({camp['playtime']})")
-            if len(info['campaigns_to_migrate']) > 5:
+            if len(info["campaigns_to_migrate"]) > 5:
                 console.print(f"  ... and {len(info['campaigns_to_migrate']) - 5} more")
 
-        console.print("\n[dim]Backup will be created at: ~/.dnd_terminal/backup_pre_migration/[/dim]")
+        console.print(
+            "\n[dim]Backup will be created at: ~/.dnd_terminal/backup_pre_migration/[/dim]"
+        )
         console.print()
 
-        confirm = console.input("[bold cyan]Proceed with migration? (yes/no):[/bold cyan] ").strip().lower()
+        confirm = (
+            console.input("[bold cyan]Proceed with migration? (yes/no):[/bold cyan] ")
+            .strip()
+            .lower()
+        )
 
-        if confirm == 'yes':
+        if confirm == "yes":
             console.print("\n[yellow]Migrating...[/yellow]")
 
             success, message, stats = self.migration_manager.migrate()
@@ -85,13 +91,17 @@ class MainMenuV2:
             if success:
                 print_status_message(message, "success")
 
-                if stats.get('errors'):
+                if stats.get("errors"):
                     console.print("\n[yellow]Warnings:[/yellow]")
-                    for error in stats['errors'][:5]:
+                    for error in stats["errors"][:5]:
                         console.print(f"  [dim]• {error}[/dim]")
 
-                console.print(f"\n[green]✓ Migrated {stats['campaigns_migrated']} campaign(s)[/green]")
-                console.print(f"[green]✓ Extracted {stats['characters_migrated']} character(s)[/green]")
+                console.print(
+                    f"\n[green]✓ Migrated {stats['campaigns_migrated']} campaign(s)[/green]"
+                )
+                console.print(
+                    f"[green]✓ Extracted {stats['characters_migrated']} character(s)[/green]"
+                )
 
                 console.print("\n[dim]Press Enter to continue...[/dim]")
                 console.input()
@@ -123,7 +133,7 @@ class MainMenuV2:
             {"number": "2", "text": "Load Game"},
             {"number": "3", "text": "Character Vault"},
             {"number": "4", "text": "Manage Save Slots"},
-            {"number": "5", "text": "Exit"}
+            {"number": "5", "text": "Exit"},
         ]
 
         print_choice_menu("Main Menu", options)
@@ -131,13 +141,7 @@ class MainMenuV2:
 
         choice = console.input("[bold cyan]Choose an option [1-5]:[/bold cyan] ").strip()
 
-        choice_map = {
-            "1": "new",
-            "2": "load",
-            "3": "vault",
-            "4": "manage",
-            "5": "exit"
-        }
+        choice_map = {"1": "new", "2": "load", "3": "vault", "4": "manage", "5": "exit"}
 
         return choice_map.get(choice)
 
@@ -188,16 +192,16 @@ class MainMenuV2:
         """
         # Format: "Name - Level X Race Class"
         parts = [
-            char_info['name'],
+            char_info["name"],
             "-",
             f"Level {char_info['level']}",
-            char_info['race'],
-            char_info['class'],
+            char_info["race"],
+            char_info["class"],
         ]
 
         # Add usage indicator if used
-        if char_info['times_used'] > 0:
-            slots_str = ", ".join(map(str, char_info['save_slots_used']))
+        if char_info["times_used"] > 0:
+            slots_str = ", ".join(map(str, char_info["save_slots_used"]))
             parts.append(f"(in slots: {slots_str})")
 
         return " ".join(parts)
@@ -222,18 +226,18 @@ class MainMenuV2:
         choices = []
         for char_info in char_list:
             display = self._build_character_choice_display(char_info)
-            choices.append(questionary.Choice(
-                title=display,
-                value=char_info,
-            ))
+            choices.append(
+                questionary.Choice(
+                    title=display,
+                    value=char_info,
+                )
+            )
 
         choices.append(questionary.Choice(title="← Back", value="back"))
 
         try:
             selected = questionary.select(
-                "Select character to delete:",
-                choices=choices,
-                use_arrow_keys=True
+                "Select character to delete:", choices=choices, use_arrow_keys=True
             ).ask()
             if selected == "back":
                 return None
@@ -242,10 +246,7 @@ class MainMenuV2:
             return None
 
     def _select_save_slot(
-        self,
-        prompt: str,
-        filter_empty: bool = False,
-        allow_empty: bool = True
+        self, prompt: str, filter_empty: bool = False, allow_empty: bool = True
     ) -> int | None:
         """
         Select a save slot using questionary.
@@ -277,20 +278,14 @@ class MainMenuV2:
             if not allow_empty and slot.is_empty():
                 disabled = "empty slot"
 
-            choices.append(questionary.Choice(
-                title=display,
-                value=slot.slot_number,
-                disabled=disabled
-            ))
+            choices.append(
+                questionary.Choice(title=display, value=slot.slot_number, disabled=disabled)
+            )
 
         choices.append(questionary.Choice(title="← Back", value=None))
 
         try:
-            selected = questionary.select(
-                prompt,
-                choices=choices,
-                use_arrow_keys=True
-            ).ask()
+            selected = questionary.select(prompt, choices=choices, use_arrow_keys=True).ask()
             return selected
         except (EOFError, KeyboardInterrupt):
             return None
@@ -324,7 +319,7 @@ class MainMenuV2:
                 status = slot.get_display_name()
                 panel_content = [
                     f"[cyan]Last played:[/cyan] {slot.get_last_played_display()}",
-                    f"[cyan]Playtime:[/cyan] {slot._format_playtime()}"
+                    f"[cyan]Playtime:[/cyan] {slot._format_playtime()}",
                 ]
 
                 if slot.party_composition:
@@ -340,7 +335,7 @@ class MainMenuV2:
                 "\n".join(panel_content),
                 title=f"[bold cyan][Slot {slot.slot_number}][/bold cyan] {status}",
                 border_style=border_style,
-                padding=(0, 2)
+                padding=(0, 2),
             )
             console.print(panel)
 
@@ -355,9 +350,7 @@ class MainMenuV2:
         print_section("LOAD GAME")
 
         slot_num = self._select_save_slot(
-            "Select a saved game to load:",
-            filter_empty=True,
-            allow_empty=False
+            "Select a saved game to load:", filter_empty=True, allow_empty=False
         )
 
         if slot_num is None:
@@ -405,7 +398,7 @@ class MainMenuV2:
             "SELECT PARTY",
             f"Campaign: {campaign_info['name']} (Level {level_range})\n"
             "Build your party by selecting 1-6 characters from your vault.\n"
-            "Press [bold]C[/bold] to create new characters on the fly."
+            "Press [bold]C[/bold] to create new characters on the fly.",
         )
 
         party_characters = self._select_party_from_vault()
@@ -419,9 +412,7 @@ class MainMenuV2:
         print_section("SELECT SAVE SLOT")
 
         slot_num = self._select_save_slot(
-            "Select a save slot for your new game:",
-            filter_empty=False,
-            allow_empty=True
+            "Select a save slot for your new game:", filter_empty=False, allow_empty=True
         )
 
         if slot_num is None:
@@ -434,7 +425,7 @@ class MainMenuV2:
             try:
                 confirm = questionary.confirm(
                     f"Slot {slot_num} contains: {slot.get_display_name()}. Overwrite?",
-                    default=False
+                    default=False,
                 ).ask()
             except (EOFError, KeyboardInterrupt):
                 return None
@@ -463,7 +454,7 @@ class MainMenuV2:
                 dungeon_name=starting_dungeon,
                 campaign_id=campaign_info["campaign_id"],
                 data_loader=self.data_loader,
-                campaign_progress=campaign_progress
+                campaign_progress=campaign_progress,
             )
 
             # Override to start at the campaign's specific starting room
@@ -475,7 +466,7 @@ class MainMenuV2:
                 game_state=game_state,
                 playtime_delta=0,
                 campaign_progress=campaign_progress,
-                character_vault=self.vault
+                character_vault=self.vault,
             )
 
             # Step 6: Record character usage in vault
@@ -483,8 +474,8 @@ class MainMenuV2:
                 # Find character ID in vault by name (not ideal, but works for now)
                 char_list = self.vault.list_characters()
                 for char_info in char_list:
-                    if char_info['name'] == character.name:
-                        self.vault.record_usage(char_info['id'], slot_num)
+                    if char_info["name"] == character.name:
+                        self.vault.record_usage(char_info["id"], slot_num)
                         break
 
             print_status_message(f"Game saved to Slot {slot_num}", "success")
@@ -515,11 +506,8 @@ class MainMenuV2:
             # Build choices for questionary
             choices = []
             for char_info in char_list:
-                display = (
-                    f"{char_info['name']} - "
-                    f"Level {char_info['level']} {char_info['class']}"
-                )
-                choices.append(questionary.Choice(title=display, value=char_info['id']))
+                display = f"{char_info['name']} - Level {char_info['level']} {char_info['class']}"
+                choices.append(questionary.Choice(title=display, value=char_info["id"]))
 
             def validate_selection(selected: list) -> bool | str:
                 if len(selected) > 6:
@@ -531,7 +519,7 @@ class MainMenuV2:
                     "Select characters for your party (1-6):",
                     choices=choices,
                     validate=validate_selection,
-                    instruction="(Space to toggle, Enter to confirm)"
+                    instruction="(Space to toggle, Enter to confirm)",
                 ).ask()
 
                 if selected_ids:
@@ -542,7 +530,7 @@ class MainMenuV2:
                         if removed["quest_items"]:
                             print_status_message(
                                 f"{character.name}: Quest items removed: {', '.join(removed['quest_items'])}",
-                                "info"
+                                "info",
                             )
                         selected_characters.append(character)
 
@@ -560,7 +548,7 @@ class MainMenuV2:
             try:
                 create_more = questionary.confirm(
                     prompt,
-                    default=len(selected_characters) == 0  # Default yes if no characters
+                    default=len(selected_characters) == 0,  # Default yes if no characters
                 ).ask()
             except (EOFError, KeyboardInterrupt):
                 if len(selected_characters) > 0:
@@ -592,10 +580,7 @@ class MainMenuV2:
         factory = CharacterFactory()
 
         try:
-            character = factory.create_character_interactive(
-                ui=None,
-                data_loader=self.data_loader
-            )
+            character = factory.create_character_interactive(ui=None, data_loader=self.data_loader)
             return character
         except KeyboardInterrupt:
             console.print("\n[yellow]Character creation cancelled.[/yellow]")
@@ -636,9 +621,7 @@ class MainMenuV2:
 
         try:
             selected_id = questionary.select(
-                "Choose a campaign:",
-                choices=choices,
-                use_arrow_keys=True
+                "Choose a campaign:", choices=choices, use_arrow_keys=True
             ).ask()
         except (EOFError, KeyboardInterrupt):
             return None
@@ -695,7 +678,7 @@ class MainMenuV2:
             "name": definition.name,
             "level_range": definition.level_range,
             "starting_room": starting_room,
-            "campaign_progress": progress
+            "campaign_progress": progress,
         }
 
     def handle_character_vault(self) -> None:
@@ -718,19 +701,13 @@ class MainMenuV2:
             ]
 
             if char_list:
-                action_choices.append(
-                    questionary.Choice(title="Delete character", value="delete")
-                )
+                action_choices.append(questionary.Choice(title="Delete character", value="delete"))
 
-            action_choices.append(
-                questionary.Choice(title="← Back to main menu", value="back")
-            )
+            action_choices.append(questionary.Choice(title="← Back to main menu", value="back"))
 
             try:
                 action = questionary.select(
-                    "What would you like to do?",
-                    choices=action_choices,
-                    use_arrow_keys=True
+                    "What would you like to do?", choices=action_choices, use_arrow_keys=True
                 ).ask()
             except (EOFError, KeyboardInterrupt):
                 break
@@ -746,12 +723,11 @@ class MainMenuV2:
                 char_info = self._select_character_for_deletion(char_list)
                 if char_info:
                     confirm = questionary.confirm(
-                        f"Delete {char_info['name']}? This cannot be undone.",
-                        default=False
+                        f"Delete {char_info['name']}? This cannot be undone.", default=False
                     ).ask()
 
                     if confirm:
-                        self.vault.delete_character(char_info['id'])
+                        self.vault.delete_character(char_info["id"])
                         print_status_message(f"Deleted {char_info['name']}", "success")
 
     def handle_manage_slots(self) -> None:
@@ -769,9 +745,7 @@ class MainMenuV2:
 
             try:
                 action = questionary.select(
-                    "What would you like to do?",
-                    choices=action_choices,
-                    use_arrow_keys=True
+                    "What would you like to do?", choices=action_choices, use_arrow_keys=True
                 ).ask()
             except (EOFError, KeyboardInterrupt):
                 break
@@ -781,9 +755,7 @@ class MainMenuV2:
 
             elif action == "rename":
                 slot_num = self._select_save_slot(
-                    "Select slot to rename:",
-                    filter_empty=False,
-                    allow_empty=False
+                    "Select slot to rename:", filter_empty=False, allow_empty=False
                 )
 
                 if slot_num is not None:
@@ -795,9 +767,7 @@ class MainMenuV2:
 
             elif action == "clear":
                 slot_num = self._select_save_slot(
-                    "Select slot to clear:",
-                    filter_empty=False,
-                    allow_empty=False
+                    "Select slot to clear:", filter_empty=False, allow_empty=False
                 )
 
                 if slot_num is not None:
@@ -807,8 +777,7 @@ class MainMenuV2:
                     else:
                         try:
                             confirm = questionary.confirm(
-                                f"Clear slot {slot_num}? This cannot be undone!",
-                                default=False
+                                f"Clear slot {slot_num}? This cannot be undone!", default=False
                             ).ask()
                         except (EOFError, KeyboardInterrupt):
                             continue
