@@ -391,13 +391,19 @@ class TestDungeonCompletionDetection:
             "name": "First Dungeon",
             "start_room": "dungeon1.entrance",
             "rooms": {
+                "dungeon1.entrance": {
+                    "id": "dungeon1.entrance",
+                    "name": "Dungeon Entrance",
+                    "enemies": [],
+                    "exits": {"north": "dungeon1.boss_room"},
+                },
                 "dungeon1.boss_room": {
                     "id": "dungeon1.boss_room",
                     "name": "Boss Chamber",
                     "boss_room": True,
                     "enemies": [],
                     "exits": {},
-                }
+                },
             },
         }
         mock_loader.load_monsters.return_value = {}
@@ -430,8 +436,8 @@ class TestDungeonCompletionDetection:
 
             game_state.event_bus.subscribe(EventType.BOSS_DEFEATED, capture_event)
 
-            # Call boss defeat handler
-            game_state._handle_boss_defeat()
+            # Call boss defeat handler with mock enemy IDs
+            game_state._handle_boss_defeat(["test_boss"])
 
             # Verify boss defeat was recorded
             assert progress.boss_defeats.get("dungeon1") is True

@@ -26,14 +26,19 @@ NPC_TOOLS = [
             "name": "activate_quest",
             "description": (
                 "Activate a quest when the player shows clear commitment to helping. "
-                "Only call this when they explicitly agree, not just when asking questions."
+                "Only call this when they explicitly agree, not just when asking questions. "
+                "IMPORTANT: You MUST use the exact quest ID returned by get_available_quests - "
+                "do NOT invent or modify quest IDs."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "quest_id": {
                         "type": "string",
-                        "description": "The quest identifier",
+                        "description": (
+                            "The EXACT quest ID from get_available_quests response. "
+                            "Must match exactly (e.g., 'investigate_crypt', not 'investigate_family_crypt')."
+                        ),
                     }
                 },
                 "required": ["quest_id"],

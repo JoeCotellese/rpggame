@@ -87,16 +87,37 @@ class DataLoader:
 
         return creature
 
-    def load_items(self) -> dict[str, Any]:
+    def load_items(self, campaign_id: str | None = None) -> dict[str, Any]:
         """
         Load all item definitions from JSON.
 
+        Loads base SRD items and optionally merges in campaign-specific items
+        from the quest file's "items" section.
+
+        Args:
+            campaign_id: Optional campaign ID to load campaign-specific items
+
         Returns:
-            Dictionary containing weapons, armor, and consumables
+            Dictionary containing weapons, armor, consumables, and campaign items
         """
         items_file = self.data_path / "srd" / "items.json"
         with open(items_file) as f:
-            return json.load(f)
+            items = json.load(f)
+
+        # Load campaign-specific items if campaign_id provided
+        if campaign_id:
+            quest_file = self.data_path / "content" / "quests" / f"{campaign_id}.json"
+            if quest_file.exists():
+                with open(quest_file, encoding="utf-8") as f:
+                    quest_data = json.load(f)
+                    campaign_items = quest_data.get("items", {})
+                    if campaign_items:
+                        # Add campaign items to consumables category
+                        if "consumables" not in items:
+                            items["consumables"] = {}
+                        items["consumables"].update(campaign_items)
+
+        return items
 
     def load_dungeon(self, dungeon_name: str) -> dict[str, Any]:
         """

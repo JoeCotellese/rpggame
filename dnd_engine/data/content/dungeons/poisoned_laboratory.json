@@ -206,6 +206,16 @@
           "type": "item",
           "id": "acid_vial",
           "visible": false
+        },
+        {
+          "type": "item",
+          "id": "alchemist_research_notes",
+          "visible": true
+        },
+        {
+          "type": "item",
+          "id": "volatile_compound",
+          "visible": true
         }
       ],
       "searched": false,
@@ -230,6 +240,16 @@
         {
           "type": "item",
           "id": "potion_of_healing",
+          "visible": false
+        },
+        {
+          "type": "item",
+          "id": "necromantic_evidence",
+          "visible": true
+        },
+        {
+          "type": "item",
+          "id": "preserved_specimen",
           "visible": false
         }
       ],

@@ -242,6 +242,19 @@ class TestWizardSpellPreparation:
         assert "can_prepare_spells" in result
         assert result["can_prepare_spells"] is False
 
+    def test_take_long_rest_dead_wizard_cannot_prepare(self, level_1_wizard):
+        """Test dead wizard cannot prepare spells after long rest"""
+        # Kill the wizard with 3 death save failures
+        level_1_wizard.current_hp = 0
+        level_1_wizard.death_save_failures = 3
+
+        assert level_1_wizard.is_dead is True
+
+        result = level_1_wizard.take_long_rest()
+
+        assert "can_prepare_spells" in result
+        assert result["can_prepare_spells"] is False
+
 
 class TestWizardArcaneRecovery:
     """Test wizard Arcane Recovery feature"""

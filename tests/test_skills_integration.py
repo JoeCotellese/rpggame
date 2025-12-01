@@ -212,3 +212,56 @@ class TestDataLoaderSkills:
         assert "from" in skill_profs
         assert skill_profs["choose"] == 2
         assert len(skill_profs["from"]) >= 2
+
+
+class TestDataLoaderCampaignItems:
+    """Integration tests for DataLoader campaign item loading"""
+
+    def test_load_items_without_campaign(self):
+        """Test that load_items works without campaign_id"""
+        loader = DataLoader()
+        items = loader.load_items()
+
+        assert isinstance(items, dict)
+        assert "weapons" in items
+        assert "consumables" in items
+        # Should not have campaign-specific items
+        assert "alchemist_research_notes" not in items.get("consumables", {})
+
+    def test_load_items_with_campaign_merges_items(self):
+        """Test that load_items with campaign_id merges campaign items"""
+        loader = DataLoader()
+        items = loader.load_items(campaign_id="poisoned_laboratory")
+
+        assert isinstance(items, dict)
+        assert "consumables" in items
+
+        # Should have campaign-specific items merged into consumables
+        consumables = items["consumables"]
+        assert "alchemist_research_notes" in consumables
+        assert "volatile_compound" in consumables
+        assert "necromantic_evidence" in consumables
+        assert "preserved_specimen" in consumables
+
+        # Verify campaign item has expected fields
+        notes = consumables["alchemist_research_notes"]
+        assert notes["quest_item"] is True
+        assert "description" in notes
+
+    def test_load_items_with_nonexistent_campaign(self):
+        """Test that load_items handles missing campaign gracefully"""
+        loader = DataLoader()
+        items = loader.load_items(campaign_id="nonexistent_campaign")
+
+        # Should still return base items without error
+        assert isinstance(items, dict)
+        assert "weapons" in items
+
+    def test_load_items_campaign_without_items_section(self):
+        """Test that load_items handles campaigns without items section"""
+        loader = DataLoader()
+        # the_unquiet_dead doesn't have items in quest file (they're in srd)
+        items = loader.load_items(campaign_id="the_unquiet_dead")
+
+        assert isinstance(items, dict)
+        assert "weapons" in items
