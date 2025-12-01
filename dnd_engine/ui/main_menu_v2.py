@@ -6,7 +6,6 @@ from rich.panel import Panel
 
 from dnd_engine.core.campaign_progress import CampaignProgressTracker
 from dnd_engine.core.character import Character
-from dnd_engine.core.character_factory import CharacterFactory
 from dnd_engine.core.character_vault_v2 import CharacterVaultV2
 from dnd_engine.core.game_state import GameState
 from dnd_engine.core.migration import MigrationManager
@@ -14,6 +13,7 @@ from dnd_engine.core.party import Party
 from dnd_engine.core.room_registry import RoomRegistry
 from dnd_engine.core.save_slot_manager import SaveSlotManager
 from dnd_engine.rules.loader import DataLoader
+from dnd_engine.ui.character_wizard import CharacterCreationWizard
 from dnd_engine.ui.rich_ui import (
     console,
     print_banner,
@@ -569,7 +569,7 @@ class MainMenuV2:
 
     def _create_character_interactive(self) -> Character | None:
         """
-        Create a new character interactively.
+        Create a new character interactively using the CharacterCreationWizard.
 
         Returns:
             Created Character or None if cancelled
@@ -577,10 +577,10 @@ class MainMenuV2:
         console.print()
         print_section("CREATE CHARACTER")
 
-        factory = CharacterFactory()
+        wizard = CharacterCreationWizard(data_loader=self.data_loader)
 
         try:
-            character = factory.create_character_interactive(ui=None, data_loader=self.data_loader)
+            character = wizard.run()
             return character
         except KeyboardInterrupt:
             console.print("\n[yellow]Character creation cancelled.[/yellow]")

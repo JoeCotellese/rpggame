@@ -1,6 +1,6 @@
 """Unit tests for CharacterCreationWizard"""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -43,7 +43,7 @@ class TestCharacterCreationWizard:
         # Should have some templates (if file exists)
         if wizard.templates_data:
             # Check template structure
-            for template_id, template in wizard.templates_data.items():
+            for _template_id, template in wizard.templates_data.items():
                 assert "name" in template
                 assert "description" in template
                 assert "race" in template
@@ -118,49 +118,55 @@ class TestCharacterCreationWizard:
         assert " " in name  # Should have first and last name
 
     def test_swap_abilities(self, wizard):
-        """Test ability swapping functionality"""
+        """Test ability swapping functionality with questionary select"""
         wizard.abilities = {
             "strength": 16,
             "dexterity": 14,
             "constitution": 15,
             "intelligence": 10,
             "wisdom": 12,
-            "charisma": 8
+            "charisma": 8,
         }
 
         original_str = wizard.abilities["strength"]
         original_dex = wizard.abilities["dexterity"]
 
-        # Mock console input for swap
-        with patch('dnd_engine.ui.character_wizard.console.input') as mock_input:
-            mock_input.side_effect = ["str", "dex"]
+        # Mock questionary.select for swap
+        mock_select = MagicMock()
+        mock_select.ask.side_effect = ["strength", "dexterity"]
 
-            result = wizard._swap_abilities_interactive()
+        with patch(
+            "dnd_engine.ui.character_wizard.questionary.select", return_value=mock_select
+        ):
+            with patch("dnd_engine.ui.character_wizard.print_status_message"):
+                result = wizard._swap_abilities_interactive()
 
         # Should swap successfully
         assert result is True
         assert wizard.abilities["strength"] == original_dex
         assert wizard.abilities["dexterity"] == original_str
 
-    def test_swap_abilities_invalid(self, wizard):
-        """Test ability swap with invalid ability name"""
+    def test_swap_abilities_cancelled(self, wizard):
+        """Test ability swap cancellation"""
         wizard.abilities = {
             "strength": 16,
             "dexterity": 14,
             "constitution": 15,
             "intelligence": 10,
             "wisdom": 12,
-            "charisma": 8
+            "charisma": 8,
         }
 
-        # Mock console input with invalid ability
-        with patch('dnd_engine.ui.character_wizard.console.input') as mock_input:
-            with patch('dnd_engine.ui.character_wizard.print_error'):
-                mock_input.side_effect = ["invalid", "dex"]
+        # Mock questionary.select returning None (cancelled)
+        mock_select = MagicMock()
+        mock_select.ask.return_value = None
 
-                result = wizard._swap_abilities_interactive()
+        with patch(
+            "dnd_engine.ui.character_wizard.questionary.select", return_value=mock_select
+        ):
+            result = wizard._swap_abilities_interactive()
 
-        # Should fail
+        # Should fail (cancelled)
         assert result is False
 
     def test_create_from_template_sets_state(self, wizard):
@@ -172,22 +178,27 @@ class TestCharacterCreationWizard:
         template_id = list(wizard.templates_data.keys())[0]
         template = wizard.templates_data[template_id]
 
-        # Mock console input for name
-        with patch('dnd_engine.ui.character_wizard.console.input', return_value="Test Character"):
-            with patch('dnd_engine.ui.character_wizard.console.print'):
-                with patch('dnd_engine.ui.character_wizard.print_status_message'):
+        # Mock questionary.text for name input
+        mock_text = MagicMock()
+        mock_text.ask.return_value = "Test Character"
+
+        with patch(
+            "dnd_engine.ui.character_wizard.questionary.text", return_value=mock_text
+        ):
+            with patch("dnd_engine.ui.character_wizard.console.print"):
+                with patch("dnd_engine.ui.character_wizard.print_status_message"):
                     # Mock finalize to return None (we just want to test state setting)
-                    with patch.object(wizard, '_finalize_character', return_value=None):
+                    with patch.object(wizard, "_finalize_character", return_value=None):
                         wizard._create_from_template(template_id)
 
         # Check state was set from template
-        assert wizard.race == template['race']
-        assert wizard.character_class == template['class']
+        assert wizard.race == template["race"]
+        assert wizard.character_class == template["class"]
         assert wizard.name == "Test Character"
         assert wizard.abilities is not None
 
         # Abilities should include racial bonuses
-        for ability, base_score in template['abilities'].items():
+        for ability, base_score in template["abilities"].items():
             # May have racial bonus applied
             assert wizard.abilities[ability] >= base_score
 
@@ -334,11 +345,169 @@ class TestCharacterCreationWizard:
             "constitution": 15,
             "intelligence": 10,
             "wisdom": 12,
-            "charisma": 8
+            "charisma": 8,
         }
 
         # Should display without error
-        with patch('dnd_engine.ui.character_wizard.console.print'):
-            with patch('dnd_engine.ui.character_wizard.console.input'):
-                with patch('dnd_engine.ui.character_wizard.print_section'):
+        with patch("dnd_engine.ui.character_wizard.console.print"):
+            with patch("dnd_engine.ui.character_wizard.console.input"):
+                with patch("dnd_engine.ui.character_wizard.print_section"):
                     wizard._show_progress_summary()
+
+    def test_step_choose_path_custom(self, wizard):
+        """Test choosing custom creation path with questionary"""
+        mock_select = MagicMock()
+        mock_select.ask.return_value = CreationPath.CUSTOM
+
+        with patch(
+            "dnd_engine.ui.character_wizard.questionary.select", return_value=mock_select
+        ):
+            with patch("dnd_engine.ui.character_wizard.print_section"):
+                with patch("dnd_engine.ui.character_wizard.console.print"):
+                    result = wizard._step_choose_path()
+
+        assert result is True
+        assert wizard.creation_path == CreationPath.CUSTOM
+
+    def test_step_choose_path_cancel(self, wizard):
+        """Test cancelling path selection"""
+        mock_select = MagicMock()
+        mock_select.ask.return_value = None
+
+        with patch(
+            "dnd_engine.ui.character_wizard.questionary.select", return_value=mock_select
+        ):
+            with patch("dnd_engine.ui.character_wizard.print_section"):
+                with patch("dnd_engine.ui.character_wizard.console.print"):
+                    result = wizard._step_choose_path()
+
+        assert result is False
+        assert wizard.creation_path is None
+
+    def test_custom_step_race(self, wizard):
+        """Test race selection step with questionary"""
+        mock_select = MagicMock()
+        mock_select.ask.return_value = "human"
+
+        mock_nav = MagicMock()
+        mock_nav.ask.return_value = "next"
+
+        with patch(
+            "dnd_engine.ui.character_wizard.questionary.select",
+            side_effect=[mock_select, mock_nav],
+        ):
+            with patch("dnd_engine.ui.character_wizard.print_status_message"):
+                with patch("dnd_engine.ui.character_wizard.console.print"):
+                    result = wizard._custom_step_race()
+
+        assert wizard.race == "human"
+        assert result == "next"
+
+    def test_custom_step_class(self, wizard):
+        """Test class selection step with questionary"""
+        mock_select = MagicMock()
+        mock_select.ask.return_value = "fighter"
+
+        mock_nav = MagicMock()
+        mock_nav.ask.return_value = "next"
+
+        with patch(
+            "dnd_engine.ui.character_wizard.questionary.select",
+            side_effect=[mock_select, mock_nav],
+        ):
+            with patch("dnd_engine.ui.character_wizard.print_status_message"):
+                with patch("dnd_engine.ui.character_wizard.console.print"):
+                    result = wizard._custom_step_class()
+
+        assert wizard.character_class == "fighter"
+        assert result == "next"
+
+    def test_custom_step_name(self, wizard):
+        """Test name input step (now last step) with questionary"""
+        wizard.race = "human"
+        wizard.character_class = "fighter"
+
+        mock_text = MagicMock()
+        mock_text.ask.return_value = "Test Hero"
+
+        mock_nav = MagicMock()
+        mock_nav.ask.return_value = "next"
+
+        with patch(
+            "dnd_engine.ui.character_wizard.questionary.text", return_value=mock_text
+        ):
+            with patch(
+                "dnd_engine.ui.character_wizard.questionary.select",
+                return_value=mock_nav,
+            ):
+                with patch("dnd_engine.ui.character_wizard.print_status_message"):
+                    with patch("dnd_engine.ui.character_wizard.console.print"):
+                        result = wizard._custom_step_name()
+
+        assert wizard.name == "Test Hero"
+        assert result == "next"
+
+    def test_select_skills_questionary(self, wizard):
+        """Test skill selection with questionary checkbox"""
+        class_data = wizard.classes_data["fighter"]
+
+        mock_checkbox = MagicMock()
+        mock_checkbox.ask.return_value = ["athletics", "intimidation"]
+
+        with patch(
+            "dnd_engine.ui.character_wizard.questionary.checkbox",
+            return_value=mock_checkbox,
+        ):
+            with patch("dnd_engine.ui.character_wizard.print_status_message"):
+                result = wizard._select_skills_questionary(class_data, wizard.skills_data)
+
+        assert result == ["athletics", "intimidation"]
+        assert len(result) == 2
+
+    def test_display_progress_bar(self, wizard):
+        """Test progress bar display during wizard steps"""
+        steps = [
+            ("Race", None),
+            ("Class", None),
+            ("Abilities", None),
+            ("Skills", None),
+            ("Name", None),
+        ]
+
+        # Should not raise exception for any step
+        with patch("dnd_engine.ui.character_wizard.console.print"):
+            for i in range(len(steps)):
+                wizard._display_progress_bar(i, len(steps), steps)
+
+    def test_finalize_character_confirm(self, wizard):
+        """Test confirming character creation with questionary"""
+        wizard.name = "Test Character"
+        wizard.race = "human"
+        wizard.character_class = "fighter"
+        wizard.abilities = {
+            "strength": 16,
+            "dexterity": 14,
+            "constitution": 15,
+            "intelligence": 10,
+            "wisdom": 12,
+            "charisma": 8,
+        }
+        wizard.skill_proficiencies = ["athletics", "intimidation"]
+        wizard.expertise_skills = []
+        wizard.selected_spells = []
+        wizard.level = 1
+
+        mock_select = MagicMock()
+        mock_select.ask.return_value = "confirm"
+
+        with patch(
+            "dnd_engine.ui.character_wizard.questionary.select", return_value=mock_select
+        ):
+            with patch("dnd_engine.ui.character_wizard.console.print"):
+                with patch("dnd_engine.ui.character_wizard.console.status"):
+                    with patch("dnd_engine.ui.character_wizard.print_section"):
+                        with patch("dnd_engine.ui.character_wizard.print_status_message"):
+                            character = wizard._finalize_character()
+
+        assert character is not None
+        assert character.name == "Test Character"
