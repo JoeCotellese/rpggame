@@ -176,6 +176,69 @@ class MainMenuV2:
 
         return " ".join(parts)
 
+    def _build_character_choice_display(self, char_info: dict) -> str:
+        """
+        Build a display string for a character vault choice.
+
+        Args:
+            char_info: Character info dict from vault.list_characters()
+
+        Returns:
+            Formatted display string for questionary choice
+        """
+        # Format: "Name - Level X Race Class"
+        parts = [
+            char_info['name'],
+            "-",
+            f"Level {char_info['level']}",
+            char_info['race'],
+            char_info['class'],
+        ]
+
+        # Add usage indicator if used
+        if char_info['times_used'] > 0:
+            slots_str = ", ".join(map(str, char_info['save_slots_used']))
+            parts.append(f"(in slots: {slots_str})")
+
+        return " ".join(parts)
+
+    def _select_character_for_deletion(
+        self,
+        char_list: list[dict],
+    ) -> dict | None:
+        """
+        Select a character from the vault for deletion using questionary.
+
+        Args:
+            char_list: List of character info dicts from vault.list_characters()
+
+        Returns:
+            Selected character info dict, or None if cancelled
+        """
+        if not char_list:
+            print_status_message("No characters in vault.", "warning")
+            return None
+
+        choices = []
+        for char_info in char_list:
+            display = self._build_character_choice_display(char_info)
+            choices.append(questionary.Choice(
+                title=display,
+                value=char_info,
+            ))
+
+        choices.append(questionary.Choice(title="← Back", value=None))
+
+        try:
+            selected = questionary.select(
+                "Select character to delete:",
+                choices=choices,
+                use_arrow_keys=True
+            ).ask()
+            return selected
+        except (EOFError, KeyboardInterrupt):
+            return None
+
     def _select_save_slot(
         self,
         prompt: str,
@@ -641,68 +704,53 @@ class MainMenuV2:
 
             char_list = self.vault.list_characters()
 
+            # Display character summary
             if not char_list:
                 console.print("\n[yellow]No characters in vault.[/yellow]")
             else:
-                console.print()
-                for char_info in char_list:
-                    panel_content = [
-                        f"[cyan]Class:[/cyan] {char_info['class']}",
-                        f"[cyan]Level:[/cyan] {char_info['level']}",
-                        f"[cyan]Race:[/cyan] {char_info['race']}",
-                    ]
+                console.print(f"\n[dim]{len(char_list)} character(s) in vault[/dim]")
 
-                    if char_info['times_used'] > 0:
-                        panel_content.append(f"[cyan]Times used:[/cyan] {char_info['times_used']}")
-                        panel_content.append(f"[cyan]Slots:[/cyan] {', '.join(map(str, char_info['save_slots_used']))}")
+            # Build action menu
+            action_choices = [
+                questionary.Choice(title="Create new character", value="create"),
+            ]
 
-                    panel = Panel(
-                        "\n".join(panel_content),
-                        title=f"[bold white]{char_info['name']}[/bold white]",
-                        border_style="cyan",
-                        padding=(0, 2)
-                    )
-                    console.print(panel)
-
-            console.print("\n[bold]Actions:[/bold]")
-            console.print("  [C] Create new character")
             if char_list:
-                console.print("  [D] Delete character")
-            console.print("  [B] Back to main menu")
+                action_choices.append(
+                    questionary.Choice(title="Delete character", value="delete")
+                )
 
-            console.print()
-            choice = console.input("[bold cyan]Select action:[/bold cyan] ").strip().upper()
+            action_choices.append(
+                questionary.Choice(title="← Back to main menu", value=None)
+            )
 
-            if choice == 'B':
+            try:
+                action = questionary.select(
+                    "What would you like to do?",
+                    choices=action_choices,
+                    use_arrow_keys=True
+                ).ask()
+            except (EOFError, KeyboardInterrupt):
                 break
-            elif choice == 'C':
+
+            if action is None:
+                break
+            elif action == "create":
                 new_char = self._create_character_interactive()
                 if new_char:
                     self.vault.add_character(new_char)
                     print_status_message(f"Added {new_char.name} to vault", "success")
-            elif choice == 'D' and char_list:
-                console.print()
-                for i, char_info in enumerate(char_list, 1):
-                    console.print(f"  [{i}] {char_info['name']}")
+            elif action == "delete":
+                char_info = self._select_character_for_deletion(char_list)
+                if char_info:
+                    confirm = questionary.confirm(
+                        f"Delete {char_info['name']}? This cannot be undone.",
+                        default=False
+                    ).ask()
 
-                del_choice = console.input("\n[bold cyan]Delete character number:[/bold cyan] ").strip()
-
-                try:
-                    idx = int(del_choice)
-                    if 1 <= idx <= len(char_list):
-                        char_info = char_list[idx - 1]
-                        confirm = console.input(f"[bold red]Delete {char_info['name']}? (yes/no):[/bold red] ").strip().lower()
-
-                        if confirm == 'yes':
-                            self.vault.delete_character(char_info['id'])
-                            print_status_message(f"Deleted {char_info['name']}", "success")
-                except ValueError:
-                    print_error("Invalid input.")
-            else:
-                print_error("Invalid action.")
-
-            console.print("\n[dim]Press Enter to continue...[/dim]")
-            console.input()
+                    if confirm:
+                        self.vault.delete_character(char_info['id'])
+                        print_status_message(f"Deleted {char_info['name']}", "success")
 
     def handle_manage_slots(self) -> None:
         """Handle save slot management menu."""
