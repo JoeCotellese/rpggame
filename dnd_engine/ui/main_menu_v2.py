@@ -227,7 +227,7 @@ class MainMenuV2:
                 value=char_info,
             ))
 
-        choices.append(questionary.Choice(title="← Back", value=None))
+        choices.append(questionary.Choice(title="← Back", value="back"))
 
         try:
             selected = questionary.select(
@@ -235,6 +235,8 @@ class MainMenuV2:
                 choices=choices,
                 use_arrow_keys=True
             ).ask()
+            if selected == "back":
+                return None
             return selected
         except (EOFError, KeyboardInterrupt):
             return None
@@ -721,7 +723,7 @@ class MainMenuV2:
                 )
 
             action_choices.append(
-                questionary.Choice(title="← Back to main menu", value=None)
+                questionary.Choice(title="← Back to main menu", value="back")
             )
 
             try:
@@ -733,7 +735,7 @@ class MainMenuV2:
             except (EOFError, KeyboardInterrupt):
                 break
 
-            if action is None:
+            if action == "back" or action is None:
                 break
             elif action == "create":
                 new_char = self._create_character_interactive()

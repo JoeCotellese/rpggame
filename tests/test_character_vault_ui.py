@@ -104,7 +104,7 @@ class TestSelectCharacterForDeletion:
         """Test that selecting back returns None."""
         menu = MainMenuV2()
 
-        mock_questionary.select.return_value.ask.return_value = None
+        mock_questionary.select.return_value.ask.return_value = "back"
         mock_questionary.Choice = Mock(side_effect=lambda **kwargs: kwargs)
 
         result = menu._select_character_for_deletion(character_list)
@@ -168,8 +168,8 @@ class TestHandleCharacterVault:
         menu.vault = Mock()
         menu.vault.list_characters.return_value = []
 
-        # Return None (back) immediately
-        mock_questionary.select.return_value.ask.return_value = None
+        # Return "back" immediately
+        mock_questionary.select.return_value.ask.return_value = "back"
         mock_questionary.Choice = Mock(side_effect=lambda **kwargs: kwargs)
 
         menu.handle_character_vault()
@@ -314,7 +314,7 @@ class TestHandleCharacterVault:
         menu.vault = Mock()
         menu.vault.list_characters.return_value = []
 
-        mock_questionary.select.return_value.ask.return_value = None
+        mock_questionary.select.return_value.ask.return_value = "back"
         mock_questionary.Choice = Mock(side_effect=lambda **kwargs: kwargs)
 
         menu.handle_character_vault()
@@ -336,7 +336,7 @@ class TestHandleCharacterVault:
         menu.vault = Mock()
         menu.vault.list_characters.return_value = character_list
 
-        mock_questionary.select.return_value.ask.return_value = None
+        mock_questionary.select.return_value.ask.return_value = "back"
         mock_questionary.Choice = Mock(side_effect=lambda **kwargs: kwargs)
 
         menu.handle_character_vault()
