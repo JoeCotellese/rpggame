@@ -1703,6 +1703,7 @@ class CLI:
             # Build choices for questionary
             choices = []
             item_id = item_to_take.get("id", item_name)
+            item_display_name = self._get_item_display_name(item_id)
 
             for character in living_members:
                 choice_text = f"{character.name} ({character.character_class.value.title()})"
@@ -1714,7 +1715,7 @@ class CLI:
             # Get user selection
             try:
                 result = questionary.select(
-                    f"Who should receive the {item_id}?",
+                    f"Who should receive the {item_display_name}?",
                     choices=choices,
                     use_arrow_keys=True
                 ).ask()
@@ -1729,12 +1730,13 @@ class CLI:
 
         # Take the item
         item_id = item_to_take.get("id", item_name)
+        item_display_name = self._get_item_display_name(item_id)
         success = self.game_state.take_item(item_id, selected_character)
 
         if success:
-            print_status_message(f"{selected_character.name} picks up the {item_id}.", "success")
+            print_status_message(f"{selected_character.name} picks up the {item_display_name}.", "success")
         else:
-            print_error(f"Failed to pick up {item_id}.")
+            print_error(f"Failed to pick up {item_display_name}.")
 
     def handle_take_all(self) -> None:
         """
@@ -1797,6 +1799,7 @@ class CLI:
             The character to assign the item to, or None if cancelled
         """
         item_id = item.get("id", "")
+        item_display_name = self._get_item_display_name(item_id)
 
         # Get recommendations from the item assignment service
         recommendations = self.item_assignment.get_recommended_recipients(
@@ -1821,7 +1824,7 @@ class CLI:
 
         try:
             result = questionary.select(
-                f"Who should receive the {item_id}?",
+                f"Who should receive the {item_display_name}?",
                 choices=choices,
                 use_arrow_keys=True
             ).ask()
@@ -5197,3 +5200,22 @@ class CLI:
         except Exception:
             # Silently fail auto-save to avoid disrupting gameplay
             pass
+
+    def _get_item_display_name(self, item_id: str) -> str:
+        """
+        Get the display name for an item, falling back to item_id if not found.
+
+        Args:
+            item_id: The item's ID
+
+        Returns:
+            The item's display name or the item_id if not found
+        """
+        if not self.game_state or not self.game_state.data_loader:
+            return item_id
+
+        items_data = self.game_state.data_loader.load_items(self.game_state.campaign_id)
+        for category in items_data.values():
+            if item_id in category:
+                return category[item_id].get("name", item_id)
+        return item_id
