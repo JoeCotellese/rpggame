@@ -159,10 +159,10 @@ class TestClearObjectiveHandler:
     def test_clear_only_checks_active_quests(
         self, quest_manager, event_bus, clear_quest
     ):
-        """CLEAR handler should only check active quests."""
+        """CLEAR handler should only check active quests (not locked quests)."""
         quest_manager.quests[clear_quest.id] = clear_quest
-        quest_manager._quest_states[clear_quest.id] = QuestState.AVAILABLE
-        # Quest is AVAILABLE but not ACTIVE
+        quest_manager._quest_states[clear_quest.id] = QuestState.LOCKED
+        # Quest is LOCKED (cannot be auto-activated)
 
         # Emit COMBAT_END
         event_bus.emit(

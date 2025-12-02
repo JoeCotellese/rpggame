@@ -980,13 +980,14 @@ class TestEventDrivenObjectiveTracking:
     def test_events_only_affect_active_quests(
         self, quest_manager_with_events, event_bus
     ):
-        """Events should not affect quests that aren't active."""
+        """Events should not affect quests that are locked."""
         from dnd_engine.utils.events import Event, EventType
 
-        # Quest is AVAILABLE but not ACTIVE
+        # Set quest to LOCKED (cannot be auto-activated)
+        quest_manager_with_events._quest_states["investigate_crypt"] = QuestState.LOCKED
         assert (
             quest_manager_with_events.get_quest_state("investigate_crypt")
-            == QuestState.AVAILABLE
+            == QuestState.LOCKED
         )
 
         # Emit events
@@ -997,10 +998,10 @@ class TestEventDrivenObjectiveTracking:
             Event(EventType.ITEM_USED, {"item_id": "gorgus_journal"})
         )
 
-        # Quest should still be AVAILABLE, not COMPLETED
+        # Quest should still be LOCKED, not ACTIVE or COMPLETED
         assert (
             quest_manager_with_events.get_quest_state("investigate_crypt")
-            == QuestState.AVAILABLE
+            == QuestState.LOCKED
         )
 
         # Objectives should not be completed
