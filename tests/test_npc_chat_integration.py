@@ -241,6 +241,203 @@ class TestNPCChatManagerToolHandlers:
         assert result["success"] is False
         assert "Unknown tool" in result["error"]
 
+    # === Quest Reward Tool Handler Tests ===
+
+    def test_handle_turn_in_quest_success(self, manager, sample_npc, mock_character):
+        """Test successful quest turn-in awards gold."""
+        manager._current_conversation = ConversationState(npc=sample_npc)
+
+        # Configure mock to return successful claim
+        manager.game_state.quest_manager.claim_quest_reward.return_value = {
+            "success": True,
+            "quest_name": "Investigate the Crypt",
+            "reward_gold": 50,
+        }
+
+        result = manager._handle_turn_in_quest("investigate_crypt")
+
+        assert result["success"] is True
+        assert result["quest_name"] == "Investigate the Crypt"
+        assert result["reward_gold"] == 50
+        # Gold should be added to party leader
+        assert mock_character.inventory.gold == 150
+
+    def test_handle_turn_in_quest_wrong_npc(self, manager, sample_npc):
+        """Test turn-in fails when talking to wrong NPC."""
+        manager._current_conversation = ConversationState(npc=sample_npc)
+
+        # Configure mock to return failure (wrong NPC)
+        manager.game_state.quest_manager.claim_quest_reward.return_value = {
+            "success": False,
+            "error": "This quest must be turned in to Father Aldric",
+        }
+
+        result = manager._handle_turn_in_quest("investigate_crypt")
+
+        assert result["success"] is False
+        assert "Father Aldric" in result["error"]
+
+    def test_handle_turn_in_quest_not_completed(self, manager, sample_npc):
+        """Test turn-in fails when quest not completed."""
+        manager._current_conversation = ConversationState(npc=sample_npc)
+
+        manager.game_state.quest_manager.claim_quest_reward.return_value = {
+            "success": False,
+            "error": "Quest 'investigate_crypt' is not completed",
+        }
+
+        result = manager._handle_turn_in_quest("investigate_crypt")
+
+        assert result["success"] is False
+        assert "not completed" in result["error"]
+
+    def test_handle_turn_in_quest_no_conversation(self, manager):
+        """Test turn-in fails without active conversation."""
+        result = manager._handle_turn_in_quest("investigate_crypt")
+
+        assert result["success"] is False
+        assert "No active conversation" in result["error"]
+
+    def test_handle_get_pending_rewards_with_quests(self, manager, sample_npc):
+        """Test getting pending rewards returns completed quests."""
+        manager._current_conversation = ConversationState(npc=sample_npc)
+
+        # Create mock completed quests
+        mock_quest1 = Mock()
+        mock_quest1.id = "investigate_crypt"
+        mock_quest1.name = "Investigate the Crypt"
+        mock_quest1.reward_gold = 50
+
+        mock_quest2 = Mock()
+        mock_quest2.id = "clear_cellar"
+        mock_quest2.name = "Rat Problem"
+        mock_quest2.reward_gold = 25
+
+        manager.game_state.quest_manager.get_quests_awaiting_reward.return_value = [
+            mock_quest1,
+            mock_quest2,
+        ]
+
+        result = manager._handle_get_pending_rewards()
+
+        assert len(result["pending_rewards"]) == 2
+        assert result["pending_rewards"][0]["quest_id"] == "investigate_crypt"
+        assert result["pending_rewards"][0]["reward_gold"] == 50
+        assert result["pending_rewards"][1]["quest_id"] == "clear_cellar"
+
+    def test_handle_get_pending_rewards_empty(self, manager, sample_npc):
+        """Test getting pending rewards when none available."""
+        manager._current_conversation = ConversationState(npc=sample_npc)
+
+        manager.game_state.quest_manager.get_quests_awaiting_reward.return_value = []
+
+        result = manager._handle_get_pending_rewards()
+
+        assert result["pending_rewards"] == []
+
+    def test_handle_get_pending_rewards_no_conversation(self, manager):
+        """Test getting pending rewards without conversation."""
+        result = manager._handle_get_pending_rewards()
+
+        assert result["pending_rewards"] == []
+
+    def test_handle_receive_item_delivers_objective(self, manager, sample_npc, mock_character):
+        """Test receiving item completes deliver objective."""
+        manager._current_conversation = ConversationState(npc=sample_npc)
+
+        # Character has the item
+        mock_character.inventory.has_item.return_value = True
+
+        # Deliver objective succeeds
+        manager.game_state.quest_manager.complete_deliver_objective.return_value = {
+            "success": True,
+            "quest_id": "analyze_research",
+            "quest_name": "Dangerous Knowledge",
+        }
+
+        result = manager._handle_receive_item_from_player("volatile_compound")
+
+        assert result["success"] is True
+        assert result["deliver_objective_completed"] is True
+        assert result["quest_id"] == "analyze_research"
+        # Item should be removed from inventory
+        mock_character.inventory.remove_item.assert_called_with("volatile_compound")
+
+    def test_handle_receive_item_bonus_reward(self, manager, sample_npc, mock_character):
+        """Test receiving item triggers bonus reward."""
+        manager._current_conversation = ConversationState(npc=sample_npc)
+
+        # Character has the item
+        mock_character.inventory.has_item.return_value = True
+
+        # Deliver objective fails (not a deliver item)
+        manager.game_state.quest_manager.complete_deliver_objective.return_value = {
+            "success": False,
+        }
+
+        # But it's a bonus reward item
+        mock_quest = Mock()
+        mock_quest.id = "stop_the_alchemist"
+        mock_bonus = Mock()
+        mock_bonus.reward_item = "potion_of_healing"
+        mock_bonus.description = "Thanks for the specimen!"
+
+        manager.game_state.quest_manager.check_bonus_reward.return_value = (
+            mock_quest,
+            mock_bonus,
+        )
+
+        # Mock item category lookup
+        manager.game_state._get_item_category.return_value = "consumables"
+
+        result = manager._handle_receive_item_from_player("preserved_specimen")
+
+        assert result["success"] is True
+        assert result["bonus_reward"] is True
+        assert result["reward_item"] == "potion_of_healing"
+        # Item removed from giver, reward added to recipient
+        mock_character.inventory.remove_item.assert_called_with("preserved_specimen")
+        mock_character.inventory.add_item.assert_called_with(
+            "potion_of_healing", "consumables"
+        )
+
+    def test_handle_receive_item_no_special_reward(self, manager, sample_npc, mock_character):
+        """Test receiving item with no quest reward."""
+        manager._current_conversation = ConversationState(npc=sample_npc)
+
+        mock_character.inventory.has_item.return_value = True
+
+        # Not a deliver objective
+        manager.game_state.quest_manager.complete_deliver_objective.return_value = {
+            "success": False,
+        }
+        # Not a bonus reward either
+        manager.game_state.quest_manager.check_bonus_reward.return_value = (None, None)
+
+        result = manager._handle_receive_item_from_player("random_item")
+
+        assert result["success"] is True
+        assert result["bonus_reward"] is False
+        mock_character.inventory.remove_item.assert_called_with("random_item")
+
+    def test_handle_receive_item_not_in_inventory(self, manager, sample_npc, mock_character):
+        """Test receiving item fails if party doesn't have it."""
+        manager._current_conversation = ConversationState(npc=sample_npc)
+
+        mock_character.inventory.has_item.return_value = False
+
+        result = manager._handle_receive_item_from_player("missing_item")
+
+        assert result["success"] is False
+        assert "does not have item" in result["error"]
+
+    def test_handle_receive_item_no_conversation(self, manager):
+        """Test receiving item fails without conversation."""
+        result = manager._handle_receive_item_from_player("some_item")
+
+        assert result["success"] is False
+        assert "No active conversation" in result["error"]
+
 
 class TestNPCChatManagerWithMockedProvider:
     """Tests for NPCChatManager with mocked LLM provider."""
