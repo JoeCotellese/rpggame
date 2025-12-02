@@ -4233,12 +4233,12 @@ class CLI:
                     )
                     has_depleted_slots = False
                     if character and character.has_spell_slots():
-                        slots = character.spell_slots
-                        has_depleted_slots = any(
-                            slots.get(level, 0) < character.get_max_spell_slots(level)
-                            for level in range(1, 10)
-                            if character.get_max_spell_slots(level) > 0
-                        )
+                        for level in range(1, 10):
+                            pool_name = f"spell_slots_level_{level}"
+                            pool = character.resource_pools.get(pool_name)
+                            if pool and pool.maximum > 0 and pool.current < pool.maximum:
+                                has_depleted_slots = True
+                                break
 
                     if has_depleted_slots and result.rest_type == "short":
                         print_message("  ✓ HP at full (spell slots require long rest)")

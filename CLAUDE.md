@@ -5,3 +5,4 @@ create a new game
 select players from existing list
 begin adventure in the crypt
 save slot 4
+- the character vault is located in ~/.dnd_game/character_vault.json
