@@ -1,8 +1,10 @@
 # ABOUTME: Character creation wizard for interactive character building
-# ABOUTME: Supports custom, template-based, and random character generation with navigation
+# ABOUTME: Supports custom, template-based, and random character generation with questionary UI
 
 from enum import Enum
 from typing import Any
+
+import questionary
 
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.character_factory import CharacterFactory
@@ -12,7 +14,6 @@ from dnd_engine.rules.loader import DataLoader
 from dnd_engine.ui.rich_ui import (
     console,
     print_banner,
-    print_choice_menu,
     print_error,
     print_message,
     print_section,
@@ -126,65 +127,64 @@ class CharacterCreationWizard:
         print_section("Choose Creation Method")
         console.print()
 
-        options = [
-            {
-                "number": "1",
-                "text": "Custom Character (step-by-step)"
-            },
-            {
-                "number": "2",
-                "text": "Quick Build Template"
-            },
-            {
-                "number": "3",
-                "text": "Random Character"
-            },
-            {
-                "number": "B",
-                "text": "Back/Cancel"
-            }
+        choices = [
+            questionary.Choice(
+                title="Custom Character - Step-by-step with full control",
+                value=CreationPath.CUSTOM
+            ),
+            questionary.Choice(
+                title="Quick Build Template - Pre-configured archetypes",
+                value=CreationPath.TEMPLATE
+            ),
+            questionary.Choice(
+                title="Random Character - Fully randomized generation",
+                value=CreationPath.RANDOM
+            ),
+            questionary.Choice(title="← Back/Cancel", value=None),
         ]
 
-        print_choice_menu("Creation Options", options)
-        console.print()
+        try:
+            selected = questionary.select(
+                "How would you like to create your character?",
+                choices=choices,
+                use_arrow_keys=True,
+            ).ask()
 
-        while True:
-            choice = console.input("[bold cyan]Choose [1-3] or [B]:[/bold cyan] ").strip().lower()
-
-            if choice == "1":
-                self.creation_path = CreationPath.CUSTOM
-                return True
-            elif choice == "2":
-                self.creation_path = CreationPath.TEMPLATE
-                return True
-            elif choice == "3":
-                self.creation_path = CreationPath.RANDOM
-                return True
-            elif choice == "b":
+            if selected is None:
                 return False
-            else:
-                print_error("Invalid choice. Please enter 1, 2, 3, or B.")
+
+            self.creation_path = selected
+            return True
+        except (EOFError, KeyboardInterrupt):
+            return False
 
     def _run_custom_path(self) -> Character | None:
         """
         Run the custom character creation path with Back/Review navigation.
 
+        Step order follows D&D Beyond pattern: Race → Class → Abilities → Skills → Name
+        Name comes last so players can choose thematic names after seeing their character.
+
         Returns:
             Created Character or None if cancelled
         """
-        # Custom path steps
+        # Custom path steps - name moved to end per UX best practice
         steps = [
-            ("Name", self._custom_step_name),
             ("Race", self._custom_step_race),
             ("Class", self._custom_step_class),
             ("Abilities", self._custom_step_abilities),
             ("Skills", self._custom_step_skills),
+            ("Name", self._custom_step_name),
         ]
 
         current_step = 0
 
         while current_step < len(steps):
             console.print()
+
+            # Display visual progress indicator
+            self._display_progress_bar(current_step, len(steps), steps)
+
             step_name, step_func = steps[current_step]
             print_section(f"Step {current_step + 1}/{len(steps)}: {step_name}")
             console.print()
@@ -206,180 +206,375 @@ class CharacterCreationWizard:
         # Show final summary and confirm
         return self._finalize_character()
 
+    def _display_progress_bar(
+        self, current_step: int, total_steps: int, steps: list[tuple[str, Any]]
+    ) -> None:
+        """Display a visual progress indicator for the wizard steps."""
+        step_names = [s[0] for s in steps]
+
+        # Build progress display with step indicators
+        progress_parts = []
+        for i, name in enumerate(step_names):
+            if i < current_step:
+                progress_parts.append(f"[green]✓ {name}[/green]")
+            elif i == current_step:
+                progress_parts.append(f"[cyan bold]→ {name}[/cyan bold]")
+            else:
+                progress_parts.append(f"[dim]○ {name}[/dim]")
+
+        console.print(" │ ".join(progress_parts))
+        console.print()
+
     def _custom_step_name(self) -> str:
-        """Custom path: Get character name."""
-        while True:
-            name = console.input("[bold cyan]Character Name:[/bold cyan] ").strip()
+        """Custom path: Get character name (final step after all choices made)."""
+        # Show what character they're naming for context
+        if self.race and self.character_class:
+            race_name = self.races_data[self.race]["name"]
+            class_name = self.classes_data[self.character_class]["name"]
+            console.print(
+                f"[dim]You're naming your {race_name} {class_name}.[/dim]"
+            )
+            console.print()
 
-            if not name:
-                print_error("Name cannot be empty")
-                continue
+        try:
+            name = questionary.text(
+                "What is your character's name?",
+                validate=lambda x: len(x.strip()) > 0 or "Name cannot be empty",
+            ).ask()
 
-            self.name = name
+            if name is None:
+                return "cancel"
+
+            self.name = name.strip()
             print_status_message(f"✓ Name: {self.name}", "success")
 
-            return self._get_navigation_choice(allow_back=False)
+            return self._get_navigation_choice(allow_back=True)
+        except (EOFError, KeyboardInterrupt):
+            return "cancel"
 
     def _custom_step_race(self) -> str:
-        """Custom path: Choose race."""
+        """Custom path: Choose race with questionary."""
         race_list = list(self.races_data.keys())
 
-        options = []
-        for i, race_id in enumerate(race_list, 1):
+        # Build choices with race info
+        choices = []
+        for race_id in race_list:
             race = self.races_data[race_id]
-            bonuses = ", ".join([f"+{v} {k.upper()[:3]}" for k, v in race["ability_bonuses"].items()])
-            options.append({"number": str(i), "text": f"{race['name']} ({bonuses})"})
+            bonuses = ", ".join(
+                [f"+{v} {k.upper()[:3]}" for k, v in race["ability_bonuses"].items()]
+            )
+            traits = race.get("traits", [])
+            traits_str = f" - {', '.join(traits[:2])}" if traits else ""
+            display = f"{race['name']} ({bonuses}){traits_str}"
+            choices.append(questionary.Choice(title=display, value=race_id))
 
-        print_choice_menu("Choose Your Race", options)
-        console.print()
+        choices.append(questionary.Choice(title="← Back", value="back"))
 
-        while True:
-            choice = console.input(f"[bold cyan]Enter number [1-{len(race_list)}]:[/bold cyan] ").strip()
+        try:
+            selected = questionary.select(
+                "Choose your race:",
+                choices=choices,
+                use_arrow_keys=True,
+            ).ask()
 
-            try:
-                idx = int(choice) - 1
-                if 0 <= idx < len(race_list):
-                    self.race = race_list[idx]
-                    race_data = self.races_data[self.race]
-                    print_status_message(f"✓ Race: {race_data['name']}", "success")
+            if selected is None:
+                return "cancel"
+            if selected == "back":
+                return "back"
 
-                    return self._get_navigation_choice()
-                else:
-                    print_error(f"Please enter a number between 1 and {len(race_list)}")
-            except ValueError:
-                print_error("Please enter a valid number")
+            self.race = selected
+            race_data = self.races_data[self.race]
+            print_status_message(f"✓ Race: {race_data['name']}", "success")
+
+            return self._get_navigation_choice()
+        except (EOFError, KeyboardInterrupt):
+            return "cancel"
 
     def _custom_step_class(self) -> str:
-        """Custom path: Choose class."""
+        """Custom path: Choose class with questionary."""
         class_list = list(self.classes_data.keys())
 
-        options = []
-        for i, class_id in enumerate(class_list, 1):
+        # Build choices with class info
+        choices = []
+        for class_id in class_list:
             cls = self.classes_data[class_id]
-            options.append({"number": str(i), "text": f"{cls['name']} ({cls['description']})"})
+            hit_die = cls.get("hit_die", "1d8")
+            display = f"{cls['name']} ({cls['description']}) - {hit_die}"
+            choices.append(questionary.Choice(title=display, value=class_id))
 
-        print_choice_menu("Choose Your Class", options)
-        console.print()
+        choices.append(questionary.Choice(title="← Back", value="back"))
 
-        while True:
-            choice = console.input(f"[bold cyan]Enter number [1-{len(class_list)}]:[/bold cyan] ").strip()
+        try:
+            selected = questionary.select(
+                "Choose your class:",
+                choices=choices,
+                use_arrow_keys=True,
+            ).ask()
 
-            try:
-                idx = int(choice) - 1
-                if 0 <= idx < len(class_list):
-                    self.character_class = class_list[idx]
-                    class_data = self.classes_data[self.character_class]
-                    print_status_message(f"✓ Class: {class_data['name']}", "success")
+            if selected is None:
+                return "cancel"
+            if selected == "back":
+                return "back"
 
-                    return self._get_navigation_choice()
-                else:
-                    print_error(f"Please enter a number between 1 and {len(class_list)}")
-            except ValueError:
-                print_error("Please enter a valid number")
+            self.character_class = selected
+            class_data = self.classes_data[self.character_class]
+            print_status_message(f"✓ Class: {class_data['name']}", "success")
+
+            return self._get_navigation_choice()
+        except (EOFError, KeyboardInterrupt):
+            return "cancel"
 
     def _custom_step_abilities(self) -> str:
-        """Custom path: Roll and assign abilities."""
-        # Roll abilities
-        print_message("[bold]Rolling ability scores (4d6 drop lowest)...[/bold]")
-        console.print()
+        """Custom path: Roll and assign abilities with questionary UI."""
+        try:
+            # Roll abilities
+            print_message("[bold]Rolling ability scores (4d6 drop lowest)...[/bold]")
+            console.print()
 
-        all_rolls = self.factory.roll_all_abilities(self.dice_roller)
-        scores = []
-        roll_display = []
+            all_rolls = self.factory.roll_all_abilities(self.dice_roller)
+            scores = []
+            roll_display = []
 
-        for i, (score, dice) in enumerate(all_rolls, 1):
-            dropped = min(dice)
-            roll_display.append(f"Roll {i}: {sorted(dice, reverse=True)} = {score} (dropped {dropped})")
-            scores.append(score)
+            for i, (score, dice) in enumerate(all_rolls, 1):
+                dropped = min(dice)
+                roll_display.append(
+                    f"Roll {i}: {sorted(dice, reverse=True)} = {score} (dropped {dropped})"
+                )
+                scores.append(score)
 
-        print_message("\n".join(roll_display))
-        console.print()
-        print_status_message(f"Your rolled scores: {sorted(scores, reverse=True)}", "info")
-        console.print()
+            print_message("\n".join(roll_display))
+            console.print()
+            print_status_message(
+                f"Your rolled scores: {sorted(scores, reverse=True)}", "info"
+            )
+            console.print()
 
-        self.rolled_scores = scores
+            self.rolled_scores = scores
 
-        # Auto-assign based on class priorities
-        class_data = self.classes_data[self.character_class]
-        self.abilities = self.factory.auto_assign_abilities(scores, class_data)
+            # Auto-assign based on class priorities
+            class_data = self.classes_data[self.character_class]
+            self.abilities = self.factory.auto_assign_abilities(scores, class_data)
 
-        print_message(f"[bold]Auto-assigned for {class_data['name']}:[/bold]")
-        self._display_abilities(self.abilities)
-        console.print()
+            print_message(f"[bold]Auto-assigned for {class_data['name']}:[/bold]")
+            self._display_abilities(self.abilities)
+            console.print()
 
-        # Allow swaps
-        while True:
-            swap_choice = console.input("[bold cyan]Swap abilities? [y/N]:[/bold cyan] ").strip().lower()
+            # Allow swaps with questionary
+            while True:
+                swap_choice = questionary.confirm(
+                    "Would you like to swap any abilities?", default=False
+                ).ask()
 
-            if swap_choice in ["n", "no", ""]:
-                break
-            elif swap_choice in ["y", "yes"]:
+                if swap_choice is None:
+                    return "cancel"
+                if not swap_choice:
+                    break
+
                 if self._swap_abilities_interactive():
                     console.print()
                     print_message("[bold]Updated abilities:[/bold]")
                     self._display_abilities(self.abilities)
                     console.print()
-            else:
-                print_error("Please enter 'y' or 'n'")
 
-        # Apply racial bonuses
-        abilities_before = self.abilities.copy()
-        self.abilities = self.factory.apply_racial_bonuses(self.abilities, self.races_data[self.race])
-
-        console.print()
-        print_message(f"[bold]After {self.races_data[self.race]['name']} racial bonuses:[/bold]")
-        self._display_abilities(self.abilities, before=abilities_before)
-
-        return self._get_navigation_choice()
-
-    def _custom_step_skills(self) -> str:
-        """Custom path: Select skill proficiencies."""
-        class_data = self.classes_data[self.character_class]
-
-        # Select skill proficiencies
-        self.skill_proficiencies = self.factory.select_skill_proficiencies(
-            class_data,
-            self.skills_data
-        )
-
-        # If Rogue, select expertise
-        if self.character_class == "rogue":
-            console.print()
-            self.expertise_skills = self.factory.select_expertise_skills(
-                self.skill_proficiencies,
-                self.skills_data
+            # Apply racial bonuses
+            abilities_before = self.abilities.copy()
+            self.abilities = self.factory.apply_racial_bonuses(
+                self.abilities, self.races_data[self.race]
             )
 
-        return self._get_navigation_choice()
+            console.print()
+            print_message(
+                f"[bold]After {self.races_data[self.race]['name']} racial bonuses:[/bold]"
+            )
+            self._display_abilities(self.abilities, before=abilities_before)
+
+            return self._get_navigation_choice()
+        except (EOFError, KeyboardInterrupt):
+            return "cancel"
+
+    def _custom_step_skills(self) -> str:
+        """Custom path: Select skill proficiencies with questionary checkbox."""
+        try:
+            class_data = self.classes_data[self.character_class]
+
+            # Select skill proficiencies using questionary
+            self.skill_proficiencies = self._select_skills_questionary(
+                class_data, self.skills_data
+            )
+
+            if self.skill_proficiencies is None:
+                return "cancel"
+
+            # If Rogue, select expertise
+            if self.character_class == "rogue" and self.skill_proficiencies:
+                console.print()
+                self.expertise_skills = self._select_expertise_questionary(
+                    self.skill_proficiencies, self.skills_data
+                )
+                if self.expertise_skills is None:
+                    return "cancel"
+
+            return self._get_navigation_choice()
+        except (EOFError, KeyboardInterrupt):
+            return "cancel"
+
+    def _select_skills_questionary(
+        self, class_data: dict[str, Any], skills_data: dict[str, Any]
+    ) -> list[str] | None:
+        """
+        Select skill proficiencies using questionary checkbox.
+
+        Args:
+            class_data: Class definition with skill_proficiencies
+            skills_data: Skills data from skills.json
+
+        Returns:
+            List of selected skill IDs, or None if cancelled
+        """
+        skill_profs = class_data.get("skill_proficiencies")
+        if not skill_profs:
+            return []
+
+        num_to_choose = skill_profs.get("choose", 0)
+        available_skills = skill_profs.get("from", [])
+
+        if num_to_choose == 0 or not available_skills:
+            return []
+
+        # Build choices with skill descriptions
+        choices = []
+        for skill_id in available_skills:
+            skill_info = skills_data.get(skill_id, {})
+            ability = skill_info.get("ability", "?").upper()[:3]
+            skill_name = skill_info.get("name", skill_id.title())
+            display = f"{skill_name} ({ability})"
+            choices.append(questionary.Choice(title=display, value=skill_id))
+
+        def validate_selection(selected: list) -> bool | str:
+            if len(selected) != num_to_choose:
+                return f"Please select exactly {num_to_choose} skills"
+            return True
+
+        selected = questionary.checkbox(
+            f"Select {num_to_choose} skill proficiencies:",
+            choices=choices,
+            validate=validate_selection,
+            instruction="(Space to toggle, Enter to confirm)",
+        ).ask()
+
+        if selected is None:
+            return None
+
+        # Display selected skills
+        for skill_id in selected:
+            skill_name = skills_data[skill_id].get("name", skill_id.title())
+            print_status_message(f"✓ {skill_name}", "success")
+
+        return selected
+
+    def _select_expertise_questionary(
+        self, skill_proficiencies: list[str], skills_data: dict[str, Any]
+    ) -> list[str] | None:
+        """
+        Select expertise skills using questionary checkbox (Rogue feature).
+
+        Args:
+            skill_proficiencies: List of skills the character is proficient in
+            skills_data: Skills data from skills.json
+
+        Returns:
+            List of selected expertise skill IDs, or None if cancelled
+        """
+        if not skill_proficiencies:
+            return []
+
+        num_expertise = min(2, len(skill_proficiencies))
+
+        print_message(
+            "[bold]Rogue Expertise:[/bold] Choose skills to gain double proficiency bonus."
+        )
+        console.print()
+
+        # Build choices from proficient skills
+        choices = []
+        for skill_id in skill_proficiencies:
+            skill_info = skills_data.get(skill_id, {})
+            ability = skill_info.get("ability", "?").upper()[:3]
+            skill_name = skill_info.get("name", skill_id.title())
+            display = f"{skill_name} ({ability})"
+            choices.append(questionary.Choice(title=display, value=skill_id))
+
+        def validate_selection(selected: list) -> bool | str:
+            if len(selected) != num_expertise:
+                return f"Please select exactly {num_expertise} skills for expertise"
+            return True
+
+        selected = questionary.checkbox(
+            f"Select {num_expertise} skills for Expertise:",
+            choices=choices,
+            validate=validate_selection,
+            instruction="(Space to toggle, Enter to confirm)",
+        ).ask()
+
+        if selected is None:
+            return None
+
+        # Display selected expertise
+        for skill_id in selected:
+            skill_name = skills_data[skill_id].get("name", skill_id.title())
+            print_status_message(f"✓ Expertise: {skill_name}", "success")
+
+        return selected
 
     def _swap_abilities_interactive(self) -> bool:
         """
-        Interactive ability swap.
+        Interactive ability swap using questionary select.
 
         Returns:
             True if swap was made, False if cancelled
         """
-        ability1 = console.input("[bold cyan]First ability (STR/DEX/CON/INT/WIS/CHA):[/bold cyan] ").strip().lower()
-        ability2 = console.input("[bold cyan]Second ability (STR/DEX/CON/INT/WIS/CHA):[/bold cyan] ").strip().lower()
-
-        # Map short forms to full names
-        ability_map = {
-            "str": "strength", "dex": "dexterity", "con": "constitution",
-            "int": "intelligence", "wis": "wisdom", "cha": "charisma"
-        }
-
-        ability1_full = ability_map.get(ability1, ability1)
-        ability2_full = ability_map.get(ability2, ability2)
+        # Build choices showing current values
+        ability_choices = []
+        for ability in ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]:
+            score = self.abilities[ability]
+            modifier = self.factory.calculate_ability_modifier(score)
+            sign = "+" if modifier >= 0 else ""
+            display = f"{ability.upper()[:3]}: {score} ({sign}{modifier})"
+            ability_choices.append(questionary.Choice(title=display, value=ability))
 
         try:
-            self.abilities = self.factory.swap_abilities(self.abilities, ability1_full, ability2_full)
+            ability1 = questionary.select(
+                "Select first ability to swap:",
+                choices=ability_choices,
+                use_arrow_keys=True,
+            ).ask()
+
+            if ability1 is None:
+                return False
+
+            # Filter out the first choice for second selection
+            remaining_choices = [c for c in ability_choices if c.value != ability1]
+
+            ability2 = questionary.select(
+                f"Swap {ability1.upper()[:3]} with:",
+                choices=remaining_choices,
+                use_arrow_keys=True,
+            ).ask()
+
+            if ability2 is None:
+                return False
+
+            self.abilities = self.factory.swap_abilities(
+                self.abilities, ability1, ability2
+            )
             print_status_message(
-                f"Swapped {ability1_full.upper()} <-> {ability2_full.upper()}",
-                "success"
+                f"Swapped {ability1.upper()[:3]} ↔ {ability2.upper()[:3]}", "success"
             )
             return True
         except ValueError as e:
             print_error(str(e))
+            return False
+        except (EOFError, KeyboardInterrupt):
             return False
 
     def _display_abilities(self, abilities: dict[str, int], before: dict[str, int] | None = None) -> None:
@@ -407,7 +602,7 @@ class CharacterCreationWizard:
 
     def _get_navigation_choice(self, allow_back: bool = True) -> str:
         """
-        Get navigation choice from user.
+        Get navigation choice from user using questionary.
 
         Args:
             allow_back: Whether to allow Back option
@@ -417,29 +612,33 @@ class CharacterCreationWizard:
         """
         console.print()
 
-        options_text = "[N]ext"
+        choices = [questionary.Choice(title="Continue →", value="next")]
         if allow_back:
-            options_text += ", [B]ack"
-        options_text += ", [R]eview, [C]ancel"
+            choices.append(questionary.Choice(title="← Back", value="back"))
+        choices.append(questionary.Choice(title="Review Progress", value="review"))
+        choices.append(questionary.Choice(title="Cancel", value="cancel"))
 
-        while True:
-            choice = console.input(f"[bold cyan]{options_text}:[/bold cyan] ").strip().lower()
+        try:
+            selected = questionary.select(
+                "What would you like to do?",
+                choices=choices,
+                use_arrow_keys=True,
+            ).ask()
 
-            if choice in ["n", "next", ""]:
-                return "next"
-            elif choice in ["b", "back"] and allow_back:
-                return "back"
-            elif choice in ["r", "review"]:
-                return "review"
-            elif choice in ["c", "cancel"]:
-                confirm = console.input("[bold]Cancel character creation? [y/N]:[/bold] ").strip().lower()
-                if confirm in ["y", "yes"]:
+            if selected is None:
+                return "cancel"
+
+            if selected == "cancel":
+                confirm = questionary.confirm(
+                    "Cancel character creation?", default=False
+                ).ask()
+                if confirm:
                     return "cancel"
-            else:
-                valid_options = ["N", "R", "C"]
-                if allow_back:
-                    valid_options.insert(1, "B")
-                print_error(f"Invalid choice. Please enter {', '.join(valid_options)}")
+                return self._get_navigation_choice(allow_back)
+
+            return selected
+        except (EOFError, KeyboardInterrupt):
+            return "cancel"
 
     def _show_progress_summary(self) -> None:
         """Show current progress summary."""
@@ -467,7 +666,7 @@ class CharacterCreationWizard:
 
     def _run_template_path(self) -> Character | None:
         """
-        Run the template-based character creation path.
+        Run the template-based character creation path with questionary.
 
         Returns:
             Created Character or None if cancelled
@@ -480,42 +679,35 @@ class CharacterCreationWizard:
             print_error("No templates available")
             return None
 
-        template_list = list(self.templates_data.keys())
+        # Build choices with template descriptions
+        choices = []
+        for template_id, template in self.templates_data.items():
+            race_name = self.races_data.get(template["race"], {}).get("name", template["race"])
+            class_name = self.classes_data.get(template["class"], {}).get("name", template["class"])
+            display = f"{template['name']} - {race_name} {class_name}"
+            choices.append(
+                questionary.Choice(title=display, value=template_id)
+            )
 
-        # Display templates
-        for i, template_id in enumerate(template_list, 1):
-            template = self.templates_data[template_id]
-            console.print(f"[bold][{i}] {template['name']}[/bold]")
-            console.print(f"    {template['description']}")
+        choices.append(questionary.Choice(title="← Back/Cancel", value=None))
 
-            # Show ability preview
-            abilities = template['abilities']
-            ability_str = ", ".join([f"{k.upper()[:3]} {v}" for k, v in abilities.items()])
-            console.print(f"    [dim]Abilities: {ability_str}[/dim]")
-            console.print()
+        try:
+            selected = questionary.select(
+                "Choose a character template:",
+                choices=choices,
+                use_arrow_keys=True,
+            ).ask()
 
-        console.print("[B] Back/Cancel")
-        console.print()
-
-        while True:
-            choice = console.input(f"[bold cyan]Select template [1-{len(template_list)}] or [B]:[/bold cyan] ").strip().lower()
-
-            if choice == "b":
+            if selected is None:
                 return None
 
-            try:
-                idx = int(choice) - 1
-                if 0 <= idx < len(template_list):
-                    template_id = template_list[idx]
-                    return self._create_from_template(template_id)
-                else:
-                    print_error(f"Please enter a number between 1 and {len(template_list)}")
-            except ValueError:
-                print_error("Please enter a valid number")
+            return self._create_from_template(selected)
+        except (EOFError, KeyboardInterrupt):
+            return None
 
     def _create_from_template(self, template_id: str) -> Character | None:
         """
-        Create character from template.
+        Create character from template with questionary UI.
 
         Args:
             template_id: ID of template to use
@@ -523,49 +715,62 @@ class CharacterCreationWizard:
         Returns:
             Created Character or None if cancelled
         """
-        template = self.templates_data[template_id]
+        try:
+            template = self.templates_data[template_id]
 
-        console.print()
-        print_status_message(f"Creating {template['name']}...", "info")
-        console.print()
+            console.print()
+            print_status_message(f"Creating {template['name']}...", "info")
+            console.print()
 
-        # Set wizard state from template
-        self.race = template['race']
-        self.character_class = template['class']
-        self.abilities = template['abilities'].copy()
+            # Set wizard state from template
+            self.race = template["race"]
+            self.character_class = template["class"]
+            self.abilities = template["abilities"].copy()
 
-        # Apply racial bonuses
-        self.abilities = self.factory.apply_racial_bonuses(
-            self.abilities,
-            self.races_data[self.race]
-        )
+            # Apply racial bonuses
+            self.abilities = self.factory.apply_racial_bonuses(
+                self.abilities, self.races_data[self.race]
+            )
 
-        # Get character name
-        console.print(f"[bold]Template:[/bold] {template['name']}")
-        console.print(f"[bold]Race:[/bold] {self.races_data[self.race]['name']}")
-        console.print(f"[bold]Class:[/bold] {self.classes_data[self.character_class]['name']}")
-        console.print()
+            # Show template details
+            console.print(f"[bold]Template:[/bold] {template['name']}")
+            console.print(f"[bold]Race:[/bold] {self.races_data[self.race]['name']}")
+            console.print(
+                f"[bold]Class:[/bold] {self.classes_data[self.character_class]['name']}"
+            )
+            console.print(f"[dim]{template['description']}[/dim]")
+            console.print()
 
-        self.name = console.input("[bold cyan]Character Name:[/bold cyan] ").strip()
-        while not self.name:
-            print_error("Name cannot be empty")
-            self.name = console.input("[bold cyan]Character Name:[/bold cyan] ").strip()
+            # Get character name using questionary
+            name = questionary.text(
+                "What is your character's name?",
+                validate=lambda x: len(x.strip()) > 0 or "Name cannot be empty",
+            ).ask()
 
-        # Auto-select skills from template
-        self.skill_proficiencies = template.get('skill_choices', [])
-        self.expertise_skills = template.get('expertise_choices', [])
+            if name is None:
+                return None
 
-        # Handle spells for spellcasters
-        if 'spell_preferences' in template:
-            spell_prefs = template['spell_preferences']
-            self.selected_spells = spell_prefs.get('cantrips', []) + spell_prefs.get('level_1', [])
+            self.name = name.strip()
 
-        # Show final summary and confirm
-        return self._finalize_character()
+            # Auto-select skills from template
+            self.skill_proficiencies = template.get("skill_choices", [])
+            self.expertise_skills = template.get("expertise_choices", [])
+
+            # Handle spells for spellcasters
+            if "spell_preferences" in template:
+                spell_prefs = template["spell_preferences"]
+                self.selected_spells = (
+                    spell_prefs.get("cantrips", []) + spell_prefs.get("level_1", [])
+                )
+
+            # Show final summary and confirm
+            return self._finalize_character()
+        except (EOFError, KeyboardInterrupt):
+            return None
 
     def _run_random_path(self) -> Character | None:
         """
-        Run the random character generation path.
+        Run the random character generation path with questionary UI.
 
         Returns:
             Created Character or None if cancelled
@@ -574,32 +779,51 @@ class CharacterCreationWizard:
         print_section("Random Character Generator")
         console.print()
 
-        while True:
-            # Generate random character
-            self._generate_random_character()
+        try:
+            while True:
+                # Generate random character
+                self._generate_random_character()
 
-            # Show preview
-            self._show_random_preview()
-            console.print()
-
-            choice = console.input("[bold cyan][A]ccept, [R]egenerate, or [C]ancel:[/bold cyan] ").strip().lower()
-
-            if choice in ["a", "accept"]:
-                # Get name
+                # Show preview
+                self._show_random_preview()
                 console.print()
-                self.name = console.input("[bold cyan]Character Name (or Enter for random):[/bold cyan] ").strip()
-                if not self.name:
-                    self.name = self._generate_random_name()
-                    print_status_message(f"Random name: {self.name}", "info")
 
-                return self._finalize_character()
-            elif choice in ["r", "regenerate"]:
+                choice = questionary.select(
+                    "What would you like to do?",
+                    choices=[
+                        questionary.Choice(title="Accept this character", value="accept"),
+                        questionary.Choice(title="Regenerate", value="regenerate"),
+                        questionary.Choice(title="← Cancel", value="cancel"),
+                    ],
+                    use_arrow_keys=True,
+                ).ask()
+
+                if choice is None or choice == "cancel":
+                    return None
+
+                if choice == "accept":
+                    # Get name using questionary
+                    console.print()
+                    name = questionary.text(
+                        "Character name (leave empty for random):",
+                    ).ask()
+
+                    if name is None:
+                        return None
+
+                    if not name.strip():
+                        self.name = self._generate_random_name()
+                        print_status_message(f"Random name: {self.name}", "info")
+                    else:
+                        self.name = name.strip()
+
+                    return self._finalize_character()
+
+                # choice == "regenerate" - loop continues
                 console.print()
-                continue
-            elif choice in ["c", "cancel"]:
-                return None
-            else:
-                print_error("Please enter A, R, or C")
+
+        except (EOFError, KeyboardInterrupt):
+            return None
 
     def _generate_random_character(self) -> None:
         """Generate a random character with standard array."""
@@ -619,7 +843,7 @@ class CharacterCreationWizard:
         rng.shuffle(standard_array)
 
         ability_names = ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]
-        self.abilities = dict(zip(ability_names, standard_array))
+        self.abilities = dict(zip(ability_names, standard_array, strict=True))
 
         # Apply racial bonuses
         self.abilities = self.factory.apply_racial_bonuses(
@@ -674,7 +898,7 @@ class CharacterCreationWizard:
 
     def _finalize_character(self) -> Character | None:
         """
-        Show final summary and create character.
+        Show final summary and create character with questionary confirmation.
 
         Returns:
             Created Character or None if user cancels
@@ -686,25 +910,41 @@ class CharacterCreationWizard:
         # Build comprehensive summary
         self._show_character_summary()
 
-        console.print()
-        choice = console.input("[bold cyan][C]onfirm, [E]dit Name, [S]tart Over, [X]Cancel:[/bold cyan] ").strip().lower()
+        try:
+            console.print()
+            choice = questionary.select(
+                "What would you like to do?",
+                choices=[
+                    questionary.Choice(title="✓ Confirm and Create", value="confirm"),
+                    questionary.Choice(title="Edit Name", value="edit"),
+                    questionary.Choice(title="Start Over", value="restart"),
+                    questionary.Choice(title="Cancel", value="cancel"),
+                ],
+                use_arrow_keys=True,
+            ).ask()
 
-        if choice in ["c", "confirm", ""]:
-            return self._create_character()
-        elif choice in ["e", "edit"]:
-            self.name = console.input("[bold cyan]New Name:[/bold cyan] ").strip()
-            while not self.name:
-                print_error("Name cannot be empty")
-                self.name = console.input("[bold cyan]New Name:[/bold cyan] ").strip()
-            return self._finalize_character()
-        elif choice in ["s", "start"]:
-            # Restart wizard
-            return self.run()
-        elif choice in ["x", "cancel"]:
+            if choice is None or choice == "cancel":
+                return None
+
+            if choice == "confirm":
+                return self._create_character()
+            elif choice == "edit":
+                new_name = questionary.text(
+                    "Enter new name:",
+                    default=self.name,
+                    validate=lambda x: len(x.strip()) > 0 or "Name cannot be empty",
+                ).ask()
+                if new_name is None:
+                    return None
+                self.name = new_name.strip()
+                return self._finalize_character()
+            elif choice == "restart":
+                # Restart wizard
+                return self.run()
+
             return None
-        else:
-            print_error("Invalid choice")
-            return self._finalize_character()
+        except (EOFError, KeyboardInterrupt):
+            return None
 
     def _show_character_summary(self) -> None:
         """Display comprehensive character summary."""
@@ -803,7 +1043,7 @@ class CharacterCreationWizard:
                 constitution=self.abilities["constitution"],
                 intelligence=self.abilities["intelligence"],
                 wisdom=self.abilities["wisdom"],
-                charisma=self.abilities["charisma"]
+                charisma=self.abilities["charisma"],
             )
 
             # Calculate stats
@@ -839,14 +1079,17 @@ class CharacterCreationWizard:
                 skill_proficiencies=self.skill_proficiencies,
                 expertise_skills=self.expertise_skills,
                 weapon_proficiencies=weapon_proficiencies,
-                armor_proficiencies=armor_proficiencies
+                armor_proficiencies=armor_proficiencies,
             )
 
-            # Set race
+            # Set race and racial traits
             character.race = self.race
+            character.darkvision_range = race_data.get("darkvision_range", 0)
 
             # Set saving throw proficiencies
-            character.saving_throw_proficiencies = class_data.get("saving_throw_proficiencies", [])
+            character.saving_throw_proficiencies = class_data.get(
+                "saving_throw_proficiencies", []
+            )
 
             # Initialize class resources
             self.factory.initialize_class_resources(character, class_data, self.level)
