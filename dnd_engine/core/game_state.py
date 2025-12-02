@@ -455,7 +455,8 @@ class GameState:
         data_loader: DataLoader | None = None,
         dice_roller: DiceRoller | None = None,
         campaign_id: str | None = None,
-        campaign_progress: CampaignProgress | None = None
+        campaign_progress: CampaignProgress | None = None,
+        skip_initial_room_enter: bool = False
     ):
         """
         Initialize the game state.
@@ -468,7 +469,9 @@ class GameState:
             dice_roller: Dice roller (creates new if not provided)
             campaign_id: Optional campaign ID for quest tracking (e.g., "the_unquiet_dead")
             campaign_progress: Optional campaign progress for multi-dungeon campaigns
+            skip_initial_room_enter: If True, skip initial ROOM_ENTER event (for save loading)
         """
+        self._skip_initial_room_enter = skip_initial_room_enter
         self.party = party
         self.event_bus = event_bus or EventBus()
         self.data_loader = data_loader or DataLoader()
@@ -536,14 +539,16 @@ class GameState:
                 self.quest_manager.set_event_bus(self.event_bus)
 
                 # Emit initial room enter event to trigger quest auto-activation
-                self.event_bus.emit(Event(
-                    type=EventType.ROOM_ENTER,
-                    data={
-                        "room_id": self.current_room_id,
-                        "room_name": self.get_current_room()["name"],
-                        "dungeon_id": self.dungeon_name,
-                    }
-                ))
+                # Skip if loading from save (save_slot_manager will emit at right time)
+                if not self._skip_initial_room_enter:
+                    self.event_bus.emit(Event(
+                        type=EventType.ROOM_ENTER,
+                        data={
+                            "room_id": self.current_room_id,
+                            "room_name": self.get_current_room()["name"],
+                            "dungeon_id": self.dungeon_name,
+                        }
+                    ))
             except FileNotFoundError:
                 logger.warning(f"No quest data found for campaign '{self.campaign_id}'")
 
@@ -1608,7 +1613,15 @@ class GameState:
                 return False  # Unknown item category
 
             # Check if this is a quest item (doesn't transfer between campaigns)
-            is_quest_item = item_to_take.get("quest_item", False)
+            # First check room item placement, then fall back to item definition
+            # TODO: Review why we check both room placement and item definition.
+            # Room placement override may be unnecessary - consider only using item def.
+            is_quest_item = item_to_take.get("quest_item", None)
+            if is_quest_item is None:
+                # Look up quest_item flag from item definition
+                items_data = self.data_loader.load_items(campaign_id=self.campaign_id)
+                item_def = items_data.get(category, {}).get(item_id, {})
+                is_quest_item = item_def.get("quest_item", False)
 
             # Add item to the specified character's inventory
             character.inventory.add_item(item_id, category, quest_item=is_quest_item)

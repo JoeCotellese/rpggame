@@ -6,9 +6,12 @@
     "town.square": {
       "id": "town.square",
       "name": "Village Square",
-      "description": "The heart of Thornwood Village. A weathered stone fountain stands in the center, surrounded by simple wooden buildings. The Rusty Cauldron tavern sits on the eastern side, its sign creaking in the breeze.",
+      "description": "The heart of Thornwood Village. A weathered stone fountain stands in the center, surrounded by simple wooden buildings. The Rusty Cauldron tavern sits to the east, an apothecary shop to the north, a healer's cottage to the south, and the town hall to the west.",
       "exits": {
-        "east": "town.tavern"
+        "east": "town.tavern",
+        "north": "village.apothecary_shop",
+        "south": "village.healers_cottage",
+        "west": "village.town_hall"
       },
       "enemies": [],
       "items": [],
@@ -37,6 +40,48 @@
           "visible": true
         }
       ],
+      "searched": false,
+      "searchable": true,
+      "safe_zone": true,
+      "lighting": "bright"
+    },
+    "village.apothecary_shop": {
+      "id": "village.apothecary_shop",
+      "name": "Aldric's Apothecary",
+      "description": "A cluttered shop filled with dried herbs, bubbling alembics, and shelves of colorful potions. Master Aldric, a thin man with spectacles and ink-stained fingers, works at a worn wooden counter. The air smells of lavender and sulfur.",
+      "exits": {
+        "south": "town.square"
+      },
+      "enemies": [],
+      "items": [],
+      "searched": false,
+      "searchable": true,
+      "safe_zone": true,
+      "lighting": "bright"
+    },
+    "village.healers_cottage": {
+      "id": "village.healers_cottage",
+      "name": "Healer's Cottage",
+      "description": "A cozy cottage with whitewashed walls and bundles of medicinal herbs hanging from the rafters. Healer Gwendolyn, a kind-faced woman in simple robes, tends to a small garden of healing plants by the window. A cot in the corner awaits patients.",
+      "exits": {
+        "north": "town.square"
+      },
+      "enemies": [],
+      "items": [],
+      "searched": false,
+      "searchable": true,
+      "safe_zone": true,
+      "lighting": "bright"
+    },
+    "village.town_hall": {
+      "id": "village.town_hall",
+      "name": "Thornwood Town Hall",
+      "description": "A modest but well-maintained building with oak-paneled walls and a large desk covered in papers. Mayor Thornton, a portly man with a worried expression, paces near the window. A notice board displays various village announcements.",
+      "exits": {
+        "east": "town.square"
+      },
+      "enemies": [],
+      "items": [],
       "searched": false,
       "searchable": true,
       "safe_zone": true,

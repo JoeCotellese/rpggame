@@ -267,6 +267,36 @@ class NPC:
             ]
         )
 
+        # Add context about visible quest items the player is carrying
+        if game_context and game_context.get("visible_quest_items"):
+            visible_items = game_context["visible_quest_items"]
+            lines.extend(
+                [
+                    "",
+                    "VISIBLE QUEST ITEMS (CRITICAL - REACT IMMEDIATELY):",
+                    "The player is carrying items you recognize as important:",
+                ]
+            )
+            for item in visible_items:
+                item_name = item.get("item_name", item["item_id"])
+                item_desc = item.get("item_description", "")
+                lines.append(f"- {item_name}")
+                if item_desc:
+                    # Include a brief excerpt of the description
+                    brief_desc = item_desc[:200] + "..." if len(item_desc) > 200 else item_desc
+                    lines.append(f"  Contents: {brief_desc}")
+
+            lines.extend(
+                [
+                    "",
+                    "IMPORTANT: You should IMMEDIATELY notice and ask about these items!",
+                    "- React naturally: 'What's that you're holding?' or 'Is that a note?'",
+                    "- Show appropriate concern/interest based on your character",
+                    "- Call get_pending_rewards to check if this relates to a completed task",
+                    "- Do NOT wait for the player to mention the item - YOU initiate",
+                ]
+            )
+
         return "\n".join(lines)
 
     def get_greeting(self) -> str:

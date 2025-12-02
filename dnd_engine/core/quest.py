@@ -482,6 +482,76 @@ class QuestManager:
                     return quest, bonus
         return None, None
 
+    def get_relevant_quest_items(self, npc_id: str) -> list[dict[str, Any]]:
+        """
+        Get quest-related items that would be relevant to show a specific NPC.
+
+        This helps NPCs recognize when the player is carrying items related to
+        quests they can help with (as turn_in_npc, quest_giver, or bonus reward).
+
+        Args:
+            npc_id: ID of the NPC to check relevance for
+
+        Returns:
+            List of dicts with item_id, quest_id, quest_name, and relevance_type
+        """
+        relevant_items: list[dict[str, Any]] = []
+        seen_items: set[str] = set()
+
+        for quest in self.quests.values():
+            state = self._quest_states.get(quest.id, QuestState.LOCKED)
+
+            # Only consider quests that are in progress or completable
+            if state not in [QuestState.AVAILABLE, QuestState.ACTIVE, QuestState.COMPLETED]:
+                continue
+
+            # Check if this NPC is relevant to this quest
+            is_turn_in_npc = quest.turn_in_npc == npc_id
+            is_quest_giver = quest.quest_giver == npc_id
+
+            if not (is_turn_in_npc or is_quest_giver):
+                continue
+
+            # Find quest items from objectives
+            for obj in quest.objectives:
+                item_id = None
+                relevance = ""
+
+                if obj.type == ObjectiveType.USE and is_turn_in_npc:
+                    # USE objectives like reading a note - show to turn_in_npc
+                    item_id = obj.target
+                    relevance = "item to show/discuss"
+                elif obj.type == ObjectiveType.FETCH:
+                    item_id = obj.target
+                    relevance = "item to retrieve"
+                elif obj.type == ObjectiveType.DELIVER and obj.deliver_item:
+                    item_id = obj.deliver_item
+                    relevance = "item to deliver"
+
+                if item_id and item_id not in seen_items:
+                    seen_items.add(item_id)
+                    relevant_items.append({
+                        "item_id": item_id,
+                        "quest_id": quest.id,
+                        "quest_name": quest.name,
+                        "relevance_type": relevance,
+                        "quest_state": state.value,
+                    })
+
+            # Check bonus rewards
+            for bonus in quest.bonus_rewards:
+                if bonus.turn_in_npc == npc_id and bonus.item_id not in seen_items:
+                    seen_items.add(bonus.item_id)
+                    relevant_items.append({
+                        "item_id": bonus.item_id,
+                        "quest_id": quest.id,
+                        "quest_name": quest.name,
+                        "relevance_type": "bonus reward item",
+                        "quest_state": state.value,
+                    })
+
+        return relevant_items
+
     def serialize_states(self) -> dict[str, str]:
         """
         Serialize quest states for saving.

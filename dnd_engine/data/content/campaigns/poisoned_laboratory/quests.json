@@ -98,12 +98,12 @@
       "unlocks_quests": ["stop_the_alchemist"],
       "unlocks_dungeons": [],
       "quest_giver": null,
-      "turn_in_npc": "tavern_keeper",
+      "turn_in_npc": "master_aldric",
       "reward_gold": 5,
       "npc_hints": {
         "available": "You found a note in the cellar? Let me see... this is troubling. Someone should read this carefully.",
         "active": "Have you read that note yet? It might explain where those giant rats came from.",
-        "completed": "So the alchemist's experiments caused all this? That explains a lot. Someone should put a stop to whatever he's doing up there before things get worse."
+        "completed": "Archibald wrote this? I trained that boy... I never thought he'd go this far. His experiments have clearly spiraled out of control. Someone must stop him!"
       }
     },
     {

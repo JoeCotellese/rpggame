@@ -342,22 +342,43 @@ class CLI:
             "enemy_hp": enemy_hp
         }
 
-    def _record_combat_action(self, result: Any) -> None:
+    def _record_combat_action(
+        self,
+        result: Any,
+        defender_hp: int | None = None,
+        defender_max_hp: int | None = None
+    ) -> None:
         """
         Record a combat action in history for narrative context.
 
         Args:
             result: AttackResult from combat engine
+            defender_hp: Defender's HP after taking damage (for LLM context)
+            defender_max_hp: Defender's max HP (for LLM context)
         """
         import time
 
         # Determine event type and description
         if result.hit:
             event_type = "attack"
-            if result.critical_hit:
-                description = f"{result.attacker_name} CRITICALLY hit {result.defender_name} for {result.damage} damage"
-            else:
-                description = f"{result.attacker_name} hit {result.defender_name} for {result.damage} damage"
+            base_desc = (
+                f"{result.attacker_name} CRITICALLY hit {result.defender_name} "
+                f"for {result.damage} damage"
+                if result.critical_hit
+                else f"{result.attacker_name} hit {result.defender_name} "
+                f"for {result.damage} damage"
+            )
+
+            # Add HP context if available (helps LLM avoid "killed" for unconscious)
+            if defender_hp is not None:
+                if defender_hp <= 0:
+                    # Only players go unconscious; monsters/NPCs are killed at 0 HP
+                    # Check if this is a player character by looking for death saves
+                    base_desc += " (knocked unconscious, making death saves)"
+                else:
+                    base_desc += f" ({defender_hp}/{defender_max_hp} HP remaining)"
+
+            description = base_desc
         else:
             event_type = "miss"
             description = f"{result.attacker_name} missed {result.defender_name}"
@@ -2218,8 +2239,12 @@ class CLI:
             if narrative:
                 self.display_narrative_panel(narrative)
 
-        # Record this action in combat history
-        self._record_combat_action(attack_result)
+        # Record this action in combat history with HP context
+        self._record_combat_action(
+            attack_result,
+            defender_hp=target.current_hp,
+            defender_max_hp=target.max_hp
+        )
 
         # 2. Display mechanics after narrative
         console.print(f"[cyan]⚔️  {str(attack_result)}[/cyan]")
@@ -2588,7 +2613,25 @@ class CLI:
 
         # Record combat action for attack spells
         if result.attack_result:
-            self._record_combat_action(result.attack_result)
+            # Find target for HP context
+            target_name = result.targets[0] if result.targets else None
+            spell_target = None
+            if target_name:
+                for enemy in self.game_state.active_enemies:
+                    if enemy.name == target_name:
+                        spell_target = enemy
+                        break
+                # Also check party members (for friendly fire/healing tracking)
+                if not spell_target:
+                    for char in self.game_state.party.characters:
+                        if char.name == target_name:
+                            spell_target = char
+                            break
+            self._record_combat_action(
+                result.attack_result,
+                defender_hp=spell_target.current_hp if spell_target else None,
+                defender_max_hp=spell_target.max_hp if spell_target else None
+            )
 
         # Display mechanics
         console.print(f"[magenta]✨ {result.caster_name} casts {result.spell_name}![/magenta]")
@@ -3018,9 +3061,14 @@ class CLI:
                     if narrative:
                         self.display_narrative_panel(narrative)
 
-            # Record combat action in history
+            # Record combat action in history with HP context
             if result.attack_result:
-                self._record_combat_action(result.attack_result)
+                target = self._find_party_member_by_name(result.target_name)
+                self._record_combat_action(
+                    result.attack_result,
+                    defender_hp=target.current_hp if target else None,
+                    defender_max_hp=target.max_hp if target else None
+                )
 
             # Display attack mechanics
             if result.attack_result:

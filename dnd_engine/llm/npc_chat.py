@@ -254,20 +254,97 @@ class NPCChatManager:
         if not self.provider:
             return npc.get_greeting()
 
-        # Build system prompt
-        system_prompt = npc.build_system_prompt()
+        # Gather context about quest items the player is visibly carrying
+        game_context = self._gather_visible_quest_context(npc)
+
+        # Build system prompt with context
+        system_prompt = npc.build_system_prompt(game_context)
         self._current_conversation.messages.append(
             {"role": "system", "content": system_prompt}
         )
 
-        # Add initial user message to trigger greeting
+        # Build initial message describing what the NPC sees
+        initial_message = self._build_initial_approach_message(game_context)
         self._current_conversation.messages.append(
-            {"role": "user", "content": "*enters and approaches*"}
+            {"role": "user", "content": initial_message}
         )
 
         # Get initial greeting from LLM
         response = self._run_sync(self._get_npc_response(), timeout=timeout)
         return response
+
+    def _gather_visible_quest_context(self, npc: NPC) -> dict[str, Any]:
+        """
+        Gather context about quest items the party is carrying that this NPC
+        would recognize or be interested in.
+
+        Args:
+            npc: The NPC to check relevance for
+
+        Returns:
+            Dictionary with visible_quest_items list
+        """
+        visible_items: list[dict[str, Any]] = []
+
+        if not self.game_state.quest_manager:
+            return {"visible_quest_items": visible_items}
+
+        # Get quest items relevant to this NPC
+        relevant_items = self.game_state.quest_manager.get_relevant_quest_items(npc.id)
+
+        # Check which of these items the party actually has
+        for item_info in relevant_items:
+            item_id = item_info["item_id"]
+            for char in self.game_state.party.characters:
+                if char.inventory.has_item(item_id):
+                    # Get item description from content registry
+                    item_data = self._get_item_data(item_id)
+                    visible_items.append({
+                        "item_id": item_id,
+                        "item_name": item_data.get("name", item_id) if item_data else item_id,
+                        "item_description": item_data.get("description", "") if item_data else "",
+                        "quest_state": item_info["quest_state"],
+                        "relevance_type": item_info["relevance_type"],
+                    })
+                    break  # Only count once per item type
+
+        return {"visible_quest_items": visible_items}
+
+    def _get_item_data(self, item_id: str) -> dict[str, Any] | None:
+        """Get item data from game state's content registry."""
+        if hasattr(self.game_state, "content_registry") and self.game_state.content_registry:
+            return self.game_state.content_registry.get_item(item_id)
+        return None
+
+    def _build_initial_approach_message(
+        self, game_context: dict[str, Any]
+    ) -> str:
+        """
+        Build the initial approach message describing what the NPC sees.
+
+        Args:
+            game_context: Context with visible_quest_items
+
+        Returns:
+            String describing the player's approach
+        """
+        visible_items = game_context.get("visible_quest_items", [])
+
+        if not visible_items:
+            return "*enters and approaches*"
+
+        # Describe what the NPC can see
+        item_descriptions = []
+        for item in visible_items:
+            name = item.get("item_name", item["item_id"])
+            item_descriptions.append(name.lower())
+
+        if len(item_descriptions) == 1:
+            items_text = item_descriptions[0]
+        else:
+            items_text = ", ".join(item_descriptions[:-1]) + f" and {item_descriptions[-1]}"
+
+        return f"*enters and approaches, visibly carrying a {items_text}*"
 
     def send_message_sync(
         self, player_message: str, timeout: float = 30.0

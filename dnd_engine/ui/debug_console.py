@@ -1578,6 +1578,8 @@ class DebugConsole:
             /quest activate <quest_id> - Activate a quest
             /quest complete <quest_id> - Complete a quest
             /quest reward <quest_id> - Mark quest as rewarded
+            /quest unlock <quest_id> - Force unlock a quest (set to available)
+            /quest setstate <quest_id> <state> - Set quest to any state
         """
         if not self.game_state.quest_manager:
             print_error("No quest manager available (not in a campaign)")
@@ -1640,6 +1642,45 @@ class DebugConsole:
                 print_status_message(f"Quest '{quest_id}' marked as rewarded", "success")
             else:
                 print_error(f"Unknown quest: {quest_id}")
+
+        elif subcommand == "unlock":
+            if len(args) < 2:
+                print_error("Usage: /quest unlock <quest_id>")
+                return
+            quest_id = args[1]
+            if quest_id in qm.quests:
+                qm._quest_states[quest_id] = QuestState.AVAILABLE
+                print_status_message(
+                    f"Quest '{quest_id}' forced to AVAILABLE state", "success"
+                )
+            else:
+                print_error(f"Unknown quest: {quest_id}")
+
+        elif subcommand == "setstate":
+            if len(args) < 3:
+                print_error("Usage: /quest setstate <quest_id> <state>")
+                print_message("States: locked, available, active, completed, rewarded")
+                return
+            quest_id = args[1]
+            state_str = args[2].lower()
+            state_map = {
+                "locked": QuestState.LOCKED,
+                "available": QuestState.AVAILABLE,
+                "active": QuestState.ACTIVE,
+                "completed": QuestState.COMPLETED,
+                "rewarded": QuestState.REWARDED,
+            }
+            if quest_id not in qm.quests:
+                print_error(f"Unknown quest: {quest_id}")
+                return
+            if state_str not in state_map:
+                print_error(f"Unknown state: {state_str}")
+                print_message("Valid states: locked, available, active, completed, rewarded")
+                return
+            qm._quest_states[quest_id] = state_map[state_str]
+            print_status_message(
+                f"Quest '{quest_id}' set to {state_str.upper()}", "success"
+            )
 
         else:
             print_error(f"Unknown subcommand: {subcommand}")
