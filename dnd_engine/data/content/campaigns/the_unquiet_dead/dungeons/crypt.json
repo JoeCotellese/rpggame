@@ -1,5 +1,5 @@
 {
-  "id": "the_unquiet_dead_crypt",
+  "id": "crypt",
   "name": "The Unquiet Dead: Davos Family Crypt",
   "campaign_id": "the_unquiet_dead",
   "description": "The skeletons of the Davos family ancestors have begun to rise from their ancient crypt. Strange figures were seen skulking about in the dark. The local noble is offering 50 gold pieces to investigate and put the dead back to rest. But something darker lurks within these halls - a cult plot that threatens far more than just a family's legacy.",
@@ -12,7 +12,7 @@
     "crypt.graveyard_entrance": {
       "id": "crypt.graveyard_entrance",
       "location_type": "dungeon",
-      "parent": "the_unquiet_dead_crypt",
+      "parent": "crypt",
       "name": "Overgrown Graveyard",
       "description": "A rusted iron gate opens into a small graveyard. Ancient headstones lean at odd angles, covered in moss and ivy. At the center stands a stone mausoleum bearing the name 'DAVOS' in weathered letters. The heavy door hangs ajar, revealing darkness within.",
       "lighting": "bright",
@@ -41,7 +41,7 @@
     "crypt.hall_of_the_dead": {
       "id": "crypt.hall_of_the_dead",
       "location_type": "dungeon",
-      "parent": "the_unquiet_dead_crypt",
+      "parent": "crypt",
       "name": "Hall of the Dead",
       "description": "Dusty stone stairs descend into a large burial chamber. The walls are lined with plaques and sealed coffins bearing the names of deceased Davos family members - generations of the dead laid to rest in this silent hall. Cobwebs hang thick in the corners, though recent disturbance has cleared a path through them. Footprints in the dust lead deeper into the crypt. The air is cold and still, carrying the faint scent of decay.",
       "lighting": "dark",
@@ -67,7 +67,7 @@
     "crypt.antechamber": {
       "id": "crypt.antechamber",
       "location_type": "dungeon",
-      "parent": "the_unquiet_dead_crypt",
+      "parent": "crypt",
       "name": "Antechamber",
       "description": "This octagonal chamber serves as a central hub for the crypt. Doors of solid oak with iron reinforcements stand in each cardinal direction, their metal hinges spotted with rust. The stone floor here shows heavy foot traffic - many boots have passed through recently. A faint scraping sound echoes from somewhere nearby, like bone dragging across stone.",
       "lighting": "dark",
@@ -126,7 +126,7 @@
     "crypt.eastern_crypt": {
       "id": "crypt.eastern_crypt",
       "location_type": "dungeon",
-      "parent": "the_unquiet_dead_crypt",
+      "parent": "crypt",
       "name": "Eastern Crypt",
       "description": "Two large stone coffins are embedded in the northern and southern walls of this burial chamber. Their lids have been pushed aside, revealing empty interiors lined with rotting cloth.",
       "lighting": "dark",
@@ -151,7 +151,7 @@
     "crypt.northern_crypt": {
       "id": "crypt.northern_crypt",
       "location_type": "dungeon",
-      "parent": "the_unquiet_dead_crypt",
+      "parent": "crypt",
       "name": "Northern Crypt",
       "description": "This burial chamber mirrors its southern counterpart - coffins and memorial plaques line the granite walls, bearing dates that span centuries.",
       "lighting": "dark",
@@ -177,7 +177,7 @@
     "crypt.southern_crypt": {
       "id": "crypt.southern_crypt",
       "location_type": "dungeon",
-      "parent": "the_unquiet_dead_crypt",
+      "parent": "crypt",
       "name": "Southern Crypt",
       "description": "More ancestral remains rest here, their names carved into brass plaques that have long since tarnished. The air grows colder, and a malevolent presence seems to permeate the chamber.",
       "lighting": "dark",
@@ -203,7 +203,7 @@
     "crypt.family_shrine": {
       "id": "crypt.family_shrine",
       "location_type": "dungeon",
-      "parent": "the_unquiet_dead_crypt",
+      "parent": "crypt",
       "name": "Family Shrine - Chamber of Davos",
       "description": "A small stone dais rises against the western wall. Upon it rests an ornate coffin, clearly more elaborate than the others you've seen. The lid has been violently smashed inward, splinters of ancient wood scattered across the floor. This was the final resting place of Davos the cleric, whose divine power once sealed away a great evil. In the corner lies a fresh corpse, wearing tattered cultist robes.",
       "lighting": "dark",

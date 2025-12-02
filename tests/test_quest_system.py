@@ -58,11 +58,11 @@ class TestQuest:
             objectives=objectives,
             unlocked_by_default=True,
             unlock_requirements=None,
-            target_dungeon="the_unquiet_dead_crypt",
+            target_dungeon="crypt",
             unlocks_quests=["cult_conspiracy"]
         )
         assert quest.unlocked_by_default is True
-        assert quest.target_dungeon == "the_unquiet_dead_crypt"
+        assert quest.target_dungeon == "crypt"
         assert len(quest.objectives) == 1
         assert quest.objectives[0].type == ObjectiveType.KILL
         assert quest.unlocks_quests == ["cult_conspiracy"]
@@ -115,7 +115,7 @@ class TestQuestManager:
                         }
                     ],
                     "unlocked_by_default": True,
-                    "target_dungeon": "the_unquiet_dead_crypt",
+                    "target_dungeon": "crypt",
                     "unlocks_quests": ["cult_conspiracy"]
                 },
                 {

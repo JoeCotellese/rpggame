@@ -1,6 +1,63 @@
 {
   "campaign_id": "poisoned_laboratory",
   "npcs": {
+    "tavern_keeper": {
+      "id": "tavern_keeper",
+      "name": "Maggie",
+      "display_name": "Maggie, the Tavern Keeper",
+      "home_location": "town.tavern",
+      "current_location": "town.tavern",
+      "can_move": false,
+      "personality": {
+        "traits": ["practical", "no-nonsense", "warm-hearted", "gossip"],
+        "speech_style": "direct and friendly, uses colorful expressions, always knows what's happening in town",
+        "attitude_default": "friendly",
+        "suspicion_of_strangers": "none"
+      },
+      "knowledge": {
+        "general": [
+          "Runs The Rusty Cauldron tavern for 20 years",
+          "Knows everyone in Thornwood Village",
+          "Has been hearing scratching sounds from the cellar for a week",
+          "Heard rumors about strange happenings at the old laboratory"
+        ],
+        "quest_hooks": ["clear_cellar"],
+        "local_lore": [
+          "The village has been quiet until recently",
+          "Some folks have seen lights at the abandoned laboratory on the hill",
+          "The rats in the cellar started appearing after that alchemist moved into the old lab"
+        ]
+      },
+      "shop": {
+        "enabled": true,
+        "shop_type": "tavern",
+        "inventory": [
+          {"item_id": "rations", "price": 5, "stock": 10},
+          {"item_id": "torch", "price": 1, "stock": 5},
+          {"item_id": "waterskin", "price": 2, "stock": 3}
+        ],
+        "buy_rate": 0.4,
+        "sell_dialogue": "Need supplies for the road? I've got food and torches.",
+        "insufficient_funds_dialogue": "Sorry love, I can't run a charity. Coin first."
+      },
+      "dialogue": {
+        "greeting": "Welcome to The Rusty Cauldron! What can I get for ya? Say, you look like capable sorts...",
+        "farewell": "Safe travels! And if you hear any scratching down there, that's just the rats. Big ones.",
+        "hostile_greeting": "I don't serve troublemakers. Get out of my tavern."
+      },
+      "reputation_modifiers": {
+        "friendly_threshold": 3,
+        "hostile_threshold": -10,
+        "disposition_effects": {
+          "friendly": {"price_modifier": 0.9, "extra_hints": true},
+          "hostile": {"refuses_service": true}
+        }
+      },
+      "schedule": null,
+      "services": {
+        "rest": {"cost": 5, "available": true, "heals_hp": true}
+      }
+    },
     "master_aldric": {
       "id": "master_aldric",
       "name": "Master Aldric",

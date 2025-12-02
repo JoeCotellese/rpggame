@@ -439,8 +439,8 @@ class TestGameStateStart:
             }
         }
 
-        # Mock the load_dungeon method
-        monkeypatch.setattr(data_loader, 'load_dungeon', lambda name: mock_dungeon)
+        # Mock the load_dungeon method (accepts optional campaign_id parameter)
+        monkeypatch.setattr(data_loader, 'load_dungeon', lambda name, campaign_id=None: mock_dungeon)
 
         # Create game state
         game_state = GameState(
@@ -491,8 +491,8 @@ class TestGameStateStart:
             }
         }
 
-        # Mock the load_dungeon method
-        monkeypatch.setattr(data_loader, 'load_dungeon', lambda name: mock_dungeon)
+        # Mock the load_dungeon method (accepts optional campaign_id parameter)
+        monkeypatch.setattr(data_loader, 'load_dungeon', lambda name, campaign_id=None: mock_dungeon)
 
         # Create game state
         game_state = GameState(

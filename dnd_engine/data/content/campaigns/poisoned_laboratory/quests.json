@@ -3,6 +3,15 @@
   "campaign_name": "The Poisoned Laboratory",
   "campaign_description": "A standalone adventure to stop a mad alchemist's dangerous experiments.",
   "items": {
+    "alchemist_warning": {
+      "name": "Alchemist's Warning",
+      "type": "consumable",
+      "rarity": "common",
+      "effect_type": "information",
+      "quest_item": true,
+      "description": "A crumpled piece of parchment, partially chewed by rats. The handwriting is hasty and frantic: 'If you're reading this, stay away from the laboratory on the hill! My experiments have gone terribly wrong. The fumes... they're changing things. Even the rats have grown to monstrous sizes. I've barricaded myself inside but I fear it's too late. Tell Master Aldric - he'll know what to do. -A'",
+      "value": 0
+    },
     "alchemist_research_notes": {
       "name": "Archibald's Research Notes",
       "type": "consumable",
@@ -42,6 +51,62 @@
   },
   "quests": [
     {
+      "id": "clear_cellar",
+      "name": "Rat Problem",
+      "description": "Maggie, the tavern keeper at The Rusty Cauldron, has a pest problem. Giant rats have infested her cellar, and she needs someone capable to clear them out before they ruin all her supplies.",
+      "objectives": [
+        {
+          "id": "clear_rats",
+          "type": "clear",
+          "target": "cellar.storage",
+          "description": "Clear out the giant rats in the cellar storage room"
+        }
+      ],
+      "unlocked_by_default": true,
+      "unlock_requirements": null,
+      "target_dungeon": "cellar",
+      "unlocks_quests": ["read_note"],
+      "unlocks_dungeons": ["laboratory"],
+      "quest_giver": "tavern_keeper",
+      "turn_in_npc": "tavern_keeper",
+      "reward_gold": 15,
+      "npc_hints": {
+        "available": {
+          "tavern_keeper": "I've got a bit of a problem, if you're looking for work. There's rats in my cellar - and I don't mean the normal kind. These things are as big as dogs! I can hear them scratching around down there all night. Clear 'em out and I'll make it worth your while."
+        },
+        "active": "Those rats still giving you trouble? The cellar's through the trapdoor in the corner. Mind the stairs, they're a bit rickety.",
+        "completed": "You did it! I could hear the commotion from up here. Thank the gods those vermin are gone. Here's your coin, well earned!"
+      }
+    },
+    {
+      "id": "read_note",
+      "name": "The Alchemist's Warning",
+      "description": "You found a mysterious note in the cellar, apparently written by the alchemist who lives in the laboratory on the hill. The warning speaks of dangerous experiments gone wrong.",
+      "objectives": [
+        {
+          "id": "read_warning",
+          "type": "use",
+          "target": "alchemist_warning",
+          "description": "Read the alchemist's warning note"
+        }
+      ],
+      "unlocked_by_default": false,
+      "unlock_requirements": {
+        "quest_completed": "clear_cellar"
+      },
+      "target_dungeon": null,
+      "unlocks_quests": ["stop_the_alchemist"],
+      "unlocks_dungeons": [],
+      "quest_giver": null,
+      "turn_in_npc": "tavern_keeper",
+      "reward_gold": 5,
+      "npc_hints": {
+        "available": "You found a note in the cellar? Let me see... this is troubling. Someone should read this carefully.",
+        "active": "Have you read that note yet? It might explain where those giant rats came from.",
+        "completed": "So the alchemist's experiments caused all this? That explains a lot. Someone should put a stop to whatever he's doing up there before things get worse."
+      }
+    },
+    {
       "id": "stop_the_alchemist",
       "name": "The Mad Alchemist",
       "description": "Master Aldric, the village apothecary, is gravely concerned. His former apprentice, Archibald, has gone mad and taken over an abandoned laboratory outside town. Strange fumes and explosions have been seen at all hours. Someone must stop him before his experiments harm the village.",
@@ -59,8 +124,10 @@
           "description": "Recover Archibald's research notes"
         }
       ],
-      "unlocked_by_default": true,
-      "unlock_requirements": null,
+      "unlocked_by_default": false,
+      "unlock_requirements": {
+        "quest_completed": "read_note"
+      },
       "target_dungeon": "poisoned_laboratory",
       "unlocks_quests": ["analyze_research"],
       "unlocks_dungeons": [],

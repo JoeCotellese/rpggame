@@ -63,7 +63,10 @@ def campaigns_dir(sample_campaign_data) -> Path:
     """Create temporary campaigns directory with test data."""
     with tempfile.TemporaryDirectory() as tmpdir:
         campaigns_path = Path(tmpdir)
-        campaign_file = campaigns_path / "test_campaign.json"
+        # Create campaign subdirectory with campaign.json inside
+        campaign_dir = campaigns_path / "test_campaign"
+        campaign_dir.mkdir()
+        campaign_file = campaign_dir / "campaign.json"
         with open(campaign_file, "w") as f:
             json.dump(sample_campaign_data, f)
         yield campaigns_path
@@ -262,7 +265,7 @@ class TestRealCampaign:
         assert definition is not None
         assert definition.id == "the_unquiet_dead"
         assert definition.name == "The Unquiet Dead"
-        assert "the_unquiet_dead_crypt" in definition.dungeons
+        assert "crypt" in definition.dungeons
         assert "cult_hideout" in definition.dungeons
         assert "temple_of_durgon" in definition.dungeons
 
@@ -272,14 +275,14 @@ class TestRealCampaign:
         progress = tracker.create_initial_progress("the_unquiet_dead")
 
         # Only crypt should be unlocked initially
-        assert tracker.is_dungeon_unlocked(progress, "the_unquiet_dead_crypt")
+        assert tracker.is_dungeon_unlocked(progress, "crypt")
         assert not tracker.is_dungeon_unlocked(progress, "cult_hideout")
         assert not tracker.is_dungeon_unlocked(progress, "temple_of_durgon")
 
         # Simulate completing crypt with journal
-        tracker.record_boss_defeat(progress, "the_unquiet_dead_crypt")
+        tracker.record_boss_defeat(progress, "crypt")
         newly_unlocked = tracker.complete_dungeon(
-            progress, "the_unquiet_dead_crypt", inventory_item_ids=["gorgus_journal"]
+            progress, "crypt", inventory_item_ids=["gorgus_journal"]
         )
 
         assert "cult_hideout" in newly_unlocked

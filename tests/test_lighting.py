@@ -75,7 +75,7 @@ class TestRoomLighting:
     def test_dark_room(self, human_character):
         """Test dark room lighting."""
         party = Party([human_character])
-        game_state = GameState(party, "the_unquiet_dead_crypt")
+        game_state = GameState(party, "crypt", campaign_id="the_unquiet_dead")
 
         # Move to a dark room (hall_of_the_dead)
         game_state.current_room_id = "crypt.hall_of_the_dead"
@@ -100,7 +100,7 @@ class TestDarkvision:
     def test_darkvision_treats_dark_as_dim(self, dwarf_character):
         """Test that darkvision treats darkness as dim light."""
         party = Party([dwarf_character])
-        game_state = GameState(party, "the_unquiet_dead_crypt")
+        game_state = GameState(party, "crypt", campaign_id="the_unquiet_dead")
 
         # Move to a dark room
         game_state.current_room_id = "crypt.hall_of_the_dead"
@@ -134,7 +134,7 @@ class TestLightSpell:
         human_character.spellcasting_ability = "int"
 
         party = Party([human_character])
-        game_state = GameState(party, "the_unquiet_dead_crypt")
+        game_state = GameState(party, "crypt", campaign_id="the_unquiet_dead")
 
         # Move to a dark room
         game_state.current_room_id = "crypt.hall_of_the_dead"
@@ -197,7 +197,7 @@ class TestPerceptionPenalties:
     def test_passive_perception_penalty_in_dim_light(self, human_character):
         """Test that passive Perception has -5 penalty in dim light."""
         party = Party([human_character])
-        game_state = GameState(party, "the_unquiet_dead_crypt")
+        game_state = GameState(party, "crypt", campaign_id="the_unquiet_dead")
 
         # Create a room with dim lighting
         game_state.dungeon["rooms"]["test_dim_room"] = {
@@ -229,7 +229,7 @@ class TestPerceptionPenalties:
     def test_passive_perception_fails_in_darkness(self, human_character):
         """Test that passive Perception auto-fails in complete darkness."""
         party = Party([human_character])
-        game_state = GameState(party, "the_unquiet_dead_crypt")
+        game_state = GameState(party, "crypt", campaign_id="the_unquiet_dead")
 
         # Move to dark room
         game_state.current_room_id = "crypt.hall_of_the_dead"
@@ -242,7 +242,7 @@ class TestPerceptionPenalties:
     def test_darkvision_reduces_darkness_penalty(self, dwarf_character):
         """Test that darkvision converts darkness to dim light for Perception."""
         party = Party([dwarf_character])
-        game_state = GameState(party, "the_unquiet_dead_crypt")
+        game_state = GameState(party, "crypt", campaign_id="the_unquiet_dead")
 
         # Move to dark room
         game_state.current_room_id = "crypt.hall_of_the_dead"

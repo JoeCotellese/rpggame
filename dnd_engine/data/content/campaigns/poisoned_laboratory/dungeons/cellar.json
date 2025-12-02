@@ -1,0 +1,66 @@
+{
+  "name": "Tavern Cellar",
+  "description": "A damp cellar beneath The Rusty Cauldron, overrun with rats",
+  "start_room": "cellar.stairs",
+  "rooms": {
+    "cellar.stairs": {
+      "id": "cellar.stairs",
+      "name": "Cellar Stairs",
+      "description": "Rickety wooden stairs descend into the darkness. The musty smell of old ale barrels and something fouler fills the air. Scratching sounds echo from deeper within.",
+      "exits": {
+        "up": {
+          "destination": "town.tavern",
+          "label": "Back to Tavern"
+        },
+        "north": "cellar.storage"
+      },
+      "enemies": [],
+      "items": [
+        {
+          "type": "item",
+          "id": "torch",
+          "quantity": 1,
+          "visible": true
+        }
+      ],
+      "searched": false,
+      "searchable": true,
+      "safe_zone": false,
+      "lighting": "dim"
+    },
+    "cellar.storage": {
+      "id": "cellar.storage",
+      "name": "Storage Room",
+      "description": "A large storage area filled with barrels, crates, and the stench of rat droppings. Beady eyes glint from the shadows as giant rats scurry between the debris. A crumpled piece of parchment lies in the corner, partially chewed.",
+      "exits": {
+        "south": "cellar.stairs",
+        "east": {
+          "destination": "laboratory.entrance",
+          "label": "Hidden Passage to Laboratory",
+          "hidden": true,
+          "examine_checks": [
+            {
+              "skill": "perception",
+              "dc": 10,
+              "success_message": "Behind some collapsed barrels, you notice a crude tunnel dug into the stone wall. The stench of chemicals wafts from within.",
+              "reveals_exit": true
+            }
+          ]
+        }
+      },
+      "enemies": ["giant_rat", "giant_rat", "giant_rat", "giant_rat"],
+      "items": [
+        {
+          "type": "item",
+          "id": "alchemist_warning",
+          "quantity": 1,
+          "visible": false
+        }
+      ],
+      "searched": false,
+      "searchable": true,
+      "safe_zone": false,
+      "lighting": "dim"
+    }
+  }
+}

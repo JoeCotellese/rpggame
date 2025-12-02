@@ -134,6 +134,56 @@
       }
     ]
   },
+  "giant_rat": {
+    "name": "Giant Rat",
+    "source": "D&D 5E SRD (CC BY 4.0)",
+    "size": "small",
+    "type": "beast",
+    "alignment": "unaligned",
+    "ac": 12,
+    "ac_source": "natural armor",
+    "hp": "2d6",
+    "hp_average": 7,
+    "speed": 30,
+    "abilities": {
+      "str": 7,
+      "dex": 15,
+      "con": 11,
+      "int": 2,
+      "wis": 10,
+      "cha": 4
+    },
+    "skills": {},
+    "senses": "darkvision 60 ft., passive Perception 10",
+    "passive_perception": 10,
+    "languages": [],
+    "cr": "1/8",
+    "xp": 25,
+    "loot": {
+      "copper": 2
+    },
+    "traits": [
+      {
+        "name": "Keen Smell",
+        "description": "The rat has advantage on Wisdom (Perception) checks that rely on smell."
+      },
+      {
+        "name": "Pack Tactics",
+        "description": "The rat has advantage on attack rolls against a creature if at least one of the rat's allies is within 5 feet of the creature and the ally isn't incapacitated."
+      }
+    ],
+    "actions": [
+      {
+        "name": "Bite",
+        "type": "melee-weapon-attack",
+        "attack_bonus": 4,
+        "reach": "5 ft.",
+        "damage": "1d4+2",
+        "damage_average": 4,
+        "damage_type": "piercing"
+      }
+    ]
+  },
   "wolf": {
     "name": "Wolf",
     "source": "D&D 5E SRD (CC BY 4.0)",

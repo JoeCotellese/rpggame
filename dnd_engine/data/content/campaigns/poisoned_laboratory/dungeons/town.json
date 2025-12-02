@@ -1,0 +1,46 @@
+{
+  "name": "Thornwood Village",
+  "description": "A small village at the edge of the wilderness, home to farmers, craftsmen, and a cozy tavern",
+  "start_room": "town.square",
+  "rooms": {
+    "town.square": {
+      "id": "town.square",
+      "name": "Village Square",
+      "description": "The heart of Thornwood Village. A weathered stone fountain stands in the center, surrounded by simple wooden buildings. The Rusty Cauldron tavern sits on the eastern side, its sign creaking in the breeze.",
+      "exits": {
+        "east": "town.tavern"
+      },
+      "enemies": [],
+      "items": [],
+      "searched": false,
+      "searchable": false,
+      "safe_zone": true,
+      "lighting": "bright"
+    },
+    "town.tavern": {
+      "id": "town.tavern",
+      "name": "The Rusty Cauldron",
+      "description": "A warm and inviting tavern with a crackling fireplace. The tavern keeper, a stout woman named Maggie, wipes down the bar while eyeing you with curiosity. A trapdoor in the corner leads down to the cellar, and scratching sounds can be heard from below.",
+      "exits": {
+        "west": "town.square",
+        "down": {
+          "destination": "cellar.stairs",
+          "label": "Cellar Trapdoor"
+        }
+      },
+      "enemies": [],
+      "items": [
+        {
+          "type": "item",
+          "id": "torch",
+          "quantity": 2,
+          "visible": true
+        }
+      ],
+      "searched": false,
+      "searchable": true,
+      "safe_zone": true,
+      "lighting": "bright"
+    }
+  }
+}

@@ -526,6 +526,7 @@ class QuestManager:
         event_bus.subscribe(EventType.ITEM_USED, self._on_item_used)
         event_bus.subscribe(EventType.ROOM_ENTER, self._on_room_enter)
         event_bus.subscribe(EventType.CHARACTER_DEATH, self._on_character_death)
+        event_bus.subscribe(EventType.COMBAT_END, self._on_combat_end)
 
     def _on_boss_defeated(self, event: "Event") -> None:
         """Handle boss defeated event - check kill objectives."""
@@ -543,7 +544,35 @@ class QuestManager:
         """Handle item used event - check use objectives."""
         item_id = event.data.get("item_id")
         if item_id:
+            # Auto-activate available quests that have a USE objective for this item
+            self._auto_activate_quests_for_use_objective(item_id)
             self._check_objectives(ObjectiveType.USE, item_id)
+
+    def _auto_activate_quests_for_use_objective(self, item_id: str) -> None:
+        """Auto-activate available quests when using an item that matches a USE objective."""
+        from dnd_engine.utils.events import Event, EventType
+
+        for quest in self.get_available_quests():
+            for objective in quest.objectives:
+                if objective.type == ObjectiveType.USE and objective.target == item_id:
+                    self._quest_states[quest.id] = QuestState.ACTIVE
+                    logger.info(
+                        f"Quest '{quest.name}' auto-activated upon using {item_id}"
+                    )
+
+                    # Emit quest activated event
+                    if hasattr(self, "_event_bus"):
+                        self._event_bus.emit(
+                            Event(
+                                EventType.QUEST_ACTIVATED,
+                                {
+                                    "quest_id": quest.id,
+                                    "quest_name": quest.name,
+                                    "item_id": item_id,
+                                },
+                            )
+                        )
+                    break  # Only activate once per quest
 
     def _on_room_enter(self, event: "Event") -> None:
         """Handle room enter event - check discover objectives and auto-activate quests."""
@@ -565,6 +594,41 @@ class QuestManager:
             monster_id = event.data.get("monster_id")
             if monster_id:
                 self._check_objectives(ObjectiveType.KILL, monster_id)
+
+    def _on_combat_end(self, event: "Event") -> None:
+        """Handle combat end event - check clear objectives."""
+        # Only check on victory (all enemies in room defeated)
+        if event.data.get("victory", False):
+            room_id = event.data.get("room_id")
+            if room_id:
+                # Auto-activate available quests that have a CLEAR objective for this room
+                self._auto_activate_quests_for_clear_objective(room_id)
+                self._check_objectives(ObjectiveType.CLEAR, room_id)
+
+    def _auto_activate_quests_for_clear_objective(self, room_id: str) -> None:
+        """Auto-activate available quests when clearing a room that matches a CLEAR objective."""
+        from dnd_engine.utils.events import Event, EventType
+
+        for quest in self.get_available_quests():
+            for objective in quest.objectives:
+                if objective.type == ObjectiveType.CLEAR and objective.target == room_id:
+                    self._quest_states[quest.id] = QuestState.ACTIVE
+                    logger.info(
+                        f"Quest '{quest.name}' auto-activated upon clearing {room_id}"
+                    )
+                    # Emit quest activated event
+                    if hasattr(self, "_event_bus"):
+                        self._event_bus.emit(
+                            Event(
+                                EventType.QUEST_ACTIVATED,
+                                {
+                                    "quest_id": quest.id,
+                                    "quest_name": quest.name,
+                                    "room_id": room_id,
+                                },
+                            )
+                        )
+                    break  # Only activate once per quest
 
     def _auto_activate_quests_for_dungeon(self, dungeon_id: str) -> None:
         """

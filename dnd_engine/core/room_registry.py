@@ -14,14 +14,37 @@ class RoomRegistry:
     The prefix identifies which dungeon the room belongs to.
     """
 
-    def __init__(self, dungeons_path: Path):
+    def __init__(
+        self,
+        dungeons_path: Path | None = None,
+        campaign_id: str | None = None,
+        content_path: Path | None = None,
+    ):
         """
-        Initialize the room registry by scanning all dungeon files.
+        Initialize the room registry by scanning dungeon files.
 
         Args:
-            dungeons_path: Path to the dungeons directory
+            dungeons_path: Direct path to a dungeons directory (for tests/legacy).
+                          If provided, scans this directory directly.
+            campaign_id: Campaign to load dungeons from. Requires content_path.
+            content_path: Path to content directory (contains campaigns/).
+                         Required if campaign_id is provided.
+
+        Provide either dungeons_path OR (campaign_id + content_path).
         """
-        self.dungeons_path = dungeons_path
+        self.campaign_id = campaign_id
+        self.content_path = content_path
+
+        # Determine the dungeons path
+        if dungeons_path:
+            self.dungeons_path = dungeons_path
+        elif campaign_id and content_path:
+            self.dungeons_path = content_path / "campaigns" / campaign_id / "dungeons"
+        else:
+            raise ValueError(
+                "Must provide either dungeons_path or (campaign_id + content_path)"
+            )
+
         # Maps room GUID prefix to dungeon filename (without .json)
         self._prefix_to_dungeon: dict[str, str] = {}
         # Maps dungeon filename to loaded dungeon data (lazy loaded)
@@ -31,6 +54,9 @@ class RoomRegistry:
 
     def _scan_dungeons(self) -> None:
         """Scan all dungeon files and build the prefix-to-dungeon mapping."""
+        if not self.dungeons_path.exists():
+            return
+
         for dungeon_file in self.dungeons_path.glob("*.json"):
             # Skip generated dungeons
             if dungeon_file.stem.startswith("generated_"):

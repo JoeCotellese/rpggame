@@ -478,12 +478,14 @@ class GameState:
 
         # Load dungeon using data_loader (supports mocking in tests)
         self.dungeon_name = dungeon_name  # Store filename for saving
-        self.dungeon = self.data_loader.load_dungeon(dungeon_name)
+        self.campaign_id = campaign_id
+
+        # Load dungeon - with campaign_id if provided, otherwise try standalone
+        self.dungeon = self.data_loader.load_dungeon(dungeon_name, campaign_id)
 
         # Auto-detect campaign_id from dungeon if not explicitly provided
-        if campaign_id is None:
-            campaign_id = self.dungeon.get("campaign_id")
-        self.campaign_id = campaign_id
+        if self.campaign_id is None:
+            self.campaign_id = self.dungeon.get("campaign_id")
 
         # Campaign progress for multi-dungeon campaigns
         self.campaign_progress = campaign_progress
@@ -502,11 +504,20 @@ class GameState:
         # May be None if data_path is unavailable (e.g., in tests with mocked loaders)
         self.room_registry: RoomRegistry | None = None
         try:
-            dungeons_path = self.data_loader.data_path / "content" / "dungeons"
-            if dungeons_path.exists():
-                self.room_registry = RoomRegistry(dungeons_path)
-                # Pre-populate registry cache with current dungeon data
-                # so modifications are shared when we return to this dungeon
+            content_path = self.data_loader.data_path / "content"
+            if self.campaign_id and content_path.exists():
+                self.room_registry = RoomRegistry(
+                    campaign_id=self.campaign_id,
+                    content_path=content_path,
+                )
+            else:
+                # Fallback for test dungeons without campaign
+                dungeons_path = content_path / "dungeons"
+                if dungeons_path.exists():
+                    self.room_registry = RoomRegistry(dungeons_path=dungeons_path)
+            # Pre-populate registry cache with current dungeon data
+            # so modifications are shared when we return to this dungeon
+            if self.room_registry:
                 self.room_registry._loaded_dungeons[dungeon_name] = self.dungeon
         except (AttributeError, TypeError):
             # data_path may not exist on mocked loaders
@@ -895,7 +906,7 @@ class GameState:
                 # Get item name from data loader if available
                 item_name = item_id
                 if self.data_loader:
-                    items_data = self.data_loader.load_items()
+                    items_data = self.data_loader.load_items(self.campaign_id)
                     for category in items_data.values():
                         if item_id in category:
                             item_name = category[item_id].get("name", item_id)
@@ -1951,7 +1962,7 @@ class GameState:
         equipped_weapon = attacker.inventory.get_equipped_item(EquipmentSlot.WEAPON)
 
         # Load item data for weapon lookup
-        items_data = self.data_loader.load_items()
+        items_data = self.data_loader.load_items(self.campaign_id)
 
         # Calculate attack/damage bonuses and get weapon info
         ammo_id = None  # Track ammo for consumption after attack
@@ -2939,6 +2950,7 @@ class GameState:
             type=EventType.COMBAT_END,
             data={
                 "victory": victory,
+                "room_id": self.current_room_id,
                 "xp_gained": total_xp,
                 "xp_per_character": total_xp // len(self.party.characters) if len(self.party.characters) > 0 else 0
             }
@@ -4026,10 +4038,14 @@ class GameState:
         # Load new dungeon if specified, otherwise reload current one
         if new_dungeon_name:
             self.dungeon_name = new_dungeon_name
-            self.dungeon = self.data_loader.load_dungeon(new_dungeon_name)
+            self.dungeon = self.data_loader.load_dungeon(
+                new_dungeon_name, self.campaign_id
+            )
         else:
             # Reload current dungeon from disk to reset state
-            self.dungeon = self.data_loader.load_dungeon(self.dungeon_name)
+            self.dungeon = self.data_loader.load_dungeon(
+                self.dungeon_name, self.campaign_id
+            )
 
         # Reset to start room
         self.current_room_id = self.dungeon["start_room"]
@@ -4099,7 +4115,7 @@ class GameState:
             CombatItemResult with attack outcome and display information
         """
         # Load item data (structure: {"weapons": {...}, "armor": {...}, "consumables": {...}})
-        items_data = self.data_loader.load_items()
+        items_data = self.data_loader.load_items(self.campaign_id)
 
         # Find item in categories
         item_data = None
@@ -4253,8 +4269,8 @@ class GameState:
         """
         from dnd_engine.systems.item_effects import apply_item_effect
 
-        # Load item data
-        items_data = self.data_loader.load_items()
+        # Load item data (including campaign-specific items)
+        items_data = self.data_loader.load_items(self.campaign_id)
 
         # Find item in consumables category
         item_data = items_data.get("consumables", {}).get(item_id)

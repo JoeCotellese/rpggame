@@ -845,7 +845,7 @@ class CLI:
                 return
 
             character = current.creature
-            items_data = self.game_state.data_loader.load_items()
+            items_data = self.game_state.data_loader.load_items(self.game_state.campaign_id)
 
             # Search for the item in the character's inventory
             consumables = character.inventory.get_items_by_category("consumables")
@@ -3158,7 +3158,7 @@ class CLI:
         """
         import questionary
 
-        items_data = self.game_state.data_loader.load_items()
+        items_data = self.game_state.data_loader.load_items(self.game_state.campaign_id)
         consumables_list = []
 
         # Gather consumables from specified character or all party
@@ -3619,7 +3619,7 @@ class CLI:
                 - Player name (e.g., "gandalf"): Show specific player's inventory
                 - Category (e.g., "potions", "weapons", "armor"): Filter by item type
         """
-        items_data = self.game_state.data_loader.load_items()
+        items_data = self.game_state.data_loader.load_items(self.game_state.campaign_id)
         from dnd_engine.systems.inventory import EquipmentSlot
 
         # Handle summary view
@@ -3707,7 +3707,7 @@ class CLI:
 
     def _display_inventory_summary(self) -> None:
         """Display a summary of consumables across all party members."""
-        items_data = self.game_state.data_loader.load_items()
+        items_data = self.game_state.data_loader.load_items(self.game_state.campaign_id)
 
         # Aggregate consumables across party
         consumable_totals = {}
@@ -3753,7 +3753,7 @@ class CLI:
             return
 
         inventory = character.inventory
-        items_data = self.game_state.data_loader.load_items()
+        items_data = self.game_state.data_loader.load_items(self.game_state.campaign_id)
 
         # Find the item in inventory (by ID or name)
         target_item = None
@@ -3826,7 +3826,7 @@ class CLI:
         item_id = inventory.unequip_item(slot)
 
         if item_id:
-            items_data = self.game_state.data_loader.load_items()
+            items_data = self.game_state.data_loader.load_items(self.game_state.campaign_id)
             category = "weapons" if slot == EquipmentSlot.WEAPON else "armor"
             item_data = items_data[category].get(item_id, {})
             item_name = item_data.get("name", item_id)
@@ -3852,7 +3852,7 @@ class CLI:
         from dnd_engine.systems.item_effects import apply_item_effect
 
         inventory = owner.inventory
-        items_data = self.game_state.data_loader.load_items()
+        items_data = self.game_state.data_loader.load_items(self.game_state.campaign_id)
 
         # Use the item from owner's inventory (removes it)
         success, item_info = inventory.use_item(item_id, items_data)
@@ -3903,7 +3903,7 @@ class CLI:
             item_id: The item to use (ID or name)
             player_identifier: Optional player identifier for target (1-based index or character name)
         """
-        items_data = self.game_state.data_loader.load_items()
+        items_data = self.game_state.data_loader.load_items(self.game_state.campaign_id)
 
         # Get target character (allow unconscious but not dead)
         target = self._get_target_player(player_identifier, allow_unconscious=True)
@@ -5155,12 +5155,18 @@ class CLI:
         """Handle quest completion event."""
         quest_name = event.data.get("quest_name", "Unknown Quest")
         reward_gold = event.data.get("reward_gold", 0)
-        turn_in_npc = event.data.get("turn_in_npc")
+        turn_in_npc_id = event.data.get("turn_in_npc")
 
         print_status_message(f"🏆 Quest Complete: {quest_name}", "success")
-        if reward_gold > 0 and turn_in_npc:
+        if reward_gold > 0 and turn_in_npc_id:
+            # Look up NPC display name
+            npc_name = turn_in_npc_id
+            if self.game_state and self.game_state.npc_manager:
+                npc = self.game_state.npc_manager.get_npc(turn_in_npc_id)
+                if npc:
+                    npc_name = npc.name
             print_status_message(
-                f"   Return to {turn_in_npc} to claim your reward ({reward_gold} gold)",
+                f"   Return to {npc_name} to claim your reward ({reward_gold} gold)",
                 "info",
             )
 

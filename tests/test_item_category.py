@@ -23,7 +23,7 @@ def game_state():
         ac=10,
     )
     party = Party([char])
-    return GameState(party=party, dungeon_name="the_unquiet_dead_crypt")
+    return GameState(party=party, dungeon_name="crypt", campaign_id="the_unquiet_dead")
 
 
 class TestGetItemCategory:

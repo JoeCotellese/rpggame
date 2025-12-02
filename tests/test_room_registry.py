@@ -218,21 +218,27 @@ class TestRoomRegistryWithRealData:
         """Test that the real crypt dungeon is properly registered."""
         from dnd_engine.rules.loader import DataLoader
         loader = DataLoader()
-        dungeons_path = loader.data_path / "content" / "dungeons"
+        content_path = loader.data_path / "content"
 
-        registry = RoomRegistry(dungeons_path)
+        registry = RoomRegistry(
+            campaign_id="the_unquiet_dead",
+            content_path=content_path,
+        )
 
         # Should find crypt rooms
-        assert registry.get_dungeon_for_room("crypt.graveyard_entrance") == "the_unquiet_dead_crypt"
+        assert registry.get_dungeon_for_room("crypt.graveyard_entrance") == "crypt"
         assert registry.room_exists("crypt.family_shrine")
 
     def test_town_dungeon_registered(self):
         """Test that the town of Arden is properly registered."""
         from dnd_engine.rules.loader import DataLoader
         loader = DataLoader()
-        dungeons_path = loader.data_path / "content" / "dungeons"
+        content_path = loader.data_path / "content"
 
-        registry = RoomRegistry(dungeons_path)
+        registry = RoomRegistry(
+            campaign_id="the_unquiet_dead",
+            content_path=content_path,
+        )
 
         # Should find town rooms
         assert registry.get_dungeon_for_room("arden.town_square") == "town_of_arden"
@@ -242,9 +248,12 @@ class TestRoomRegistryWithRealData:
         """Test that exits between dungeons can be resolved."""
         from dnd_engine.rules.loader import DataLoader
         loader = DataLoader()
-        dungeons_path = loader.data_path / "content" / "dungeons"
+        content_path = loader.data_path / "content"
 
-        registry = RoomRegistry(dungeons_path)
+        registry = RoomRegistry(
+            campaign_id="the_unquiet_dead",
+            content_path=content_path,
+        )
 
         # Get the town road room (connects to crypt)
         town_road = registry.get_room("arden.town_road")
