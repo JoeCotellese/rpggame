@@ -3963,12 +3963,11 @@ class CLI:
                 print_error("No party members can be targeted!")
             return
 
-        # Search all living party members' inventories for the item
-        owner = None
-        target_item_id = None
+        # Search all living party members' inventories for matching items
         item_id_lower = item_id.lower().replace("_", " ")
+        matches: list[tuple[Character, str, dict]] = []  # (owner, item_id, item_data)
 
-        # First try exact match
+        # Collect all matches (exact ID, name, or substring)
         for char in self.game_state.party.get_living_members():
             consumables = char.inventory.get_items_by_category("consumables")
             for inv_item in consumables:
@@ -3981,18 +3980,12 @@ class CLI:
                     item_name_normalized == item_id_lower or
                     item_id_lower in inv_item_id_normalized or
                     item_id_lower in item_name_normalized):
-                    owner = char
-                    target_item_id = inv_item.item_id
-                    break
-            if owner:
-                break
+                    matches.append((char, inv_item.item_id, item_data))
 
-        # If no exact match, try fuzzy matching
-        if not owner:
+        # If no matches, try fuzzy matching
+        if not matches:
             from difflib import SequenceMatcher
-            best_match_char = None
-            best_match_item_id = None
-            best_ratio = 0.6  # Minimum similarity threshold
+            fuzzy_matches: list[tuple[Character, str, dict, float]] = []
 
             for char in self.game_state.party.get_living_members():
                 consumables = char.inventory.get_items_by_category("consumables")
@@ -4001,19 +3994,64 @@ class CLI:
                     inv_item_id_normalized = inv_item.item_id.lower().replace("_", " ")
                     item_name_normalized = item_data.get("name", "").lower()
 
-                    # Check similarity against both ID and name
                     ratio_id = SequenceMatcher(None, item_id_lower, inv_item_id_normalized).ratio()
                     ratio_name = SequenceMatcher(None, item_id_lower, item_name_normalized).ratio()
-                    best_item_ratio = max(ratio_id, ratio_name)
+                    best_ratio = max(ratio_id, ratio_name)
 
-                    if best_item_ratio > best_ratio:
-                        best_ratio = best_item_ratio
-                        best_match_char = char
-                        best_match_item_id = inv_item.item_id
+                    if best_ratio >= 0.6:
+                        fuzzy_matches.append((char, inv_item.item_id, item_data, best_ratio))
 
-            if best_match_char and best_match_item_id:
-                owner = best_match_char
-                target_item_id = best_match_item_id
+            # Use fuzzy matches if we found any
+            if fuzzy_matches:
+                matches = [(char, iid, idata) for char, iid, idata, _ in fuzzy_matches]
+
+        # Handle results
+        if not matches:
+            print_error(f"No party member has a consumable '{item_id}' in inventory.")
+            return
+
+        owner = None
+        target_item_id = None
+
+        if len(matches) == 1:
+            # Single match - use it directly
+            owner, target_item_id, _ = matches[0]
+        else:
+            # Multiple matches - prompt user to select
+            import questionary
+
+            # Deduplicate by item_id (same item on different characters shows once)
+            unique_items: dict[str, tuple[Character, dict]] = {}
+            for char, iid, idata in matches:
+                if iid not in unique_items:
+                    unique_items[iid] = (char, idata)
+
+            if len(unique_items) == 1:
+                # Same item type on multiple characters - just use first
+                owner, target_item_id, _ = matches[0]
+            else:
+                # Different item types - let user choose
+                choices = []
+                for iid, (char, idata) in unique_items.items():
+                    item_name = idata.get("name", iid)
+                    choices.append(questionary.Choice(
+                        title=f"{item_name} - {char.name}",
+                        value=(char, iid)
+                    ))
+                choices.append(questionary.Choice(title="Cancel", value=None))
+
+                try:
+                    result = questionary.select(
+                        f"Multiple items match '{item_id}':",
+                        choices=choices,
+                        use_arrow_keys=True
+                    ).ask()
+
+                    if result is None:
+                        return
+                    owner, target_item_id = result
+                except (EOFError, KeyboardInterrupt):
+                    return
 
         if not owner or not target_item_id:
             print_error(f"No party member has a consumable '{item_id}' in inventory.")
