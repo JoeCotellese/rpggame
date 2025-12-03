@@ -2980,6 +2980,19 @@ class GameState:
         Args:
             defeated_enemy_ids: List of monster IDs that were defeated
         """
+        # Emit boss defeated event for each defeated enemy
+        # This allows quest objectives to track specific monster kills
+        # Must happen before the campaign_tracker guard so quests work independently
+        for monster_id in defeated_enemy_ids:
+            self.event_bus.emit(Event(
+                type=EventType.BOSS_DEFEATED,
+                data={
+                    "dungeon_id": self.dungeon_name,
+                    "dungeon_name": self.dungeon.get("name", self.dungeon_name) if self.dungeon else self.dungeon_name,
+                    "monster_id": monster_id,
+                }
+            ))
+
         if not self.campaign_progress or not self.campaign_tracker:
             return
 
@@ -2987,18 +3000,6 @@ class GameState:
         self.campaign_tracker.record_boss_defeat(
             self.campaign_progress, self.dungeon_name
         )
-
-        # Emit boss defeated event for each defeated enemy
-        # This allows quest objectives to track specific monster kills
-        for monster_id in defeated_enemy_ids:
-            self.event_bus.emit(Event(
-                type=EventType.BOSS_DEFEATED,
-                data={
-                    "dungeon_id": self.dungeon_name,
-                    "dungeon_name": self.dungeon.get("name", self.dungeon_name),
-                    "monster_id": monster_id,
-                }
-            ))
 
         # Check if dungeon completion criteria are now met
         self._check_dungeon_completion()

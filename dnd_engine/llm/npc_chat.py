@@ -515,6 +515,15 @@ class NPCChatManager:
         if not quest:
             return {"success": False, "error": f"Unknown quest: {quest_id}"}
 
+        # If quest is locked and this NPC is the quest_giver, unlock it first
+        qm = self.game_state.quest_manager
+        state = qm.get_quest_state(quest_id)
+        if state.value == "locked" and self._current_conversation:
+            npc_id = self._current_conversation.npc.id
+            if quest.quest_giver == npc_id:
+                from dnd_engine.core.quest import QuestState
+                qm._quest_states[quest_id] = QuestState.AVAILABLE
+
         success = self.game_state.quest_manager.activate_quest(quest_id)
         if success:
             return {
@@ -538,13 +547,18 @@ class NPCChatManager:
             quest = self.game_state.quest_manager.quests.get(quest_id)
             if quest:
                 state = self.game_state.quest_manager.get_quest_state(quest_id)
-                if state.value in ["available", "active"]:
+                # Include locked quests if this NPC is the quest_giver (they can offer it)
+                is_quest_giver = quest.quest_giver == npc.id
+                if state.value in ["available", "active"] or (
+                    state.value == "locked" and is_quest_giver
+                ):
                     # Get NPC-specific hint from quest data
                     hint = self._get_quest_hint(quest_id, npc.id)
                     available.append(
                         {
                             "id": quest.id,
                             "state": state.value,
+                            "can_offer": is_quest_giver and state.value in ["locked", "available"],
                             # 'hint' is how the NPC would describe this situation
                             "hint": hint,
                         }

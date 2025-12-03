@@ -21,9 +21,9 @@
           "description": "Read the cultist's journal"
         }
       ],
-      "unlocked_by_default": true,
+      "unlocked_by_default": false,
       "unlock_requirements": null,
-      "target_dungeon": "the_unquiet_dead_crypt",
+      "target_dungeon": "crypt",
       "unlocks_quests": ["cult_conspiracy"],
       "unlocks_dungeons": ["cult_hideout"],
       "quest_giver": "father_aldric",
