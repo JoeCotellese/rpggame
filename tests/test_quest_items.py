@@ -152,6 +152,7 @@ class TestConditionalExits:
         game_state = GameState(
             party=test_party,
             dungeon_name="town_of_arden",
+            campaign_id="the_unquiet_dead",
             event_bus=event_bus,
             data_loader=data_loader
         )
@@ -169,6 +170,7 @@ class TestConditionalExits:
         game_state = GameState(
             party=test_party,
             dungeon_name="town_of_arden",
+            campaign_id="the_unquiet_dead",
             event_bus=event_bus,
             data_loader=data_loader
         )
@@ -183,6 +185,7 @@ class TestConditionalExits:
         game_state = GameState(
             party=test_party,
             dungeon_name="town_of_arden",
+            campaign_id="the_unquiet_dead",
             event_bus=event_bus,
             data_loader=data_loader
         )
@@ -222,6 +225,7 @@ class TestConditionalExits:
         game_state = GameState(
             party=test_party,
             dungeon_name="town_of_arden",
+            campaign_id="the_unquiet_dead",
             event_bus=event_bus,
             data_loader=data_loader
         )
@@ -263,6 +267,7 @@ class TestConditionalExits:
         game_state = GameState(
             party=test_party,
             dungeon_name="town_of_arden",
+            campaign_id="the_unquiet_dead",
             event_bus=event_bus,
             data_loader=data_loader
         )
@@ -280,6 +285,7 @@ class TestConditionalExits:
         game_state = GameState(
             party=test_party,
             dungeon_name="town_of_arden",
+            campaign_id="the_unquiet_dead",
             event_bus=event_bus,
             data_loader=data_loader
         )

@@ -83,6 +83,12 @@ class EventType(Enum):
     BOSS_DEFEATED = "boss_defeated"
     DUNGEON_COMPLETED = "dungeon_completed"
 
+    # Quest events
+    QUEST_ACTIVATED = "quest_activated"
+    QUEST_OBJECTIVE_COMPLETE = "quest_objective_complete"
+    QUEST_COMPLETED = "quest_completed"
+    QUEST_REWARDED = "quest_rewarded"
+
 
 @dataclass
 class Event:

@@ -1,0 +1,225 @@
+{
+  "campaign_id": "poisoned_laboratory",
+  "npcs": {
+    "tavern_keeper": {
+      "id": "tavern_keeper",
+      "name": "Maggie",
+      "display_name": "Maggie, the Tavern Keeper",
+      "home_location": "town.tavern",
+      "current_location": "town.tavern",
+      "can_move": false,
+      "personality": {
+        "traits": ["practical", "no-nonsense", "warm-hearted", "gossip"],
+        "speech_style": "direct and friendly, uses colorful expressions, always knows what's happening in town",
+        "attitude_default": "friendly",
+        "suspicion_of_strangers": "none"
+      },
+      "knowledge": {
+        "general": [
+          "Runs The Rusty Cauldron tavern for 20 years",
+          "Knows everyone in Thornwood Village",
+          "Has been hearing scratching sounds from the cellar for a week",
+          "Heard rumors about strange happenings at the old laboratory"
+        ],
+        "quest_hooks": ["clear_cellar"],
+        "local_lore": [
+          "The village has been quiet until recently",
+          "Some folks have seen lights at the abandoned laboratory on the hill",
+          "The rats in the cellar started appearing after that alchemist moved into the old lab"
+        ]
+      },
+      "shop": {
+        "enabled": true,
+        "shop_type": "tavern",
+        "inventory": [
+          {"item_id": "rations", "price": 5, "stock": 10},
+          {"item_id": "torch", "price": 1, "stock": 5},
+          {"item_id": "waterskin", "price": 2, "stock": 3}
+        ],
+        "buy_rate": 0.4,
+        "sell_dialogue": "Need supplies for the road? I've got food and torches.",
+        "insufficient_funds_dialogue": "Sorry love, I can't run a charity. Coin first."
+      },
+      "dialogue": {
+        "greeting": "Welcome to The Rusty Cauldron! What can I get for ya? Say, you look like capable sorts...",
+        "farewell": "Safe travels! And if you hear any scratching down there, that's just the rats. Big ones.",
+        "hostile_greeting": "I don't serve troublemakers. Get out of my tavern."
+      },
+      "reputation_modifiers": {
+        "friendly_threshold": 3,
+        "hostile_threshold": -10,
+        "disposition_effects": {
+          "friendly": {"price_modifier": 0.9, "extra_hints": true},
+          "hostile": {"refuses_service": true}
+        }
+      },
+      "schedule": null,
+      "services": {
+        "rest": {"cost": 5, "available": true, "heals_hp": true}
+      }
+    },
+    "master_aldric": {
+      "id": "master_aldric",
+      "name": "Master Aldric",
+      "display_name": "Master Aldric, the Apothecary",
+      "home_location": "village.apothecary_shop",
+      "current_location": "village.apothecary_shop",
+      "can_move": false,
+      "personality": {
+        "traits": ["scholarly", "concerned", "meticulous", "guilt-ridden"],
+        "speech_style": "precise and educated, uses alchemical terminology, speaks with underlying worry",
+        "attitude_default": "friendly",
+        "suspicion_of_strangers": "low"
+      },
+      "knowledge": {
+        "general": [
+          "Runs the village apothecary for 30 years",
+          "Trained Archibald as an apprentice before his descent into madness",
+          "Expert in herbal remedies and basic alchemy",
+          "Feels responsible for not seeing the warning signs in Archibald"
+        ],
+        "quest_hooks": ["stop_the_alchemist", "analyze_research", "specimen_secrets"],
+        "local_lore": [
+          "The Thornwood Laboratory was abandoned after a fire 50 years ago",
+          "Archibald was brilliant but obsessed with pushing boundaries",
+          "Strange lights and explosions have been seen at the laboratory for weeks"
+        ]
+      },
+      "shop": {
+        "enabled": true,
+        "shop_type": "apothecary",
+        "inventory": [
+          {"item_id": "potion_of_healing", "price": 50, "stock": 5},
+          {"item_id": "antitoxin", "price": 50, "stock": 3},
+          {"item_id": "healer_kit", "price": 5, "stock": 3},
+          {"item_id": "alchemists_fire", "price": 50, "stock": 2},
+          {"item_id": "acid_vial", "price": 25, "stock": 3}
+        ],
+        "buy_rate": 0.6,
+        "sell_dialogue": "I have remedies and alchemical supplies. What do you need?",
+        "insufficient_funds_dialogue": "I'm afraid I can't extend credit, even in these troubled times."
+      },
+      "dialogue": {
+        "greeting": "Ah, travelers! Thank goodness you've come. I desperately need help with a... delicate matter.",
+        "farewell": "Be careful out there. And please, stop Archibald before it's too late.",
+        "hostile_greeting": "I don't have time for troublemakers. Please leave."
+      },
+      "reputation_modifiers": {
+        "friendly_threshold": 5,
+        "hostile_threshold": -15,
+        "disposition_effects": {
+          "friendly": {"price_modifier": 0.85, "extra_hints": true},
+          "hostile": {"refuses_service": true}
+        }
+      },
+      "schedule": null,
+      "services": null
+    },
+    "healer_gwendolyn": {
+      "id": "healer_gwendolyn",
+      "name": "Gwendolyn",
+      "display_name": "Healer Gwendolyn",
+      "home_location": "village.healers_cottage",
+      "current_location": "village.healers_cottage",
+      "can_move": false,
+      "personality": {
+        "traits": ["compassionate", "perceptive", "cautious", "knowledgeable"],
+        "speech_style": "calm and reassuring, asks probing questions, explains things clearly",
+        "attitude_default": "welcoming",
+        "suspicion_of_strangers": "none"
+      },
+      "knowledge": {
+        "general": [
+          "Village healer for 15 years",
+          "Trained in both mundane medicine and detecting magical ailments",
+          "Has treated several villagers for mysterious symptoms lately",
+          "Suspects something unnatural is at work in the area"
+        ],
+        "quest_hooks": ["analyze_research", "specimen_secrets"],
+        "local_lore": [
+          "Several villagers have reported feeling unwell near the old laboratory",
+          "Animals have been avoiding the area around Thornwood Hill",
+          "The symptoms she's seen don't match any natural illness"
+        ]
+      },
+      "shop": {
+        "enabled": true,
+        "shop_type": "healer",
+        "inventory": [
+          {"item_id": "potion_of_healing", "price": 50, "stock": 4},
+          {"item_id": "potion_of_greater_healing", "price": 150, "stock": 1},
+          {"item_id": "antitoxin", "price": 50, "stock": 4},
+          {"item_id": "healer_kit", "price": 5, "stock": 5}
+        ],
+        "buy_rate": 0.0,
+        "sell_dialogue": "I have healing supplies if you need them. Staying healthy is important work.",
+        "insufficient_funds_dialogue": "I wish I could give these away, but I need coin for more supplies."
+      },
+      "dialogue": {
+        "greeting": "Welcome, traveler. Are you injured? Or perhaps you've come about the strange sickness in the village?",
+        "farewell": "Take care of yourself. And if you feel any strange symptoms, come see me immediately.",
+        "hostile_greeting": "I heal all who come to me, but I won't tolerate threats in my home."
+      },
+      "reputation_modifiers": {
+        "friendly_threshold": 5,
+        "hostile_threshold": -20
+      },
+      "schedule": null,
+      "services": {
+        "healing": {"cost_per_hp": 1, "available": true},
+        "cure_disease": {"cost": 50, "available": true},
+        "cure_poison": {"cost": 25, "available": true}
+      }
+    },
+    "mayor_thornton": {
+      "id": "mayor_thornton",
+      "name": "Mayor Thornton",
+      "display_name": "Mayor Horace Thornton",
+      "home_location": "village.town_hall",
+      "current_location": "village.town_hall",
+      "can_move": true,
+      "personality": {
+        "traits": ["pragmatic", "worried", "politically-minded", "generous"],
+        "speech_style": "formal but approachable, concerned with public safety, offers rewards",
+        "attitude_default": "neutral",
+        "suspicion_of_strangers": "mild"
+      },
+      "knowledge": {
+        "general": [
+          "Elected mayor of the village 8 years ago",
+          "Responsible for the safety and well-being of all villagers",
+          "Has been fielding complaints about the laboratory for weeks",
+          "Doesn't have the budget for a proper militia"
+        ],
+        "quest_hooks": ["stop_the_alchemist"],
+        "local_lore": [
+          "The village has prospered under his leadership",
+          "The old Thornwood family (his ancestors) built the laboratory",
+          "He's ashamed that his family's legacy has become a threat"
+        ]
+      },
+      "shop": {
+        "enabled": false,
+        "shop_type": "none",
+        "inventory": [],
+        "buy_rate": 0.0
+      },
+      "dialogue": {
+        "greeting": "Ah, adventurers! The village could use capable folk like yourselves. We have a problem that needs solving.",
+        "farewell": "The village thanks you for your service. May fortune favor your endeavors.",
+        "hostile_greeting": "I am the duly elected mayor of this village. You will show respect or face the consequences."
+      },
+      "reputation_modifiers": {
+        "friendly_threshold": 10,
+        "hostile_threshold": -15
+      },
+      "schedule": {
+        "morning": "village.town_hall",
+        "afternoon": "village.market_square",
+        "evening": "village.tavern",
+        "night": "village.mayor_residence"
+      },
+      "services": null
+    }
+  }
+}

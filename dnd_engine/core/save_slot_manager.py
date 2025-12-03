@@ -23,7 +23,7 @@ from dnd_engine.rules.loader import DataLoader
 from dnd_engine.systems.currency import Currency
 from dnd_engine.systems.inventory import EquipmentSlot, Inventory
 from dnd_engine.systems.resources import ResourcePool
-from dnd_engine.utils.events import EventBus
+from dnd_engine.utils.events import Event, EventBus, EventType
 
 # Current save file version
 SAVE_VERSION = "2.0.0"
@@ -351,6 +351,7 @@ class SaveSlotManager:
                 "campaign_id": game_state.campaign_id,
                 "current_room_id": game_state.current_room_id,
                 "dungeon_state": self._serialize_dungeon_state(game_state.dungeon),
+                "all_dungeon_states": self._serialize_all_dungeon_states(game_state),
                 "in_combat": game_state.in_combat,
                 "action_history": game_state.action_history,
                 "last_entry_direction": game_state.last_entry_direction
@@ -358,6 +359,13 @@ class SaveSlotManager:
             # Include campaign progress if present
             if campaign_progress:
                 slot_data["campaign_progress"] = campaign_progress.to_dict()
+
+            # Include quest states if quest manager is active
+            if game_state.quest_manager:
+                slot_data["quest_states"] = game_state.quest_manager.serialize_states()
+                slot_data["quest_objective_states"] = (
+                    game_state.quest_manager.serialize_objective_states()
+                )
         else:
             # Empty slot
             slot_data["party"] = []
@@ -479,6 +487,82 @@ class SaveSlotManager:
 
         return room_states
 
+    def _serialize_all_dungeon_states(
+        self, game_state: GameState
+    ) -> dict[str, dict[str, Any]]:
+        """
+        Serialize room states for ALL loaded dungeons.
+
+        This ensures that when traveling between dungeons, cleared rooms
+        and collected items are preserved across save/load cycles.
+
+        Args:
+            game_state: Current game state with room_registry
+
+        Returns:
+            Dictionary mapping dungeon names to their room states
+        """
+        all_states: dict[str, dict[str, Any]] = {}
+
+        # Always include current dungeon
+        all_states[game_state.dungeon_name] = self._serialize_dungeon_state(
+            game_state.dungeon
+        )
+
+        # Include all other loaded dungeons from registry
+        if game_state.room_registry:
+            for dungeon_name, dungeon_data in (
+                game_state.room_registry._loaded_dungeons.items()
+            ):
+                if dungeon_name != game_state.dungeon_name:
+                    all_states[dungeon_name] = self._serialize_dungeon_state(
+                        dungeon_data
+                    )
+
+        return all_states
+
+    def _restore_all_dungeon_states(
+        self,
+        game_state: GameState,
+        all_dungeon_states: dict[str, dict[str, Any]]
+    ) -> None:
+        """
+        Restore room states for all dungeons to the room registry.
+
+        This pre-populates the room registry cache with modified dungeon states
+        so that when the player travels to a previously visited dungeon,
+        cleared rooms and collected items are preserved.
+
+        Args:
+            game_state: Game state with room_registry to populate
+            all_dungeon_states: Saved states for all dungeons
+        """
+        if not game_state.room_registry:
+            return
+
+        for dungeon_name, room_states in all_dungeon_states.items():
+            # Skip current dungeon - already handled
+            if dungeon_name == game_state.dungeon_name:
+                continue
+
+            # Load the dungeon into registry cache
+            dungeon_data = game_state.room_registry.load_dungeon(dungeon_name)
+            if not dungeon_data:
+                continue
+
+            # Apply saved room states
+            for room_id, room_state in room_states.items():
+                if room_id in dungeon_data.get("rooms", {}):
+                    dungeon_data["rooms"][room_id]["searched"] = room_state.get(
+                        "searched", False
+                    )
+                    dungeon_data["rooms"][room_id]["enemies"] = room_state.get(
+                        "enemies", []
+                    )
+                    dungeon_data["rooms"][room_id]["items"] = room_state.get(
+                        "items", []
+                    )
+
     def _deserialize_game_state(
         self,
         slot_data: dict[str, Any],
@@ -498,22 +582,29 @@ class SaveSlotManager:
         gs_data = slot_data["game_state"]
 
         # Create game state (this loads fresh dungeon)
+        # Skip initial ROOM_ENTER - we'll fire it after restoring quest states
         game_state = GameState(
             party=party,
             dungeon_name=gs_data["dungeon_name"],
             campaign_id=gs_data.get("campaign_id"),
             event_bus=event_bus,
             data_loader=data_loader,
-            dice_roller=dice_roller
+            dice_roller=dice_roller,
+            skip_initial_room_enter=True
         )
 
-        # Restore room-specific state
+        # Restore room-specific state for current dungeon
         room_states = gs_data.get("dungeon_state", {})
         for room_id, room_state in room_states.items():
             if room_id in game_state.dungeon["rooms"]:
                 game_state.dungeon["rooms"][room_id]["searched"] = room_state.get("searched", False)
                 game_state.dungeon["rooms"][room_id]["enemies"] = room_state.get("enemies", [])
                 game_state.dungeon["rooms"][room_id]["items"] = room_state.get("items", [])
+
+        # Restore room states for ALL other dungeons visited during session
+        # This ensures cleared rooms stay cleared after save/load
+        all_dungeon_states = gs_data.get("all_dungeon_states", {})
+        self._restore_all_dungeon_states(game_state, all_dungeon_states)
 
         # Restore current position
         game_state.current_room_id = gs_data["current_room_id"]
@@ -523,6 +614,27 @@ class SaveSlotManager:
 
         # Restore navigation tracking
         game_state.last_entry_direction = gs_data.get("last_entry_direction")
+
+        # Restore quest states if present
+        if game_state.quest_manager and "quest_states" in slot_data:
+            game_state.quest_manager.deserialize_states(slot_data["quest_states"])
+
+        # Restore quest objective states if present
+        if game_state.quest_manager and "quest_objective_states" in slot_data:
+            game_state.quest_manager.deserialize_objective_states(
+                slot_data["quest_objective_states"]
+            )
+
+        # Fire ROOM_ENTER event for the loaded position
+        # This ensures discover objectives trigger for the restored room
+        game_state.event_bus.emit(Event(
+            type=EventType.ROOM_ENTER,
+            data={
+                "room_id": game_state.current_room_id,
+                "room_name": game_state.get_current_room().get("name", ""),
+                "dungeon_id": game_state.dungeon_name,
+            }
+        ))
 
         return game_state
 

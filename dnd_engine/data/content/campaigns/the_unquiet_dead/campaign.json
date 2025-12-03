@@ -6,7 +6,7 @@
   "estimated_playtime": "2-3 hours",
   "starting_room": "arden.town_square",
   "dungeons": {
-    "the_unquiet_dead_crypt": {
+    "crypt": {
       "name": "Davos Family Crypt",
       "order": 1,
       "unlocked_by_default": true,

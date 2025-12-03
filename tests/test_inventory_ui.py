@@ -67,6 +67,10 @@ def mock_character():
     char.weapon_proficiencies = {"martial", "simple"}
     char.armor_proficiencies = {"light", "medium", "heavy"}
 
+    # Mock proficiency methods - fighter is proficient with all weapons/armor
+    char.is_proficient_with_weapon.return_value = True
+    char.is_proficient_with_armor.return_value = True
+
     # Mock inventory
     char.inventory = Mock(spec=Inventory)
     char.inventory.gold = 50
@@ -90,6 +94,10 @@ def mock_rogue():
     char.max_hp = 18
     char.weapon_proficiencies = {"simple", "rapier", "shortsword"}
     char.armor_proficiencies = {"light"}
+
+    # Mock proficiency methods - rogue NOT proficient with martial weapons or heavy armor
+    char.is_proficient_with_weapon.return_value = False
+    char.is_proficient_with_armor.return_value = False
 
     char.inventory = Mock(spec=Inventory)
     char.inventory.gold = 30
@@ -302,8 +310,7 @@ class TestProficiencyMarkers:
         """Test proficiency marker shows checkmark for proficient weapon."""
         ui = InventoryUI(party=[mock_character], data_loader=mock_data_loader)
 
-        weapon_data = mock_items_data["weapons"]["longsword"]
-        result = ui._get_proficiency_marker(mock_character, weapon_data, "weapon")
+        result = ui._get_proficiency_marker(mock_character, "longsword", "weapon")
 
         assert "✓" in result
         assert "not proficient" not in result
@@ -314,8 +321,7 @@ class TestProficiencyMarkers:
         """Test proficiency marker shows warning for non-proficient weapon."""
         ui = InventoryUI(party=[mock_rogue], data_loader=mock_data_loader)
 
-        weapon_data = mock_items_data["weapons"]["longsword"]
-        result = ui._get_proficiency_marker(mock_rogue, weapon_data, "weapon")
+        result = ui._get_proficiency_marker(mock_rogue, "longsword", "weapon")
 
         assert "not proficient" in result
 
@@ -325,8 +331,7 @@ class TestProficiencyMarkers:
         """Test proficiency marker shows checkmark for proficient armor."""
         ui = InventoryUI(party=[mock_character], data_loader=mock_data_loader)
 
-        armor_data = mock_items_data["armor"]["chain_mail"]
-        result = ui._get_proficiency_marker(mock_character, armor_data, "armor")
+        result = ui._get_proficiency_marker(mock_character, "chain_mail", "armor")
 
         assert "✓" in result
 
@@ -336,8 +341,7 @@ class TestProficiencyMarkers:
         """Test proficiency marker shows warning for non-proficient armor."""
         ui = InventoryUI(party=[mock_rogue], data_loader=mock_data_loader)
 
-        armor_data = mock_items_data["armor"]["chain_mail"]
-        result = ui._get_proficiency_marker(mock_rogue, armor_data, "armor")
+        result = ui._get_proficiency_marker(mock_rogue, "chain_mail", "armor")
 
         assert "not proficient" in result
 

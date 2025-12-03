@@ -127,6 +127,8 @@ class CLI:
         self.game_state.event_bus.subscribe(EventType.FEATURE_GRANTED, self._on_feature_granted)
         self.game_state.event_bus.subscribe(EventType.LONG_REST, self._on_long_rest)
         self.game_state.event_bus.subscribe(EventType.SKILL_CHECK, self._on_skill_check)
+        self.game_state.event_bus.subscribe(EventType.QUEST_ACTIVATED, self._on_quest_activated)
+        self.game_state.event_bus.subscribe(EventType.QUEST_COMPLETED, self._on_quest_completed)
 
     def display_banner(self) -> None:
         """Display the game banner."""
@@ -340,22 +342,43 @@ class CLI:
             "enemy_hp": enemy_hp
         }
 
-    def _record_combat_action(self, result: Any) -> None:
+    def _record_combat_action(
+        self,
+        result: Any,
+        defender_hp: int | None = None,
+        defender_max_hp: int | None = None
+    ) -> None:
         """
         Record a combat action in history for narrative context.
 
         Args:
             result: AttackResult from combat engine
+            defender_hp: Defender's HP after taking damage (for LLM context)
+            defender_max_hp: Defender's max HP (for LLM context)
         """
         import time
 
         # Determine event type and description
         if result.hit:
             event_type = "attack"
-            if result.critical_hit:
-                description = f"{result.attacker_name} CRITICALLY hit {result.defender_name} for {result.damage} damage"
-            else:
-                description = f"{result.attacker_name} hit {result.defender_name} for {result.damage} damage"
+            base_desc = (
+                f"{result.attacker_name} CRITICALLY hit {result.defender_name} "
+                f"for {result.damage} damage"
+                if result.critical_hit
+                else f"{result.attacker_name} hit {result.defender_name} "
+                f"for {result.damage} damage"
+            )
+
+            # Add HP context if available (helps LLM avoid "killed" for unconscious)
+            if defender_hp is not None:
+                if defender_hp <= 0:
+                    # Only players go unconscious; monsters/NPCs are killed at 0 HP
+                    # Check if this is a player character by looking for death saves
+                    base_desc += " (knocked unconscious, making death saves)"
+                else:
+                    base_desc += f" ({defender_hp}/{defender_max_hp} HP remaining)"
+
+            description = base_desc
         else:
             event_type = "miss"
             description = f"{result.attacker_name} missed {result.defender_name}"
@@ -843,7 +866,7 @@ class CLI:
                 return
 
             character = current.creature
-            items_data = self.game_state.data_loader.load_items()
+            items_data = self.game_state.data_loader.load_items(self.game_state.campaign_id)
 
             # Search for the item in the character's inventory
             consumables = character.inventory.get_items_by_category("consumables")
@@ -1701,6 +1724,7 @@ class CLI:
             # Build choices for questionary
             choices = []
             item_id = item_to_take.get("id", item_name)
+            item_display_name = self._get_item_display_name(item_id)
 
             for character in living_members:
                 choice_text = f"{character.name} ({character.character_class.value.title()})"
@@ -1712,7 +1736,7 @@ class CLI:
             # Get user selection
             try:
                 result = questionary.select(
-                    f"Who should receive the {item_id}?",
+                    f"Who should receive the {item_display_name}?",
                     choices=choices,
                     use_arrow_keys=True
                 ).ask()
@@ -1727,12 +1751,13 @@ class CLI:
 
         # Take the item
         item_id = item_to_take.get("id", item_name)
+        item_display_name = self._get_item_display_name(item_id)
         success = self.game_state.take_item(item_id, selected_character)
 
         if success:
-            print_status_message(f"{selected_character.name} picks up the {item_id}.", "success")
+            print_status_message(f"{selected_character.name} picks up the {item_display_name}.", "success")
         else:
-            print_error(f"Failed to pick up {item_id}.")
+            print_error(f"Failed to pick up {item_display_name}.")
 
     def handle_take_all(self) -> None:
         """
@@ -1795,6 +1820,7 @@ class CLI:
             The character to assign the item to, or None if cancelled
         """
         item_id = item.get("id", "")
+        item_display_name = self._get_item_display_name(item_id)
 
         # Get recommendations from the item assignment service
         recommendations = self.item_assignment.get_recommended_recipients(
@@ -1819,7 +1845,7 @@ class CLI:
 
         try:
             result = questionary.select(
-                f"Who should receive the {item_id}?",
+                f"Who should receive the {item_display_name}?",
                 choices=choices,
                 use_arrow_keys=True
             ).ask()
@@ -1921,10 +1947,7 @@ class CLI:
         Args:
             npc: The NPC to converse with
         """
-        from rich.console import Console
         from rich.panel import Panel
-
-        console = Console()
 
         # Start conversation
         if self.npc_chat_manager:
@@ -2216,8 +2239,12 @@ class CLI:
             if narrative:
                 self.display_narrative_panel(narrative)
 
-        # Record this action in combat history
-        self._record_combat_action(attack_result)
+        # Record this action in combat history with HP context
+        self._record_combat_action(
+            attack_result,
+            defender_hp=target.current_hp,
+            defender_max_hp=target.max_hp
+        )
 
         # 2. Display mechanics after narrative
         console.print(f"[cyan]⚔️  {str(attack_result)}[/cyan]")
@@ -2586,7 +2613,25 @@ class CLI:
 
         # Record combat action for attack spells
         if result.attack_result:
-            self._record_combat_action(result.attack_result)
+            # Find target for HP context
+            target_name = result.targets[0] if result.targets else None
+            spell_target = None
+            if target_name:
+                for enemy in self.game_state.active_enemies:
+                    if enemy.name == target_name:
+                        spell_target = enemy
+                        break
+                # Also check party members (for friendly fire/healing tracking)
+                if not spell_target:
+                    for char in self.game_state.party.characters:
+                        if char.name == target_name:
+                            spell_target = char
+                            break
+            self._record_combat_action(
+                result.attack_result,
+                defender_hp=spell_target.current_hp if spell_target else None,
+                defender_max_hp=spell_target.max_hp if spell_target else None
+            )
 
         # Display mechanics
         console.print(f"[magenta]✨ {result.caster_name} casts {result.spell_name}![/magenta]")
@@ -3016,9 +3061,14 @@ class CLI:
                     if narrative:
                         self.display_narrative_panel(narrative)
 
-            # Record combat action in history
+            # Record combat action in history with HP context
             if result.attack_result:
-                self._record_combat_action(result.attack_result)
+                target = self._find_party_member_by_name(result.target_name)
+                self._record_combat_action(
+                    result.attack_result,
+                    defender_hp=target.current_hp if target else None,
+                    defender_max_hp=target.max_hp if target else None
+                )
 
             # Display attack mechanics
             if result.attack_result:
@@ -3159,7 +3209,7 @@ class CLI:
         """
         import questionary
 
-        items_data = self.game_state.data_loader.load_items()
+        items_data = self.game_state.data_loader.load_items(self.game_state.campaign_id)
         consumables_list = []
 
         # Gather consumables from specified character or all party
@@ -3620,7 +3670,7 @@ class CLI:
                 - Player name (e.g., "gandalf"): Show specific player's inventory
                 - Category (e.g., "potions", "weapons", "armor"): Filter by item type
         """
-        items_data = self.game_state.data_loader.load_items()
+        items_data = self.game_state.data_loader.load_items(self.game_state.campaign_id)
         from dnd_engine.systems.inventory import EquipmentSlot
 
         # Handle summary view
@@ -3708,7 +3758,7 @@ class CLI:
 
     def _display_inventory_summary(self) -> None:
         """Display a summary of consumables across all party members."""
-        items_data = self.game_state.data_loader.load_items()
+        items_data = self.game_state.data_loader.load_items(self.game_state.campaign_id)
 
         # Aggregate consumables across party
         consumable_totals = {}
@@ -3754,7 +3804,7 @@ class CLI:
             return
 
         inventory = character.inventory
-        items_data = self.game_state.data_loader.load_items()
+        items_data = self.game_state.data_loader.load_items(self.game_state.campaign_id)
 
         # Find the item in inventory (by ID or name)
         target_item = None
@@ -3827,7 +3877,7 @@ class CLI:
         item_id = inventory.unequip_item(slot)
 
         if item_id:
-            items_data = self.game_state.data_loader.load_items()
+            items_data = self.game_state.data_loader.load_items(self.game_state.campaign_id)
             category = "weapons" if slot == EquipmentSlot.WEAPON else "armor"
             item_data = items_data[category].get(item_id, {})
             item_name = item_data.get("name", item_id)
@@ -3853,7 +3903,7 @@ class CLI:
         from dnd_engine.systems.item_effects import apply_item_effect
 
         inventory = owner.inventory
-        items_data = self.game_state.data_loader.load_items()
+        items_data = self.game_state.data_loader.load_items(self.game_state.campaign_id)
 
         # Use the item from owner's inventory (removes it)
         success, item_info = inventory.use_item(item_id, items_data)
@@ -3904,7 +3954,7 @@ class CLI:
             item_id: The item to use (ID or name)
             player_identifier: Optional player identifier for target (1-based index or character name)
         """
-        items_data = self.game_state.data_loader.load_items()
+        items_data = self.game_state.data_loader.load_items(self.game_state.campaign_id)
 
         # Get target character (allow unconscious but not dead)
         target = self._get_target_player(player_identifier, allow_unconscious=True)
@@ -3913,20 +3963,95 @@ class CLI:
                 print_error("No party members can be targeted!")
             return
 
-        # Search all living party members' inventories for the item
-        owner = None
-        target_item_id = None
+        # Search all living party members' inventories for matching items
+        item_id_lower = item_id.lower().replace("_", " ")
+        matches: list[tuple[Character, str, dict]] = []  # (owner, item_id, item_data)
 
+        # Collect all matches (exact ID, name, or substring)
         for char in self.game_state.party.get_living_members():
             consumables = char.inventory.get_items_by_category("consumables")
             for inv_item in consumables:
                 item_data = items_data["consumables"].get(inv_item.item_id, {})
-                if inv_item.item_id == item_id or item_data.get("name", "").lower() == item_id.lower():
-                    owner = char
-                    target_item_id = inv_item.item_id
-                    break
-            if owner:
-                break
+                inv_item_id_normalized = inv_item.item_id.lower().replace("_", " ")
+                item_name_normalized = item_data.get("name", "").lower()
+                # Exact match on ID, name, or substring match
+                if (inv_item.item_id == item_id or
+                    inv_item_id_normalized == item_id_lower or
+                    item_name_normalized == item_id_lower or
+                    item_id_lower in inv_item_id_normalized or
+                    item_id_lower in item_name_normalized):
+                    matches.append((char, inv_item.item_id, item_data))
+
+        # If no matches, try fuzzy matching
+        if not matches:
+            from difflib import SequenceMatcher
+            fuzzy_matches: list[tuple[Character, str, dict, float]] = []
+
+            for char in self.game_state.party.get_living_members():
+                consumables = char.inventory.get_items_by_category("consumables")
+                for inv_item in consumables:
+                    item_data = items_data["consumables"].get(inv_item.item_id, {})
+                    inv_item_id_normalized = inv_item.item_id.lower().replace("_", " ")
+                    item_name_normalized = item_data.get("name", "").lower()
+
+                    ratio_id = SequenceMatcher(None, item_id_lower, inv_item_id_normalized).ratio()
+                    ratio_name = SequenceMatcher(None, item_id_lower, item_name_normalized).ratio()
+                    best_ratio = max(ratio_id, ratio_name)
+
+                    if best_ratio >= 0.6:
+                        fuzzy_matches.append((char, inv_item.item_id, item_data, best_ratio))
+
+            # Use fuzzy matches if we found any
+            if fuzzy_matches:
+                matches = [(char, iid, idata) for char, iid, idata, _ in fuzzy_matches]
+
+        # Handle results
+        if not matches:
+            print_error(f"No party member has a consumable '{item_id}' in inventory.")
+            return
+
+        owner = None
+        target_item_id = None
+
+        if len(matches) == 1:
+            # Single match - use it directly
+            owner, target_item_id, _ = matches[0]
+        else:
+            # Multiple matches - prompt user to select
+            import questionary
+
+            # Deduplicate by item_id (same item on different characters shows once)
+            unique_items: dict[str, tuple[Character, dict]] = {}
+            for char, iid, idata in matches:
+                if iid not in unique_items:
+                    unique_items[iid] = (char, idata)
+
+            if len(unique_items) == 1:
+                # Same item type on multiple characters - just use first
+                owner, target_item_id, _ = matches[0]
+            else:
+                # Different item types - let user choose
+                choices = []
+                for iid, (char, idata) in unique_items.items():
+                    item_name = idata.get("name", iid)
+                    choices.append(questionary.Choice(
+                        title=f"{item_name} - {char.name}",
+                        value=(char, iid)
+                    ))
+                choices.append(questionary.Choice(title="Cancel", value=None))
+
+                try:
+                    result = questionary.select(
+                        f"Multiple items match '{item_id}':",
+                        choices=choices,
+                        use_arrow_keys=True
+                    ).ask()
+
+                    if result is None:
+                        return
+                    owner, target_item_id = result
+                except (EOFError, KeyboardInterrupt):
+                    return
 
         if not owner or not target_item_id:
             print_error(f"No party member has a consumable '{item_id}' in inventory.")
@@ -4183,12 +4308,12 @@ class CLI:
                     )
                     has_depleted_slots = False
                     if character and character.has_spell_slots():
-                        slots = character.spell_slots
-                        has_depleted_slots = any(
-                            slots.get(level, 0) < character.get_max_spell_slots(level)
-                            for level in range(1, 10)
-                            if character.get_max_spell_slots(level) > 0
-                        )
+                        for level in range(1, 10):
+                            pool_name = f"spell_slots_level_{level}"
+                            pool = character.resource_pools.get(pool_name)
+                            if pool and pool.maximum > 0 and pool.current < pool.maximum:
+                                has_depleted_slots = True
+                                break
 
                     if has_depleted_slots and result.rest_type == "short":
                         print_message("  ✓ HP at full (spell slots require long rest)")
@@ -5147,6 +5272,30 @@ class CLI:
             elif not data["success"] and data.get("failure_text"):
                 print_status_message(f"   → {data['failure_text']}", "info")
 
+    def _on_quest_activated(self, event: Event) -> None:
+        """Handle quest activation event."""
+        quest_name = event.data.get("quest_name", "Unknown Quest")
+        print_status_message(f"📜 Quest Started: {quest_name}", "success")
+
+    def _on_quest_completed(self, event: Event) -> None:
+        """Handle quest completion event."""
+        quest_name = event.data.get("quest_name", "Unknown Quest")
+        reward_gold = event.data.get("reward_gold", 0)
+        turn_in_npc_id = event.data.get("turn_in_npc")
+
+        print_status_message(f"🏆 Quest Complete: {quest_name}", "success")
+        if reward_gold > 0 and turn_in_npc_id:
+            # Look up NPC display name
+            npc_name = turn_in_npc_id
+            if self.game_state and self.game_state.npc_manager:
+                npc = self.game_state.npc_manager.get_npc(turn_in_npc_id)
+                if npc:
+                    npc_name = npc.name
+            print_status_message(
+                f"   Return to {npc_name} to claim your reward ({reward_gold} gold)",
+                "info",
+            )
+
     def _auto_save(self, trigger: str) -> None:
         """
         Perform an auto-save using CampaignManager.
@@ -5174,3 +5323,22 @@ class CLI:
         except Exception:
             # Silently fail auto-save to avoid disrupting gameplay
             pass
+
+    def _get_item_display_name(self, item_id: str) -> str:
+        """
+        Get the display name for an item, falling back to item_id if not found.
+
+        Args:
+            item_id: The item's ID
+
+        Returns:
+            The item's display name or the item_id if not found
+        """
+        if not self.game_state or not self.game_state.data_loader:
+            return item_id
+
+        items_data = self.game_state.data_loader.load_items(self.game_state.campaign_id)
+        for category in items_data.values():
+            if item_id in category:
+                return category[item_id].get("name", item_id)
+        return item_id

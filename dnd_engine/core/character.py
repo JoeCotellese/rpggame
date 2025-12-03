@@ -1204,7 +1204,7 @@ class Character(Creature):
         Take a short rest (1 hour).
 
         Effects:
-        - Recover resources with recovery_type="short_rest"
+        - Recover resources with recovery_type="short_rest" (living characters only)
         - Can spend Hit Dice to heal (not implemented in MVP)
 
         Returns:
@@ -1214,7 +1214,11 @@ class Character(Creature):
             - "resources_recovered": list of recovered resource names
             - "hp_recovered": 0 (Hit Dice healing for future)
         """
-        resources_recovered = self.recover_resources("short_rest")
+        # Dead characters cannot benefit from rest - they need resurrection
+        if self.is_dead:
+            resources_recovered = []
+        else:
+            resources_recovered = self.recover_resources("short_rest")
 
         return {
             "character": self.name,
@@ -1228,7 +1232,7 @@ class Character(Creature):
         Take a long rest (8 hours).
 
         Effects:
-        - Recover all HP
+        - Recover all HP (living characters only)
         - Recover all resources with recovery_type="long_rest" or "short_rest"
         - Recover half of spent Hit Dice (not implemented in MVP)
 
@@ -1239,13 +1243,25 @@ class Character(Creature):
             - "hp_recovered": amount of HP recovered
             - "resources_recovered": list of recovered resource names
             - "conditions_removed": empty list (for future implementation)
+            - "can_prepare_spells": whether character can prepare spells
         """
-        hp_recovered = self.recover_hp()
-        resources_recovered = self.recover_resources("long_rest")
+        # Dead characters cannot benefit from rest - they need resurrection
+        character_is_dead = self.is_dead
+
+        if character_is_dead:
+            hp_recovered = 0
+            resources_recovered = []
+        else:
+            hp_recovered = self.recover_hp()
+            resources_recovered = self.recover_resources("long_rest")
 
         # Check if this character can prepare spells (Wizard, Cleric)
+        # Dead characters cannot prepare spells
         prepared_caster_classes = {CharacterClass.WIZARD, CharacterClass.CLERIC}
-        can_prepare = self.character_class in prepared_caster_classes
+        can_prepare = (
+            self.character_class in prepared_caster_classes
+            and not character_is_dead
+        )
 
         return {
             "character": self.name,

@@ -1,0 +1,38 @@
+{
+  "id": "poisoned_laboratory",
+  "name": "The Poisoned Laboratory",
+  "description": "A standalone adventure in an abandoned alchemist's workshop filled with dangerous fumes, volatile chemicals, and failed experiments.",
+  "level_range": "1",
+  "estimated_playtime": "1-2 hours",
+  "starting_room": "town.square",
+  "dungeons": {
+    "town": {
+      "name": "Thornwood Village",
+      "order": 1,
+      "unlocked_by_default": true,
+      "completion_criteria": null,
+      "unlocks": [],
+      "final_dungeon": false
+    },
+    "cellar": {
+      "name": "Tavern Cellar",
+      "order": 2,
+      "unlocked_by_default": true,
+      "completion_criteria": {
+        "room_cleared": "cellar.storage"
+      },
+      "unlocks": [],
+      "final_dungeon": false
+    },
+    "laboratory": {
+      "name": "The Poisoned Laboratory",
+      "order": 3,
+      "unlocked_by_default": false,
+      "completion_criteria": {
+        "boss_defeated": true
+      },
+      "unlocks": [],
+      "final_dungeon": true
+    }
+  }
+}

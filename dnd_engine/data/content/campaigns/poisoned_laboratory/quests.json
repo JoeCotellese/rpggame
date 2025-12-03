@@ -1,0 +1,229 @@
+{
+  "campaign_id": "poisoned_laboratory",
+  "campaign_name": "The Poisoned Laboratory",
+  "campaign_description": "A standalone adventure to stop a mad alchemist's dangerous experiments.",
+  "items": {
+    "alchemist_warning": {
+      "name": "Alchemist's Warning",
+      "type": "consumable",
+      "rarity": "common",
+      "effect_type": "information",
+      "quest_item": true,
+      "description": "A crumpled piece of parchment, partially chewed by rats. The handwriting is hasty and frantic: 'If you're reading this, stay away from the laboratory on the hill! My experiments have gone terribly wrong. The fumes... they're changing things. Even the rats have grown to monstrous sizes. I've barricaded myself inside but I fear it's too late. Tell Master Aldric - he'll know what to do. -A'",
+      "value": 0
+    },
+    "alchemist_research_notes": {
+      "name": "Archibald's Research Notes",
+      "type": "consumable",
+      "rarity": "common",
+      "effect_type": "information",
+      "quest_item": true,
+      "description": "A thick leather-bound journal filled with cramped, increasingly erratic handwriting. The early pages contain legitimate alchemical formulae, but as you progress, the notes become more disturbing. Archibald writes of 'unlocking the secrets of life and death' and 'bridging the gap between the living and the dead.' Diagrams show experiments combining alchemical compounds with necromantic symbols. The final pages contain a formula for a 'volatile compound' that he claims can 'animate the deceased.'",
+      "value": 0
+    },
+    "volatile_compound": {
+      "name": "Volatile Compound",
+      "type": "consumable",
+      "rarity": "uncommon",
+      "effect_type": "special",
+      "quest_item": true,
+      "description": "A bubbling vial of sickly green liquid that seems to glow faintly in the dark. The compound is warm to the touch and occasionally releases small puffs of vapor. According to Archibald's notes, this experimental mixture was intended to animate dead tissue. Handle with extreme care.",
+      "value": 0
+    },
+    "necromantic_evidence": {
+      "name": "Necromantic Ritual Components",
+      "type": "consumable",
+      "rarity": "uncommon",
+      "effect_type": "information",
+      "quest_item": true,
+      "description": "A collection of disturbing items found in the specimen chamber: a ritual dagger inscribed with death runes, vials of preserved blood, fragments of bone arranged in arcane patterns, and a tattered page from a forbidden necromantic tome. Together, these items prove beyond doubt that Archibald was practicing forbidden death magic.",
+      "value": 0
+    },
+    "preserved_specimen": {
+      "name": "Preserved Alchemical Specimen",
+      "type": "consumable",
+      "rarity": "rare",
+      "effect_type": "special",
+      "quest_item": true,
+      "description": "A sealed glass jar containing a small creature preserved in murky alchemical fluid. The creature appears to be a strange hybrid - part rat, part something else entirely. It floats motionless in the liquid, yet you could swear its tiny eyes follow you. The jar is labeled 'Specimen 17 - Partial Success' in Archibald's handwriting.",
+      "value": 0
+    }
+  },
+  "quests": [
+    {
+      "id": "clear_cellar",
+      "name": "Rat Problem",
+      "description": "Maggie, the tavern keeper at The Rusty Cauldron, has a pest problem. Giant rats have infested her cellar, and she needs someone capable to clear them out before they ruin all her supplies.",
+      "objectives": [
+        {
+          "id": "clear_rats",
+          "type": "clear",
+          "target": "cellar.storage",
+          "description": "Clear out the giant rats in the cellar storage room"
+        }
+      ],
+      "unlocked_by_default": true,
+      "unlock_requirements": null,
+      "target_dungeon": "cellar",
+      "unlocks_quests": ["read_note"],
+      "unlocks_dungeons": ["laboratory"],
+      "quest_giver": "tavern_keeper",
+      "turn_in_npc": "tavern_keeper",
+      "reward_gold": 15,
+      "npc_hints": {
+        "available": {
+          "tavern_keeper": "I've got a bit of a problem, if you're looking for work. There's rats in my cellar - and I don't mean the normal kind. These things are as big as dogs! I can hear them scratching around down there all night. Clear 'em out and I'll make it worth your while."
+        },
+        "active": "Those rats still giving you trouble? The cellar's through the trapdoor in the corner. Mind the stairs, they're a bit rickety.",
+        "completed": "You did it! I could hear the commotion from up here. Thank the gods those vermin are gone. Here's your coin, well earned!"
+      }
+    },
+    {
+      "id": "read_note",
+      "name": "The Alchemist's Warning",
+      "description": "You found a mysterious note in the cellar, apparently written by the alchemist who lives in the laboratory on the hill. The warning speaks of dangerous experiments gone wrong.",
+      "objectives": [
+        {
+          "id": "read_warning",
+          "type": "use",
+          "target": "alchemist_warning",
+          "description": "Read the alchemist's warning note"
+        }
+      ],
+      "unlocked_by_default": false,
+      "unlock_requirements": {
+        "quest_completed": "clear_cellar"
+      },
+      "target_dungeon": null,
+      "unlocks_quests": ["stop_the_alchemist"],
+      "unlocks_dungeons": [],
+      "quest_giver": null,
+      "turn_in_npc": "master_aldric",
+      "reward_gold": 5,
+      "npc_hints": {
+        "available": "You found a note in the cellar? Let me see... this is troubling. Someone should read this carefully.",
+        "active": "Have you read that note yet? It might explain where those giant rats came from.",
+        "completed": "Archibald wrote this? I trained that boy... I never thought he'd go this far. His experiments have clearly spiraled out of control. Someone must stop him!"
+      }
+    },
+    {
+      "id": "stop_the_alchemist",
+      "name": "The Mad Alchemist",
+      "description": "Master Aldric, the village apothecary, is gravely concerned. His former apprentice, Archibald, has gone mad and taken over an abandoned laboratory outside town. Strange fumes and explosions have been seen at all hours. Someone must stop him before his experiments harm the village.",
+      "objectives": [
+        {
+          "id": "defeat_archibald",
+          "type": "kill",
+          "target": "goblin_boss",
+          "description": "Defeat Archibald the Mad Alchemist"
+        },
+        {
+          "id": "find_research",
+          "type": "fetch",
+          "target": "alchemist_research_notes",
+          "description": "Recover Archibald's research notes"
+        }
+      ],
+      "unlocked_by_default": false,
+      "unlock_requirements": {
+        "quest_completed": "read_note"
+      },
+      "target_dungeon": "poisoned_laboratory",
+      "unlocks_quests": ["analyze_research"],
+      "unlocks_dungeons": [],
+      "quest_giver": "master_aldric",
+      "turn_in_npc": "master_aldric",
+      "reward_gold": 75,
+      "npc_hints": {
+        "available": {
+          "apothecary": "My former apprentice Archibald... he was always brilliant but unstable. Now he's taken over the old Thornwood Laboratory outside town. The fumes and explosions - it's dangerous! Someone must stop him before he poisons the whole village.",
+          "mayor": "That laboratory on the hill has been belching toxic smoke for days. Master Aldric says his old apprentice has gone mad. We need adventurers brave enough to put a stop to this menace."
+        },
+        "active": "Be careful in that laboratory! Archibald's experiments are deadly. Find his research notes if you can - I need to understand what he was trying to do.",
+        "completed": "You stopped Archibald? Thank the gods! Let me see those research notes... this is troubling indeed."
+      }
+    },
+    {
+      "id": "analyze_research",
+      "name": "Dangerous Knowledge",
+      "description": "Master Aldric has examined the research notes and discovered that Archibald was working on a formula to synthesize a powerful toxin. A sample of the volatile compound must be delivered to the village healer for analysis to ensure no one was poisoned.",
+      "objectives": [
+        {
+          "id": "deliver_sample",
+          "type": "deliver",
+          "target": "healer_gwendolyn",
+          "deliver_item": "volatile_compound",
+          "description": "Deliver the volatile compound sample to Healer Gwendolyn"
+        }
+      ],
+      "unlocked_by_default": false,
+      "unlock_requirements": {
+        "quest_completed": "stop_the_alchemist"
+      },
+      "target_dungeon": null,
+      "unlocks_quests": ["specimen_secrets"],
+      "unlocks_dungeons": [],
+      "quest_giver": "master_aldric",
+      "turn_in_npc": "healer_gwendolyn",
+      "reward_gold": 25,
+      "npc_hints": {
+        "available": "This compound in Archibald's notes... it's dangerous. Take this sample to Healer Gwendolyn. She'll know if anyone in town has been exposed.",
+        "active": "Have you delivered the sample to Gwendolyn yet? Time is of the essence!",
+        "completed": "Good work getting that sample analyzed. At least we know the village is safe."
+      }
+    },
+    {
+      "id": "specimen_secrets",
+      "name": "The Specimen Chamber",
+      "description": "Healer Gwendolyn's analysis revealed traces of necromantic energy in the compound. She believes Archibald may have been experimenting on the dead. Return to the laboratory and investigate the locked specimen chamber for evidence of his dark experiments.",
+      "objectives": [
+        {
+          "id": "discover_chamber",
+          "type": "discover",
+          "target": "poisoned_laboratory.specimen_chamber",
+          "description": "Investigate the specimen preservation chamber"
+        },
+        {
+          "id": "defeat_skeleton",
+          "type": "kill",
+          "target": "skeleton",
+          "description": "Defeat the animated specimen"
+        },
+        {
+          "id": "find_evidence",
+          "type": "fetch",
+          "target": "necromantic_evidence",
+          "description": "Find evidence of Archibald's dark experiments"
+        }
+      ],
+      "unlocked_by_default": false,
+      "unlock_requirements": {
+        "quest_completed": "analyze_research"
+      },
+      "target_dungeon": "poisoned_laboratory",
+      "unlocks_quests": [],
+      "unlocks_dungeons": [],
+      "final_quest": true,
+      "quest_giver": "healer_gwendolyn",
+      "turn_in_npc": "master_aldric",
+      "reward_gold": 100,
+      "bonus_rewards": [
+        {
+          "condition": "return_item",
+          "item_id": "preserved_specimen",
+          "turn_in_npc": "healer_gwendolyn",
+          "reward_item": "elixir_of_health",
+          "description": "Return the preserved specimen to Healer Gwendolyn for study"
+        }
+      ],
+      "npc_hints": {
+        "available": {
+          "healer": "The compound has necromantic traces! Archibald was experimenting with death itself. The laboratory has a locked specimen chamber - investigate it for evidence. Be careful, his experiments may still be active.",
+          "apothecary": "Gwendolyn told me about the necromantic traces. I never taught Archibald such dark arts! Please, find evidence of what he was really doing in that laboratory."
+        },
+        "active": "The specimen chamber holds the key. Watch out for any animated experiments - Archibald's magic may still linger.",
+        "completed": "This evidence is damning. Archibald was indeed dabbling in necromancy. At least his madness has been stopped. Thank you, brave adventurer."
+      }
+    }
+  ]
+}

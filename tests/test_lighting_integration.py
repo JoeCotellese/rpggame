@@ -72,7 +72,7 @@ class TestLightSpellIntegration:
     def test_light_spell_enables_perception_in_dark_room(self, wizard_with_light_spell):
         """Test that casting Light in a dark room allows successful Perception checks."""
         party = Party([wizard_with_light_spell])
-        game_state = GameState(party, "the_unquiet_dead_crypt")
+        game_state = GameState(party, "crypt", campaign_id="the_unquiet_dead")
 
         # Move to dark room with hidden features
         game_state.current_room_id = "crypt.hall_of_the_dead"
@@ -100,7 +100,7 @@ class TestLightSpellIntegration:
     def test_light_spell_expires_after_duration(self, wizard_with_light_spell):
         """Test that Light spell effect expires after 1 hour."""
         party = Party([wizard_with_light_spell])
-        game_state = GameState(party, "the_unquiet_dead_crypt")
+        game_state = GameState(party, "crypt", campaign_id="the_unquiet_dead")
         game_state.current_room_id = "crypt.hall_of_the_dead"
 
         # Cast Light
@@ -131,7 +131,7 @@ class TestDarkvisionIntegration:
     def test_dwarf_can_see_in_dark_room(self, dwarf_cleric):
         """Test that dwarf with darkvision treats darkness as dim light."""
         party = Party([dwarf_cleric])
-        game_state = GameState(party, "the_unquiet_dead_crypt")
+        game_state = GameState(party, "crypt", campaign_id="the_unquiet_dead")
 
         # Move to dark room
         game_state.current_room_id = "crypt.hall_of_the_dead"
@@ -145,7 +145,7 @@ class TestDarkvisionIntegration:
     def test_mixed_party_lighting_perception(self, wizard_with_light_spell, dwarf_cleric):
         """Test that mixed party has different effective lighting levels."""
         party = Party([wizard_with_light_spell, dwarf_cleric])
-        game_state = GameState(party, "the_unquiet_dead_crypt")
+        game_state = GameState(party, "crypt", campaign_id="the_unquiet_dead")
 
         # Move to dark room
         game_state.current_room_id = "crypt.hall_of_the_dead"
@@ -175,7 +175,7 @@ class TestPerceptionIntegration:
         event_bus = EventBus()
         event_bus.subscribe(EventType.SKILL_CHECK, capture_skill_check)
 
-        game_state = GameState(party, "the_unquiet_dead_crypt", event_bus=event_bus)
+        game_state = GameState(party, "crypt", campaign_id="the_unquiet_dead", event_bus=event_bus)
 
         # Move to dark hall with passive Perception check (DC 16)
         game_state.current_room_id = "crypt.hall_of_the_dead"
@@ -213,7 +213,7 @@ class TestPerceptionIntegration:
         event_bus = EventBus()
         event_bus.subscribe(EventType.SKILL_CHECK, capture_skill_check)
 
-        game_state = GameState(party, "the_unquiet_dead_crypt", event_bus=event_bus)
+        game_state = GameState(party, "crypt", campaign_id="the_unquiet_dead", event_bus=event_bus)
         game_state.current_room_id = "crypt.antechamber"
 
         # Add an examinable door with Perception check
@@ -235,7 +235,7 @@ class TestPerceptionIntegration:
     def test_examine_exit_lighting_penalty(self, wizard_with_light_spell):
         """Test that examine_exit applies lighting penalties to Perception."""
         party = Party([wizard_with_light_spell])
-        game_state = GameState(party, "the_unquiet_dead_crypt")
+        game_state = GameState(party, "crypt", campaign_id="the_unquiet_dead")
 
         # Move to antechamber with examine checks on exits
         game_state.current_room_id = "crypt.antechamber"
@@ -264,7 +264,7 @@ class TestCompleteWorkflow:
     def test_dungeon_exploration_with_lighting(self, wizard_with_light_spell, dwarf_cleric):
         """Test full workflow: enter dark crypt, cast Light, make Perception checks."""
         party = Party([wizard_with_light_spell, dwarf_cleric])
-        game_state = GameState(party, "the_unquiet_dead_crypt")
+        game_state = GameState(party, "crypt", campaign_id="the_unquiet_dead")
 
         # Start at graveyard (bright light)
         assert game_state.current_room_id == "crypt.graveyard_entrance"

@@ -61,7 +61,11 @@ def archer():
 def game_state(archer):
     """Create a game state for testing with the archer in the party"""
     party = Party([archer])
-    return GameState(party=party, dungeon_name="the_unquiet_dead_crypt")
+    return GameState(
+        party=party,
+        dungeon_name="crypt",
+        campaign_id="the_unquiet_dead",
+    )
 
 
 @pytest.fixture
@@ -300,7 +304,7 @@ class TestAmmunitionConsumptionInCombat:
 
         # Create game_state with fighter
         party = Party([fighter])
-        game_state = GameState(party=party, dungeon_name="the_unquiet_dead_crypt")
+        game_state = GameState(party=party, dungeon_name="crypt", campaign_id="the_unquiet_dead")
 
         # Execute melee attack
         result = game_state.execute_player_attack(fighter, enemy)
@@ -337,7 +341,7 @@ class TestAmmunitionWithDifferentWeapons:
         archer.inventory.add_item("arrows", "ammunition", quantity=20)
 
         party = Party([archer])
-        game_state = GameState(party=party, dungeon_name="the_unquiet_dead_crypt")
+        game_state = GameState(party=party, dungeon_name="crypt", campaign_id="the_unquiet_dead")
 
         result = game_state.execute_player_attack(archer, enemy)
 
@@ -368,7 +372,7 @@ class TestAmmunitionWithDifferentWeapons:
         crossbowman.inventory.add_item("bolts", "ammunition", quantity=20)
 
         party = Party([crossbowman])
-        game_state = GameState(party=party, dungeon_name="the_unquiet_dead_crypt")
+        game_state = GameState(party=party, dungeon_name="crypt", campaign_id="the_unquiet_dead")
 
         result = game_state.execute_player_attack(crossbowman, enemy)
 
@@ -400,7 +404,7 @@ class TestAmmunitionWithDifferentWeapons:
         archer.inventory.add_item("bolts", "ammunition", quantity=20)
 
         party = Party([archer])
-        game_state = GameState(party=party, dungeon_name="the_unquiet_dead_crypt")
+        game_state = GameState(party=party, dungeon_name="crypt", campaign_id="the_unquiet_dead")
 
         result = game_state.execute_player_attack(archer, enemy)
 

@@ -134,8 +134,8 @@ def game_state_with_locked_doors(mock_dungeon_with_locked_door, test_party, monk
     event_bus = EventBus()
     data_loader = DataLoader()
 
-    # Mock the dungeon loading
-    monkeypatch.setattr(data_loader, 'load_dungeon', lambda name: mock_dungeon_with_locked_door)
+    # Mock the dungeon loading (accepts optional campaign_id parameter)
+    monkeypatch.setattr(data_loader, 'load_dungeon', lambda name, campaign_id=None: mock_dungeon_with_locked_door)
 
     game_state = GameState(
         party=test_party,

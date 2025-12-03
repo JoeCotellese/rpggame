@@ -26,14 +26,19 @@ NPC_TOOLS = [
             "name": "activate_quest",
             "description": (
                 "Activate a quest when the player shows clear commitment to helping. "
-                "Only call this when they explicitly agree, not just when asking questions."
+                "Only call this when they explicitly agree, not just when asking questions. "
+                "IMPORTANT: You MUST use the exact quest ID returned by get_available_quests - "
+                "do NOT invent or modify quest IDs."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "quest_id": {
                         "type": "string",
-                        "description": "The quest identifier",
+                        "description": (
+                            "The EXACT quest ID from get_available_quests response. "
+                            "Must match exactly (e.g., 'investigate_crypt', not 'investigate_family_crypt')."
+                        ),
                     }
                 },
                 "required": ["quest_id"],
@@ -249,20 +254,97 @@ class NPCChatManager:
         if not self.provider:
             return npc.get_greeting()
 
-        # Build system prompt
-        system_prompt = npc.build_system_prompt()
+        # Gather context about quest items the player is visibly carrying
+        game_context = self._gather_visible_quest_context(npc)
+
+        # Build system prompt with context
+        system_prompt = npc.build_system_prompt(game_context)
         self._current_conversation.messages.append(
             {"role": "system", "content": system_prompt}
         )
 
-        # Add initial user message to trigger greeting
+        # Build initial message describing what the NPC sees
+        initial_message = self._build_initial_approach_message(game_context)
         self._current_conversation.messages.append(
-            {"role": "user", "content": "*enters and approaches*"}
+            {"role": "user", "content": initial_message}
         )
 
         # Get initial greeting from LLM
         response = self._run_sync(self._get_npc_response(), timeout=timeout)
         return response
+
+    def _gather_visible_quest_context(self, npc: NPC) -> dict[str, Any]:
+        """
+        Gather context about quest items the party is carrying that this NPC
+        would recognize or be interested in.
+
+        Args:
+            npc: The NPC to check relevance for
+
+        Returns:
+            Dictionary with visible_quest_items list
+        """
+        visible_items: list[dict[str, Any]] = []
+
+        if not self.game_state.quest_manager:
+            return {"visible_quest_items": visible_items}
+
+        # Get quest items relevant to this NPC
+        relevant_items = self.game_state.quest_manager.get_relevant_quest_items(npc.id)
+
+        # Check which of these items the party actually has
+        for item_info in relevant_items:
+            item_id = item_info["item_id"]
+            for char in self.game_state.party.characters:
+                if char.inventory.has_item(item_id):
+                    # Get item description from content registry
+                    item_data = self._get_item_data(item_id)
+                    visible_items.append({
+                        "item_id": item_id,
+                        "item_name": item_data.get("name", item_id) if item_data else item_id,
+                        "item_description": item_data.get("description", "") if item_data else "",
+                        "quest_state": item_info["quest_state"],
+                        "relevance_type": item_info["relevance_type"],
+                    })
+                    break  # Only count once per item type
+
+        return {"visible_quest_items": visible_items}
+
+    def _get_item_data(self, item_id: str) -> dict[str, Any] | None:
+        """Get item data from game state's content registry."""
+        if hasattr(self.game_state, "content_registry") and self.game_state.content_registry:
+            return self.game_state.content_registry.get_item(item_id)
+        return None
+
+    def _build_initial_approach_message(
+        self, game_context: dict[str, Any]
+    ) -> str:
+        """
+        Build the initial approach message describing what the NPC sees.
+
+        Args:
+            game_context: Context with visible_quest_items
+
+        Returns:
+            String describing the player's approach
+        """
+        visible_items = game_context.get("visible_quest_items", [])
+
+        if not visible_items:
+            return "*enters and approaches*"
+
+        # Describe what the NPC can see
+        item_descriptions = []
+        for item in visible_items:
+            name = item.get("item_name", item["item_id"])
+            item_descriptions.append(name.lower())
+
+        if len(item_descriptions) == 1:
+            items_text = item_descriptions[0]
+        else:
+            items_text = ", ".join(item_descriptions[:-1]) + f" and {item_descriptions[-1]}"
+
+        return f"*enters and approaches, visibly carrying a {items_text}*"
 
     def send_message_sync(
         self, player_message: str, timeout: float = 30.0
@@ -419,6 +501,8 @@ class NPCChatManager:
             print_status_message(f"💰 Party gold: {gold}", "info")
 
         # Note: get_available_quests has no user feedback - NPC describes quests naturally
+        # Note: turn_in_quest feedback is handled in _handle_turn_in_quest directly
+        # Note: get_pending_rewards has no user feedback - NPC describes rewards naturally
 
     # === Tool Handlers ===
 
@@ -430,6 +514,15 @@ class NPCChatManager:
         quest = self.game_state.quest_manager.quests.get(quest_id)
         if not quest:
             return {"success": False, "error": f"Unknown quest: {quest_id}"}
+
+        # If quest is locked and this NPC is the quest_giver, unlock it first
+        qm = self.game_state.quest_manager
+        state = qm.get_quest_state(quest_id)
+        if state.value == "locked" and self._current_conversation:
+            npc_id = self._current_conversation.npc.id
+            if quest.quest_giver == npc_id:
+                from dnd_engine.core.quest import QuestState
+                qm._quest_states[quest_id] = QuestState.AVAILABLE
 
         success = self.game_state.quest_manager.activate_quest(quest_id)
         if success:
@@ -454,13 +547,18 @@ class NPCChatManager:
             quest = self.game_state.quest_manager.quests.get(quest_id)
             if quest:
                 state = self.game_state.quest_manager.get_quest_state(quest_id)
-                if state.value in ["available", "active"]:
+                # Include locked quests if this NPC is the quest_giver (they can offer it)
+                is_quest_giver = quest.quest_giver == npc.id
+                if state.value in ["available", "active"] or (
+                    state.value == "locked" and is_quest_giver
+                ):
                     # Get NPC-specific hint from quest data
                     hint = self._get_quest_hint(quest_id, npc.id)
                     available.append(
                         {
                             "id": quest.id,
                             "state": state.value,
+                            "can_offer": is_quest_giver and state.value in ["locked", "available"],
                             # 'hint' is how the NPC would describe this situation
                             "hint": hint,
                         }
@@ -473,19 +571,23 @@ class NPCChatManager:
         # Try to get hint from quest data
         if self.game_state.quest_manager:
             quest = self.game_state.quest_manager.quests.get(quest_id)
-            if quest and hasattr(quest, "npc_hints"):
-                # Check if npc_hints exists in completion_criteria (where we store it)
-                hints = quest.completion_criteria.get("npc_hints", {})
+            if quest and quest.npc_hints:
                 state = self.game_state.quest_manager.get_quest_state(quest_id)
-                state_hints = hints.get(state.value, {})
-                if npc_id in state_hints:
-                    return state_hints[npc_id]
-                # Try by NPC role
-                npc = self._current_conversation.npc if self._current_conversation else None
-                if npc:
-                    role = npc.id.split("_")[-1]  # e.g., "innkeeper" from "marta_innkeeper"
-                    if role in state_hints:
-                        return state_hints[role]
+                state_hints = quest.npc_hints.get(state.value, {})
+
+                # state_hints can be a string (same for all NPCs) or dict (NPC-specific)
+                if isinstance(state_hints, str):
+                    return state_hints
+
+                if isinstance(state_hints, dict):
+                    if npc_id in state_hints:
+                        return state_hints[npc_id]
+                    # Try by NPC role
+                    npc = self._current_conversation.npc if self._current_conversation else None
+                    if npc:
+                        role = npc.id.split("_")[-1]  # e.g., "innkeeper" from "marta_innkeeper"
+                        if role in state_hints:
+                            return state_hints[role]
 
         return ""
 
@@ -547,7 +649,7 @@ class NPCChatManager:
         }
 
     def _handle_receive_item_from_player(self, item_id: str) -> dict[str, Any]:
-        """Accept an item from the player, checking for bonus rewards."""
+        """Accept an item from the player, checking for deliver objectives and bonus rewards."""
         if not self._current_conversation:
             return {"success": False, "error": "No active conversation"}
 
@@ -565,6 +667,22 @@ class NPCChatManager:
             return {
                 "success": False,
                 "error": f"Party does not have item: {item_id}",
+            }
+
+        # Check if this completes a deliver objective
+        deliver_result = quest_manager.complete_deliver_objective(npc.id, item_id)
+        if deliver_result.get("success"):
+            # Remove item from player inventory
+            item_holder.inventory.remove_item(item_id)
+            print_status_message(
+                f"🎁 Gave {item_id} to {npc.display_name}", "success"
+            )
+            return {
+                "success": True,
+                "item_received": item_id,
+                "deliver_objective_completed": True,
+                "quest_id": deliver_result.get("quest_id"),
+                "quest_name": deliver_result.get("quest_name"),
             }
 
         # Check if this triggers a bonus reward
@@ -594,6 +712,18 @@ class NPCChatManager:
                 "reward_item": bonus.reward_item,
                 "reward_recipient": reward_recipient.name,
                 "npc_dialogue_hint": bonus.description,
+            }
+
+        # Block transfer of quest items that don't have a matching objective
+        inv_item = item_holder.inventory.items.get(item_id)
+        if inv_item and inv_item.quest_item:
+            return {
+                "success": False,
+                "error": (
+                    f"Cannot give away {item_id} - it is a quest item needed "
+                    "for progression. Quest items can only be given to NPCs "
+                    "when a quest objective specifically requires it."
+                ),
             }
 
         # NPC accepts the item but no special reward

@@ -45,6 +45,7 @@ class TestCrossDungeonNavigation:
         game_state = GameState(
             party=test_party,
             dungeon_name="town_of_arden",
+            campaign_id="the_unquiet_dead",
             event_bus=event_bus,
             data_loader=data_loader
         )
@@ -62,7 +63,7 @@ class TestCrossDungeonNavigation:
         success = game_state.move("south", check_for_enemies=False)
         assert success is True
         assert game_state.current_room_id == "crypt.graveyard_entrance"
-        assert game_state.dungeon_name == "the_unquiet_dead_crypt"
+        assert game_state.dungeon_name == "crypt"
 
     def test_start_in_crypt_navigate_to_town(self, test_party):
         """Test starting in crypt and navigating back to town."""
@@ -72,14 +73,15 @@ class TestCrossDungeonNavigation:
         # Start in crypt
         game_state = GameState(
             party=test_party,
-            dungeon_name="the_unquiet_dead_crypt",
+            dungeon_name="crypt",
+            campaign_id="the_unquiet_dead",
             event_bus=event_bus,
             data_loader=data_loader
         )
 
         # Should start in graveyard entrance
         assert game_state.current_room_id == "crypt.graveyard_entrance"
-        assert game_state.dungeon_name == "the_unquiet_dead_crypt"
+        assert game_state.dungeon_name == "crypt"
 
         # Move north to town (cross-dungeon)
         success = game_state.move("north", check_for_enemies=False)
@@ -96,6 +98,7 @@ class TestCrossDungeonNavigation:
         game_state = GameState(
             party=test_party,
             dungeon_name="town_of_arden",
+            campaign_id="the_unquiet_dead",
             event_bus=event_bus,
             data_loader=data_loader
         )
@@ -113,7 +116,7 @@ class TestCrossDungeonNavigation:
         # Go back to crypt again (south)
         game_state.move("south", check_for_enemies=False)
         assert game_state.current_room_id == "crypt.graveyard_entrance"
-        assert game_state.dungeon_name == "the_unquiet_dead_crypt"
+        assert game_state.dungeon_name == "crypt"
 
     def test_dungeon_state_preserved_across_transitions(self, test_party):
         """Test that dungeon state is preserved when moving between dungeons."""
@@ -123,7 +126,8 @@ class TestCrossDungeonNavigation:
         # Start in crypt
         game_state = GameState(
             party=test_party,
-            dungeon_name="the_unquiet_dead_crypt",
+            dungeon_name="crypt",
+            campaign_id="the_unquiet_dead",
             event_bus=event_bus,
             data_loader=data_loader
         )
@@ -152,6 +156,7 @@ class TestCrossDungeonNavigation:
         game_state = GameState(
             party=test_party,
             dungeon_name="town_of_arden",
+            campaign_id="the_unquiet_dead",
             event_bus=event_bus,
             data_loader=data_loader
         )
@@ -165,7 +170,7 @@ class TestCrossDungeonNavigation:
         assert room["id"] == "crypt.graveyard_entrance"
         assert room["name"] == "Overgrown Graveyard"
         assert room["location_type"] == "dungeon"
-        assert room["parent"] == "the_unquiet_dead_crypt"
+        assert room["parent"] == "crypt"
 
     def test_exits_available_after_cross_dungeon_move(self, test_party):
         """Test that exits are correctly reported after cross-dungeon moves."""
@@ -176,6 +181,7 @@ class TestCrossDungeonNavigation:
         game_state = GameState(
             party=test_party,
             dungeon_name="town_of_arden",
+            campaign_id="the_unquiet_dead",
             event_bus=event_bus,
             data_loader=data_loader
         )

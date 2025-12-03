@@ -3,9 +3,12 @@
 
 import asyncio
 import json
+import logging
 from typing import Any
 
 from openai import AsyncOpenAI
+
+logger = logging.getLogger(__name__)
 
 from dnd_engine.ui.rich_ui import print_error, print_status_message
 
@@ -117,6 +120,9 @@ class OpenAIProvider(LLMProvider):
             or None on error
         """
         try:
+            logger.info(f"[OpenAI] chat_with_tools called with {len(tools)} tools")
+            logger.debug(f"[OpenAI] Tools: {[t['function']['name'] for t in tools]}")
+
             response = await asyncio.wait_for(
                 self.client.chat.completions.create(
                     model=self.model,
@@ -129,6 +135,8 @@ class OpenAIProvider(LLMProvider):
             )
 
             message = response.choices[0].message
+            logger.info(f"[OpenAI] Response finish_reason: {response.choices[0].finish_reason}")
+            logger.info(f"[OpenAI] Has tool_calls: {message.tool_calls is not None}")
             tool_calls = []
 
             if message.tool_calls:

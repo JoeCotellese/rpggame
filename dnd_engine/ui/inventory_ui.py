@@ -176,7 +176,7 @@ class InventoryUI:
                 item_data = self._get_item_data(inv_item.item_id, "weapons")
                 name = item_data.get("name", inv_item.item_id) if item_data else inv_item.item_id
                 equipped_marker = " [green][equipped][/green]" if inv_item.item_id == equipped_weapon else ""
-                prof_marker = self._get_proficiency_marker(char, item_data, "weapon")
+                prof_marker = self._get_proficiency_marker(char, inv_item.item_id, "weapon")
                 qty_str = f" (x{inv_item.quantity})" if inv_item.quantity > 1 else ""
                 lines.append(f"  {name}{qty_str}{equipped_marker}{prof_marker}")
             lines.append("")
@@ -189,7 +189,7 @@ class InventoryUI:
                 item_data = self._get_item_data(inv_item.item_id, "armor")
                 name = item_data.get("name", inv_item.item_id) if item_data else inv_item.item_id
                 equipped_marker = " [green][equipped][/green]" if inv_item.item_id == equipped_armor else ""
-                prof_marker = self._get_proficiency_marker(char, item_data, "armor")
+                prof_marker = self._get_proficiency_marker(char, inv_item.item_id, "armor")
                 lines.append(f"  {name}{equipped_marker}{prof_marker}")
             lines.append("")
 
@@ -300,7 +300,7 @@ class InventoryUI:
             name = item_data.get("name", inv_item.item_id) if item_data else inv_item.item_id
 
             # Build display with proficiency status (plain text for questionary)
-            prof_marker = self._get_proficiency_marker_plain(char, item_data, slot_name)
+            prof_marker = self._get_proficiency_marker_plain(char, inv_item.item_id, slot_name)
             equipped_marker = " [equipped]" if inv_item.item_id == currently_equipped else ""
 
             display = f"{name}{equipped_marker}{prof_marker}"
@@ -388,7 +388,7 @@ class InventoryUI:
     def _get_proficiency_marker(
         self,
         char: Character,
-        item_data: dict[str, Any] | None,
+        item_id: str,
         item_type: str
     ) -> str:
         """
@@ -396,38 +396,31 @@ class InventoryUI:
 
         Args:
             char: Character to check proficiency for
-            item_data: Item data dictionary
+            item_id: Item ID (e.g., "rapier", "chain_mail")
             item_type: "weapon" or "armor"
 
         Returns:
             Formatted proficiency marker string with Rich markup
         """
-        if not item_data:
+        try:
+            if item_type == "weapon":
+                if char.is_proficient_with_weapon(item_id, self.items_data):
+                    return " [green]✓[/green]"
+                return " [red]✗ not proficient[/red]"
+
+            elif item_type == "armor":
+                if char.is_proficient_with_armor(item_id, self.items_data):
+                    return " [green]✓[/green]"
+                return " [red]✗ not proficient[/red]"
+        except KeyError:
             return ""
-
-        if item_type == "weapon":
-            weapon_type = item_data.get("weapon_type", "")
-            # Check weapon type proficiency
-            if weapon_type in char.weapon_proficiencies:
-                return " [green]✓[/green]"
-            # Check specific weapon proficiency
-            item_id = item_data.get("name", "").lower().replace(" ", "_")
-            if item_id in char.weapon_proficiencies:
-                return " [green]✓[/green]"
-            return " [red]✗ not proficient[/red]"
-
-        elif item_type == "armor":
-            armor_type = item_data.get("armor_type", "")
-            if armor_type in char.armor_proficiencies:
-                return " [green]✓[/green]"
-            return " [red]✗ not proficient[/red]"
 
         return ""
 
     def _get_proficiency_marker_plain(
         self,
         char: Character,
-        item_data: dict[str, Any] | None,
+        item_id: str,
         item_type: str
     ) -> str:
         """
@@ -435,30 +428,23 @@ class InventoryUI:
 
         Args:
             char: Character to check proficiency for
-            item_data: Item data dictionary
+            item_id: Item ID (e.g., "rapier", "chain_mail")
             item_type: "weapon" or "armor"
 
         Returns:
             Plain text proficiency marker string (no Rich markup)
         """
-        if not item_data:
+        try:
+            if item_type == "weapon":
+                if char.is_proficient_with_weapon(item_id, self.items_data):
+                    return " ✓"
+                return " ✗ not proficient"
+
+            elif item_type == "armor":
+                if char.is_proficient_with_armor(item_id, self.items_data):
+                    return " ✓"
+                return " ✗ not proficient"
+        except KeyError:
             return ""
-
-        if item_type == "weapon":
-            weapon_type = item_data.get("weapon_type", "")
-            # Check weapon type proficiency
-            if weapon_type in char.weapon_proficiencies:
-                return " ✓"
-            # Check specific weapon proficiency
-            item_id = item_data.get("name", "").lower().replace(" ", "_")
-            if item_id in char.weapon_proficiencies:
-                return " ✓"
-            return " ✗ not proficient"
-
-        elif item_type == "armor":
-            armor_type = item_data.get("armor_type", "")
-            if armor_type in char.armor_proficiencies:
-                return " ✓"
-            return " ✗ not proficient"
 
         return ""

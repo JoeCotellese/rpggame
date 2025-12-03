@@ -182,11 +182,11 @@ def data_loader(mock_dungeon_with_skill_checks, monkeypatch):
     """Create a data loader with mocked dungeon."""
     loader = DataLoader()
 
-    # Mock load_dungeon to return our test dungeon
+    # Mock load_dungeon to return our test dungeon (accepts optional campaign_id)
     monkeypatch.setattr(
         loader,
         'load_dungeon',
-        lambda name: mock_dungeon_with_skill_checks
+        lambda name, campaign_id=None: mock_dungeon_with_skill_checks
     )
 
     return loader

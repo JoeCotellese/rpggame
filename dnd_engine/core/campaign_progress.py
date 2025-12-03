@@ -46,7 +46,8 @@ class CampaignDefinition:
         """Load campaign definition from dictionary."""
         dungeons = {}
         for dungeon_id, dungeon_data in data.get("dungeons", {}).items():
-            completion = dungeon_data.get("completion_criteria", {})
+            # Handle null completion_criteria (None from JSON null)
+            completion = dungeon_data.get("completion_criteria") or {}
             dungeons[dungeon_id] = DungeonDefinition(
                 id=dungeon_id,
                 name=dungeon_data.get("name", dungeon_id),
@@ -142,7 +143,7 @@ class CampaignProgressTracker:
         if campaign_id in self._definitions:
             return self._definitions[campaign_id]
 
-        campaign_file = self.campaigns_dir / f"{campaign_id}.json"
+        campaign_file = self.campaigns_dir / campaign_id / "campaign.json"
         if not campaign_file.exists():
             logger.warning(f"Campaign definition not found: {campaign_file}")
             return None
@@ -168,11 +169,12 @@ class CampaignProgressTracker:
         if not self.campaigns_dir.exists():
             return campaigns
 
-        for campaign_file in self.campaigns_dir.glob("*.json"):
-            campaign_id = campaign_file.stem
-            definition = self.load_campaign_definition(campaign_id)
-            if definition:
-                campaigns.append(definition)
+        for campaign_dir in self.campaigns_dir.iterdir():
+            if campaign_dir.is_dir() and (campaign_dir / "campaign.json").exists():
+                campaign_id = campaign_dir.name
+                definition = self.load_campaign_definition(campaign_id)
+                if definition:
+                    campaigns.append(definition)
 
         return sorted(campaigns, key=lambda c: c.name)
 

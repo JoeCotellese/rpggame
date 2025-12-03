@@ -1,11 +1,17 @@
 # ABOUTME: Quest state system for tracking quest progression through the campaign.
-# ABOUTME: Handles quest states (locked/available/active/completed) and transitions.
+# ABOUTME: Handles quest states (locked/available/active/completed) and objective tracking.
 
 import json
+import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from dnd_engine.utils.events import Event, EventBus
+
+logger = logging.getLogger(__name__)
 
 
 class QuestState(Enum):
@@ -16,6 +22,69 @@ class QuestState(Enum):
     ACTIVE = "active"
     COMPLETED = "completed"
     REWARDED = "rewarded"  # Quest completed AND reward claimed
+
+
+class ObjectiveType(Enum):
+    """Types of quest objectives."""
+
+    KILL = "kill"  # Defeat a specific enemy/boss
+    FETCH = "fetch"  # Acquire a specific item
+    USE = "use"  # Use/read a specific item
+    DELIVER = "deliver"  # Bring item to an NPC
+    DISCOVER = "discover"  # Visit a location/room
+    CLEAR = "clear"  # Defeat all enemies in an area
+
+
+@dataclass
+class QuestObjective:
+    """A single objective within a quest."""
+
+    id: str
+    type: ObjectiveType
+    target: str  # monster_id, item_id, room_id, or npc_id depending on type
+    description: str
+    required: bool = True
+    count_required: int = 1
+    count_current: int = 0
+    completed: bool = False
+
+    # For deliver objectives, the item to deliver
+    deliver_item: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "QuestObjective":
+        """Create a QuestObjective from a dictionary."""
+        obj_type = data.get("type", "fetch")
+        if isinstance(obj_type, str):
+            obj_type = ObjectiveType(obj_type)
+
+        return cls(
+            id=data["id"],
+            type=obj_type,
+            target=data["target"],
+            description=data.get("description", ""),
+            required=data.get("required", True),
+            count_required=data.get("count_required", 1),
+            count_current=data.get("count_current", 0),
+            completed=data.get("completed", False),
+            deliver_item=data.get("deliver_item"),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert QuestObjective to a dictionary."""
+        result = {
+            "id": self.id,
+            "type": self.type.value,
+            "target": self.target,
+            "description": self.description,
+            "required": self.required,
+            "count_required": self.count_required,
+            "count_current": self.count_current,
+            "completed": self.completed,
+        }
+        if self.deliver_item:
+            result["deliver_item"] = self.deliver_item
+        return result
 
 
 @dataclass
@@ -56,21 +125,31 @@ class Quest:
     Definition of a quest in the campaign.
 
     Quests are discovered through NPC conversations and track player
-    progression through the campaign's storyline.
+    progression through the campaign's storyline. Each quest has objectives
+    that must be completed before rewards can be claimed.
     """
 
     id: str
     name: str
     description: str
+    objectives: list[QuestObjective] = field(default_factory=list)
     unlocked_by_default: bool = False
     unlock_requirements: dict[str, Any] | None = None
     target_dungeon: str | None = None
-    completion_criteria: dict[str, Any] = field(default_factory=dict)
     unlocks_quests: list[str] = field(default_factory=list)
-    quest_giver: str | None = None  # NPC who gives quest and receives turn-in
+    unlocks_dungeons: list[str] = field(default_factory=list)
+    quest_giver: str | None = None  # NPC who gives the quest
+    turn_in_npc: str | None = None  # NPC to return to (defaults to quest_giver)
     reward_gold: int = 0  # Gold reward for completing quest
+    reward_items: list[str] = field(default_factory=list)
     bonus_rewards: list[BonusReward] = field(default_factory=list)
     final_quest: bool = False
+    npc_hints: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        """Set turn_in_npc to quest_giver if not specified."""
+        if self.turn_in_npc is None and self.quest_giver is not None:
+            self.turn_in_npc = self.quest_giver
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Quest":
@@ -83,6 +162,9 @@ class Quest:
         Returns:
             Quest instance
         """
+        objectives = [
+            QuestObjective.from_dict(obj) for obj in data.get("objectives", [])
+        ]
         bonus_rewards = [
             BonusReward.from_dict(br) for br in data.get("bonus_rewards", [])
         ]
@@ -90,15 +172,19 @@ class Quest:
             id=data["id"],
             name=data["name"],
             description=data["description"],
+            objectives=objectives,
             unlocked_by_default=data.get("unlocked_by_default", False),
             unlock_requirements=data.get("unlock_requirements"),
             target_dungeon=data.get("target_dungeon"),
-            completion_criteria=data.get("completion_criteria", {}),
             unlocks_quests=data.get("unlocks_quests", []),
+            unlocks_dungeons=data.get("unlocks_dungeons", []),
             quest_giver=data.get("quest_giver"),
+            turn_in_npc=data.get("turn_in_npc"),
             reward_gold=data.get("reward_gold", 0),
+            reward_items=data.get("reward_items", []),
             bonus_rewards=bonus_rewards,
             final_quest=data.get("final_quest", False),
+            npc_hints=data.get("npc_hints", {}),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -112,16 +198,26 @@ class Quest:
             "id": self.id,
             "name": self.name,
             "description": self.description,
+            "objectives": [obj.to_dict() for obj in self.objectives],
             "unlocked_by_default": self.unlocked_by_default,
             "unlock_requirements": self.unlock_requirements,
             "target_dungeon": self.target_dungeon,
-            "completion_criteria": self.completion_criteria,
             "unlocks_quests": self.unlocks_quests,
+            "unlocks_dungeons": self.unlocks_dungeons,
             "quest_giver": self.quest_giver,
+            "turn_in_npc": self.turn_in_npc,
             "reward_gold": self.reward_gold,
+            "reward_items": self.reward_items,
             "bonus_rewards": [br.to_dict() for br in self.bonus_rewards],
             "final_quest": self.final_quest,
+            "npc_hints": self.npc_hints,
         }
+
+    def all_required_objectives_complete(self) -> bool:
+        """Check if all required objectives are completed."""
+        return all(
+            obj.completed for obj in self.objectives if obj.required
+        )
 
 
 class QuestManager:
@@ -319,23 +415,23 @@ class QuestManager:
             npc_id: ID of the NPC to check for turn-ins
 
         Returns:
-            List of Quest objects that are completed and have this NPC as quest_giver
+            List of Quest objects that are completed and have this NPC as turn_in_npc
         """
         return [
             self.quests[qid]
             for qid, state in self._quest_states.items()
             if state == QuestState.COMPLETED
-            and self.quests[qid].quest_giver == npc_id
+            and self.quests[qid].turn_in_npc == npc_id
             and self.quests[qid].reward_gold > 0
         ]
 
     def claim_quest_reward(self, quest_id: str, npc_id: str) -> dict[str, Any]:
         """
-        Claim the reward for a completed quest from the quest giver.
+        Claim the reward for a completed quest from the turn-in NPC.
 
         Args:
             quest_id: ID of the quest to claim reward for
-            npc_id: ID of the NPC claiming from (must match quest_giver)
+            npc_id: ID of the NPC claiming from (must match turn_in_npc)
 
         Returns:
             Dictionary with success status and reward details
@@ -351,10 +447,10 @@ class QuestManager:
                 return {"success": False, "error": "Reward already claimed"}
             return {"success": False, "error": "Quest not completed"}
 
-        if quest.quest_giver != npc_id:
+        if quest.turn_in_npc != npc_id:
             return {
                 "success": False,
-                "error": f"Wrong NPC - quest giver is {quest.quest_giver}",
+                "error": f"Wrong NPC - turn in to {quest.turn_in_npc}",
             }
 
         # Mark as rewarded
@@ -386,6 +482,76 @@ class QuestManager:
                     return quest, bonus
         return None, None
 
+    def get_relevant_quest_items(self, npc_id: str) -> list[dict[str, Any]]:
+        """
+        Get quest-related items that would be relevant to show a specific NPC.
+
+        This helps NPCs recognize when the player is carrying items related to
+        quests they can help with (as turn_in_npc, quest_giver, or bonus reward).
+
+        Args:
+            npc_id: ID of the NPC to check relevance for
+
+        Returns:
+            List of dicts with item_id, quest_id, quest_name, and relevance_type
+        """
+        relevant_items: list[dict[str, Any]] = []
+        seen_items: set[str] = set()
+
+        for quest in self.quests.values():
+            state = self._quest_states.get(quest.id, QuestState.LOCKED)
+
+            # Only consider quests that are in progress or completable
+            if state not in [QuestState.AVAILABLE, QuestState.ACTIVE, QuestState.COMPLETED]:
+                continue
+
+            # Check if this NPC is relevant to this quest
+            is_turn_in_npc = quest.turn_in_npc == npc_id
+            is_quest_giver = quest.quest_giver == npc_id
+
+            if not (is_turn_in_npc or is_quest_giver):
+                continue
+
+            # Find quest items from objectives
+            for obj in quest.objectives:
+                item_id = None
+                relevance = ""
+
+                if obj.type == ObjectiveType.USE and is_turn_in_npc:
+                    # USE objectives like reading a note - show to turn_in_npc
+                    item_id = obj.target
+                    relevance = "item to show/discuss"
+                elif obj.type == ObjectiveType.FETCH:
+                    item_id = obj.target
+                    relevance = "item to retrieve"
+                elif obj.type == ObjectiveType.DELIVER and obj.deliver_item:
+                    item_id = obj.deliver_item
+                    relevance = "item to deliver"
+
+                if item_id and item_id not in seen_items:
+                    seen_items.add(item_id)
+                    relevant_items.append({
+                        "item_id": item_id,
+                        "quest_id": quest.id,
+                        "quest_name": quest.name,
+                        "relevance_type": relevance,
+                        "quest_state": state.value,
+                    })
+
+            # Check bonus rewards
+            for bonus in quest.bonus_rewards:
+                if bonus.turn_in_npc == npc_id and bonus.item_id not in seen_items:
+                    seen_items.add(bonus.item_id)
+                    relevant_items.append({
+                        "item_id": bonus.item_id,
+                        "quest_id": quest.id,
+                        "quest_name": quest.name,
+                        "relevance_type": "bonus reward item",
+                        "quest_state": state.value,
+                    })
+
+        return relevant_items
+
     def serialize_states(self) -> dict[str, str]:
         """
         Serialize quest states for saving.
@@ -408,3 +574,324 @@ class QuestManager:
         for quest_id, state_str in saved_states.items():
             if quest_id in self.quests:
                 self._quest_states[quest_id] = QuestState(state_str)
+
+    # -------------------------------------------------------------------------
+    # Event-driven objective tracking
+    # -------------------------------------------------------------------------
+
+    def set_event_bus(self, event_bus: "EventBus") -> None:
+        """
+        Connect this QuestManager to an EventBus for event-driven tracking.
+
+        Args:
+            event_bus: The EventBus to subscribe to
+        """
+        from dnd_engine.utils.events import EventType
+
+        self._event_bus = event_bus
+
+        # Subscribe to relevant game events
+        event_bus.subscribe(EventType.BOSS_DEFEATED, self._on_boss_defeated)
+        event_bus.subscribe(EventType.ITEM_ACQUIRED, self._on_item_acquired)
+        event_bus.subscribe(EventType.ITEM_USED, self._on_item_used)
+        event_bus.subscribe(EventType.ROOM_ENTER, self._on_room_enter)
+        event_bus.subscribe(EventType.CHARACTER_DEATH, self._on_character_death)
+        event_bus.subscribe(EventType.COMBAT_END, self._on_combat_end)
+
+    def _on_boss_defeated(self, event: "Event") -> None:
+        """Handle boss defeated event - check kill objectives."""
+        monster_id = event.data.get("monster_id")
+        if monster_id:
+            self._check_objectives(ObjectiveType.KILL, monster_id)
+
+    def _on_item_acquired(self, event: "Event") -> None:
+        """Handle item acquired event - check fetch objectives."""
+        item_id = event.data.get("item_id")
+        if item_id:
+            self._check_objectives(ObjectiveType.FETCH, item_id)
+
+    def _on_item_used(self, event: "Event") -> None:
+        """Handle item used event - check use objectives."""
+        item_id = event.data.get("item_id")
+        if item_id:
+            # Auto-activate available quests that have a USE objective for this item
+            self._auto_activate_quests_for_use_objective(item_id)
+            self._check_objectives(ObjectiveType.USE, item_id)
+
+    def _auto_activate_quests_for_use_objective(self, item_id: str) -> None:
+        """Auto-activate available quests when using an item that matches a USE objective."""
+        from dnd_engine.utils.events import Event, EventType
+
+        for quest in self.get_available_quests():
+            for objective in quest.objectives:
+                if objective.type == ObjectiveType.USE and objective.target == item_id:
+                    self._quest_states[quest.id] = QuestState.ACTIVE
+                    logger.info(
+                        f"Quest '{quest.name}' auto-activated upon using {item_id}"
+                    )
+
+                    # Emit quest activated event
+                    if hasattr(self, "_event_bus"):
+                        self._event_bus.emit(
+                            Event(
+                                EventType.QUEST_ACTIVATED,
+                                {
+                                    "quest_id": quest.id,
+                                    "quest_name": quest.name,
+                                    "item_id": item_id,
+                                },
+                            )
+                        )
+                    break  # Only activate once per quest
+
+    def _on_room_enter(self, event: "Event") -> None:
+        """Handle room enter event - check discover objectives and auto-activate quests."""
+        room_id = event.data.get("room_id")
+        dungeon_id = event.data.get("dungeon_id")
+
+        # Auto-activate available quests when entering their target dungeon
+        if dungeon_id:
+            self._auto_activate_quests_for_dungeon(dungeon_id)
+
+        # Check discover objectives for active quests
+        if room_id:
+            self._check_objectives(ObjectiveType.DISCOVER, room_id)
+
+    def _on_character_death(self, event: "Event") -> None:
+        """Handle character death event - check kill objectives for non-boss enemies."""
+        # Only process enemy deaths, not player deaths
+        if event.data.get("is_enemy", False):
+            monster_id = event.data.get("monster_id")
+            if monster_id:
+                self._check_objectives(ObjectiveType.KILL, monster_id)
+
+    def _on_combat_end(self, event: "Event") -> None:
+        """Handle combat end event - check clear objectives."""
+        # Only check on victory (all enemies in room defeated)
+        if event.data.get("victory", False):
+            room_id = event.data.get("room_id")
+            if room_id:
+                # Auto-activate available quests that have a CLEAR objective for this room
+                self._auto_activate_quests_for_clear_objective(room_id)
+                self._check_objectives(ObjectiveType.CLEAR, room_id)
+
+    def _auto_activate_quests_for_clear_objective(self, room_id: str) -> None:
+        """Auto-activate available quests when clearing a room that matches a CLEAR objective."""
+        from dnd_engine.utils.events import Event, EventType
+
+        for quest in self.get_available_quests():
+            for objective in quest.objectives:
+                if objective.type == ObjectiveType.CLEAR and objective.target == room_id:
+                    self._quest_states[quest.id] = QuestState.ACTIVE
+                    logger.info(
+                        f"Quest '{quest.name}' auto-activated upon clearing {room_id}"
+                    )
+                    # Emit quest activated event
+                    if hasattr(self, "_event_bus"):
+                        self._event_bus.emit(
+                            Event(
+                                EventType.QUEST_ACTIVATED,
+                                {
+                                    "quest_id": quest.id,
+                                    "quest_name": quest.name,
+                                    "room_id": room_id,
+                                },
+                            )
+                        )
+                    break  # Only activate once per quest
+
+    def _auto_activate_quests_for_dungeon(self, dungeon_id: str) -> None:
+        """
+        Auto-activate available quests when entering their target dungeon.
+
+        Args:
+            dungeon_id: The ID of the dungeon being entered
+        """
+        from dnd_engine.utils.events import Event, EventType
+
+        for quest in self.get_available_quests():
+            if quest.target_dungeon == dungeon_id:
+                self._quest_states[quest.id] = QuestState.ACTIVE
+                logger.info(
+                    f"Quest '{quest.name}' auto-activated upon entering {dungeon_id}"
+                )
+
+                # Emit quest activated event
+                if hasattr(self, "_event_bus"):
+                    self._event_bus.emit(
+                        Event(
+                            EventType.QUEST_ACTIVATED,
+                            {
+                                "quest_id": quest.id,
+                                "quest_name": quest.name,
+                                "dungeon_id": dungeon_id,
+                            },
+                        )
+                    )
+
+    def _check_objectives(self, obj_type: ObjectiveType, target: str) -> None:
+        """
+        Check all active quests for objectives matching the type and target.
+
+        Args:
+            obj_type: The type of objective to check
+            target: The target ID (item_id, monster_id, room_id, etc.)
+        """
+        from dnd_engine.utils.events import Event, EventType
+
+        for quest in self.get_active_quests():
+            for objective in quest.objectives:
+                if objective.type == obj_type and objective.target == target:
+                    if not objective.completed:
+                        objective.count_current += 1
+                        logger.info(
+                            f"Quest '{quest.name}' objective '{objective.id}' "
+                            f"progress: {objective.count_current}/{objective.count_required}"
+                        )
+
+                        if objective.count_current >= objective.count_required:
+                            objective.completed = True
+                            logger.info(
+                                f"Quest '{quest.name}' objective "
+                                f"'{objective.id}' completed!"
+                            )
+
+                            # Emit objective complete event
+                            if hasattr(self, "_event_bus"):
+                                self._event_bus.emit(
+                                    Event(
+                                        EventType.QUEST_OBJECTIVE_COMPLETE,
+                                        {
+                                            "quest_id": quest.id,
+                                            "quest_name": quest.name,
+                                            "objective_id": objective.id,
+                                            "objective_description": objective.description,
+                                        },
+                                    )
+                                )
+
+            # Check if quest is now complete
+            if quest.all_required_objectives_complete():
+                if self._quest_states[quest.id] == QuestState.ACTIVE:
+                    self._complete_quest_from_objectives(quest)
+
+    def _complete_quest_from_objectives(self, quest: Quest) -> None:
+        """
+        Complete a quest when all required objectives are done.
+
+        Args:
+            quest: The quest to complete
+        """
+        from dnd_engine.utils.events import Event, EventType
+
+        self._quest_states[quest.id] = QuestState.COMPLETED
+        logger.info(f"Quest '{quest.name}' completed!")
+
+        # Unlock dependent quests
+        unlocked_quests = []
+        for unlock_id in quest.unlocks_quests:
+            if unlock_id in self.quests:
+                if self._check_unlock_conditions(unlock_id):
+                    if self._quest_states[unlock_id] == QuestState.LOCKED:
+                        self._quest_states[unlock_id] = QuestState.AVAILABLE
+                        unlocked_quests.append(unlock_id)
+                        logger.info(f"Quest '{unlock_id}' is now available!")
+
+        # Emit quest completed event
+        if hasattr(self, "_event_bus"):
+            self._event_bus.emit(
+                Event(
+                    EventType.QUEST_COMPLETED,
+                    {
+                        "quest_id": quest.id,
+                        "quest_name": quest.name,
+                        "unlocked_quests": unlocked_quests,
+                        "unlocked_dungeons": quest.unlocks_dungeons,
+                        "turn_in_npc": quest.turn_in_npc,
+                        "reward_gold": quest.reward_gold,
+                    },
+                )
+            )
+
+    def complete_deliver_objective(
+        self, npc_id: str, item_id: str
+    ) -> dict[str, Any]:
+        """
+        Complete a deliver objective when a player gives an item to an NPC.
+
+        Args:
+            npc_id: ID of the NPC receiving the item
+            item_id: ID of the item being delivered
+
+        Returns:
+            Dictionary with success status and quest info
+        """
+        for quest in self.get_active_quests():
+            for objective in quest.objectives:
+                if (
+                    objective.type == ObjectiveType.DELIVER
+                    and objective.target == npc_id
+                    and objective.deliver_item == item_id
+                    and not objective.completed
+                ):
+                    objective.completed = True
+                    logger.info(
+                        f"Quest '{quest.name}' deliver objective "
+                        f"'{objective.id}' completed!"
+                    )
+
+                    # Check if quest is now complete
+                    if quest.all_required_objectives_complete():
+                        self._complete_quest_from_objectives(quest)
+
+                    return {
+                        "success": True,
+                        "quest_id": quest.id,
+                        "quest_name": quest.name,
+                        "objective_id": objective.id,
+                    }
+
+        return {"success": False, "error": "No matching deliver objective found"}
+
+    def serialize_objective_states(self) -> dict[str, list[dict[str, Any]]]:
+        """
+        Serialize objective states for saving.
+
+        Returns:
+            Dictionary mapping quest IDs to lists of objective state dicts
+        """
+        result = {}
+        for quest_id, quest in self.quests.items():
+            if quest.objectives:
+                result[quest_id] = [
+                    {
+                        "id": obj.id,
+                        "count_current": obj.count_current,
+                        "completed": obj.completed,
+                    }
+                    for obj in quest.objectives
+                ]
+        return result
+
+    def deserialize_objective_states(
+        self, saved_objectives: dict[str, list[dict[str, Any]]]
+    ) -> None:
+        """
+        Restore objective states from saved data.
+
+        Args:
+            saved_objectives: Dictionary mapping quest IDs to objective states
+        """
+        for quest_id, objectives_data in saved_objectives.items():
+            if quest_id in self.quests:
+                quest = self.quests[quest_id]
+                obj_map = {obj.id: obj for obj in quest.objectives}
+                for obj_data in objectives_data:
+                    obj_id = obj_data.get("id")
+                    if obj_id in obj_map:
+                        obj_map[obj_id].count_current = obj_data.get(
+                            "count_current", 0
+                        )
+                        obj_map[obj_id].completed = obj_data.get(
+                            "completed", False
+                        )

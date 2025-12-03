@@ -214,12 +214,18 @@ class NPC:
             "",
             self.knowledge.to_prompt_text(),
             "",
+            "TOOL USAGE (CRITICAL):",
+            "- You have access to tools. When you need information, CALL THE TOOL IMMEDIATELY.",
+            "- FORBIDDEN: Writing '*calls*', '*calling*', '*checking*', 'let me check', 'one moment'",
+            "- FORBIDDEN: Announcing or narrating that you will use a tool",
+            "- CORRECT: Just call the tool silently, then respond with the information",
+            "- If you need quest info, call get_available_quests WITHOUT saying anything first",
+            "",
             "BEHAVIOR:",
             "- Stay in character at all times",
             "- Don't break character or mention being an AI",
             "- ALWAYS call get_available_quests before sharing any rumors - don't invent content",
             "- Only activate quests when the player clearly commits to helping",
-            "- Never narrate tool usage - just do it and respond to the result",
             "",
             "CRITICAL - PURCHASES:",
             "- You MUST call buy_item for ANY purchase - never just roleplay accepting money",
@@ -248,14 +254,48 @@ class NPC:
                 "- Use the 'hint' field for how YOUR CHARACTER would describe the situation",
                 "- Keep responses conversational and in-character",
                 "",
-                "QUEST REWARDS AND ITEM EXCHANGE:",
-                "- Call get_pending_rewards to check if player has quests to turn in to you",
-                "- When player reports completing a task, call turn_in_quest to give them gold",
+                "QUEST REWARDS (CRITICAL - ACT IMMEDIATELY):",
+                "- When player says they 'handled', 'cleared', 'finished', 'done', 'completed' something:",
+                "  -> IMMEDIATELY call get_pending_rewards (do NOT respond first, call the tool)",
+                "- If get_pending_rewards returns a quest, IMMEDIATELY call turn_in_quest",
+                "- NEVER just acknowledge completion - ALWAYS check for rewards first via tools",
+                "- NEVER roleplay giving gold - call turn_in_quest to actually transfer gold",
+                "",
+                "ITEM EXCHANGE:",
                 "- When player offers to give/return an item, call receive_item_from_player",
                 "- If receive_item_from_player returns bonus_reward=true, describe giving them the reward",
-                "- React naturally to receiving items - express gratitude for important returns",
             ]
         )
+
+        # Add context about visible quest items the player is carrying
+        if game_context and game_context.get("visible_quest_items"):
+            visible_items = game_context["visible_quest_items"]
+            lines.extend(
+                [
+                    "",
+                    "VISIBLE QUEST ITEMS (CRITICAL - REACT IMMEDIATELY):",
+                    "The player is carrying items you recognize as important:",
+                ]
+            )
+            for item in visible_items:
+                item_name = item.get("item_name", item["item_id"])
+                item_desc = item.get("item_description", "")
+                lines.append(f"- {item_name}")
+                if item_desc:
+                    # Include a brief excerpt of the description
+                    brief_desc = item_desc[:200] + "..." if len(item_desc) > 200 else item_desc
+                    lines.append(f"  Contents: {brief_desc}")
+
+            lines.extend(
+                [
+                    "",
+                    "IMPORTANT: You should IMMEDIATELY notice and ask about these items!",
+                    "- React naturally: 'What's that you're holding?' or 'Is that a note?'",
+                    "- Show appropriate concern/interest based on your character",
+                    "- Call get_pending_rewards to check if this relates to a completed task",
+                    "- Do NOT wait for the player to mention the item - YOU initiate",
+                ]
+            )
 
         return "\n".join(lines)
 

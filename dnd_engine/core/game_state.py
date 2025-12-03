@@ -455,7 +455,8 @@ class GameState:
         data_loader: DataLoader | None = None,
         dice_roller: DiceRoller | None = None,
         campaign_id: str | None = None,
-        campaign_progress: CampaignProgress | None = None
+        campaign_progress: CampaignProgress | None = None,
+        skip_initial_room_enter: bool = False
     ):
         """
         Initialize the game state.
@@ -468,7 +469,9 @@ class GameState:
             dice_roller: Dice roller (creates new if not provided)
             campaign_id: Optional campaign ID for quest tracking (e.g., "the_unquiet_dead")
             campaign_progress: Optional campaign progress for multi-dungeon campaigns
+            skip_initial_room_enter: If True, skip initial ROOM_ENTER event (for save loading)
         """
+        self._skip_initial_room_enter = skip_initial_room_enter
         self.party = party
         self.event_bus = event_bus or EventBus()
         self.data_loader = data_loader or DataLoader()
@@ -478,12 +481,14 @@ class GameState:
 
         # Load dungeon using data_loader (supports mocking in tests)
         self.dungeon_name = dungeon_name  # Store filename for saving
-        self.dungeon = self.data_loader.load_dungeon(dungeon_name)
+        self.campaign_id = campaign_id
+
+        # Load dungeon - with campaign_id if provided, otherwise try standalone
+        self.dungeon = self.data_loader.load_dungeon(dungeon_name, campaign_id)
 
         # Auto-detect campaign_id from dungeon if not explicitly provided
-        if campaign_id is None:
-            campaign_id = self.dungeon.get("campaign_id")
-        self.campaign_id = campaign_id
+        if self.campaign_id is None:
+            self.campaign_id = self.dungeon.get("campaign_id")
 
         # Campaign progress for multi-dungeon campaigns
         self.campaign_progress = campaign_progress
@@ -502,11 +507,20 @@ class GameState:
         # May be None if data_path is unavailable (e.g., in tests with mocked loaders)
         self.room_registry: RoomRegistry | None = None
         try:
-            dungeons_path = self.data_loader.data_path / "content" / "dungeons"
-            if dungeons_path.exists():
-                self.room_registry = RoomRegistry(dungeons_path)
-                # Pre-populate registry cache with current dungeon data
-                # so modifications are shared when we return to this dungeon
+            content_path = self.data_loader.data_path / "content"
+            if self.campaign_id and content_path.exists():
+                self.room_registry = RoomRegistry(
+                    campaign_id=self.campaign_id,
+                    content_path=content_path,
+                )
+            else:
+                # Fallback for test dungeons without campaign
+                dungeons_path = content_path / "dungeons"
+                if dungeons_path.exists():
+                    self.room_registry = RoomRegistry(dungeons_path=dungeons_path)
+            # Pre-populate registry cache with current dungeon data
+            # so modifications are shared when we return to this dungeon
+            if self.room_registry:
                 self.room_registry._loaded_dungeons[dungeon_name] = self.dungeon
         except (AttributeError, TypeError):
             # data_path may not exist on mocked loaders
@@ -521,6 +535,20 @@ class GameState:
                 quest_data = self.data_loader.load_quests(self.campaign_id)
                 self.quest_manager = QuestManager()
                 self.quest_manager.load_quests_from_dict(quest_data)
+                # Wire QuestManager to EventBus for event-driven objective tracking
+                self.quest_manager.set_event_bus(self.event_bus)
+
+                # Emit initial room enter event to trigger quest auto-activation
+                # Skip if loading from save (save_slot_manager will emit at right time)
+                if not self._skip_initial_room_enter:
+                    self.event_bus.emit(Event(
+                        type=EventType.ROOM_ENTER,
+                        data={
+                            "room_id": self.current_room_id,
+                            "room_name": self.get_current_room()["name"],
+                            "dungeon_id": self.dungeon_name,
+                        }
+                    ))
             except FileNotFoundError:
                 logger.warning(f"No quest data found for campaign '{self.campaign_id}'")
 
@@ -531,6 +559,9 @@ class GameState:
                 self.npc_manager = NPCManager(self.campaign_id, self.data_loader)
             except FileNotFoundError:
                 logger.warning(f"No NPC data found for campaign '{self.campaign_id}'")
+
+        # Subscribe to quest completion for dungeon unlocking
+        self.event_bus.subscribe(EventType.QUEST_COMPLETED, self._on_quest_completed)
 
         # Combat state
         self.in_combat = False
@@ -774,7 +805,8 @@ class GameState:
             type=EventType.ROOM_ENTER,
             data={
                 "room_id": new_room_id,
-                "room_name": self.get_current_room()["name"]
+                "room_name": self.get_current_room()["name"],
+                "dungeon_id": self.dungeon_name,
             }
         ))
 
@@ -879,7 +911,7 @@ class GameState:
                 # Get item name from data loader if available
                 item_name = item_id
                 if self.data_loader:
-                    items_data = self.data_loader.load_items()
+                    items_data = self.data_loader.load_items(self.campaign_id)
                     for category in items_data.values():
                         if item_id in category:
                             item_name = category[item_id].get("name", item_id)
@@ -1581,7 +1613,15 @@ class GameState:
                 return False  # Unknown item category
 
             # Check if this is a quest item (doesn't transfer between campaigns)
-            is_quest_item = item_to_take.get("quest_item", False)
+            # First check room item placement, then fall back to item definition
+            # TODO: Review why we check both room placement and item definition.
+            # Room placement override may be unnecessary - consider only using item def.
+            is_quest_item = item_to_take.get("quest_item", None)
+            if is_quest_item is None:
+                # Look up quest_item flag from item definition
+                items_data = self.data_loader.load_items(campaign_id=self.campaign_id)
+                item_def = items_data.get(category, {}).get(item_id, {})
+                is_quest_item = item_def.get("quest_item", False)
 
             # Add item to the specified character's inventory
             character.inventory.add_item(item_id, category, quest_item=is_quest_item)
@@ -1935,7 +1975,7 @@ class GameState:
         equipped_weapon = attacker.inventory.get_equipped_item(EquipmentSlot.WEAPON)
 
         # Load item data for weapon lookup
-        items_data = self.data_loader.load_items()
+        items_data = self.data_loader.load_items(self.campaign_id)
 
         # Calculate attack/damage bonuses and get weapon info
         ammo_id = None  # Track ammo for consumption after attack
@@ -2461,7 +2501,7 @@ class GameState:
         Returns:
             Category name or None if not found
         """
-        items_data = self.data_loader.load_items()
+        items_data = self.data_loader.load_items(campaign_id=self.campaign_id)
 
         # Direct category matches
         for category in [
@@ -2910,6 +2950,8 @@ class GameState:
 
         # Remove defeated enemies from room only on victory
         room = self.get_current_room()
+        # Capture defeated enemy IDs before clearing them (for quest tracking)
+        defeated_enemy_ids = list(room.get("enemies", [])) if victory else []
         if victory:
             room["enemies"] = []
 
@@ -2921,6 +2963,7 @@ class GameState:
             type=EventType.COMBAT_END,
             data={
                 "victory": victory,
+                "room_id": self.current_room_id,
                 "xp_gained": total_xp,
                 "xp_per_character": total_xp // len(self.party.characters) if len(self.party.characters) > 0 else 0
             }
@@ -2928,10 +2971,28 @@ class GameState:
 
         # Check for boss defeat and dungeon completion (campaign progression)
         if victory and room.get("boss_room"):
-            self._handle_boss_defeat()
+            self._handle_boss_defeat(defeated_enemy_ids)
 
-    def _handle_boss_defeat(self) -> None:
-        """Handle boss defeat for campaign progression."""
+    def _handle_boss_defeat(self, defeated_enemy_ids: list[str]) -> None:
+        """
+        Handle boss defeat for campaign progression.
+
+        Args:
+            defeated_enemy_ids: List of monster IDs that were defeated
+        """
+        # Emit boss defeated event for each defeated enemy
+        # This allows quest objectives to track specific monster kills
+        # Must happen before the campaign_tracker guard so quests work independently
+        for monster_id in defeated_enemy_ids:
+            self.event_bus.emit(Event(
+                type=EventType.BOSS_DEFEATED,
+                data={
+                    "dungeon_id": self.dungeon_name,
+                    "dungeon_name": self.dungeon.get("name", self.dungeon_name) if self.dungeon else self.dungeon_name,
+                    "monster_id": monster_id,
+                }
+            ))
+
         if not self.campaign_progress or not self.campaign_tracker:
             return
 
@@ -2939,15 +3000,6 @@ class GameState:
         self.campaign_tracker.record_boss_defeat(
             self.campaign_progress, self.dungeon_name
         )
-
-        # Emit boss defeated event
-        self.event_bus.emit(Event(
-            type=EventType.BOSS_DEFEATED,
-            data={
-                "dungeon_id": self.dungeon_name,
-                "dungeon_name": self.dungeon.get("name", self.dungeon_name)
-            }
-        ))
 
         # Check if dungeon completion criteria are now met
         self._check_dungeon_completion()
@@ -2964,6 +3016,71 @@ class GameState:
                 inventory_item_ids.append(item.item_id)
 
         # Try to complete the dungeon
+        newly_unlocked = self.campaign_tracker.complete_dungeon(
+            self.campaign_progress,
+            self.dungeon_name,
+            inventory_item_ids
+        )
+
+        if newly_unlocked:
+            # Get dungeon names for display
+            unlocked_names = []
+            for dungeon_id in newly_unlocked:
+                definition = self.campaign_tracker.load_campaign_definition(
+                    self.campaign_progress.campaign_id
+                )
+                if definition and dungeon_id in definition.dungeons:
+                    unlocked_names.append(definition.dungeons[dungeon_id].name)
+                else:
+                    unlocked_names.append(dungeon_id)
+
+            # Emit dungeon completed event
+            self.event_bus.emit(Event(
+                type=EventType.DUNGEON_COMPLETED,
+                data={
+                    "dungeon_id": self.dungeon_name,
+                    "dungeon_name": self.dungeon.get("name", self.dungeon_name),
+                    "newly_unlocked": newly_unlocked,
+                    "unlocked_names": unlocked_names,
+                    "campaign_complete": self.campaign_tracker.is_campaign_complete(
+                        self.campaign_progress
+                    )
+                }
+            ))
+
+    def _on_quest_completed(self, event: Event) -> None:
+        """
+        Handle quest completion to unlock dungeons.
+
+        When a quest completes with unlocks_dungeons, this handler:
+        1. Unlocks those dungeons in campaign progress
+        2. Emits DUNGEON_COMPLETED event for UI notification
+
+        Args:
+            event: Quest completed event with unlocked_dungeons data
+        """
+        if not self.campaign_progress or not self.campaign_tracker:
+            return
+
+        unlocked_dungeons = event.data.get("unlocked_dungeons", [])
+        if not unlocked_dungeons:
+            return
+
+        # Mark current dungeon as completed and unlock the specified dungeons
+        # First record boss defeat if not already done
+        if self.dungeon_name not in self.campaign_progress.boss_defeats:
+            self.campaign_tracker.record_boss_defeat(
+                self.campaign_progress, self.dungeon_name
+            )
+
+        # Get current inventory items for completion check
+        inventory_item_ids = []
+        for character in self.party.characters:
+            for item in character.inventory.items.values():
+                inventory_item_ids.append(item.item_id)
+
+        # Try to complete the dungeon (this will unlock the dungeons specified
+        # in the campaign definition if all criteria are met)
         newly_unlocked = self.campaign_tracker.complete_dungeon(
             self.campaign_progress,
             self.dungeon_name,
@@ -3935,10 +4052,14 @@ class GameState:
         # Load new dungeon if specified, otherwise reload current one
         if new_dungeon_name:
             self.dungeon_name = new_dungeon_name
-            self.dungeon = self.data_loader.load_dungeon(new_dungeon_name)
+            self.dungeon = self.data_loader.load_dungeon(
+                new_dungeon_name, self.campaign_id
+            )
         else:
             # Reload current dungeon from disk to reset state
-            self.dungeon = self.data_loader.load_dungeon(self.dungeon_name)
+            self.dungeon = self.data_loader.load_dungeon(
+                self.dungeon_name, self.campaign_id
+            )
 
         # Reset to start room
         self.current_room_id = self.dungeon["start_room"]
@@ -4008,7 +4129,7 @@ class GameState:
             CombatItemResult with attack outcome and display information
         """
         # Load item data (structure: {"weapons": {...}, "armor": {...}, "consumables": {...}})
-        items_data = self.data_loader.load_items()
+        items_data = self.data_loader.load_items(self.campaign_id)
 
         # Find item in categories
         item_data = None
@@ -4162,8 +4283,8 @@ class GameState:
         """
         from dnd_engine.systems.item_effects import apply_item_effect
 
-        # Load item data
-        items_data = self.data_loader.load_items()
+        # Load item data (including campaign-specific items)
+        items_data = self.data_loader.load_items(self.campaign_id)
 
         # Find item in consumables category
         item_data = items_data.get("consumables", {}).get(item_id)

@@ -440,8 +440,11 @@ class MainMenuV2:
 
         # Use room registry to find the dungeon containing the starting room
         starting_room = campaign_info["starting_room"]
-        dungeons_path = self.data_loader.data_path / "content" / "dungeons"
-        room_registry = RoomRegistry(dungeons_path)
+        content_path = self.data_loader.data_path / "content"
+        room_registry = RoomRegistry(
+            campaign_id=campaign_info["campaign_id"],
+            content_path=content_path,
+        )
         starting_dungeon = room_registry.get_dungeon_for_room(starting_room)
 
         if not starting_dungeon:
