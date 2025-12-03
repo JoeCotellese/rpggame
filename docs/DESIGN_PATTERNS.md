@@ -85,7 +85,7 @@ The patterns serve specific architectural goals:
 | `apply_starting_equipment()` | Equip items, ammo, tools | Complex |
 | `initialize_spellcasting()` | Set up spell slots, known spells | Complex |
 | `initialize_class_resources()` | Ki points, rage, etc. | Medium |
-| `create_character_interactive()` | Full interactive flow | Very Complex |
+| `create_character()` | Create fully-initialized character (no UI) | Complex |
 
 **Example**:
 
@@ -98,9 +98,11 @@ ac = 10 + (dexterity - 10) // 2
 # ... 200 more lines of setup
 
 # After Factory (encapsulated)
-character = CharacterFactory.create_character_interactive(
-    loader=data_loader,
-    rng=random.Random()
+character = factory.create_character(
+    class_name="fighter",
+    race_name="human",
+    data_loader=data_loader,
+    level=1
 )
 # All setup handled internally
 ```
