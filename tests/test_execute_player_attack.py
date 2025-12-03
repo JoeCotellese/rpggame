@@ -10,7 +10,6 @@ from dnd_engine.core.game_state import GameState, PlayerAttackResult
 from dnd_engine.core.party import Party
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.systems.inventory import EquipmentSlot
-from dnd_engine.systems.resources import ResourcePool
 from dnd_engine.utils.events import EventBus
 
 
@@ -36,12 +35,12 @@ class TestExecutePlayerAttack:
     def fighter_abilities(self):
         """Create abilities for a fighter (high STR)"""
         return Abilities(
-            strength=16,      # +3 modifier
-            dexterity=14,     # +2 modifier
+            strength=16,  # +3 modifier
+            dexterity=14,  # +2 modifier
             constitution=14,  # +2 modifier
             intelligence=10,
             wisdom=12,
-            charisma=8
+            charisma=8,
         )
 
     @pytest.fixture
@@ -53,7 +52,7 @@ class TestExecutePlayerAttack:
             level=3,
             abilities=fighter_abilities,
             max_hp=28,
-            ac=16
+            ac=16,
         )
         # Equip a longsword
         fighter.inventory.add_item("longsword", 1)
@@ -69,27 +68,19 @@ class TestExecutePlayerAttack:
             level=3,
             abilities=fighter_abilities,
             max_hp=28,
-            ac=14
+            ac=14,
         )
 
     @pytest.fixture
     def goblin(self):
         """Create a goblin enemy"""
-        return Creature(
-            name="Goblin",
-            max_hp=7,
-            ac=13,
-            abilities=Abilities(8, 14, 10, 10, 8, 8)
-        )
+        return Creature(name="Goblin", max_hp=7, ac=13, abilities=Abilities(8, 14, 10, 10, 8, 8))
 
     @pytest.fixture
     def weak_goblin(self):
         """Create a weak goblin that will die easily"""
         return Creature(
-            name="Weak Goblin",
-            max_hp=1,
-            ac=5,
-            abilities=Abilities(8, 14, 10, 10, 8, 8)
+            name="Weak Goblin", max_hp=1, ac=5, abilities=Abilities(8, 14, 10, 10, 8, 8)
         )
 
     @pytest.fixture
@@ -101,7 +92,7 @@ class TestExecutePlayerAttack:
             dungeon_name="test_dungeon",
             event_bus=event_bus,
             data_loader=data_loader,
-            dice_roller=dice_roller
+            dice_roller=dice_roller,
         )
         game_state.active_enemies = [goblin]
         return game_state
@@ -149,7 +140,7 @@ class TestUnarmedAttack(TestExecutePlayerAttack):
             dungeon_name="test_dungeon",
             event_bus=event_bus,
             data_loader=data_loader,
-            dice_roller=dice_roller
+            dice_roller=dice_roller,
         )
         game_state.active_enemies = [goblin]
 
@@ -176,9 +167,7 @@ class TestAttackDamage(TestExecutePlayerAttack):
 class TestTargetKilled(TestExecutePlayerAttack):
     """Test target death tracking"""
 
-    def test_killing_blow_sets_target_killed(
-        self, fighter, weak_goblin, event_bus, data_loader
-    ):
+    def test_killing_blow_sets_target_killed(self, fighter, weak_goblin, event_bus, data_loader):
         """target_killed is True when attack kills target"""
         # Use a dice roller that guarantees hits
         dice_roller = DiceRoller(seed=12345)
@@ -189,7 +178,7 @@ class TestTargetKilled(TestExecutePlayerAttack):
             dungeon_name="test_dungeon",
             event_bus=event_bus,
             data_loader=data_loader,
-            dice_roller=dice_roller
+            dice_roller=dice_roller,
         )
         game_state.active_enemies = [weak_goblin]
 
@@ -240,7 +229,7 @@ class TestConcentrationBreak(TestExecutePlayerAttack):
             abilities=Abilities(8, 12, 10, 16, 10, 10),
             max_hp=15,
             ac=12,
-            spellcasting_ability="int"
+            spellcasting_ability="int",
         )
         return wizard
 
@@ -257,21 +246,24 @@ class TestConcentrationBreak(TestExecutePlayerAttack):
             dungeon_name="test_dungeon",
             event_bus=event_bus,
             data_loader=data_loader,
-            dice_roller=dice_roller
+            dice_roller=dice_roller,
         )
 
         # Set up concentration on target
         from dnd_engine.systems.time_manager import ActiveEffect, EffectType
-        game_state.time_manager.add_effect(ActiveEffect(
-            effect_type=EffectType.SPELL,
-            source="Concentration: Test Spell",
-            duration_type="rounds",
-            duration_value=10,
-            remaining_value=10,
-            target_name="Enemy Wizard",
-            caster_name="Enemy Wizard",
-            concentration=True
-        ))
+
+        game_state.time_manager.add_effect(
+            ActiveEffect(
+                effect_type=EffectType.SPELL,
+                source="Concentration: Test Spell",
+                duration_type="rounds",
+                duration_value=10,
+                remaining_value=10,
+                target_name="Enemy Wizard",
+                caster_name="Enemy Wizard",
+                concentration=True,
+            )
+        )
 
         result = game_state.execute_player_attack(fighter, concentrating_wizard)
 

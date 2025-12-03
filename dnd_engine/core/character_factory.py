@@ -79,10 +79,7 @@ class CharacterFactory:
         return [CharacterFactory.roll_ability_score(dice_roller) for _ in range(6)]
 
     @staticmethod
-    def auto_assign_abilities(
-        scores: list[int],
-        class_data: dict[str, Any]
-    ) -> dict[str, int]:
+    def auto_assign_abilities(scores: list[int], class_data: dict[str, Any]) -> dict[str, int]:
         """
         Auto-assign scores to abilities based on class priorities.
 
@@ -98,9 +95,10 @@ class CharacterFactory:
         sorted_scores = sorted(scores, reverse=True)
 
         # Get ability priorities from class data
-        priorities = class_data.get("ability_priorities", [
-            "strength", "constitution", "dexterity", "wisdom", "intelligence", "charisma"
-        ])
+        priorities = class_data.get(
+            "ability_priorities",
+            ["strength", "constitution", "dexterity", "wisdom", "intelligence", "charisma"],
+        )
 
         # Assign scores to abilities based on priorities
         abilities = {}
@@ -110,11 +108,7 @@ class CharacterFactory:
         return abilities
 
     @staticmethod
-    def swap_abilities(
-        abilities: dict[str, int],
-        ability1: str,
-        ability2: str
-    ) -> dict[str, int]:
+    def swap_abilities(abilities: dict[str, int], ability1: str, ability2: str) -> dict[str, int]:
         """
         Swap two ability scores.
 
@@ -129,7 +123,14 @@ class CharacterFactory:
         Raises:
             ValueError: If ability names are invalid
         """
-        valid_abilities = ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]
+        valid_abilities = [
+            "strength",
+            "dexterity",
+            "constitution",
+            "intelligence",
+            "wisdom",
+            "charisma",
+        ]
 
         if ability1 not in valid_abilities:
             raise ValueError(f"Invalid ability name: {ability1}")
@@ -144,8 +145,7 @@ class CharacterFactory:
 
     @staticmethod
     def apply_racial_bonuses(
-        abilities: dict[str, int],
-        race_data: dict[str, Any]
+        abilities: dict[str, int], race_data: dict[str, Any]
     ) -> dict[str, int]:
         """
         Apply racial ability score bonuses.
@@ -180,11 +180,7 @@ class CharacterFactory:
         return (score - 10) // 2
 
     @staticmethod
-    def calculate_hp(
-        class_data: dict[str, Any],
-        con_modifier: int,
-        level: int = 1
-    ) -> int:
+    def calculate_hp(class_data: dict[str, Any], con_modifier: int, level: int = 1) -> int:
         """
         Calculate starting HP.
 
@@ -206,10 +202,7 @@ class CharacterFactory:
         return max(1, hp)  # Minimum 1 HP
 
     @staticmethod
-    def calculate_ac(
-        equipped_armor: dict[str, Any] | None,
-        dex_modifier: int
-    ) -> int:
+    def calculate_ac(equipped_armor: dict[str, Any] | None, dex_modifier: int) -> int:
         """
         Calculate armor class.
 
@@ -237,8 +230,7 @@ class CharacterFactory:
 
     @staticmethod
     def select_skill_proficiencies(
-        class_data: dict[str, Any],
-        skills_data: dict[str, Any]
+        class_data: dict[str, Any], skills_data: dict[str, Any]
     ) -> list[str]:
         """
         Let player select skill proficiencies for their class.
@@ -279,7 +271,11 @@ class CharacterFactory:
         selected = []
         while len(selected) < num_to_choose:
             remaining = num_to_choose - len(selected)
-            prompt = f"Enter skill number (select {remaining} more)" if remaining > 1 else "Enter skill number"
+            prompt = (
+                f"Enter skill number (select {remaining} more)"
+                if remaining > 1
+                else "Enter skill number"
+            )
             try:
                 choice = print_input_prompt(prompt).strip()
                 idx = int(choice) - 1
@@ -292,7 +288,9 @@ class CharacterFactory:
                     else:
                         print_status_message("You already selected that skill.", "warning")
                 else:
-                    print_status_message(f"Please enter a number between 1 and {len(available_skills)}.", "warning")
+                    print_status_message(
+                        f"Please enter a number between 1 and {len(available_skills)}.", "warning"
+                    )
             except ValueError:
                 print_status_message("Please enter a valid number.", "warning")
 
@@ -300,8 +298,7 @@ class CharacterFactory:
 
     @staticmethod
     def select_expertise_skills(
-        skill_proficiencies: list[str],
-        skills_data: dict[str, Any]
+        skill_proficiencies: list[str], skills_data: dict[str, Any]
     ) -> list[str]:
         """
         Let Rogue player select expertise skills from their proficiencies.
@@ -337,7 +334,11 @@ class CharacterFactory:
         selected = []
         while len(selected) < num_expertise:
             remaining = num_expertise - len(selected)
-            prompt = f"Enter skill number (select {remaining} more)" if remaining > 1 else "Enter skill number"
+            prompt = (
+                f"Enter skill number (select {remaining} more)"
+                if remaining > 1
+                else "Enter skill number"
+            )
             try:
                 choice = print_input_prompt(prompt).strip()
                 idx = int(choice) - 1
@@ -348,9 +349,14 @@ class CharacterFactory:
                         skill_name = skills_data[skill_id].get("name", skill_id.title())
                         print_status_message(f"Selected expertise: {skill_name}", "success")
                     else:
-                        print_status_message("You already selected that skill for expertise.", "warning")
+                        print_status_message(
+                            "You already selected that skill for expertise.", "warning"
+                        )
                 else:
-                    print_status_message(f"Please enter a number between 1 and {len(skill_proficiencies)}.", "warning")
+                    print_status_message(
+                        f"Please enter a number between 1 and {len(skill_proficiencies)}.",
+                        "warning",
+                    )
             except ValueError:
                 print_status_message("Please enter a valid number.", "warning")
 
@@ -358,9 +364,7 @@ class CharacterFactory:
 
     @staticmethod
     def apply_starting_equipment(
-        character: Character,
-        class_data: dict[str, Any],
-        items_data: dict[str, Any]
+        character: Character, class_data: dict[str, Any], items_data: dict[str, Any]
     ) -> None:
         """
         Add starting equipment to character inventory and equip.
@@ -412,13 +416,14 @@ class CharacterFactory:
                     weapon_data = items_data.get("weapons", {}).get(item_id, {})
                     if "ammunition" in weapon_data.get("properties", []):
                         weapons_needing_ammo.append(item_id)
-                elif category == "armor" and character.inventory.get_equipped_item(EquipmentSlot.ARMOR) is None:
+                elif (
+                    category == "armor"
+                    and character.inventory.get_equipped_item(EquipmentSlot.ARMOR) is None
+                ):
                     character.inventory.equip_item(item_id, EquipmentSlot.ARMOR)
 
         # Auto-add ammunition for weapons that require it
-        CharacterFactory._add_starting_ammunition(
-            character, weapons_needing_ammo, items_data
-        )
+        CharacterFactory._add_starting_ammunition(character, weapons_needing_ammo, items_data)
 
         # Add starting gold
         starting_gold = class_data.get("starting_gold", 0)
@@ -427,9 +432,7 @@ class CharacterFactory:
 
     @staticmethod
     def _add_starting_ammunition(
-        character: Character,
-        weapons_needing_ammo: list[str],
-        items_data: dict[str, Any]
+        character: Character, weapons_needing_ammo: list[str], items_data: dict[str, Any]
     ) -> None:
         """
         Add starting ammunition for ranged weapons.
@@ -452,9 +455,7 @@ class CharacterFactory:
                     # Only add if character doesn't already have this ammo type
                     if not character.inventory.has_item(ammo_id):
                         quantity = ammo_info.get("quantity", 20)
-                        character.inventory.add_item(
-                            ammo_id, "ammunition", quantity=quantity
-                        )
+                        character.inventory.add_item(ammo_id, "ammunition", quantity=quantity)
                     break  # Only need one type of compatible ammo per weapon
 
     @staticmethod
@@ -462,7 +463,7 @@ class CharacterFactory:
         spell_type: str,
         num_to_choose: int,
         available_spells: list[tuple[str, dict[str, Any]]],
-        spells_data: dict[str, Any]
+        spells_data: dict[str, Any],
     ) -> list[str]:
         """
         Let player select spells interactively.
@@ -483,8 +484,7 @@ class CharacterFactory:
 
         # Sort spells by school then name for better organization
         sorted_spells = sorted(
-            available_spells,
-            key=lambda x: (x[1].get("school", ""), x[1].get("name", ""))
+            available_spells, key=lambda x: (x[1].get("school", ""), x[1].get("name", ""))
         )
 
         # Display available spells
@@ -495,17 +495,18 @@ class CharacterFactory:
             description = spell_data.get("description", "")
             # Truncate description to fit on one line
             desc_short = description[:60] + "..." if len(description) > 60 else description
-            options.append({
-                "number": str(i),
-                "text": f"{name} ({school}) - {desc_short}"
-            })
+            options.append({"number": str(i), "text": f"{name} ({school}) - {desc_short}"})
 
         print_choice_menu(f"Available {spell_type} (Choose {num_to_choose})", options)
 
         selected = []
         while len(selected) < num_to_choose:
             remaining = num_to_choose - len(selected)
-            prompt = f"Enter spell number (select {remaining} more)" if remaining > 1 else "Enter spell number"
+            prompt = (
+                f"Enter spell number (select {remaining} more)"
+                if remaining > 1
+                else "Enter spell number"
+            )
             try:
                 choice = print_input_prompt(prompt).strip()
                 idx = int(choice) - 1
@@ -518,7 +519,9 @@ class CharacterFactory:
                     else:
                         print_status_message("You already selected that spell.", "warning")
                 else:
-                    print_status_message(f"Please enter a number between 1 and {len(sorted_spells)}.", "warning")
+                    print_status_message(
+                        f"Please enter a number between 1 and {len(sorted_spells)}.", "warning"
+                    )
             except ValueError:
                 print_status_message("Please enter a valid number.", "warning")
             except KeyboardInterrupt:
@@ -531,7 +534,7 @@ class CharacterFactory:
         character: Character,
         class_data: dict[str, Any],
         spells_data: dict[str, Any],
-        interactive: bool = True
+        interactive: bool = True,
     ) -> None:
         """
         Initialize spellcasting properties for spellcasting classes.
@@ -586,7 +589,9 @@ class CharacterFactory:
 
         # For wizards, use spells_in_spellbook
         if spellcasting.get("spells_known_type") == "spellbook":
-            spells_known_count = spellcasting.get("spells_in_spellbook", {}).get(str(character.level), 0)
+            spells_known_count = spellcasting.get("spells_in_spellbook", {}).get(
+                str(character.level), 0
+            )
         else:
             # For sorcerers/bards who know a limited number of spells
             spells_known_count = spellcasting.get("spells_known", {}).get(str(character.level), 0)
@@ -598,18 +603,17 @@ class CharacterFactory:
 
             if cantrips_known_count > 0:
                 selected_cantrips = CharacterFactory.select_spells(
-                    "Cantrips",
-                    cantrips_known_count,
-                    cantrip_list,
-                    spells_data
+                    "Cantrips", cantrips_known_count, cantrip_list, spells_data
                 )
 
             if spells_known_count > 0:
                 selected_leveled_spells = CharacterFactory.select_spells(
-                    "1st Level Spells for Spellbook" if spellcasting.get("spells_known_type") == "spellbook" else "Known Spells",
+                    "1st Level Spells for Spellbook"
+                    if spellcasting.get("spells_known_type") == "spellbook"
+                    else "Known Spells",
                     spells_known_count,
                     leveled_spell_list,
-                    spells_data
+                    spells_data,
                 )
 
             character.known_spells = selected_cantrips + selected_leveled_spells
@@ -619,15 +623,17 @@ class CharacterFactory:
             # Non-interactive: just take first N spells
             cantrips = [s[0] for s in cantrip_list]
             leveled_spells = [s[0] for s in leveled_spell_list]
-            character.known_spells = cantrips[:cantrips_known_count] + leveled_spells[:spells_known_count]
+            character.known_spells = (
+                cantrips[:cantrips_known_count] + leveled_spells[:spells_known_count]
+            )
             # Cantrips are always prepared
-            character.prepared_spells = cantrips[:cantrips_known_count] + leveled_spells[:spells_known_count]
+            character.prepared_spells = (
+                cantrips[:cantrips_known_count] + leveled_spells[:spells_known_count]
+            )
 
     @staticmethod
     def initialize_class_resources(
-        character: Character,
-        class_data: dict[str, Any],
-        level: int
+        character: Character, class_data: dict[str, Any], level: int
     ) -> None:
         """
         Initialize resource pools from class features.
@@ -671,16 +677,12 @@ class CharacterFactory:
                             name=pool_name,
                             current=resource_data["max_uses"],
                             maximum=resource_data["max_uses"],
-                            recovery_type=resource_data["recovery"]
+                            recovery_type=resource_data["recovery"],
                         )
                         character.add_resource_pool(pool)
                         added_pools.add(pool_name)
 
-    def create_character_interactive(
-        self,
-        ui,
-        data_loader: DataLoader
-    ) -> Character:
+    def create_character_interactive(self, ui, data_loader: DataLoader) -> Character:
         """
         Full interactive character creation flow.
 
@@ -723,7 +725,9 @@ class CharacterFactory:
         options = []
         for i, race_id in enumerate(race_list, 1):
             race = races_data[race_id]
-            bonuses = ", ".join([f"+{v} {k.upper()[:3]}" for k, v in race["ability_bonuses"].items()])
+            bonuses = ", ".join(
+                [f"+{v} {k.upper()[:3]}" for k, v in race["ability_bonuses"].items()]
+            )
             options.append({"number": str(i), "text": f"{race['name']} ({bonuses})"})
 
         print_choice_menu("Choose Your Race", options)
@@ -736,7 +740,9 @@ class CharacterFactory:
                 if 0 <= idx < len(race_list):
                     race_choice = race_list[idx]
                 else:
-                    print_status_message(f"Please enter a number between 1 and {len(race_list)}.", "warning")
+                    print_status_message(
+                        f"Please enter a number between 1 and {len(race_list)}.", "warning"
+                    )
             except ValueError:
                 print_status_message("Please enter a valid number.", "warning")
 
@@ -754,7 +760,9 @@ class CharacterFactory:
 
         class_choice = class_list[0]  # For MVP, auto-select Fighter
         if len(class_list) == 1:
-            print_status_message(f"Class: {classes_data[class_choice]['name']} (MVP: Fighter only)", "info")
+            print_status_message(
+                f"Class: {classes_data[class_choice]['name']} (MVP: Fighter only)", "info"
+            )
         else:
             # Future: Allow class selection
             class_choice_idx = None
@@ -766,7 +774,9 @@ class CharacterFactory:
                         class_choice_idx = idx
                         class_choice = class_list[idx]
                     else:
-                        print_status_message(f"Please enter a number between 1 and {len(class_list)}.", "warning")
+                        print_status_message(
+                            f"Please enter a number between 1 and {len(class_list)}.", "warning"
+                        )
                 except ValueError:
                     print_status_message("Please enter a valid number.", "warning")
 
@@ -781,7 +791,9 @@ class CharacterFactory:
 
         for i, (score, dice) in enumerate(all_rolls, 1):
             dropped = min(dice)
-            roll_display.append(f"Roll {i}: {sorted(dice, reverse=True)} = {score} (dropped {dropped})")
+            roll_display.append(
+                f"Roll {i}: {sorted(dice, reverse=True)} = {score} (dropped {dropped})"
+            )
             scores.append(score)
 
         print_message("\n".join(roll_display))
@@ -804,7 +816,11 @@ class CharacterFactory:
         print_section("Ability Swap (Optional)")
 
         while True:
-            swap = print_input_prompt("Would you like to swap any two abilities? (y/n)").strip().lower()
+            swap = (
+                print_input_prompt("Would you like to swap any two abilities? (y/n)")
+                .strip()
+                .lower()
+            )
             if swap not in ["y", "yes", "n", "no"]:
                 print_status_message("Please enter 'y' or 'n'.", "warning")
                 continue
@@ -813,13 +829,25 @@ class CharacterFactory:
                 break
 
             # Get abilities to swap
-            ability1 = print_input_prompt("Enter first ability to swap (STR/DEX/CON/INT/WIS/CHA)").strip().lower()
-            ability2 = print_input_prompt("Enter second ability to swap (STR/DEX/CON/INT/WIS/CHA)").strip().lower()
+            ability1 = (
+                print_input_prompt("Enter first ability to swap (STR/DEX/CON/INT/WIS/CHA)")
+                .strip()
+                .lower()
+            )
+            ability2 = (
+                print_input_prompt("Enter second ability to swap (STR/DEX/CON/INT/WIS/CHA)")
+                .strip()
+                .lower()
+            )
 
             # Map short forms to full names
             ability_map = {
-                "str": "strength", "dex": "dexterity", "con": "constitution",
-                "int": "intelligence", "wis": "wisdom", "cha": "charisma"
+                "str": "strength",
+                "dex": "dexterity",
+                "con": "constitution",
+                "int": "intelligence",
+                "wis": "wisdom",
+                "cha": "charisma",
             }
 
             ability1_full = ability_map.get(ability1, ability1)
@@ -827,7 +855,10 @@ class CharacterFactory:
 
             try:
                 abilities = self.swap_abilities(abilities, ability1_full, ability2_full)
-                print_status_message(f"Swapping {ability1_full.upper()} ({abilities[ability1_full]}) with {ability2_full.upper()} ({abilities[ability2_full]})", "success")
+                print_status_message(
+                    f"Swapping {ability1_full.upper()} ({abilities[ability1_full]}) with {ability2_full.upper()} ({abilities[ability2_full]})",
+                    "success",
+                )
                 ability_display = []
                 for ability, score in abilities.items():
                     modifier = self.calculate_ability_modifier(score)
@@ -850,7 +881,9 @@ class CharacterFactory:
             if bonus > 0:
                 modifier = self.calculate_ability_modifier(final_score)
                 sign = "+" if modifier >= 0 else ""
-                ability_display.append(f"{ability.upper()[:3]}: {original} + {bonus} = {final_score} ({sign}{modifier})")
+                ability_display.append(
+                    f"{ability.upper()[:3]}: {original} + {bonus} = {final_score} ({sign}{modifier})"
+                )
             else:
                 modifier = self.calculate_ability_modifier(final_score)
                 sign = "+" if modifier >= 0 else ""
@@ -871,7 +904,7 @@ class CharacterFactory:
             constitution=abilities["constitution"],
             intelligence=abilities["intelligence"],
             wisdom=abilities["wisdom"],
-            charisma=abilities["charisma"]
+            charisma=abilities["charisma"],
         )
 
         # Get starting equipment to calculate AC
@@ -903,7 +936,8 @@ class CharacterFactory:
             f"Hit Points: {hp} ({class_data['hit_die']} max + {con_modifier} CON)",
             f"Armor Class: {ac}" + (f" ({armor_data['name']})" if armor_data else " (no armor)"),
             f"Attack Bonus: +{attack_bonus} (proficiency +{proficiency_bonus}, STR +{str_modifier})",
-            f"Damage: {damage_dice}+{str_modifier}" + (f" {weapon_data['damage_type']} ({weapon_data['name']})" if weapon_data else "")
+            f"Damage: {damage_dice}+{str_modifier}"
+            + (f" {weapon_data['damage_type']} ({weapon_data['name']})" if weapon_data else ""),
         ]
         print_message("\n".join(stats_display))
 
@@ -935,7 +969,7 @@ class CharacterFactory:
             skill_proficiencies=skill_proficiencies,
             expertise_skills=expertise_skills,
             weapon_proficiencies=weapon_proficiencies,
-            armor_proficiencies=armor_proficiencies
+            armor_proficiencies=armor_proficiencies,
         )
 
         # Store race (will add field to Character class)
@@ -966,7 +1000,9 @@ class CharacterFactory:
         equipment_display = ["EQUIPPED:"]
         if weapon_equipped:
             weapon_info = items_data["weapons"][weapon_equipped]
-            equipment_display.append(f"  Weapon: {weapon_info['name']} ({weapon_info['damage']} {weapon_info['damage_type']})")
+            equipment_display.append(
+                f"  Weapon: {weapon_info['name']} ({weapon_info['damage']} {weapon_info['damage_type']})"
+            )
         else:
             equipment_display.append("  Weapon: (none)")
 
@@ -997,7 +1033,14 @@ class CharacterFactory:
             "ABILITIES:",
         ]
 
-        for ability in ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]:
+        for ability in [
+            "strength",
+            "dexterity",
+            "constitution",
+            "intelligence",
+            "wisdom",
+            "charisma",
+        ]:
             score = getattr(abilities_obj, ability)
             modifier = self.calculate_ability_modifier(score)
             sign = "+" if modifier >= 0 else ""
@@ -1023,23 +1066,32 @@ class CharacterFactory:
                 skill_name = skill_info.get("name", skill_id.title())
                 sheet_display.append(f"  {skill_name}")
 
-        sheet_display.extend([
-            "",
-            "COMBAT STATS:",
-            f"  HP: {character.current_hp}/{character.max_hp}",
-            f"  AC: {character.ac}",
-            f"  Attack: +{attack_bonus} to hit, {damage_dice}+{str_modifier} damage",
-            f"  Initiative: +{abilities_obj.dex_mod}",
-            "",
-            "EQUIPMENT:"
-        ])
+        sheet_display.extend(
+            [
+                "",
+                "COMBAT STATS:",
+                f"  HP: {character.current_hp}/{character.max_hp}",
+                f"  AC: {character.ac}",
+                f"  Attack: +{attack_bonus} to hit, {damage_dice}+{str_modifier} damage",
+                f"  Initiative: +{abilities_obj.dex_mod}",
+                "",
+                "EQUIPMENT:",
+            ]
+        )
 
         if weapon_equipped:
             sheet_display.append(f"  Weapon: {items_data['weapons'][weapon_equipped]['name']}")
         if armor_equipped:
             sheet_display.append(f"  Armor: {items_data['armor'][armor_equipped]['name']}")
         if consumables:
-            items_str = ", ".join([f"{items_data['consumables'][item.item_id]['name']} x{item.quantity}" if item.quantity > 1 else items_data['consumables'][item.item_id]['name'] for item in consumables])
+            items_str = ", ".join(
+                [
+                    f"{items_data['consumables'][item.item_id]['name']} x{item.quantity}"
+                    if item.quantity > 1
+                    else items_data["consumables"][item.item_id]["name"]
+                    for item in consumables
+                ]
+            )
             sheet_display.append(f"  Items: {items_str}")
 
         print_section("CHARACTER SHEET", "\n".join(sheet_display))

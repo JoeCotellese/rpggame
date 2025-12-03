@@ -42,7 +42,17 @@ class TestCharacterCreationIntegration:
         # Verify character is valid
         assert hp >= 1
         assert ac >= 10
-        assert all(ability in abilities for ability in ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"])
+        assert all(
+            ability in abilities
+            for ability in [
+                "strength",
+                "dexterity",
+                "constitution",
+                "intelligence",
+                "wisdom",
+                "charisma",
+            ]
+        )
 
     def test_create_human_fighter(self):
         """Test creating a Human Fighter"""
@@ -196,7 +206,7 @@ class TestCharacterCreationIntegration:
             level=1,
             abilities=Abilities(15, 14, 13, 10, 12, 8),
             max_hp=12,
-            ac=16
+            ac=16,
         )
 
         # Apply starting equipment
@@ -244,7 +254,7 @@ class TestCharacterCreationIntegration:
             constitution=abilities["constitution"],
             intelligence=abilities["intelligence"],
             wisdom=abilities["wisdom"],
-            charisma=abilities["charisma"]
+            charisma=abilities["charisma"],
         )
 
         con_modifier = factory.calculate_ability_modifier(abilities["constitution"])
@@ -261,7 +271,7 @@ class TestCharacterCreationIntegration:
             abilities=abilities_obj,
             max_hp=hp,
             ac=ac,
-            race="human"
+            race="human",
         )
 
         # Apply equipment

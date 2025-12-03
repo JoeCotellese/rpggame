@@ -63,6 +63,7 @@ class TestDebugModeIntegration:
 
             # Use the global console to print something
             from dnd_engine.ui.rich_ui import console, print_message
+
             print_message("Test message")
 
             # Flush the console
@@ -92,10 +93,7 @@ class TestDebugModeIntegration:
 
             # Create event bus and emit events
             event_bus = EventBus()
-            event_bus.emit(Event(
-                EventType.COMBAT_START,
-                {"enemies": ["Goblin", "Orc"]}
-            ))
+            event_bus.emit(Event(EventType.COMBAT_START, {"enemies": ["Goblin", "Orc"]}))
 
             # Read log file
             log_path = logging_config.get_log_file_path()
@@ -184,6 +182,7 @@ class TestDebugModeIntegration:
 
             # Generate some output
             from dnd_engine.ui.rich_ui import print_status_message
+
             print_status_message("Test message", "success")
 
             # Flush
@@ -213,6 +212,7 @@ class TestDebugModeIntegration:
 
             # Write unicode characters
             from dnd_engine.ui.rich_ui import print_message
+
             print_message("Test: ⚔ ✓ ● ⚠ 💀")
 
             # Flush
@@ -220,7 +220,7 @@ class TestDebugModeIntegration:
 
             # Read log file with UTF-8
             log_path = logging_config.get_log_file_path()
-            log_content = log_path.read_text(encoding='utf-8')
+            log_content = log_path.read_text(encoding="utf-8")
 
             # Verify unicode characters are preserved
             # Note: Rich might strip some special characters when force_terminal=False

@@ -15,6 +15,7 @@ class ResourcePool:
     - Rage: name="rage", current=2, maximum=2
     - Action Surge: name="action_surge", current=1, maximum=1
     """
+
     name: str
     current: int
     maximum: int

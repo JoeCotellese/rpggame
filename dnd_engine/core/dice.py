@@ -18,6 +18,7 @@ class DiceRoll:
         advantage: Whether the roll was made with advantage
         disadvantage: Whether the roll was made with disadvantage
     """
+
     rolls: list[int]
     modifier: int
     notation: str
@@ -67,7 +68,7 @@ class DiceRoller:
     """
 
     # Regex pattern for parsing dice notation: NdS+M or NdS-M
-    DICE_PATTERN = re.compile(r'^(\d*)d(\d+)(([+-])(\d+))?$', re.IGNORECASE)
+    DICE_PATTERN = re.compile(r"^(\d*)d(\d+)(([+-])(\d+))?$", re.IGNORECASE)
 
     def __init__(self, seed: int | None = None):
         """
@@ -81,12 +82,7 @@ class DiceRoller:
         else:
             self.random = random.Random()
 
-    def roll(
-        self,
-        notation: str,
-        advantage: bool = False,
-        disadvantage: bool = False
-    ) -> DiceRoll:
+    def roll(self, notation: str, advantage: bool = False, disadvantage: bool = False) -> DiceRoll:
         """
         Roll dice according to standard D&D notation.
 
@@ -124,11 +120,12 @@ class DiceRoller:
             modifier=modifier,
             notation=notation,
             advantage=advantage,
-            disadvantage=disadvantage
+            disadvantage=disadvantage,
         )
 
         # Log the roll if debug mode is enabled
         from dnd_engine.utils.logging_config import get_logging_config
+
         logging_config = get_logging_config()
         if logging_config:
             logging_config.log_dice_roll(
@@ -137,7 +134,7 @@ class DiceRoller:
                 modifier=modifier,
                 total=result.total,
                 advantage=advantage,
-                disadvantage=disadvantage
+                disadvantage=disadvantage,
             )
 
         return result
@@ -174,7 +171,7 @@ class DiceRoller:
         if match.group(3):  # Has modifier
             sign = match.group(4)
             value = int(match.group(5))
-            modifier = value if sign == '+' else -value
+            modifier = value if sign == "+" else -value
 
         return count, sides, modifier
 

@@ -13,13 +13,14 @@ if TYPE_CHECKING:
 
 class ItemEffectResult:
     """Result of applying an item effect"""
+
     def __init__(
         self,
         success: bool,
         effect_type: str,
         amount: int = 0,
         dice_notation: str | None = None,
-        message: str = ""
+        message: str = "",
     ):
         self.success = success
         self.effect_type = effect_type
@@ -33,7 +34,7 @@ def apply_item_effect(
     target: Creature,
     dice_roller: DiceRoller | None = None,
     event_bus: EventBus | None = None,
-    time_manager: Optional["TimeManager"] = None
+    time_manager: Optional["TimeManager"] = None,
 ) -> ItemEffectResult:
     """
     Apply an item's effect to a target creature.
@@ -86,15 +87,12 @@ def apply_item_effect(
         return ItemEffectResult(
             success=False,
             effect_type=effect_type or "unknown",
-            message=f"{item_name} has no implemented effect"
+            message=f"{item_name} has no implemented effect",
         )
 
 
 def _apply_healing_effect(
-    item_info: dict[str, Any],
-    target: Creature,
-    dice_roller: DiceRoller,
-    event_bus: EventBus | None
+    item_info: dict[str, Any], target: Creature, dice_roller: DiceRoller, event_bus: EventBus | None
 ) -> ItemEffectResult:
     """
     Apply a healing effect to a target.
@@ -120,7 +118,7 @@ def _apply_healing_effect(
 
     # Apply healing - use Character.recover_hp if available (handles unconscious/death saves)
     # Otherwise fall back to Creature.heal for non-Characters
-    if hasattr(target, 'recover_hp'):
+    if hasattr(target, "recover_hp"):
         actual_healing = target.recover_hp(healing_amount)
     else:
         target.heal(healing_amount)
@@ -137,8 +135,8 @@ def _apply_healing_effect(
                 "healing_rolled": healing_amount,
                 "healing_actual": actual_healing,
                 "hp_before": hp_before,
-                "hp_after": target.current_hp
-            }
+                "hp_after": target.current_hp,
+            },
         )
         event_bus.emit(event)
 
@@ -147,7 +145,9 @@ def _apply_healing_effect(
         if not target.is_alive:
             message = f"{target.name} is dead and cannot be healed"
         else:
-            message = f"{target.name} is already at full health ({target.current_hp}/{target.max_hp} HP)"
+            message = (
+                f"{target.name} is already at full health ({target.current_hp}/{target.max_hp} HP)"
+            )
     else:
         message = f"{target.name} healed for {actual_healing} HP (rolled {healing_dice}: {healing_amount})"
         if actual_healing < healing_amount:
@@ -158,15 +158,12 @@ def _apply_healing_effect(
         effect_type="healing",
         amount=actual_healing,
         dice_notation=healing_dice,
-        message=message
+        message=message,
     )
 
 
 def _apply_damage_effect(
-    item_info: dict[str, Any],
-    target: Creature,
-    dice_roller: DiceRoller,
-    event_bus: EventBus | None
+    item_info: dict[str, Any], target: Creature, dice_roller: DiceRoller, event_bus: EventBus | None
 ) -> ItemEffectResult:
     """
     Apply a damage effect to a target.
@@ -217,8 +214,8 @@ def _apply_damage_effect(
                 "damage_actual": actual_damage,  # After all reductions
                 "has_resistance": has_resistance,
                 "hp_before": hp_before,
-                "hp_after": target.current_hp
-            }
+                "hp_after": target.current_hp,
+            },
         )
         event_bus.emit(event)
 
@@ -236,7 +233,9 @@ def _apply_damage_effect(
         if has_resistance:
             message = f"{target.name} takes {actual_damage} {damage_type} damage ({damage_roll_str}, halved by resistance)"
         else:
-            message = f"{target.name} takes {actual_damage} {damage_type} damage ({damage_roll_str})"
+            message = (
+                f"{target.name} takes {actual_damage} {damage_type} damage ({damage_roll_str})"
+            )
 
         if not target.is_alive:
             message += " - KILLED!"
@@ -246,14 +245,12 @@ def _apply_damage_effect(
         effect_type="damage",
         amount=actual_damage,
         dice_notation=damage_dice,
-        message=message
+        message=message,
     )
 
 
 def _apply_condition_removal_effect(
-    item_info: dict[str, Any],
-    target: Creature,
-    event_bus: EventBus | None
+    item_info: dict[str, Any], target: Creature, event_bus: EventBus | None
 ) -> ItemEffectResult:
     """
     Apply a condition removal effect to a target.
@@ -275,7 +272,7 @@ def _apply_condition_removal_effect(
         return ItemEffectResult(
             success=False,
             effect_type="condition_removal",
-            message=f"{item_name} has no conditions specified to remove"
+            message=f"{item_name} has no conditions specified to remove",
         )
 
     # Track which conditions were actually removed
@@ -292,8 +289,8 @@ def _apply_condition_removal_effect(
             data={
                 "target": target.name,
                 "item": item_name,
-                "conditions_removed": removed_conditions
-            }
+                "conditions_removed": removed_conditions,
+            },
         )
         event_bus.emit(event)
 
@@ -308,14 +305,12 @@ def _apply_condition_removal_effect(
         success=len(removed_conditions) > 0,
         effect_type="condition_removal",
         amount=len(removed_conditions),
-        message=message
+        message=message,
     )
 
 
 def _apply_buff_effect(
-    item_info: dict[str, Any],
-    target: Creature,
-    event_bus: EventBus | None
+    item_info: dict[str, Any], target: Creature, event_bus: EventBus | None
 ) -> ItemEffectResult:
     """
     Apply a buff effect to a target.
@@ -347,9 +342,7 @@ def _apply_buff_effect(
 
     if not buff_type:
         return ItemEffectResult(
-            success=False,
-            effect_type="buff",
-            message=f"{item_name} has no buff_type specified"
+            success=False, effect_type="buff", message=f"{item_name} has no buff_type specified"
         )
 
     # Simple condition-based buff tracking
@@ -389,28 +382,26 @@ def _apply_buff_effect(
                 "item": item_name,
                 "buff_type": buff_type,
                 "duration_minutes": duration_minutes,
-                "conditions_added": buff_conditions
-            }
+                "conditions_added": buff_conditions,
+            },
         )
         event_bus.emit(event)
 
     # Build result message
-    duration_text = f"{duration_minutes} minutes" if duration_minutes < 60 else f"{duration_minutes // 60} hours"
+    duration_text = (
+        f"{duration_minutes} minutes"
+        if duration_minutes < 60
+        else f"{duration_minutes // 60} hours"
+    )
     message = f"{target.name} gains {item_name} buff for {duration_text}"
 
     return ItemEffectResult(
-        success=True,
-        effect_type="buff",
-        amount=duration_minutes,
-        message=message
+        success=True, effect_type="buff", amount=duration_minutes, message=message
     )
 
 
 def _apply_spell_effect(
-    item_info: dict[str, Any],
-    target: Creature,
-    dice_roller: DiceRoller,
-    event_bus: EventBus | None
+    item_info: dict[str, Any], target: Creature, dice_roller: DiceRoller, event_bus: EventBus | None
 ) -> ItemEffectResult:
     """
     Apply a spell effect from a scroll or spell-effect potion.
@@ -438,7 +429,7 @@ def _apply_spell_effect(
     return ItemEffectResult(
         success=False,
         effect_type="spell",
-        message=f"{item_name} cannot be used - spell system not yet implemented (spell: {spell_id})"
+        message=f"{item_name} cannot be used - spell system not yet implemented (spell: {spell_id})",
     )
 
 
@@ -446,7 +437,7 @@ def _apply_light_effect(
     item_info: dict[str, Any],
     target: Creature,
     time_manager: Optional["TimeManager"],
-    event_bus: EventBus | None
+    event_bus: EventBus | None,
 ) -> ItemEffectResult:
     """
     Apply a light effect that illuminates the area for a duration.
@@ -473,7 +464,7 @@ def _apply_light_effect(
         return ItemEffectResult(
             success=False,
             effect_type="light",
-            message=f"{item_name} cannot be used - time manager not available"
+            message=f"{item_name} cannot be used - time manager not available",
         )
 
     # Create an ActiveEffect for the light source
@@ -486,7 +477,7 @@ def _apply_light_effect(
         target_name="party",
         description=f"{item_name} providing {light_level} light",
         concentration=False,
-        effect_data={"light_level": light_level}
+        effect_data={"light_level": light_level},
     )
 
     time_manager.add_effect(light_effect)
@@ -500,20 +491,19 @@ def _apply_light_effect(
                 "item": item_name,
                 "effect": "light",
                 "light_level": light_level,
-                "duration_minutes": duration_minutes
-            }
+                "duration_minutes": duration_minutes,
+            },
         )
         event_bus.emit(event)
 
     # Build result message
-    duration_text = f"{duration_minutes} minutes" if duration_minutes < 60 else f"{duration_minutes // 60} hour"
+    duration_text = (
+        f"{duration_minutes} minutes" if duration_minutes < 60 else f"{duration_minutes // 60} hour"
+    )
     message = f"{item_name} lit! Provides {light_level} light for {duration_text}."
 
     return ItemEffectResult(
-        success=True,
-        effect_type="light",
-        amount=duration_minutes,
-        message=message
+        success=True, effect_type="light", amount=duration_minutes, message=message
     )
 
 
@@ -532,9 +522,4 @@ def _apply_information_effect(item_info: dict[str, Any]) -> ItemEffectResult:
     """
     description = item_info.get("description", "The document appears blank.")
 
-    return ItemEffectResult(
-        success=True,
-        effect_type="information",
-        amount=0,
-        message=description
-    )
+    return ItemEffectResult(success=True, effect_type="information", amount=0, message=description)

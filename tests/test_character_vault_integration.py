@@ -46,12 +46,7 @@ def second_vault(second_vault_dir):
 def sample_character():
     """Create a sample character for testing"""
     abilities = Abilities(
-        strength=16,
-        dexterity=14,
-        constitution=15,
-        intelligence=10,
-        wisdom=12,
-        charisma=8
+        strength=16, dexterity=14, constitution=15, intelligence=10, wisdom=12, charisma=8
     )
 
     inventory = Inventory()
@@ -77,7 +72,7 @@ def sample_character():
         skill_proficiencies=["athletics", "intimidation", "perception"],
         expertise_skills=[],
         weapon_proficiencies=["simple", "martial"],
-        armor_proficiencies=["light", "medium", "heavy", "shields"]
+        armor_proficiencies=["light", "medium", "heavy", "shields"],
     )
 
     # Add multiple resource pools
@@ -241,7 +236,10 @@ class TestCloneWorkflow:
 
         # Resource pools
         assert "Second Wind" in clone.resource_pools
-        assert clone.resource_pools["Second Wind"].current == original.resource_pools["Second Wind"].current
+        assert (
+            clone.resource_pools["Second Wind"].current
+            == original.resource_pools["Second Wind"].current
+        )
 
         # Conditions
         assert "poisoned" in clone.conditions
@@ -291,9 +289,7 @@ class TestStateManagement:
 
         # Activate for a campaign
         vault.update_character_state(
-            character_id,
-            CharacterState.ACTIVE,
-            campaign_name="Lost Mine of Phandelver"
+            character_id, CharacterState.ACTIVE, campaign_name="Lost Mine of Phandelver"
         )
 
         chars = vault.list_characters()
@@ -358,12 +354,7 @@ class TestCharacterFactoryIntegration:
 
         # Create a simple character programmatically
         abilities = Abilities(
-            strength=15,
-            dexterity=13,
-            constitution=14,
-            intelligence=12,
-            wisdom=10,
-            charisma=8
+            strength=15, dexterity=13, constitution=14, intelligence=12, wisdom=10, charisma=8
         )
 
         character = Character(
@@ -374,7 +365,7 @@ class TestCharacterFactoryIntegration:
             max_hp=12,
             ac=16,
             inventory=Inventory(),
-            race="human"
+            race="human",
         )
 
         # Save to vault
@@ -390,7 +381,9 @@ class TestCharacterFactoryIntegration:
 class TestMultiVaultOperations:
     """Test operations across multiple vaults"""
 
-    def test_transfer_character_between_vaults(self, vault, second_vault, sample_character, tmp_path):
+    def test_transfer_character_between_vaults(
+        self, vault, second_vault, sample_character, tmp_path
+    ):
         """Test moving a character from one vault to another"""
         # Save to first vault
         original_id = vault.save_character(sample_character)
@@ -450,7 +443,7 @@ class TestErrorRecovery:
 
         # Create corrupted export file
         bad_export = tmp_path / "corrupted.json"
-        with open(bad_export, 'w') as f:
+        with open(bad_export, "w") as f:
             f.write("{invalid json")
 
         # Try to import (should fail)
@@ -486,20 +479,20 @@ class TestErrorRecovery:
                     "constitution": 10,
                     "intelligence": 10,
                     "wisdom": 10,
-                    "charisma": 10
+                    "charisma": 10,
                 },
                 "inventory": {
                     "items": [],
                     "equipped": {"weapon": None, "armor": None},
-                    "currency": {"copper": 0, "silver": 0, "gold": 0, "platinum": 0}
+                    "currency": {"copper": 0, "silver": 0, "gold": 0, "platinum": 0},
                 },
                 "conditions": [],
-                "resource_pools": []
-            }
+                "resource_pools": [],
+            },
         }
 
         minimal_file = tmp_path / "minimal.json"
-        with open(minimal_file, 'w') as f:
+        with open(minimal_file, "w") as f:
             json.dump(minimal_data, f)
 
         # Should import successfully
@@ -526,7 +519,7 @@ class TestBulkOperations:
                 constitution=10 + (i + 2) % 6,
                 intelligence=10 + (i + 3) % 6,
                 wisdom=10 + (i + 4) % 6,
-                charisma=10 + (i + 5) % 6
+                charisma=10 + (i + 5) % 6,
             )
 
             character = Character(
@@ -536,7 +529,7 @@ class TestBulkOperations:
                 abilities=abilities,
                 max_hp=10,
                 ac=10,
-                inventory=Inventory()
+                inventory=Inventory(),
             )
 
             vault.save_character(character)

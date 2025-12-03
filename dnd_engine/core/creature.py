@@ -12,6 +12,7 @@ class Abilities:
     Ability scores typically range from 1-20 for player characters and monsters.
     Each score provides a modifier calculated as: (score - 10) // 2
     """
+
     strength: int
     dexterity: int
     constitution: int
@@ -58,12 +59,7 @@ class Creature:
     """
 
     def __init__(
-        self,
-        name: str,
-        max_hp: int,
-        ac: int,
-        abilities: Abilities,
-        current_hp: int | None = None
+        self, name: str, max_hp: int, ac: int, abilities: Abilities, current_hp: int | None = None
     ):
         """
         Initialize a creature.
@@ -156,7 +152,7 @@ class Creature:
         dc: int | None = None,
         ability: str | None = None,
         allow_repeat_save: bool = False,
-        repeat_timing: str = "end_of_turn"
+        repeat_timing: str = "end_of_turn",
     ) -> None:
         """
         Apply a condition with full metadata for duration and repeat saves.
@@ -177,7 +173,7 @@ class Creature:
             "dc": dc,
             "ability": ability,
             "allow_repeat_save": allow_repeat_save,
-            "repeat_timing": repeat_timing
+            "repeat_timing": repeat_timing,
         }
 
     def remove_condition(self, condition: str) -> None:
@@ -229,28 +225,25 @@ class Creature:
         # Surprised condition always ends at end of turn
         if "surprised" in self.active_conditions:
             self.remove_condition("surprised")
-            results.append({
-                "type": "condition_expired",
-                "condition": "surprised"
-            })
+            results.append({"type": "condition_expired", "condition": "surprised"})
 
         for condition_name, metadata in list(self.active_conditions.items()):
             # Process repeat saves if allowed
             if metadata.get("allow_repeat_save") and metadata.get("repeat_timing") == "end_of_turn":
                 if metadata.get("dc") and metadata.get("ability"):
                     save_result = self.make_saving_throw(
-                        ability=metadata["ability"],
-                        dc=metadata["dc"],
-                        event_bus=event_bus
+                        ability=metadata["ability"], dc=metadata["dc"], event_bus=event_bus
                     )
 
                     if save_result["success"]:
                         self.remove_condition(condition_name)
-                        results.append({
-                            "type": "repeat_save_success",
-                            "condition": condition_name,
-                            "save_result": save_result
-                        })
+                        results.append(
+                            {
+                                "type": "repeat_save_success",
+                                "condition": condition_name,
+                                "save_result": save_result,
+                            }
+                        )
                     # Skip duration processing for conditions with repeat saves
                     # The repeat save is the primary mechanism for ending the condition
                     continue
@@ -260,10 +253,7 @@ class Creature:
                 metadata["duration_remaining"] = metadata.get("duration_remaining", 0) - 1
                 if metadata["duration_remaining"] <= 0:
                     self.remove_condition(condition_name)
-                    results.append({
-                        "type": "duration_expired",
-                        "condition": condition_name
-                    })
+                    results.append({"type": "duration_expired", "condition": condition_name})
 
         return results
 
@@ -283,7 +273,7 @@ class Creature:
         dc: int,
         advantage: bool = False,
         disadvantage: bool = False,
-        event_bus=None
+        event_bus=None,
     ) -> dict:
         """
         Roll an ability saving throw against a DC.
@@ -314,12 +304,20 @@ class Creature:
 
         # Normalize ability to short name
         short_to_full = {
-            "str": "strength", "dex": "dexterity", "con": "constitution",
-            "int": "intelligence", "wis": "wisdom", "cha": "charisma"
+            "str": "strength",
+            "dex": "dexterity",
+            "con": "constitution",
+            "int": "intelligence",
+            "wis": "wisdom",
+            "cha": "charisma",
         }
         full_to_short = {
-            "strength": "str", "dexterity": "dex", "constitution": "con",
-            "intelligence": "int", "wisdom": "wis", "charisma": "cha"
+            "strength": "str",
+            "dexterity": "dex",
+            "constitution": "con",
+            "intelligence": "int",
+            "wisdom": "wis",
+            "charisma": "cha",
         }
 
         ability_lower = ability.lower()
@@ -361,11 +359,15 @@ class Creature:
         # Create result dict
         result = {
             "success": success,
-            "roll": roll_result.rolls[0] if len(roll_result.rolls) == 1 else max(roll_result.rolls) if advantage else min(roll_result.rolls),
+            "roll": roll_result.rolls[0]
+            if len(roll_result.rolls) == 1
+            else max(roll_result.rolls)
+            if advantage
+            else min(roll_result.rolls),
             "modifier": modifier,
             "total": total,
             "dc": dc,
-            "ability": ability_short
+            "ability": ability_short,
         }
 
         return result

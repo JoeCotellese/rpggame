@@ -32,15 +32,15 @@ def mock_dungeon_with_locked_door():
                                 "tool_proficiency": "thieves_tools",
                                 "dc": 12,
                                 "description": "pick the lock",
-                                "silent": True
+                                "silent": True,
                             },
                             {
                                 "skill": "athletics",
                                 "dc": 12,
                                 "description": "break down the door",
-                                "silent": False
-                            }
-                        ]
+                                "silent": False,
+                            },
+                        ],
                     },
                     "east": {  # Door requiring a key
                         "destination": "key_room",
@@ -48,14 +48,14 @@ def mock_dungeon_with_locked_door():
                         "unlock_methods": [
                             {
                                 "requires_item": "rusty_key",
-                                "description": "unlock with the rusty key"
+                                "description": "unlock with the rusty key",
                             }
-                        ]
-                    }
+                        ],
+                    },
                 },
                 "enemies": [],
                 "items": [],
-                "searchable": False
+                "searchable": False,
             },
             "simple_room": {
                 "name": "Simple Room",
@@ -63,7 +63,7 @@ def mock_dungeon_with_locked_door():
                 "exits": {"south": "entrance"},
                 "enemies": [],
                 "items": [],
-                "searchable": False
+                "searchable": False,
             },
             "locked_room": {
                 "name": "Locked Room",
@@ -71,7 +71,7 @@ def mock_dungeon_with_locked_door():
                 "exits": {"east": "entrance"},
                 "enemies": [],
                 "items": [],
-                "searchable": False
+                "searchable": False,
             },
             "key_room": {
                 "name": "Key Room",
@@ -79,9 +79,9 @@ def mock_dungeon_with_locked_door():
                 "exits": {"west": "entrance"},
                 "enemies": [],
                 "items": [],
-                "searchable": False
-            }
-        }
+                "searchable": False,
+            },
+        },
     }
 
 
@@ -99,13 +99,15 @@ def test_party():
             constitution=12,
             intelligence=12,
             wisdom=12,
-            charisma=10
+            charisma=10,
         ),
         max_hp=20,
-        ac=15
+        ac=15,
     )
     rogue.tool_proficiencies = ["thieves_tools"]
-    rogue.skill_proficiencies.append("sleight_of_hand")  # Rogues are proficient in lockpicking skills
+    rogue.skill_proficiencies.append(
+        "sleight_of_hand"
+    )  # Rogues are proficient in lockpicking skills
 
     # Fighter with high STR, low DEX
     fighter = Character(
@@ -118,10 +120,10 @@ def test_party():
             constitution=16,
             intelligence=8,
             wisdom=10,
-            charisma=8
+            charisma=8,
         ),
         max_hp=30,
-        ac=18
+        ac=18,
     )
     fighter.skill_proficiencies.append("athletics")  # Fighters are proficient in physical skills
 
@@ -135,13 +137,12 @@ def game_state_with_locked_doors(mock_dungeon_with_locked_door, test_party, monk
     data_loader = DataLoader()
 
     # Mock the dungeon loading (accepts optional campaign_id parameter)
-    monkeypatch.setattr(data_loader, 'load_dungeon', lambda name, campaign_id=None: mock_dungeon_with_locked_door)
+    monkeypatch.setattr(
+        data_loader, "load_dungeon", lambda name, campaign_id=None: mock_dungeon_with_locked_door
+    )
 
     game_state = GameState(
-        party=test_party,
-        dungeon_name="test_dungeon",
-        event_bus=event_bus,
-        data_loader=data_loader
+        party=test_party, dungeon_name="test_dungeon", event_bus=event_bus, data_loader=data_loader
     )
 
     return game_state
@@ -203,13 +204,21 @@ class TestLockedDoors:
     def test_skill_check_success_unlocks_door(self, game_state_with_locked_doors, monkeypatch):
         """Test successful skill check unlocks the door."""
         from dnd_engine.core.dice import DiceRoll
+
         game_state = game_state_with_locked_doors
         rogue = game_state.party.characters[0]  # Sneaky the Rogue
 
         # Mock dice roll to always succeed (roll 20)
         def mock_roll(notation, advantage=False, disadvantage=False):
-            return DiceRoll(notation="1d20", rolls=[20], modifier=0, advantage=advantage, disadvantage=disadvantage)
-        monkeypatch.setattr(rogue._dice_roller, 'roll', mock_roll)
+            return DiceRoll(
+                notation="1d20",
+                rolls=[20],
+                modifier=0,
+                advantage=advantage,
+                disadvantage=disadvantage,
+            )
+
+        monkeypatch.setattr(rogue._dice_roller, "roll", mock_roll)
 
         # Attempt to pick the lock (method index 0)
         result = game_state.attempt_unlock("west", 0, rogue)
@@ -226,13 +235,21 @@ class TestLockedDoors:
     def test_skill_check_failure_keeps_door_locked(self, game_state_with_locked_doors, monkeypatch):
         """Test failed skill check keeps door locked but allows retry."""
         from dnd_engine.core.dice import DiceRoll
+
         game_state = game_state_with_locked_doors
         fighter = game_state.party.characters[1]  # Bruiser the Fighter
 
         # Mock dice roll to always fail (roll 1)
         def mock_roll(notation, advantage=False, disadvantage=False):
-            return DiceRoll(notation="1d20", rolls=[1], modifier=0, advantage=advantage, disadvantage=disadvantage)
-        monkeypatch.setattr(fighter._dice_roller, 'roll', mock_roll)
+            return DiceRoll(
+                notation="1d20",
+                rolls=[1],
+                modifier=0,
+                advantage=advantage,
+                disadvantage=disadvantage,
+            )
+
+        monkeypatch.setattr(fighter._dice_roller, "roll", mock_roll)
 
         # Attempt to pick the lock (fighter has no thieves tools, low DEX)
         result = game_state.attempt_unlock("west", 0, fighter)
@@ -248,13 +265,21 @@ class TestLockedDoors:
     def test_retry_after_failed_unlock(self, game_state_with_locked_doors, monkeypatch):
         """Test that player can retry after failing an unlock attempt."""
         from dnd_engine.core.dice import DiceRoll
+
         game_state = game_state_with_locked_doors
         rogue = game_state.party.characters[0]
 
         # First attempt: fail
         def mock_roll_fail(notation, advantage=False, disadvantage=False):
-            return DiceRoll(notation="1d20", rolls=[1], modifier=0, advantage=advantage, disadvantage=disadvantage)
-        monkeypatch.setattr(rogue._dice_roller, 'roll', mock_roll_fail)
+            return DiceRoll(
+                notation="1d20",
+                rolls=[1],
+                modifier=0,
+                advantage=advantage,
+                disadvantage=disadvantage,
+            )
+
+        monkeypatch.setattr(rogue._dice_roller, "roll", mock_roll_fail)
 
         result1 = game_state.attempt_unlock("west", 0, rogue)
         assert result1["success"] is False
@@ -262,8 +287,15 @@ class TestLockedDoors:
 
         # Second attempt: succeed
         def mock_roll_success(notation, advantage=False, disadvantage=False):
-            return DiceRoll(notation="1d20", rolls=[20], modifier=0, advantage=advantage, disadvantage=disadvantage)
-        monkeypatch.setattr(rogue._dice_roller, 'roll', mock_roll_success)
+            return DiceRoll(
+                notation="1d20",
+                rolls=[20],
+                modifier=0,
+                advantage=advantage,
+                disadvantage=disadvantage,
+            )
+
+        monkeypatch.setattr(rogue._dice_roller, "roll", mock_roll_success)
 
         result2 = game_state.attempt_unlock("west", 0, rogue)
         assert result2["success"] is True
@@ -272,13 +304,21 @@ class TestLockedDoors:
     def test_multiple_unlock_methods(self, game_state_with_locked_doors, monkeypatch):
         """Test that multiple unlock methods all work."""
         from dnd_engine.core.dice import DiceRoll
+
         game_state = game_state_with_locked_doors
         fighter = game_state.party.characters[1]
 
         # Mock dice roll to succeed
         def mock_roll(notation, advantage=False, disadvantage=False):
-            return DiceRoll(notation="1d20", rolls=[20], modifier=0, advantage=advantage, disadvantage=disadvantage)
-        monkeypatch.setattr(fighter._dice_roller, 'roll', mock_roll)
+            return DiceRoll(
+                notation="1d20",
+                rolls=[20],
+                modifier=0,
+                advantage=advantage,
+                disadvantage=disadvantage,
+            )
+
+        monkeypatch.setattr(fighter._dice_roller, "roll", mock_roll)
 
         # Try second method (Athletics check) instead of lockpicking
         result = game_state.attempt_unlock("west", 1, fighter)
@@ -319,13 +359,21 @@ class TestLockedDoors:
     def test_door_stays_unlocked(self, game_state_with_locked_doors, monkeypatch):
         """Test that once unlocked, a door remains unlocked."""
         from dnd_engine.core.dice import DiceRoll
+
         game_state = game_state_with_locked_doors
         rogue = game_state.party.characters[0]
 
         # Mock successful dice roll
         def mock_roll(notation, advantage=False, disadvantage=False):
-            return DiceRoll(notation="1d20", rolls=[20], modifier=0, advantage=advantage, disadvantage=disadvantage)
-        monkeypatch.setattr(rogue._dice_roller, 'roll', mock_roll)
+            return DiceRoll(
+                notation="1d20",
+                rolls=[20],
+                modifier=0,
+                advantage=advantage,
+                disadvantage=disadvantage,
+            )
+
+        monkeypatch.setattr(rogue._dice_roller, "roll", mock_roll)
 
         # Unlock the door
         result = game_state.attempt_unlock("west", 0, rogue)
@@ -349,14 +397,22 @@ class TestLockedDoors:
     def test_tool_proficiency_affects_skill_check(self, game_state_with_locked_doors, monkeypatch):
         """Test that tool proficiency is considered in skill checks."""
         from dnd_engine.core.dice import DiceRoll
+
         game_state = game_state_with_locked_doors
         rogue = game_state.party.characters[0]  # Has thieves_tools proficiency
         fighter = game_state.party.characters[1]  # Does not have thieves_tools
 
         # Mock a medium roll that would succeed with proficiency but fail without
         def mock_roll_medium(notation, advantage=False, disadvantage=False):
-            return DiceRoll(notation="1d20", rolls=[10], modifier=0, advantage=advantage, disadvantage=disadvantage)
-        monkeypatch.setattr(rogue._dice_roller, 'roll', mock_roll_medium)
+            return DiceRoll(
+                notation="1d20",
+                rolls=[10],
+                modifier=0,
+                advantage=advantage,
+                disadvantage=disadvantage,
+            )
+
+        monkeypatch.setattr(rogue._dice_roller, "roll", mock_roll_medium)
 
         # Rogue: DEX +4, proficiency +2, roll 10 = 16 total (vs DC 12) -> SUCCESS
         rogue_result = game_state.attempt_unlock("west", 0, rogue)
@@ -367,7 +423,7 @@ class TestLockedDoors:
         exit_info["locked"] = True
 
         # Mock fighter's dice roller
-        monkeypatch.setattr(fighter._dice_roller, 'roll', mock_roll_medium)
+        monkeypatch.setattr(fighter._dice_roller, "roll", mock_roll_medium)
 
         # Fighter: DEX +0, no proficiency, roll 10 = 10 total (vs DC 12) -> FAIL
         fighter_result = game_state.attempt_unlock("west", 0, fighter)
@@ -413,20 +469,31 @@ class TestLockedDoors:
     def test_skill_check_event_emitted(self, game_state_with_locked_doors, monkeypatch):
         """Test that skill check events are emitted for unlock attempts."""
         from dnd_engine.core.dice import DiceRoll
+
         game_state = game_state_with_locked_doors
         rogue = game_state.party.characters[0]
 
         # Track emitted events
         emitted_events = []
+
         def track_event(event):
             emitted_events.append(event)
+
         from dnd_engine.utils.events import EventType
+
         game_state.event_bus.subscribe(EventType.SKILL_CHECK, track_event)
 
         # Mock dice roll
         def mock_roll(notation, advantage=False, disadvantage=False):
-            return DiceRoll(notation="1d20", rolls=[15], modifier=0, advantage=advantage, disadvantage=disadvantage)
-        monkeypatch.setattr(rogue._dice_roller, 'roll', mock_roll)
+            return DiceRoll(
+                notation="1d20",
+                rolls=[15],
+                modifier=0,
+                advantage=advantage,
+                disadvantage=disadvantage,
+            )
+
+        monkeypatch.setattr(rogue._dice_roller, "roll", mock_roll)
 
         # Attempt unlock
         game_state.attempt_unlock("west", 0, rogue)

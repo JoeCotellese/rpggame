@@ -20,7 +20,7 @@ def wizard():
         constitution=12,
         intelligence=16,
         wisdom=10,
-        charisma=10
+        charisma=10,
     )
     return Character(
         name="Gandalf",
@@ -29,7 +29,7 @@ def wizard():
         abilities=abilities,
         max_hp=18,
         ac=10,  # Base AC (no armor)
-        spellcasting_ability="intelligence"
+        spellcasting_ability="intelligence",
     )
 
 
@@ -50,7 +50,7 @@ def game_state_with_wizard(wizard):
         dungeon_name="test_dungeon",
         event_bus=event_bus,
         data_loader=data_loader,
-        dice_roller=dice_roller
+        dice_roller=dice_roller,
     )
     return game_state
 
@@ -77,8 +77,8 @@ class TestEffectiveACCalculation:
             concentration=False,
             effect_data={
                 "modifier_type": ModifierType.AC_SET_BASE.value,
-                "formula": "13 + dex_mod"
-            }
+                "formula": "13 + dex_mod",
+            },
         )
         game_state_with_wizard.time_manager.add_effect(effect)
 
@@ -98,10 +98,7 @@ class TestEffectiveACCalculation:
             target_name=wizard.name,
             description="+5 AC until start of your next turn",
             concentration=False,
-            effect_data={
-                "modifier_type": ModifierType.AC_BONUS.value,
-                "value": 5
-            }
+            effect_data={"modifier_type": ModifierType.AC_BONUS.value, "value": 5},
         )
         game_state_with_wizard.time_manager.add_effect(effect)
 
@@ -123,8 +120,8 @@ class TestEffectiveACCalculation:
             concentration=False,
             effect_data={
                 "modifier_type": ModifierType.AC_SET_BASE.value,
-                "formula": "13 + dex_mod"
-            }
+                "formula": "13 + dex_mod",
+            },
         )
         game_state_with_wizard.time_manager.add_effect(mage_armor)
 
@@ -138,10 +135,7 @@ class TestEffectiveACCalculation:
             target_name=wizard.name,
             description="+5 AC",
             concentration=False,
-            effect_data={
-                "modifier_type": ModifierType.AC_BONUS.value,
-                "value": 5
-            }
+            effect_data={"modifier_type": ModifierType.AC_BONUS.value, "value": 5},
         )
         game_state_with_wizard.time_manager.add_effect(shield)
 
@@ -163,8 +157,8 @@ class TestEffectiveACCalculation:
             concentration=False,
             effect_data={
                 "modifier_type": ModifierType.AC_SET_BASE.value,
-                "formula": "13 + dex_mod"
-            }
+                "formula": "13 + dex_mod",
+            },
         )
         game_state_with_wizard.time_manager.add_effect(mage_armor)
 
@@ -179,17 +173,13 @@ class TestEffectiveACCalculation:
             description="Base AC becomes 16",
             concentration=True,
             caster_name=wizard.name,
-            effect_data={
-                "modifier_type": ModifierType.AC_SET_BASE.value,
-                "formula": "16"
-            }
+            effect_data={"modifier_type": ModifierType.AC_SET_BASE.value, "formula": "16"},
         )
         game_state_with_wizard.time_manager.add_effect(barkskin)
 
         # Only Mage Armor should apply: 13 + 2 = 15
         effective_ac = game_state_with_wizard.get_effective_ac(wizard)
         assert effective_ac == 15
-
 
     def test_shield_expires_after_one_round(self, game_state_with_wizard, wizard):
         """Test that Shield effect expires after 1 combat round"""
@@ -203,10 +193,7 @@ class TestEffectiveACCalculation:
             target_name=wizard.name,
             description="+5 AC",
             concentration=False,
-            effect_data={
-                "modifier_type": ModifierType.AC_BONUS.value,
-                "value": 5
-            }
+            effect_data={"modifier_type": ModifierType.AC_BONUS.value, "value": 5},
         )
         game_state_with_wizard.time_manager.add_effect(effect)
 
@@ -235,8 +222,8 @@ class TestEffectiveACCalculation:
             concentration=False,
             effect_data={
                 "modifier_type": ModifierType.AC_SET_BASE.value,
-                "formula": "13 + dex_mod"
-            }
+                "formula": "13 + dex_mod",
+            },
         )
         game_state_with_wizard.time_manager.add_effect(effect)
 

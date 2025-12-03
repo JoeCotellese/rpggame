@@ -32,7 +32,9 @@ class TestCLISpellcastingAbilityLookup:
         mock_combatant = Mock()
         mock_combatant.creature = None  # Will be set to character in each test
         game_state.initiative_tracker.get_current_combatant.return_value = mock_combatant
-        game_state.initiative_tracker.get_current_turn_state.return_value = None  # Will be set per-test
+        game_state.initiative_tracker.get_current_turn_state.return_value = (
+            None  # Will be set per-test
+        )
 
         return game_state
 
@@ -51,7 +53,7 @@ class TestCLISpellcastingAbilityLookup:
             abilities=Abilities(8, 14, 12, 16, 10, 8),
             max_hp=8,
             ac=12,
-            spellcasting_ability="int"
+            spellcasting_ability="int",
         )
 
     @pytest.fixture
@@ -63,7 +65,7 @@ class TestCLISpellcastingAbilityLookup:
             level=1,
             abilities=Abilities(16, 14, 14, 10, 12, 8),
             max_hp=12,
-            ac=16
+            ac=16,
         )
 
     @pytest.fixture
@@ -72,17 +74,12 @@ class TestCLISpellcastingAbilityLookup:
         return {
             "wizard": {
                 "name": "Wizard",
-                "spellcasting": {
-                    "ability": "int",
-                    "cantrips_known": {
-                        "1": 3
-                    }
-                }
+                "spellcasting": {"ability": "int", "cantrips_known": {"1": 3}},
             },
             "fighter": {
                 "name": "Fighter",
                 # No spellcasting key
-            }
+            },
         }
 
     def test_spellcasting_ability_retrieved_from_nested_object(
@@ -96,7 +93,7 @@ class TestCLISpellcastingAbilityLookup:
                 "level": 1,
                 "classes": ["wizard"],
                 "attack_type": "spell_attack",
-                "tags": ["combat"]
+                "tags": ["combat"],
             }
         }
 
@@ -113,12 +110,14 @@ class TestCLISpellcastingAbilityLookup:
         mock_game_state.party.characters = [wizard_character]
 
         # Set the current combatant's creature to the wizard so it's their turn
-        mock_game_state.initiative_tracker.get_current_combatant.return_value.creature = wizard_character
+        mock_game_state.initiative_tracker.get_current_combatant.return_value.creature = (
+            wizard_character
+        )
         mock_game_state.initiative_tracker.get_current_turn_state.return_value = mock_turn_state
 
         # Mock print_error to capture any error messages
-        with patch('dnd_engine.ui.cli.print_error') as mock_print_error:
-            with patch('dnd_engine.ui.cli.console'):
+        with patch("dnd_engine.ui.cli.print_error") as mock_print_error:
+            with patch("dnd_engine.ui.cli.console"):
                 # Call without specifying spell name - will prompt for selection
                 # Since we're not mocking the prompt, this will fail,
                 # but the key test is that we don't get "cannot cast spells" error
@@ -147,11 +146,13 @@ class TestCLISpellcastingAbilityLookup:
         mock_game_state.party.characters = [fighter_character]
 
         # Set the current combatant's creature to the fighter so it's their turn
-        mock_game_state.initiative_tracker.get_current_combatant.return_value.creature = fighter_character
+        mock_game_state.initiative_tracker.get_current_combatant.return_value.creature = (
+            fighter_character
+        )
         mock_game_state.initiative_tracker.get_current_turn_state.return_value = mock_turn_state
 
         # Mock print_error to capture the error message
-        with patch('dnd_engine.ui.cli.print_error') as mock_print_error:
+        with patch("dnd_engine.ui.cli.print_error") as mock_print_error:
             cli.handle_cast_spell("magic_missile")
 
         # Verify error message was printed
@@ -175,11 +176,13 @@ class TestCLISpellcastingAbilityLookup:
         mock_game_state.party.characters = [fighter_character]
 
         # Set the current combatant's creature to the fighter so it's their turn
-        mock_game_state.initiative_tracker.get_current_combatant.return_value.creature = fighter_character
+        mock_game_state.initiative_tracker.get_current_combatant.return_value.creature = (
+            fighter_character
+        )
         mock_game_state.initiative_tracker.get_current_turn_state.return_value = mock_turn_state
 
         # Should not crash, should print error instead
-        with patch('dnd_engine.ui.cli.print_error') as mock_print_error:
+        with patch("dnd_engine.ui.cli.print_error") as mock_print_error:
             cli.handle_cast_spell("magic_missile")
 
         # Should have printed an error
@@ -193,7 +196,7 @@ class TestCLISpellcastingAbilityLookup:
         classes_data = {
             "wizard": {
                 "name": "Wizard",
-                "spellcasting": {}  # Empty object, no 'ability' key
+                "spellcasting": {},  # Empty object, no 'ability' key
             }
         }
         mock_game_state.data_loader.load_classes.return_value = classes_data
@@ -207,11 +210,13 @@ class TestCLISpellcastingAbilityLookup:
         mock_game_state.party.characters = [wizard_character]
 
         # Set the current combatant's creature to the wizard so it's their turn
-        mock_game_state.initiative_tracker.get_current_combatant.return_value.creature = wizard_character
+        mock_game_state.initiative_tracker.get_current_combatant.return_value.creature = (
+            wizard_character
+        )
         mock_game_state.initiative_tracker.get_current_turn_state.return_value = mock_turn_state
 
         # Should print error about not being able to cast spells
-        with patch('dnd_engine.ui.cli.print_error') as mock_print_error:
+        with patch("dnd_engine.ui.cli.print_error") as mock_print_error:
             cli.handle_cast_spell("magic_missile")
 
         # Should have printed an error
@@ -222,21 +227,14 @@ class TestCLISpellcastingAbilityLookup:
     ):
         """Test that code still works if someone puts spellcasting_ability at top level (backward compat)"""
         # Setup - class data has BOTH nested and top-level (nested should take precedence)
-        classes_data = {
-            "wizard": {
-                "name": "Wizard",
-                "spellcasting": {
-                    "ability": "int"
-                }
-            }
-        }
+        classes_data = {"wizard": {"name": "Wizard", "spellcasting": {"ability": "int"}}}
         mock_game_state.data_loader.load_classes.return_value = classes_data
         mock_game_state.data_loader.load_spells.return_value = {
             "magic_missile": {
                 "name": "Magic Missile",
                 "level": 1,
                 "classes": ["wizard"],
-                "attack_type": "spell_attack"
+                "attack_type": "spell_attack",
             }
         }
 
@@ -249,20 +247,24 @@ class TestCLISpellcastingAbilityLookup:
         mock_game_state.party.characters = [wizard_character]
 
         # Set the current combatant's creature to the wizard so it's their turn
-        mock_game_state.initiative_tracker.get_current_combatant.return_value.creature = wizard_character
+        mock_game_state.initiative_tracker.get_current_combatant.return_value.creature = (
+            wizard_character
+        )
         mock_game_state.initiative_tracker.get_current_turn_state.return_value = mock_turn_state
 
         # Mock user inputs to cancel spell selection
-        with patch('builtins.input', side_effect=['1', '1', 'n']):
-            with patch('dnd_engine.ui.cli.console'):
+        with patch("builtins.input", side_effect=["1", "1", "n"]):
+            with patch("dnd_engine.ui.cli.console"):
                 # Should not crash and should not print error
-                with patch('dnd_engine.ui.cli.print_error') as mock_print_error:
+                with patch("dnd_engine.ui.cli.print_error") as mock_print_error:
                     cli.handle_cast_spell("magic_missile")
 
                     # Should NOT have printed "cannot cast spells" error
                     if mock_print_error.called:
                         error_messages = [call[0][0] for call in mock_print_error.call_args_list]
-                        assert not any("cannot cast spells" in msg.lower() for msg in error_messages)
+                        assert not any(
+                            "cannot cast spells" in msg.lower() for msg in error_messages
+                        )
 
 
 class TestSpellcastingAbilityDataStructure:

@@ -32,12 +32,7 @@ def save_manager(temp_saves_dir):
 def sample_character():
     """Create a sample character for testing."""
     abilities = Abilities(
-        strength=16,
-        dexterity=14,
-        constitution=15,
-        intelligence=8,
-        wisdom=10,
-        charisma=12
+        strength=16, dexterity=14, constitution=15, intelligence=8, wisdom=10, charisma=12
     )
 
     return Character(
@@ -49,7 +44,7 @@ def sample_character():
         ac=16,
         current_hp=25,
         xp=900,
-        race="Human"
+        race="Human",
     )
 
 
@@ -59,11 +54,7 @@ def sample_game_state(sample_character):
     party = Party([sample_character])
     data_loader = DataLoader()
 
-    game_state = GameState(
-        party=party,
-        dungeon_name="test_dungeon",
-        data_loader=data_loader
-    )
+    game_state = GameState(party=party, dungeon_name="test_dungeon", data_loader=data_loader)
 
     return game_state
 
@@ -110,9 +101,7 @@ class TestSaveSlotManager:
     def test_save_game_creates_slot_file(self, save_manager, sample_game_state, temp_saves_dir):
         """Test that saving a game creates/updates a slot file."""
         slot_path = save_manager.save_game(
-            slot_number=1,
-            game_state=sample_game_state,
-            playtime_delta=120
+            slot_number=1, game_state=sample_game_state, playtime_delta=120
         )
 
         assert slot_path.exists()
@@ -126,11 +115,7 @@ class TestSaveSlotManager:
 
     def test_save_game_updates_metadata(self, save_manager, sample_game_state):
         """Test that saving updates slot metadata correctly."""
-        save_manager.save_game(
-            slot_number=2,
-            game_state=sample_game_state,
-            playtime_delta=300
-        )
+        save_manager.save_game(slot_number=2, game_state=sample_game_state, playtime_delta=300)
 
         slot = save_manager.get_slot(2)
 
@@ -159,11 +144,7 @@ class TestSaveSlotManager:
     def test_load_game_from_saved_slot(self, save_manager, sample_game_state):
         """Test loading a game from a saved slot."""
         # Save first
-        save_manager.save_game(
-            slot_number=4,
-            game_state=sample_game_state,
-            playtime_delta=60
-        )
+        save_manager.save_game(slot_number=4, game_state=sample_game_state, playtime_delta=60)
 
         # Load - now returns tuple of (game_state, campaign_progress)
         loaded_state, campaign_progress = save_manager.load_game(slot_number=4)
@@ -185,11 +166,7 @@ class TestSaveSlotManager:
     def test_clear_slot(self, save_manager, sample_game_state):
         """Test clearing a slot resets it to empty."""
         # Save first
-        save_manager.save_game(
-            slot_number=6,
-            game_state=sample_game_state,
-            playtime_delta=100
-        )
+        save_manager.save_game(slot_number=6, game_state=sample_game_state, playtime_delta=100)
 
         slot = save_manager.get_slot(6)
         assert not slot.is_empty()
@@ -206,11 +183,7 @@ class TestSaveSlotManager:
     def test_rename_slot(self, save_manager, sample_game_state):
         """Test renaming a slot with custom name."""
         # Save first
-        save_manager.save_game(
-            slot_number=7,
-            game_state=sample_game_state,
-            playtime_delta=50
-        )
+        save_manager.save_game(slot_number=7, game_state=sample_game_state, playtime_delta=50)
 
         # Rename
         save_manager.rename_slot(7, "My Epic Quest")
@@ -228,11 +201,7 @@ class TestSaveSlotManager:
 
     def test_slot_file_format(self, save_manager, sample_game_state, temp_saves_dir):
         """Test that slot files have correct JSON structure."""
-        save_manager.save_game(
-            slot_number=8,
-            game_state=sample_game_state,
-            playtime_delta=75
-        )
+        save_manager.save_game(slot_number=8, game_state=sample_game_state, playtime_delta=75)
 
         slot_path = temp_saves_dir / "slot_08.json"
 
@@ -262,7 +231,7 @@ class TestSaveSlotManager:
         """Test that corrupted slot files are treated as empty."""
         # Create a corrupted slot file
         slot_path = temp_saves_dir / "slot_09.json"
-        with open(slot_path, 'w') as f:
+        with open(slot_path, "w") as f:
             f.write("{ invalid json }")
 
         # Should return empty slot instead of crashing
@@ -281,23 +250,17 @@ class TestSaveSlotManager:
             ac=12,
             current_hp=18,
             xp=900,
-            race="Elf"
+            race="Elf",
         )
 
         party = Party([sample_character, char2])
         data_loader = DataLoader()
         game_state = GameState(
-            party=party,
-            dungeon_name="multi_char_dungeon",
-            data_loader=data_loader
+            party=party, dungeon_name="multi_char_dungeon", data_loader=data_loader
         )
 
         # Save
-        save_manager.save_game(
-            slot_number=10,
-            game_state=game_state,
-            playtime_delta=200
-        )
+        save_manager.save_game(slot_number=10, game_state=game_state, playtime_delta=200)
 
         # Check metadata
         slot = save_manager.get_slot(10)
@@ -336,11 +299,10 @@ class TestVaultSync:
     def vault(self, temp_vault_path):
         """Create a CharacterVaultV2 with temporary file."""
         from dnd_engine.core.character_vault_v2 import CharacterVaultV2
+
         return CharacterVaultV2(vault_path=temp_vault_path)
 
-    def test_save_game_syncs_characters_with_vault_id(
-        self, save_manager, vault, sample_character
-    ):
+    def test_save_game_syncs_characters_with_vault_id(self, save_manager, vault, sample_character):
         """Test that save_game syncs characters with vault_id to the vault."""
         # Add character to vault and get the vault_id
         char_id = vault.add_character(sample_character)
@@ -349,45 +311,28 @@ class TestVaultSync:
         # Create game state with the vault-linked character
         party = Party([retrieved])
         data_loader = DataLoader()
-        game_state = GameState(
-            party=party,
-            dungeon_name="test_dungeon",
-            data_loader=data_loader
-        )
+        game_state = GameState(party=party, dungeon_name="test_dungeon", data_loader=data_loader)
 
         # Modify character in game
         game_state.party.characters[0].level = 10
         game_state.party.characters[0].xp = 50000
 
         # Save with vault sync
-        save_manager.save_game(
-            slot_number=1,
-            game_state=game_state,
-            character_vault=vault
-        )
+        save_manager.save_game(slot_number=1, game_state=game_state, character_vault=vault)
 
         # Verify vault was updated
         vault_char = vault.get_character(char_id)
         assert vault_char.level == 10
         assert vault_char.xp == 50000
 
-    def test_save_game_without_vault_skips_sync(
-        self, save_manager, sample_character
-    ):
+    def test_save_game_without_vault_skips_sync(self, save_manager, sample_character):
         """Test that save_game works without vault (no sync)."""
         party = Party([sample_character])
         data_loader = DataLoader()
-        game_state = GameState(
-            party=party,
-            dungeon_name="test_dungeon",
-            data_loader=data_loader
-        )
+        game_state = GameState(party=party, dungeon_name="test_dungeon", data_loader=data_loader)
 
         # Save without vault - should not raise
-        slot_path = save_manager.save_game(
-            slot_number=2,
-            game_state=game_state
-        )
+        slot_path = save_manager.save_game(slot_number=2, game_state=game_state)
 
         assert slot_path.exists()
 
@@ -409,32 +354,22 @@ class TestVaultSync:
             ac=15,
             current_hp=35,
             xp=6500,
-            race="Halfling"
+            race="Halfling",
         )
 
         # Create party with both
         party = Party([vault_char, new_char])
         data_loader = DataLoader()
-        game_state = GameState(
-            party=party,
-            dungeon_name="test_dungeon",
-            data_loader=data_loader
-        )
+        game_state = GameState(party=party, dungeon_name="test_dungeon", data_loader=data_loader)
 
         # Save with vault sync
-        save_manager.save_game(
-            slot_number=3,
-            game_state=game_state,
-            character_vault=vault
-        )
+        save_manager.save_game(slot_number=3, game_state=game_state, character_vault=vault)
 
         # Vault should still only have one character
         chars = vault.list_characters()
         assert len(chars) == 1
 
-    def test_save_game_handles_deleted_vault_character(
-        self, save_manager, vault, sample_character
-    ):
+    def test_save_game_handles_deleted_vault_character(self, save_manager, vault, sample_character):
         """Test that sync handles characters deleted from vault gracefully."""
         # Add and get character with vault_id
         char_id = vault.add_character(sample_character)
@@ -443,52 +378,32 @@ class TestVaultSync:
         # Create game state
         party = Party([retrieved])
         data_loader = DataLoader()
-        game_state = GameState(
-            party=party,
-            dungeon_name="test_dungeon",
-            data_loader=data_loader
-        )
+        game_state = GameState(party=party, dungeon_name="test_dungeon", data_loader=data_loader)
 
         # Delete character from vault
         vault.delete_character(char_id)
 
         # Save should not raise error even though vault char is deleted
-        save_manager.save_game(
-            slot_number=4,
-            game_state=game_state,
-            character_vault=vault
-        )
+        save_manager.save_game(slot_number=4, game_state=game_state, character_vault=vault)
 
         # Slot should still be saved
         slot = save_manager.get_slot(4)
         assert not slot.is_empty()
 
-    def test_save_game_syncs_inventory_changes(
-        self, save_manager, vault, sample_character
-    ):
+    def test_save_game_syncs_inventory_changes(self, save_manager, vault, sample_character):
         """Test that inventory changes are synced to vault."""
         char_id = vault.add_character(sample_character)
         retrieved = vault.get_character(char_id)
 
         party = Party([retrieved])
         data_loader = DataLoader()
-        game_state = GameState(
-            party=party,
-            dungeon_name="test_dungeon",
-            data_loader=data_loader
-        )
+        game_state = GameState(party=party, dungeon_name="test_dungeon", data_loader=data_loader)
 
         # Add items to character's inventory
-        game_state.party.characters[0].inventory.add_item(
-            "longsword", "weapons", 1
-        )
+        game_state.party.characters[0].inventory.add_item("longsword", "weapons", 1)
         game_state.party.characters[0].inventory.add_gold(500)
 
-        save_manager.save_game(
-            slot_number=5,
-            game_state=game_state,
-            character_vault=vault
-        )
+        save_manager.save_game(slot_number=5, game_state=game_state, character_vault=vault)
 
         # Verify vault character has the items
         vault_char = vault.get_character(char_id)
@@ -503,12 +418,7 @@ class TestProficiencySerialization:
     def character_with_proficiencies(self):
         """Create a character with full proficiency data."""
         abilities = Abilities(
-            strength=17,
-            dexterity=16,
-            constitution=15,
-            intelligence=13,
-            wisdom=14,
-            charisma=12
+            strength=17, dexterity=16, constitution=15, intelligence=13, wisdom=14, charisma=12
         )
 
         char = Character(
@@ -525,7 +435,7 @@ class TestProficiencySerialization:
             armor_proficiencies=["light", "medium", "heavy", "shields"],
             skill_proficiencies=["athletics", "perception"],
             expertise_skills=[],
-            saving_throw_proficiencies=["strength", "constitution"]
+            saving_throw_proficiencies=["strength", "constitution"],
         )
         char.darkvision_range = 60
         return char
@@ -563,11 +473,7 @@ class TestProficiencySerialization:
         """Test full save/load cycle preserves proficiencies."""
         party = Party([character_with_proficiencies])
         data_loader = DataLoader()
-        game_state = GameState(
-            party=party,
-            dungeon_name="test_dungeon",
-            data_loader=data_loader
-        )
+        game_state = GameState(party=party, dungeon_name="test_dungeon", data_loader=data_loader)
 
         # Save
         save_manager.save_game(slot_number=1, game_state=game_state)
@@ -603,19 +509,19 @@ class TestProficiencySerialization:
                 "constitution": 13,
                 "intelligence": 12,
                 "wisdom": 10,
-                "charisma": 8
+                "charisma": 8,
             },
             "inventory": {
                 "items": [],
                 "equipped": {"weapon": None, "armor": None},
-                "currency": {"gold": 0, "silver": 0, "copper": 0, "electrum": 0, "platinum": 0}
+                "currency": {"gold": 0, "silver": 0, "copper": 0, "electrum": 0, "platinum": 0},
             },
             "conditions": [],
             "resource_pools": [],
             "spellcasting_ability": None,
             "known_spells": [],
             "prepared_spells": [],
-            "vault_id": None
+            "vault_id": None,
             # Note: No proficiency fields - simulating old save format
         }
 
@@ -644,23 +550,24 @@ class TestProficiencySerialization:
             armor_proficiencies=["light"],
             skill_proficiencies=["stealth", "sleight_of_hand", "acrobatics", "perception"],
             expertise_skills=["stealth", "sleight_of_hand"],
-            saving_throw_proficiencies=["dexterity", "intelligence"]
+            saving_throw_proficiencies=["dexterity", "intelligence"],
         )
 
         party = Party([rogue])
         data_loader = DataLoader()
-        game_state = GameState(
-            party=party,
-            dungeon_name="test_dungeon",
-            data_loader=data_loader
-        )
+        game_state = GameState(party=party, dungeon_name="test_dungeon", data_loader=data_loader)
 
         save_manager.save_game(slot_number=2, game_state=game_state)
         loaded_state, _ = save_manager.load_game(slot_number=2)
         loaded_rogue = loaded_state.party.characters[0]
 
         assert loaded_rogue.expertise_skills == ["stealth", "sleight_of_hand"]
-        assert loaded_rogue.skill_proficiencies == ["stealth", "sleight_of_hand", "acrobatics", "perception"]
+        assert loaded_rogue.skill_proficiencies == [
+            "stealth",
+            "sleight_of_hand",
+            "acrobatics",
+            "perception",
+        ]
 
     def test_slot_file_contains_proficiencies(
         self, save_manager, character_with_proficiencies, temp_saves_dir
@@ -668,11 +575,7 @@ class TestProficiencySerialization:
         """Test that the JSON save file contains proficiency data."""
         party = Party([character_with_proficiencies])
         data_loader = DataLoader()
-        game_state = GameState(
-            party=party,
-            dungeon_name="test_dungeon",
-            data_loader=data_loader
-        )
+        game_state = GameState(party=party, dungeon_name="test_dungeon", data_loader=data_loader)
 
         save_manager.save_game(slot_number=3, game_state=game_state)
 

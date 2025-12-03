@@ -17,20 +17,13 @@ class TestDamageEffect:
     def abilities(self):
         """Create test abilities"""
         return Abilities(
-            strength=10, dexterity=10, constitution=10,
-            intelligence=10, wisdom=10, charisma=10
+            strength=10, dexterity=10, constitution=10, intelligence=10, wisdom=10, charisma=10
         )
 
     @pytest.fixture
     def target_creature(self, abilities):
         """Create a creature to damage"""
-        return Creature(
-            name="Target",
-            max_hp=20,
-            ac=15,
-            abilities=abilities,
-            current_hp=20
-        )
+        return Creature(name="Target", max_hp=20, ac=15, abilities=abilities, current_hp=20)
 
     def test_apply_damage_effect(self, target_creature):
         """Test applying damage to a creature"""
@@ -38,7 +31,7 @@ class TestDamageEffect:
             "name": "Alchemist's Fire",
             "effect_type": "damage",
             "damage": "1d4",
-            "damage_type": "fire"
+            "damage_type": "fire",
         }
 
         dice_roller = DiceRoller()
@@ -60,7 +53,7 @@ class TestDamageEffect:
             "name": "Acid Vial",
             "effect_type": "damage",
             "damage": "10d10",  # Guaranteed kill
-            "damage_type": "acid"
+            "damage_type": "acid",
         }
 
         result = apply_item_effect(item_info, target_creature)
@@ -84,7 +77,7 @@ class TestDamageEffect:
             "name": "Alchemist's Fire",
             "effect_type": "damage",
             "damage": "1d4",
-            "damage_type": "fire"
+            "damage_type": "fire",
         }
 
         apply_item_effect(item_info, target_creature, event_bus=event_bus)
@@ -105,7 +98,7 @@ class TestDamageEffect:
             "name": "Alchemist's Fire",
             "effect_type": "damage",
             "damage": "4d1",  # Always rolls 4 damage for predictable test
-            "damage_type": "fire"
+            "damage_type": "fire",
         }
 
         dice_roller = DiceRoller()
@@ -126,7 +119,7 @@ class TestDamageEffect:
             "name": "Alchemist's Fire",
             "effect_type": "damage",
             "damage": "3d1",  # Always rolls 3 damage
-            "damage_type": "fire"
+            "damage_type": "fire",
         }
 
         dice_roller = DiceRoller()
@@ -146,7 +139,7 @@ class TestDamageEffect:
             "name": "Alchemist's Fire",
             "effect_type": "damage",
             "damage": "1d1",  # Always rolls 1 damage
-            "damage_type": "fire"
+            "damage_type": "fire",
         }
 
         dice_roller = DiceRoller()
@@ -168,7 +161,7 @@ class TestDamageEffect:
             "name": "Alchemist's Fire",
             "effect_type": "damage",
             "damage": "4d1",  # Always rolls 4 damage
-            "damage_type": "fire"
+            "damage_type": "fire",
         }
 
         dice_roller = DiceRoller()
@@ -197,7 +190,7 @@ class TestDamageEffect:
             "name": "Alchemist's Fire",
             "effect_type": "damage",
             "damage": "4d1",  # Always rolls 4
-            "damage_type": "fire"
+            "damage_type": "fire",
         }
 
         dice_roller = DiceRoller()
@@ -218,19 +211,13 @@ class TestConditionRemovalEffect:
     def abilities(self):
         """Create test abilities"""
         return Abilities(
-            strength=10, dexterity=10, constitution=10,
-            intelligence=10, wisdom=10, charisma=10
+            strength=10, dexterity=10, constitution=10, intelligence=10, wisdom=10, charisma=10
         )
 
     @pytest.fixture
     def poisoned_creature(self, abilities):
         """Create a poisoned creature"""
-        creature = Creature(
-            name="Poisoned Fighter",
-            max_hp=20,
-            ac=15,
-            abilities=abilities
-        )
+        creature = Creature(name="Poisoned Fighter", max_hp=20, ac=15, abilities=abilities)
         creature.add_condition("poisoned")
         creature.add_condition("diseased")
         return creature
@@ -240,7 +227,7 @@ class TestConditionRemovalEffect:
         item_info = {
             "name": "Antidote",
             "effect_type": "condition_removal",
-            "removes_conditions": ["poisoned"]
+            "removes_conditions": ["poisoned"],
         }
 
         result = apply_item_effect(item_info, poisoned_creature)
@@ -257,7 +244,7 @@ class TestConditionRemovalEffect:
         item_info = {
             "name": "Elixir of Health",
             "effect_type": "condition_removal",
-            "removes_conditions": ["poisoned", "diseased"]
+            "removes_conditions": ["poisoned", "diseased"],
         }
 
         result = apply_item_effect(item_info, poisoned_creature)
@@ -271,17 +258,12 @@ class TestConditionRemovalEffect:
 
     def test_remove_nonexistent_condition(self, abilities):
         """Test removing condition that creature doesn't have"""
-        creature = Creature(
-            name="Healthy Fighter",
-            max_hp=20,
-            ac=15,
-            abilities=abilities
-        )
+        creature = Creature(name="Healthy Fighter", max_hp=20, ac=15, abilities=abilities)
 
         item_info = {
             "name": "Antidote",
             "effect_type": "condition_removal",
-            "removes_conditions": ["poisoned"]
+            "removes_conditions": ["poisoned"],
         }
 
         result = apply_item_effect(item_info, creature)
@@ -303,7 +285,7 @@ class TestConditionRemovalEffect:
         item_info = {
             "name": "Elixir of Health",
             "effect_type": "condition_removal",
-            "removes_conditions": ["poisoned", "diseased"]
+            "removes_conditions": ["poisoned", "diseased"],
         }
 
         apply_item_effect(item_info, poisoned_creature, event_bus=event_bus)
@@ -324,19 +306,13 @@ class TestBuffEffect:
     def abilities(self):
         """Create test abilities"""
         return Abilities(
-            strength=10, dexterity=10, constitution=10,
-            intelligence=10, wisdom=10, charisma=10
+            strength=10, dexterity=10, constitution=10, intelligence=10, wisdom=10, charisma=10
         )
 
     @pytest.fixture
     def target_creature(self, abilities):
         """Create a creature to buff"""
-        return Creature(
-            name="Fighter",
-            max_hp=20,
-            ac=15,
-            abilities=abilities
-        )
+        return Creature(name="Fighter", max_hp=20, ac=15, abilities=abilities)
 
     def test_apply_advantage_on_saves_buff(self, target_creature):
         """Test applying advantage on saves buff"""
@@ -345,7 +321,7 @@ class TestBuffEffect:
             "effect_type": "buff",
             "buff_type": "advantage_on_saves",
             "save_type": "poison",
-            "duration_minutes": 60
+            "duration_minutes": 60,
         }
 
         result = apply_item_effect(item_info, target_creature)
@@ -363,7 +339,7 @@ class TestBuffEffect:
             "effect_type": "buff",
             "buff_type": "resistance",
             "damage_type": "fire",
-            "duration_minutes": 60
+            "duration_minutes": 60,
         }
 
         result = apply_item_effect(item_info, target_creature)
@@ -377,7 +353,7 @@ class TestBuffEffect:
             "name": "Potion of Heroism",
             "effect_type": "buff",
             "buff_type": "temporary_hp",
-            "duration_minutes": 60
+            "duration_minutes": 60,
         }
 
         result = apply_item_effect(item_info, target_creature)
@@ -392,7 +368,7 @@ class TestBuffEffect:
             "effect_type": "buff",
             "buff_type": "temporary_hp",
             "duration_minutes": 60,
-            "adds_conditions": ["immune_to_fear"]
+            "adds_conditions": ["immune_to_fear"],
         }
 
         result = apply_item_effect(item_info, target_creature)
@@ -416,7 +392,7 @@ class TestBuffEffect:
             "effect_type": "buff",
             "buff_type": "advantage_on_saves",
             "save_type": "poison",
-            "duration_minutes": 60
+            "duration_minutes": 60,
         }
 
         apply_item_effect(item_info, target_creature, event_bus=event_bus)
@@ -431,11 +407,7 @@ class TestBuffEffect:
 
     def test_buff_without_buff_type_fails(self, target_creature):
         """Test that buff without buff_type specified fails"""
-        item_info = {
-            "name": "Invalid Buff",
-            "effect_type": "buff",
-            "duration_minutes": 60
-        }
+        item_info = {"name": "Invalid Buff", "effect_type": "buff", "duration_minutes": 60}
 
         result = apply_item_effect(item_info, target_creature)
 
@@ -450,8 +422,7 @@ class TestSpellEffect:
     def abilities(self):
         """Create test abilities"""
         return Abilities(
-            strength=10, dexterity=10, constitution=10,
-            intelligence=10, wisdom=10, charisma=10
+            strength=10, dexterity=10, constitution=10, intelligence=10, wisdom=10, charisma=10
         )
 
     @pytest.fixture
@@ -463,7 +434,7 @@ class TestSpellEffect:
             level=1,
             abilities=abilities,
             max_hp=10,
-            ac=10
+            ac=10,
         )
 
     def test_spell_effect_not_implemented(self, target_character):
@@ -472,7 +443,7 @@ class TestSpellEffect:
             "name": "Scroll of Magic Missile",
             "effect_type": "spell",
             "spell_id": "magic_missile",
-            "spell_level": 1
+            "spell_level": 1,
         }
 
         result = apply_item_effect(item_info, target_character)
@@ -490,26 +461,17 @@ class TestUnknownEffectType:
     def abilities(self):
         """Create test abilities"""
         return Abilities(
-            strength=10, dexterity=10, constitution=10,
-            intelligence=10, wisdom=10, charisma=10
+            strength=10, dexterity=10, constitution=10, intelligence=10, wisdom=10, charisma=10
         )
 
     @pytest.fixture
     def target_creature(self, abilities):
         """Create a test creature"""
-        return Creature(
-            name="Target",
-            max_hp=20,
-            ac=15,
-            abilities=abilities
-        )
+        return Creature(name="Target", max_hp=20, ac=15, abilities=abilities)
 
     def test_unknown_effect_type_fails(self, target_creature):
         """Test that unknown effect types fail gracefully"""
-        item_info = {
-            "name": "Mystery Potion",
-            "effect_type": "unknown_effect"
-        }
+        item_info = {"name": "Mystery Potion", "effect_type": "unknown_effect"}
 
         result = apply_item_effect(item_info, target_creature)
 
@@ -519,9 +481,7 @@ class TestUnknownEffectType:
 
     def test_missing_effect_type_fails(self, target_creature):
         """Test that missing effect_type fails gracefully"""
-        item_info = {
-            "name": "Broken Potion"
-        }
+        item_info = {"name": "Broken Potion"}
 
         result = apply_item_effect(item_info, target_creature)
 

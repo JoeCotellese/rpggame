@@ -162,12 +162,8 @@ class Quest:
         Returns:
             Quest instance
         """
-        objectives = [
-            QuestObjective.from_dict(obj) for obj in data.get("objectives", [])
-        ]
-        bonus_rewards = [
-            BonusReward.from_dict(br) for br in data.get("bonus_rewards", [])
-        ]
+        objectives = [QuestObjective.from_dict(obj) for obj in data.get("objectives", [])]
+        bonus_rewards = [BonusReward.from_dict(br) for br in data.get("bonus_rewards", [])]
         return cls(
             id=data["id"],
             name=data["name"],
@@ -215,9 +211,7 @@ class Quest:
 
     def all_required_objectives_complete(self) -> bool:
         """Check if all required objectives are completed."""
-        return all(
-            obj.completed for obj in self.objectives if obj.required
-        )
+        return all(obj.completed for obj in self.objectives if obj.required)
 
 
 class QuestManager:
@@ -530,25 +524,29 @@ class QuestManager:
 
                 if item_id and item_id not in seen_items:
                     seen_items.add(item_id)
-                    relevant_items.append({
-                        "item_id": item_id,
-                        "quest_id": quest.id,
-                        "quest_name": quest.name,
-                        "relevance_type": relevance,
-                        "quest_state": state.value,
-                    })
+                    relevant_items.append(
+                        {
+                            "item_id": item_id,
+                            "quest_id": quest.id,
+                            "quest_name": quest.name,
+                            "relevance_type": relevance,
+                            "quest_state": state.value,
+                        }
+                    )
 
             # Check bonus rewards
             for bonus in quest.bonus_rewards:
                 if bonus.turn_in_npc == npc_id and bonus.item_id not in seen_items:
                     seen_items.add(bonus.item_id)
-                    relevant_items.append({
-                        "item_id": bonus.item_id,
-                        "quest_id": quest.id,
-                        "quest_name": quest.name,
-                        "relevance_type": "bonus reward item",
-                        "quest_state": state.value,
-                    })
+                    relevant_items.append(
+                        {
+                            "item_id": bonus.item_id,
+                            "quest_id": quest.id,
+                            "quest_name": quest.name,
+                            "relevance_type": "bonus reward item",
+                            "quest_state": state.value,
+                        }
+                    )
 
         return relevant_items
 
@@ -559,10 +557,7 @@ class QuestManager:
         Returns:
             Dictionary mapping quest IDs to state strings
         """
-        return {
-            quest_id: state.value
-            for quest_id, state in self._quest_states.items()
-        }
+        return {quest_id: state.value for quest_id, state in self._quest_states.items()}
 
     def deserialize_states(self, saved_states: dict[str, str]) -> None:
         """
@@ -626,9 +621,7 @@ class QuestManager:
             for objective in quest.objectives:
                 if objective.type == ObjectiveType.USE and objective.target == item_id:
                     self._quest_states[quest.id] = QuestState.ACTIVE
-                    logger.info(
-                        f"Quest '{quest.name}' auto-activated upon using {item_id}"
-                    )
+                    logger.info(f"Quest '{quest.name}' auto-activated upon using {item_id}")
 
                     # Emit quest activated event
                     if hasattr(self, "_event_bus"):
@@ -683,9 +676,7 @@ class QuestManager:
             for objective in quest.objectives:
                 if objective.type == ObjectiveType.CLEAR and objective.target == room_id:
                     self._quest_states[quest.id] = QuestState.ACTIVE
-                    logger.info(
-                        f"Quest '{quest.name}' auto-activated upon clearing {room_id}"
-                    )
+                    logger.info(f"Quest '{quest.name}' auto-activated upon clearing {room_id}")
                     # Emit quest activated event
                     if hasattr(self, "_event_bus"):
                         self._event_bus.emit(
@@ -712,9 +703,7 @@ class QuestManager:
         for quest in self.get_available_quests():
             if quest.target_dungeon == dungeon_id:
                 self._quest_states[quest.id] = QuestState.ACTIVE
-                logger.info(
-                    f"Quest '{quest.name}' auto-activated upon entering {dungeon_id}"
-                )
+                logger.info(f"Quest '{quest.name}' auto-activated upon entering {dungeon_id}")
 
                 # Emit quest activated event
                 if hasattr(self, "_event_bus"):
@@ -752,8 +741,7 @@ class QuestManager:
                         if objective.count_current >= objective.count_required:
                             objective.completed = True
                             logger.info(
-                                f"Quest '{quest.name}' objective "
-                                f"'{objective.id}' completed!"
+                                f"Quest '{quest.name}' objective '{objective.id}' completed!"
                             )
 
                             # Emit objective complete event
@@ -813,9 +801,7 @@ class QuestManager:
                 )
             )
 
-    def complete_deliver_objective(
-        self, npc_id: str, item_id: str
-    ) -> dict[str, Any]:
+    def complete_deliver_objective(self, npc_id: str, item_id: str) -> dict[str, Any]:
         """
         Complete a deliver objective when a player gives an item to an NPC.
 
@@ -836,8 +822,7 @@ class QuestManager:
                 ):
                     objective.completed = True
                     logger.info(
-                        f"Quest '{quest.name}' deliver objective "
-                        f"'{objective.id}' completed!"
+                        f"Quest '{quest.name}' deliver objective '{objective.id}' completed!"
                     )
 
                     # Check if quest is now complete
@@ -889,9 +874,5 @@ class QuestManager:
                 for obj_data in objectives_data:
                     obj_id = obj_data.get("id")
                     if obj_id in obj_map:
-                        obj_map[obj_id].count_current = obj_data.get(
-                            "count_current", 0
-                        )
-                        obj_map[obj_id].completed = obj_data.get(
-                            "completed", False
-                        )
+                        obj_map[obj_id].count_current = obj_data.get("count_current", 0)
+                        obj_map[obj_id].completed = obj_data.get("completed", False)

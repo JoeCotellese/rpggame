@@ -75,7 +75,14 @@ class TestAutoAssignAbilities:
         """Verify Fighter gets highest score in STR"""
         scores = [15, 14, 13, 12, 11, 10]
         class_data = {
-            "ability_priorities": ["strength", "constitution", "dexterity", "wisdom", "intelligence", "charisma"]
+            "ability_priorities": [
+                "strength",
+                "constitution",
+                "dexterity",
+                "wisdom",
+                "intelligence",
+                "charisma",
+            ]
         }
 
         abilities = CharacterFactory.auto_assign_abilities(scores, class_data)
@@ -86,7 +93,14 @@ class TestAutoAssignAbilities:
         """Verify scores are assigned in descending order of priority"""
         scores = [18, 16, 14, 12, 10, 8]
         class_data = {
-            "ability_priorities": ["strength", "constitution", "dexterity", "wisdom", "intelligence", "charisma"]
+            "ability_priorities": [
+                "strength",
+                "constitution",
+                "dexterity",
+                "wisdom",
+                "intelligence",
+                "charisma",
+            ]
         }
 
         abilities = CharacterFactory.auto_assign_abilities(scores, class_data)
@@ -102,12 +116,26 @@ class TestAutoAssignAbilities:
         """Verify all six abilities are assigned"""
         scores = [15, 14, 13, 12, 11, 10]
         class_data = {
-            "ability_priorities": ["strength", "constitution", "dexterity", "wisdom", "intelligence", "charisma"]
+            "ability_priorities": [
+                "strength",
+                "constitution",
+                "dexterity",
+                "wisdom",
+                "intelligence",
+                "charisma",
+            ]
         }
 
         abilities = CharacterFactory.auto_assign_abilities(scores, class_data)
 
-        expected_abilities = ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]
+        expected_abilities = [
+            "strength",
+            "dexterity",
+            "constitution",
+            "intelligence",
+            "wisdom",
+            "charisma",
+        ]
         for ability in expected_abilities:
             assert ability in abilities
 
@@ -115,7 +143,14 @@ class TestAutoAssignAbilities:
         """Verify function sorts scores before assignment"""
         scores = [10, 15, 12, 14, 8, 13]  # Unsorted
         class_data = {
-            "ability_priorities": ["strength", "constitution", "dexterity", "wisdom", "intelligence", "charisma"]
+            "ability_priorities": [
+                "strength",
+                "constitution",
+                "dexterity",
+                "wisdom",
+                "intelligence",
+                "charisma",
+            ]
         }
 
         abilities = CharacterFactory.auto_assign_abilities(scores, class_data)
@@ -135,7 +170,7 @@ class TestSwapAbilities:
             "constitution": 14,
             "intelligence": 10,
             "wisdom": 12,
-            "charisma": 8
+            "charisma": 8,
         }
 
         new_abilities = CharacterFactory.swap_abilities(abilities, "strength", "dexterity")
@@ -151,7 +186,7 @@ class TestSwapAbilities:
             "constitution": 14,
             "intelligence": 10,
             "wisdom": 12,
-            "charisma": 8
+            "charisma": 8,
         }
 
         new_abilities = CharacterFactory.swap_abilities(abilities, "strength", "dexterity")
@@ -169,7 +204,7 @@ class TestSwapAbilities:
             "constitution": 14,
             "intelligence": 10,
             "wisdom": 12,
-            "charisma": 8
+            "charisma": 8,
         }
 
         with pytest.raises(ValueError, match="Invalid ability name"):
@@ -190,15 +225,10 @@ class TestApplyRacialBonuses:
             "constitution": 13,
             "intelligence": 10,
             "wisdom": 11,
-            "charisma": 8
+            "charisma": 8,
         }
 
-        race_data = {
-            "ability_bonuses": {
-                "strength": 2,
-                "constitution": 2
-            }
-        }
+        race_data = {"ability_bonuses": {"strength": 2, "constitution": 2}}
 
         new_abilities = CharacterFactory.apply_racial_bonuses(abilities, race_data)
 
@@ -214,7 +244,7 @@ class TestApplyRacialBonuses:
             "constitution": 10,
             "intelligence": 10,
             "wisdom": 10,
-            "charisma": 10
+            "charisma": 10,
         }
 
         race_data = {
@@ -224,7 +254,7 @@ class TestApplyRacialBonuses:
                 "constitution": 1,
                 "intelligence": 1,
                 "wisdom": 1,
-                "charisma": 1
+                "charisma": 1,
             }
         }
 
@@ -241,14 +271,10 @@ class TestApplyRacialBonuses:
             "constitution": 10,
             "intelligence": 10,
             "wisdom": 10,
-            "charisma": 10
+            "charisma": 10,
         }
 
-        race_data = {
-            "ability_bonuses": {
-                "strength": 2
-            }
-        }
+        race_data = {"ability_bonuses": {"strength": 2}}
 
         new_abilities = CharacterFactory.apply_racial_bonuses(abilities, race_data)
 
@@ -361,13 +387,14 @@ class TestApplyStartingEquipment:
         classes_data = data_loader.load_classes()
 
         from dnd_engine.core.creature import Abilities
+
         character = Character(
             name="Test",
             character_class=CharacterClass.FIGHTER,
             level=1,
             abilities=Abilities(10, 10, 10, 10, 10, 10),
             max_hp=10,
-            ac=10
+            ac=10,
         )
 
         CharacterFactory.apply_starting_equipment(character, classes_data["fighter"], items_data)
@@ -384,13 +411,14 @@ class TestApplyStartingEquipment:
         classes_data = data_loader.load_classes()
 
         from dnd_engine.core.creature import Abilities
+
         character = Character(
             name="Test",
             character_class=CharacterClass.FIGHTER,
             level=1,
             abilities=Abilities(10, 10, 10, 10, 10, 10),
             max_hp=10,
-            ac=10
+            ac=10,
         )
 
         CharacterFactory.apply_starting_equipment(character, classes_data["fighter"], items_data)
@@ -405,13 +433,14 @@ class TestApplyStartingEquipment:
         classes_data = data_loader.load_classes()
 
         from dnd_engine.core.creature import Abilities
+
         character = Character(
             name="Test",
             character_class=CharacterClass.FIGHTER,
             level=1,
             abilities=Abilities(10, 10, 10, 10, 10, 10),
             max_hp=10,
-            ac=10
+            ac=10,
         )
 
         CharacterFactory.apply_starting_equipment(character, classes_data["fighter"], items_data)

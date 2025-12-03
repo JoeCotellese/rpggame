@@ -307,20 +307,18 @@ class TestAllCampaignFilesValid:
             assert campaign.starting_room, f"Campaign {campaign.id} missing starting_room"
 
             # Dungeons should be a dict, not a list
-            assert isinstance(
-                campaign.dungeons, dict
-            ), f"Campaign {campaign.id}: dungeons should be dict, got {type(campaign.dungeons)}"
+            assert isinstance(campaign.dungeons, dict), (
+                f"Campaign {campaign.id}: dungeons should be dict, got {type(campaign.dungeons)}"
+            )
             assert len(campaign.dungeons) > 0, f"Campaign {campaign.id} has no dungeons"
 
             # Each dungeon should have required fields
             for dungeon_id, dungeon in campaign.dungeons.items():
                 assert dungeon.name, f"Dungeon {dungeon_id} missing name"
-                assert isinstance(
-                    dungeon.order, int
-                ), f"Dungeon {dungeon_id} order should be int"
-                assert isinstance(
-                    dungeon.unlocks, list
-                ), f"Dungeon {dungeon_id} unlocks should be list"
+                assert isinstance(dungeon.order, int), f"Dungeon {dungeon_id} order should be int"
+                assert isinstance(dungeon.unlocks, list), (
+                    f"Dungeon {dungeon_id} unlocks should be list"
+                )
 
     def test_all_campaigns_create_valid_progress(self):
         """Test that initial progress can be created for all campaigns."""
@@ -333,9 +331,9 @@ class TestAllCampaignFilesValid:
             assert progress.campaign_id == campaign.id
 
             # Should have at least one unlocked dungeon
-            assert (
-                len(progress.unlocked_dungeons) > 0
-            ), f"Campaign {campaign.id} has no initially unlocked dungeons"
+            assert len(progress.unlocked_dungeons) > 0, (
+                f"Campaign {campaign.id} has no initially unlocked dungeons"
+            )
 
     def test_all_campaigns_have_starting_dungeon(self):
         """Test that all campaigns have a valid starting dungeon."""
@@ -353,9 +351,9 @@ class TestAllCampaignFilesValid:
                     starting_dungeon = dungeon_id
                     break
 
-            assert (
-                starting_dungeon is not None
-            ), f"Campaign {campaign.id} has no unlocked starting dungeon"
+            assert starting_dungeon is not None, (
+                f"Campaign {campaign.id} has no unlocked starting dungeon"
+            )
 
 
 class TestDungeonCompletionDetection:
@@ -413,9 +411,7 @@ class TestDungeonCompletionDetection:
         mock_loader.data_path = campaigns_dir.parent
 
         # Patch GameState to use our mocks
-        with patch.object(
-            CampaignProgressTracker, "__init__", lambda self, path=None: None
-        ):
+        with patch.object(CampaignProgressTracker, "__init__", lambda self, path=None: None):
             from dnd_engine.core.game_state import GameState
 
             # Create game state with campaign progress
@@ -463,9 +459,7 @@ class TestDungeonCompletionDetection:
         assert "dungeon2" in newly_unlocked
         assert "dungeon2" in progress.unlocked_dungeons
 
-    def test_dungeon_not_completed_without_quest_item(
-        self, campaigns_dir, sample_campaign_data
-    ):
+    def test_dungeon_not_completed_without_quest_item(self, campaigns_dir, sample_campaign_data):
         """Test that dungeon isn't completed without required quest item."""
         tracker = CampaignProgressTracker(campaigns_dir)
         progress = tracker.create_initial_progress("test_campaign")
@@ -474,9 +468,7 @@ class TestDungeonCompletionDetection:
         tracker.record_boss_defeat(progress, "dungeon1")
 
         # Try to complete without quest item
-        newly_unlocked = tracker.complete_dungeon(
-            progress, "dungeon1", inventory_item_ids=[]
-        )
+        newly_unlocked = tracker.complete_dungeon(progress, "dungeon1", inventory_item_ids=[])
 
         assert "dungeon1" not in progress.completed_dungeons
         assert newly_unlocked == []

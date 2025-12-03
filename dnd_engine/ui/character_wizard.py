@@ -23,6 +23,7 @@ from dnd_engine.ui.rich_ui import (
 
 class CreationPath(Enum):
     """Character creation path options"""
+
     CUSTOM = "custom"
     TEMPLATE = "template"
     RANDOM = "random"
@@ -44,7 +45,7 @@ class CharacterCreationWizard:
         self,
         character_factory: CharacterFactory | None = None,
         data_loader: DataLoader | None = None,
-        dice_roller: DiceRoller | None = None
+        dice_roller: DiceRoller | None = None,
     ):
         """
         Initialize the character creation wizard.
@@ -129,16 +130,14 @@ class CharacterCreationWizard:
 
         choices = [
             questionary.Choice(
-                title="Custom Character - Step-by-step with full control",
-                value=CreationPath.CUSTOM
+                title="Custom Character - Step-by-step with full control", value=CreationPath.CUSTOM
             ),
             questionary.Choice(
                 title="Quick Build Template - Pre-configured archetypes",
-                value=CreationPath.TEMPLATE
+                value=CreationPath.TEMPLATE,
             ),
             questionary.Choice(
-                title="Random Character - Fully randomized generation",
-                value=CreationPath.RANDOM
+                title="Random Character - Fully randomized generation", value=CreationPath.RANDOM
             ),
             questionary.Choice(title="← Back/Cancel", value=None),
         ]
@@ -231,9 +230,7 @@ class CharacterCreationWizard:
         if self.race and self.character_class:
             race_name = self.races_data[self.race]["name"]
             class_name = self.classes_data[self.character_class]["name"]
-            console.print(
-                f"[dim]You're naming your {race_name} {class_name}.[/dim]"
-            )
+            console.print(f"[dim]You're naming your {race_name} {class_name}.[/dim]")
             console.print()
 
         try:
@@ -344,9 +341,7 @@ class CharacterCreationWizard:
 
             print_message("\n".join(roll_display))
             console.print()
-            print_status_message(
-                f"Your rolled scores: {sorted(scores, reverse=True)}", "info"
-            )
+            print_status_message(f"Your rolled scores: {sorted(scores, reverse=True)}", "info")
             console.print()
 
             self.rolled_scores = scores
@@ -398,9 +393,7 @@ class CharacterCreationWizard:
             class_data = self.classes_data[self.character_class]
 
             # Select skill proficiencies using questionary
-            self.skill_proficiencies = self._select_skills_questionary(
-                class_data, self.skills_data
-            )
+            self.skill_proficiencies = self._select_skills_questionary(class_data, self.skills_data)
 
             if self.skill_proficiencies is None:
                 return "cancel"
@@ -535,7 +528,14 @@ class CharacterCreationWizard:
         """
         # Build choices showing current values
         ability_choices = []
-        for ability in ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]:
+        for ability in [
+            "strength",
+            "dexterity",
+            "constitution",
+            "intelligence",
+            "wisdom",
+            "charisma",
+        ]:
             score = self.abilities[ability]
             modifier = self.factory.calculate_ability_modifier(score)
             sign = "+" if modifier >= 0 else ""
@@ -564,9 +564,7 @@ class CharacterCreationWizard:
             if ability2 is None:
                 return False
 
-            self.abilities = self.factory.swap_abilities(
-                self.abilities, ability1, ability2
-            )
+            self.abilities = self.factory.swap_abilities(self.abilities, ability1, ability2)
             print_status_message(
                 f"Swapped {ability1.upper()[:3]} ↔ {ability2.upper()[:3]}", "success"
             )
@@ -577,11 +575,20 @@ class CharacterCreationWizard:
         except (EOFError, KeyboardInterrupt):
             return False
 
-    def _display_abilities(self, abilities: dict[str, int], before: dict[str, int] | None = None) -> None:
+    def _display_abilities(
+        self, abilities: dict[str, int], before: dict[str, int] | None = None
+    ) -> None:
         """Display ability scores in a formatted way."""
         ability_display = []
 
-        for ability in ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]:
+        for ability in [
+            "strength",
+            "dexterity",
+            "constitution",
+            "intelligence",
+            "wisdom",
+            "charisma",
+        ]:
             score = abilities[ability]
             modifier = self.factory.calculate_ability_modifier(score)
             sign = "+" if modifier >= 0 else ""
@@ -629,9 +636,7 @@ class CharacterCreationWizard:
                 return "cancel"
 
             if selected == "cancel":
-                confirm = questionary.confirm(
-                    "Cancel character creation?", default=False
-                ).ask()
+                confirm = questionary.confirm("Cancel character creation?", default=False).ask()
                 if confirm:
                     return "cancel"
                 return self._get_navigation_choice(allow_back)
@@ -685,9 +690,7 @@ class CharacterCreationWizard:
             race_name = self.races_data.get(template["race"], {}).get("name", template["race"])
             class_name = self.classes_data.get(template["class"], {}).get("name", template["class"])
             display = f"{template['name']} - {race_name} {class_name}"
-            choices.append(
-                questionary.Choice(title=display, value=template_id)
-            )
+            choices.append(questionary.Choice(title=display, value=template_id))
 
         choices.append(questionary.Choice(title="← Back/Cancel", value=None))
 
@@ -735,9 +738,7 @@ class CharacterCreationWizard:
             # Show template details
             console.print(f"[bold]Template:[/bold] {template['name']}")
             console.print(f"[bold]Race:[/bold] {self.races_data[self.race]['name']}")
-            console.print(
-                f"[bold]Class:[/bold] {self.classes_data[self.character_class]['name']}"
-            )
+            console.print(f"[bold]Class:[/bold] {self.classes_data[self.character_class]['name']}")
             console.print(f"[dim]{template['description']}[/dim]")
             console.print()
 
@@ -759,8 +760,8 @@ class CharacterCreationWizard:
             # Handle spells for spellcasters
             if "spell_preferences" in template:
                 spell_prefs = template["spell_preferences"]
-                self.selected_spells = (
-                    spell_prefs.get("cantrips", []) + spell_prefs.get("level_1", [])
+                self.selected_spells = spell_prefs.get("cantrips", []) + spell_prefs.get(
+                    "level_1", []
                 )
 
             # Show final summary and confirm
@@ -842,13 +843,19 @@ class CharacterCreationWizard:
         standard_array = [15, 14, 13, 12, 10, 8]
         rng.shuffle(standard_array)
 
-        ability_names = ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]
+        ability_names = [
+            "strength",
+            "dexterity",
+            "constitution",
+            "intelligence",
+            "wisdom",
+            "charisma",
+        ]
         self.abilities = dict(zip(ability_names, standard_array, strict=True))
 
         # Apply racial bonuses
         self.abilities = self.factory.apply_racial_bonuses(
-            self.abilities,
-            self.races_data[self.race]
+            self.abilities, self.races_data[self.race]
         )
 
         # Random skills
@@ -858,7 +865,9 @@ class CharacterCreationWizard:
         available_skills = skill_profs.get("from", [])
 
         if num_skills > 0 and available_skills:
-            self.skill_proficiencies = rng.sample(available_skills, min(num_skills, len(available_skills)))
+            self.skill_proficiencies = rng.sample(
+                available_skills, min(num_skills, len(available_skills))
+            )
         else:
             self.skill_proficiencies = []
 
@@ -886,12 +895,30 @@ class CharacterCreationWizard:
         rng = self.dice_roller.random
 
         first_names = [
-            "Thorin", "Aria", "Kael", "Luna", "Draven", "Elara",
-            "Finn", "Nyx", "Rowan", "Zara", "Ash", "Nova"
+            "Thorin",
+            "Aria",
+            "Kael",
+            "Luna",
+            "Draven",
+            "Elara",
+            "Finn",
+            "Nyx",
+            "Rowan",
+            "Zara",
+            "Ash",
+            "Nova",
         ]
         last_names = [
-            "Ironforge", "Stormwind", "Brightblade", "Shadowmoon", "Fireborn",
-            "Frostbeard", "Swiftarrow", "Goldleaf", "Stonefist", "Ravenwood"
+            "Ironforge",
+            "Stormwind",
+            "Brightblade",
+            "Shadowmoon",
+            "Fireborn",
+            "Frostbeard",
+            "Swiftarrow",
+            "Goldleaf",
+            "Stonefist",
+            "Ravenwood",
         ]
 
         return f"{rng.choice(first_names)} {rng.choice(last_names)}"
@@ -969,7 +996,7 @@ class CharacterCreationWizard:
             constitution=self.abilities["constitution"],
             intelligence=self.abilities["intelligence"],
             wisdom=self.abilities["wisdom"],
-            charisma=self.abilities["charisma"]
+            charisma=self.abilities["charisma"],
         )
 
         con_modifier = abilities_obj.con_mod
@@ -1019,8 +1046,11 @@ class CharacterCreationWizard:
                 console.print(f"  Armor: {armor_data['name']}")
 
             # Count consumables
-            consumable_count = sum(1 for item_id in starting_equipment
-                                 if item_id in self.items_data.get("consumables", {}))
+            consumable_count = sum(
+                1
+                for item_id in starting_equipment
+                if item_id in self.items_data.get("consumables", {})
+            )
             if consumable_count > 0:
                 console.print(f"  + {consumable_count} consumable items")
 
@@ -1087,20 +1117,22 @@ class CharacterCreationWizard:
             character.darkvision_range = race_data.get("darkvision_range", 0)
 
             # Set saving throw proficiencies
-            character.saving_throw_proficiencies = class_data.get(
-                "saving_throw_proficiencies", []
-            )
+            character.saving_throw_proficiencies = class_data.get("saving_throw_proficiencies", [])
 
             # Initialize class resources
             self.factory.initialize_class_resources(character, class_data, self.level)
 
             # Initialize spellcasting (for spellcasting classes)
-            self.factory.initialize_spellcasting(character, class_data, self.spells_data, interactive=False)
+            self.factory.initialize_spellcasting(
+                character, class_data, self.spells_data, interactive=False
+            )
 
             # If we have pre-selected spells (from template), use those
             if self.selected_spells:
                 character.known_spells = self.selected_spells
-                character.prepared_spells = [s for s in self.selected_spells if not s.endswith("_0")]
+                character.prepared_spells = [
+                    s for s in self.selected_spells if not s.endswith("_0")
+                ]
 
             # Apply starting equipment
             self.factory.apply_starting_equipment(character, class_data, self.items_data)

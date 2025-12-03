@@ -19,9 +19,7 @@ class TestCharacterCreationWizard:
         dice_roller = DiceRoller(seed=42)
         factory = CharacterFactory(dice_roller=dice_roller)
         return CharacterCreationWizard(
-            character_factory=factory,
-            data_loader=DataLoader(),
-            dice_roller=dice_roller
+            character_factory=factory, data_loader=DataLoader(), dice_roller=dice_roller
         )
 
     def test_wizard_initialization(self, wizard):
@@ -59,11 +57,11 @@ class TestCharacterCreationWizard:
             "constitution": 15,
             "intelligence": 10,
             "wisdom": 12,
-            "charisma": 8
+            "charisma": 8,
         }
 
         # Should not raise exception
-        with patch('dnd_engine.ui.character_wizard.print_message'):
+        with patch("dnd_engine.ui.character_wizard.print_message"):
             wizard._display_abilities(abilities)
 
     def test_display_abilities_with_bonuses(self, wizard):
@@ -74,7 +72,7 @@ class TestCharacterCreationWizard:
             "constitution": 13,
             "intelligence": 10,
             "wisdom": 12,
-            "charisma": 8
+            "charisma": 8,
         }
 
         after = {
@@ -83,11 +81,11 @@ class TestCharacterCreationWizard:
             "constitution": 15,  # +2 from racial bonus
             "intelligence": 10,
             "wisdom": 12,
-            "charisma": 8
+            "charisma": 8,
         }
 
         # Should not raise exception
-        with patch('dnd_engine.ui.character_wizard.print_message'):
+        with patch("dnd_engine.ui.character_wizard.print_message"):
             wizard._display_abilities(after, before=before)
 
     def test_generate_random_character(self, wizard):
@@ -101,7 +99,14 @@ class TestCharacterCreationWizard:
 
         # Should have valid abilities
         assert len(wizard.abilities) == 6
-        for ability in ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]:
+        for ability in [
+            "strength",
+            "dexterity",
+            "constitution",
+            "intelligence",
+            "wisdom",
+            "charisma",
+        ]:
             assert ability in wizard.abilities
             assert isinstance(wizard.abilities[ability], int)
             assert wizard.abilities[ability] > 0
@@ -135,9 +140,7 @@ class TestCharacterCreationWizard:
         mock_select = MagicMock()
         mock_select.ask.side_effect = ["strength", "dexterity"]
 
-        with patch(
-            "dnd_engine.ui.character_wizard.questionary.select", return_value=mock_select
-        ):
+        with patch("dnd_engine.ui.character_wizard.questionary.select", return_value=mock_select):
             with patch("dnd_engine.ui.character_wizard.print_status_message"):
                 result = wizard._swap_abilities_interactive()
 
@@ -161,9 +164,7 @@ class TestCharacterCreationWizard:
         mock_select = MagicMock()
         mock_select.ask.return_value = None
 
-        with patch(
-            "dnd_engine.ui.character_wizard.questionary.select", return_value=mock_select
-        ):
+        with patch("dnd_engine.ui.character_wizard.questionary.select", return_value=mock_select):
             result = wizard._swap_abilities_interactive()
 
         # Should fail (cancelled)
@@ -182,9 +183,7 @@ class TestCharacterCreationWizard:
         mock_text = MagicMock()
         mock_text.ask.return_value = "Test Character"
 
-        with patch(
-            "dnd_engine.ui.character_wizard.questionary.text", return_value=mock_text
-        ):
+        with patch("dnd_engine.ui.character_wizard.questionary.text", return_value=mock_text):
             with patch("dnd_engine.ui.character_wizard.console.print"):
                 with patch("dnd_engine.ui.character_wizard.print_status_message"):
                     # Mock finalize to return None (we just want to test state setting)
@@ -214,13 +213,13 @@ class TestCharacterCreationWizard:
             "constitution": 15,
             "intelligence": 10,
             "wisdom": 12,
-            "charisma": 8
+            "charisma": 8,
         }
         wizard.skill_proficiencies = ["athletics", "intimidation"]
         wizard.level = 1
 
         # Should not raise exception
-        with patch('dnd_engine.ui.character_wizard.console.print'):
+        with patch("dnd_engine.ui.character_wizard.console.print"):
             wizard._show_character_summary()
 
     def test_create_character_from_wizard_state(self, wizard):
@@ -235,7 +234,7 @@ class TestCharacterCreationWizard:
             "constitution": 15,
             "intelligence": 10,
             "wisdom": 12,
-            "charisma": 8
+            "charisma": 8,
         }
         wizard.skill_proficiencies = ["athletics", "intimidation"]
         wizard.expertise_skills = []
@@ -243,8 +242,8 @@ class TestCharacterCreationWizard:
         wizard.level = 1
 
         # Create character
-        with patch('dnd_engine.ui.character_wizard.console.status'):
-            with patch('dnd_engine.ui.character_wizard.print_status_message'):
+        with patch("dnd_engine.ui.character_wizard.console.status"):
+            with patch("dnd_engine.ui.character_wizard.print_status_message"):
                 character = wizard._create_character()
 
         # Verify character properties
@@ -270,7 +269,7 @@ class TestCharacterCreationWizard:
             "constitution": 12,
             "intelligence": 13,
             "wisdom": 10,
-            "charisma": 14
+            "charisma": 14,
         }
         wizard.skill_proficiencies = ["stealth", "sleight_of_hand", "deception", "perception"]
         wizard.expertise_skills = ["stealth", "sleight_of_hand"]
@@ -278,8 +277,8 @@ class TestCharacterCreationWizard:
         wizard.level = 1
 
         # Create character
-        with patch('dnd_engine.ui.character_wizard.console.status'):
-            with patch('dnd_engine.ui.character_wizard.print_status_message'):
+        with patch("dnd_engine.ui.character_wizard.console.status"):
+            with patch("dnd_engine.ui.character_wizard.print_status_message"):
                 character = wizard._create_character()
 
         # Verify expertise
@@ -322,9 +321,9 @@ class TestCharacterCreationWizard:
         # Should generate different characters (highly likely)
         # Note: There's a tiny chance they could be identical, but extremely unlikely
         different = (
-            wizard1.race != wizard2.race or
-            wizard1.character_class != wizard2.character_class or
-            wizard1.abilities != wizard2.abilities
+            wizard1.race != wizard2.race
+            or wizard1.character_class != wizard2.character_class
+            or wizard1.abilities != wizard2.abilities
         )
         assert different
 
@@ -359,9 +358,7 @@ class TestCharacterCreationWizard:
         mock_select = MagicMock()
         mock_select.ask.return_value = CreationPath.CUSTOM
 
-        with patch(
-            "dnd_engine.ui.character_wizard.questionary.select", return_value=mock_select
-        ):
+        with patch("dnd_engine.ui.character_wizard.questionary.select", return_value=mock_select):
             with patch("dnd_engine.ui.character_wizard.print_section"):
                 with patch("dnd_engine.ui.character_wizard.console.print"):
                     result = wizard._step_choose_path()
@@ -374,9 +371,7 @@ class TestCharacterCreationWizard:
         mock_select = MagicMock()
         mock_select.ask.return_value = None
 
-        with patch(
-            "dnd_engine.ui.character_wizard.questionary.select", return_value=mock_select
-        ):
+        with patch("dnd_engine.ui.character_wizard.questionary.select", return_value=mock_select):
             with patch("dnd_engine.ui.character_wizard.print_section"):
                 with patch("dnd_engine.ui.character_wizard.console.print"):
                     result = wizard._step_choose_path()
@@ -433,9 +428,7 @@ class TestCharacterCreationWizard:
         mock_nav = MagicMock()
         mock_nav.ask.return_value = "next"
 
-        with patch(
-            "dnd_engine.ui.character_wizard.questionary.text", return_value=mock_text
-        ):
+        with patch("dnd_engine.ui.character_wizard.questionary.text", return_value=mock_text):
             with patch(
                 "dnd_engine.ui.character_wizard.questionary.select",
                 return_value=mock_nav,
@@ -500,9 +493,7 @@ class TestCharacterCreationWizard:
         mock_select = MagicMock()
         mock_select.ask.return_value = "confirm"
 
-        with patch(
-            "dnd_engine.ui.character_wizard.questionary.select", return_value=mock_select
-        ):
+        with patch("dnd_engine.ui.character_wizard.questionary.select", return_value=mock_select):
             with patch("dnd_engine.ui.character_wizard.console.print"):
                 with patch("dnd_engine.ui.character_wizard.console.status"):
                     with patch("dnd_engine.ui.character_wizard.print_section"):

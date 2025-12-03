@@ -15,12 +15,7 @@ def wizard():
         character_class=CharacterClass.WIZARD,
         level=1,
         abilities=Abilities(
-            strength=8,
-            dexterity=14,
-            constitution=12,
-            intelligence=16,
-            wisdom=10,
-            charisma=10
+            strength=8, dexterity=14, constitution=12, intelligence=16, wisdom=10, charisma=10
         ),
         max_hp=8,
         ac=12,
@@ -32,7 +27,7 @@ def wizard():
             "magic_missile",  # combat
             "mage_armor",  # combat + buff
             "detect_magic",  # utility + ritual
-            "sleep"  # combat + control
+            "sleep",  # combat + control
         ],
         prepared_spells=[
             "fire_bolt",
@@ -41,8 +36,8 @@ def wizard():
             "magic_missile",
             "mage_armor",
             "detect_magic",
-            "sleep"
-        ]
+            "sleep",
+        ],
     )
 
 
@@ -55,50 +50,50 @@ def spells_data():
             "name": "Fire Bolt",
             "level": 0,
             "target_type": "enemy",
-            "tags": ["combat", "damage"]
+            "tags": ["combat", "damage"],
         },
         "light": {
             "id": "light",
             "name": "Light",
             "level": 0,
             "target_type": "any",
-            "tags": ["utility"]
+            "tags": ["utility"],
         },
         "mage_hand": {
             "id": "mage_hand",
             "name": "Mage Hand",
             "level": 0,
             "target_type": "self",
-            "tags": ["utility"]
+            "tags": ["utility"],
         },
         "magic_missile": {
             "id": "magic_missile",
             "name": "Magic Missile",
             "level": 1,
             "target_type": "enemy",
-            "tags": ["combat", "damage"]
+            "tags": ["combat", "damage"],
         },
         "mage_armor": {
             "id": "mage_armor",
             "name": "Mage Armor",
             "level": 1,
             "target_type": "ally",
-            "tags": ["combat", "buff", "defense"]
+            "tags": ["combat", "buff", "defense"],
         },
         "detect_magic": {
             "id": "detect_magic",
             "name": "Detect Magic",
             "level": 1,
             "target_type": "self",
-            "tags": ["utility", "ritual"]
+            "tags": ["utility", "ritual"],
         },
         "sleep": {
             "id": "sleep",
             "name": "Sleep",
             "level": 1,
             "target_type": "area",
-            "tags": ["combat", "control", "aoe"]
-        }
+            "tags": ["combat", "control", "aoe"],
+        },
     }
 
 
@@ -159,7 +154,7 @@ class TestSpellTagFiltering:
             "test_spell": {
                 "id": "test_spell",
                 "name": "Test Spell",
-                "level": 1
+                "level": 1,
                 # No tags field
             }
         }
@@ -175,12 +170,7 @@ class TestSpellTagFiltering:
     def test_spell_with_empty_tags_not_included(self, wizard):
         """Spells with empty tags list should not be included"""
         spells_empty_tags = {
-            "test_spell": {
-                "id": "test_spell",
-                "name": "Test Spell",
-                "level": 1,
-                "tags": []
-            }
+            "test_spell": {"id": "test_spell", "name": "Test Spell", "level": 1, "tags": []}
         }
 
         wizard.prepared_spells = ["test_spell"]

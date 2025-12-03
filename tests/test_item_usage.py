@@ -22,7 +22,7 @@ class TestInventoryUseItem:
                 "potion_of_healing": {
                     "name": "Potion of Healing",
                     "effect_type": "healing",
-                    "healing": "2d4+2"
+                    "healing": "2d4+2",
                 }
             }
         }
@@ -47,7 +47,7 @@ class TestInventoryUseItem:
                 "potion_of_healing": {
                     "name": "Potion of Healing",
                     "effect_type": "healing",
-                    "healing": "2d4+2"
+                    "healing": "2d4+2",
                 }
             }
         }
@@ -67,7 +67,7 @@ class TestInventoryUseItem:
                 "potion_of_healing": {
                     "name": "Potion of Healing",
                     "effect_type": "healing",
-                    "healing": "2d4+2"
+                    "healing": "2d4+2",
                 }
             }
         }
@@ -106,7 +106,7 @@ class TestItemEffectApplication:
         item_info = {
             "name": "Potion of Healing",
             "effect_type": "healing",
-            "healing": "2d4+2"  # Min 4, max 10
+            "healing": "2d4+2",  # Min 4, max 10
         }
 
         dice_roller = DiceRoller()
@@ -124,11 +124,7 @@ class TestItemEffectApplication:
         abilities = Abilities(10, 10, 10, 10, 10, 10)
         creature = Creature("Test Hero", max_hp=20, ac=15, abilities=abilities, current_hp=20)
 
-        item_info = {
-            "name": "Potion of Healing",
-            "effect_type": "healing",
-            "healing": "2d4+2"
-        }
+        item_info = {"name": "Potion of Healing", "effect_type": "healing", "healing": "2d4+2"}
 
         dice_roller = DiceRoller()
         result = apply_item_effect(item_info, creature, dice_roller)
@@ -146,7 +142,7 @@ class TestItemEffectApplication:
         item_info = {
             "name": "Potion of Greater Healing",
             "effect_type": "healing",
-            "healing": "4d4+4"  # Will definitely heal more than 1 HP
+            "healing": "4d4+4",  # Will definitely heal more than 1 HP
         }
 
         dice_roller = DiceRoller()
@@ -164,11 +160,7 @@ class TestItemEffectApplication:
 
         assert not creature.is_alive
 
-        item_info = {
-            "name": "Potion of Healing",
-            "effect_type": "healing",
-            "healing": "2d4+2"
-        }
+        item_info = {"name": "Potion of Healing", "effect_type": "healing", "healing": "2d4+2"}
 
         dice_roller = DiceRoller()
         result = apply_item_effect(item_info, creature, dice_roller)
@@ -200,19 +192,15 @@ class TestItemEffectApplication:
 
         # Test different healing potions
         test_cases = [
-            ("2d4+2", 4, 10),   # Potion of Healing: min 4, max 10
-            ("4d4+4", 8, 20),   # Greater: min 8, max 20
+            ("2d4+2", 4, 10),  # Potion of Healing: min 4, max 10
+            ("4d4+4", 8, 20),  # Greater: min 8, max 20
             ("8d4+8", 16, 40),  # Superior: min 16, max 40
-            ("10d4+20", 30, 60) # Supreme: min 30, max 60
+            ("10d4+20", 30, 60),  # Supreme: min 30, max 60
         ]
 
         for dice_notation, min_val, max_val in test_cases:
             creature = Creature("Test", max_hp=100, ac=15, abilities=abilities, current_hp=10)
-            item_info = {
-                "name": "Test Potion",
-                "effect_type": "healing",
-                "healing": dice_notation
-            }
+            item_info = {"name": "Test Potion", "effect_type": "healing", "healing": dice_notation}
 
             dice_roller = DiceRoller()
             result = apply_item_effect(item_info, creature, dice_roller)
@@ -232,11 +220,7 @@ class TestItemEffectEvents:
         abilities = Abilities(10, 10, 10, 10, 10, 10)
         creature = Creature("Test Hero", max_hp=20, ac=15, abilities=abilities, current_hp=10)
 
-        item_info = {
-            "name": "Potion of Healing",
-            "effect_type": "healing",
-            "healing": "2d4+2"
-        }
+        item_info = {"name": "Potion of Healing", "effect_type": "healing", "healing": "2d4+2"}
 
         event_bus = EventBus()
         events_received = []
@@ -267,11 +251,7 @@ class TestItemEffectEvents:
         abilities = Abilities(10, 10, 10, 10, 10, 10)
         creature = Creature("Test Hero", max_hp=20, ac=15, abilities=abilities, current_hp=20)
 
-        item_info = {
-            "name": "Potion of Healing",
-            "effect_type": "healing",
-            "healing": "2d4+2"
-        }
+        item_info = {"name": "Potion of Healing", "effect_type": "healing", "healing": "2d4+2"}
 
         event_bus = EventBus()
         events_received = []

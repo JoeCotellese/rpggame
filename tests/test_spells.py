@@ -31,10 +31,10 @@ class TestSpellDataclass:
             damage=SpellDamage(
                 dice="1d10",
                 damage_type="fire",
-                higher_levels="Increases by 1d10 at 5th, 11th, and 17th level"
+                higher_levels="Increases by 1d10 at 5th, 11th, and 17th level",
             ),
             attack_type="ranged",
-            classes=["wizard", "sorcerer"]
+            classes=["wizard", "sorcerer"],
         )
 
         # Create a healing spell
@@ -49,10 +49,9 @@ class TestSpellDataclass:
             duration=DurationType.INSTANTANEOUS,
             description="A creature you touch regains hit points.",
             healing=SpellHealing(
-                dice="1d8",
-                higher_levels="Increases by 1d8 per slot level above 1st"
+                dice="1d8", higher_levels="Increases by 1d8 per slot level above 1st"
             ),
-            classes=["cleric", "paladin"]
+            classes=["cleric", "paladin"],
         )
 
         # Create a utility cantrip
@@ -64,14 +63,12 @@ class TestSpellDataclass:
             casting_time="1 action",
             range_ft=-1,  # Touch
             components=SpellComponents(
-                verbal=True,
-                material=True,
-                material_description="a firefly or phosphorescent moss"
+                verbal=True, material=True, material_description="a firefly or phosphorescent moss"
             ),
             duration=DurationType.TIMED,
             duration_value="1 hour",
             description="You touch one object that sheds bright light.",
-            classes=["wizard", "cleric"]
+            classes=["wizard", "cleric"],
         )
 
         # Create an AoE spell with saving throw
@@ -86,18 +83,18 @@ class TestSpellDataclass:
                 verbal=True,
                 somatic=True,
                 material=True,
-                material_description="a tiny ball of bat guano and sulfur"
+                material_description="a tiny ball of bat guano and sulfur",
             ),
             duration=DurationType.INSTANTANEOUS,
             description="An explosion of flame erupts.",
             damage=SpellDamage(
                 dice="8d6",
                 damage_type="fire",
-                higher_levels="Increases by 1d6 per slot level above 3rd"
+                higher_levels="Increases by 1d6 per slot level above 3rd",
             ),
             saving_throw=SavingThrow(ability="dexterity", on_success="half"),
             area_of_effect="20-foot radius sphere",
-            classes=["wizard", "sorcerer"]
+            classes=["wizard", "sorcerer"],
         )
 
         # Create a concentration spell
@@ -113,7 +110,7 @@ class TestSpellDataclass:
             duration_value="1 minute",
             concentration=True,
             description="A spectral, floating hand appears.",
-            classes=["wizard"]
+            classes=["wizard"],
         )
 
     def test_spell_creation(self):
@@ -174,7 +171,7 @@ class TestSpellDataclass:
             range_ft=0,
             components=SpellComponents(),
             duration=DurationType.INSTANTANEOUS,
-            description="Test"
+            description="Test",
         )
         assert self_spell.get_range_description() == "Self"
 
@@ -203,7 +200,7 @@ class TestSpellDataclass:
             material=True,
             material_description="a pinch of sulfur",
             material_cost=50,
-            material_consumed=True
+            material_consumed=True,
         )
         assert components.verbal is True
         assert components.somatic is True
@@ -215,9 +212,7 @@ class TestSpellDataclass:
     def test_spell_damage_dataclass(self):
         """Test SpellDamage dataclass"""
         damage = SpellDamage(
-            dice="2d6",
-            damage_type="fire",
-            higher_levels="Increases by 1d6 per level"
+            dice="2d6", damage_type="fire", higher_levels="Increases by 1d6 per level"
         )
         assert damage.dice == "2d6"
         assert damage.damage_type == "fire"
@@ -225,10 +220,7 @@ class TestSpellDataclass:
 
     def test_spell_healing_dataclass(self):
         """Test SpellHealing dataclass"""
-        healing = SpellHealing(
-            dice="1d8",
-            higher_levels="Increases by 1d8 per level"
-        )
+        healing = SpellHealing(dice="1d8", higher_levels="Increases by 1d8 per level")
         assert healing.dice == "1d8"
         assert healing.higher_levels == "Increases by 1d8 per level"
 
@@ -248,7 +240,7 @@ class TestSpellDataclass:
             SpellSchool.EVOCATION,
             SpellSchool.ILLUSION,
             SpellSchool.NECROMANCY,
-            SpellSchool.TRANSMUTATION
+            SpellSchool.TRANSMUTATION,
         ]
         assert len(schools) == 8
         assert all(isinstance(school, SpellSchool) for school in schools)
@@ -268,7 +260,7 @@ class TestSpellDataclass:
             concentration=True,
             ritual=True,
             description="You sense the presence of magic.",
-            classes=["wizard", "cleric"]
+            classes=["wizard", "cleric"],
         )
         assert detect_magic.ritual is True
 
@@ -287,11 +279,11 @@ class TestSpellDataclass:
                 material=True,
                 material_description="diamonds worth 300 gp, which the spell consumes",
                 material_cost=300,
-                material_consumed=True
+                material_consumed=True,
             ),
             duration=DurationType.INSTANTANEOUS,
             description="You touch a creature that has died within the last minute.",
-            classes=["cleric", "paladin"]
+            classes=["cleric", "paladin"],
         )
         assert revivify.components.material_cost == 300
         assert revivify.components.material_consumed is True

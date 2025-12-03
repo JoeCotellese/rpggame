@@ -14,11 +14,13 @@ class TestConversationState:
 
     def test_initial_state(self):
         """Test conversation state initialization."""
-        npc = NPC.from_dict({
-            "id": "test",
-            "name": "Test NPC",
-            "home_location": "test.room",
-        })
+        npc = NPC.from_dict(
+            {
+                "id": "test",
+                "name": "Test NPC",
+                "home_location": "test.room",
+            }
+        )
         state = ConversationState(npc=npc)
 
         assert state.npc == npc
@@ -58,16 +60,18 @@ class TestNPCChatManagerWithoutProvider:
     @pytest.fixture
     def sample_npc(self):
         """Create a sample NPC for testing."""
-        return NPC.from_dict({
-            "id": "marta_innkeeper",
-            "name": "Marta",
-            "display_name": "Marta, the Innkeeper",
-            "home_location": "arden.inn_common_room",
-            "dialogue": {
-                "greeting": "Welcome to my inn!",
-                "farewell": "Safe travels!",
-            },
-        })
+        return NPC.from_dict(
+            {
+                "id": "marta_innkeeper",
+                "name": "Marta",
+                "display_name": "Marta, the Innkeeper",
+                "home_location": "arden.inn_common_room",
+                "dialogue": {
+                    "greeting": "Welcome to my inn!",
+                    "farewell": "Safe travels!",
+                },
+            }
+        )
 
     @pytest.fixture
     def mock_game_state(self):
@@ -125,15 +129,17 @@ class TestNPCChatManagerToolHandlers:
     @pytest.fixture
     def sample_npc(self):
         """Create a sample NPC for testing."""
-        return NPC.from_dict({
-            "id": "marta_innkeeper",
-            "name": "Marta",
-            "display_name": "Marta, the Innkeeper",
-            "home_location": "arden.inn_common_room",
-            "knowledge": {
-                "quest_hooks": ["investigate_crypt"],
-            },
-        })
+        return NPC.from_dict(
+            {
+                "id": "marta_innkeeper",
+                "name": "Marta",
+                "display_name": "Marta, the Innkeeper",
+                "home_location": "arden.inn_common_room",
+                "knowledge": {
+                    "quest_hooks": ["investigate_crypt"],
+                },
+            }
+        )
 
     @pytest.fixture
     def mock_character(self):
@@ -217,6 +223,7 @@ class TestNPCChatManagerToolHandlers:
     def test_handle_open_shop_npc_has_no_shop(self, manager, sample_npc):
         """Test open_shop fails if NPC has no shop."""
         from dnd_engine.llm.npc_chat import ConversationState
+
         manager._current_conversation = ConversationState(npc=sample_npc)
 
         result = manager._handle_open_shop()
@@ -397,9 +404,7 @@ class TestNPCChatManagerToolHandlers:
         assert result["reward_item"] == "potion_of_healing"
         # Item removed from giver, reward added to recipient
         mock_character.inventory.remove_item.assert_called_with("preserved_specimen")
-        mock_character.inventory.add_item.assert_called_with(
-            "potion_of_healing", "consumables"
-        )
+        mock_character.inventory.add_item.assert_called_with("potion_of_healing", "consumables")
 
     def test_handle_receive_item_no_special_reward(self, manager, sample_npc, mock_character):
         """Test receiving item with no quest reward."""
@@ -475,31 +480,35 @@ class TestNPCChatManagerWithMockedProvider:
     @pytest.fixture
     def sample_npc(self):
         """Create a sample NPC for testing."""
-        return NPC.from_dict({
-            "id": "marta_innkeeper",
-            "name": "Marta",
-            "display_name": "Marta, the Innkeeper",
-            "home_location": "arden.inn_common_room",
-            "personality": {
-                "traits": ["warm"],
-                "speech_style": "folksy",
-            },
-            "dialogue": {
-                "greeting": "Welcome!",
-                "farewell": "Goodbye!",
-            },
-        })
+        return NPC.from_dict(
+            {
+                "id": "marta_innkeeper",
+                "name": "Marta",
+                "display_name": "Marta, the Innkeeper",
+                "home_location": "arden.inn_common_room",
+                "personality": {
+                    "traits": ["warm"],
+                    "speech_style": "folksy",
+                },
+                "dialogue": {
+                    "greeting": "Welcome!",
+                    "farewell": "Goodbye!",
+                },
+            }
+        )
 
     @pytest.fixture
     def mock_provider(self):
         """Create mock LLM provider."""
         mock = Mock()
         # Mock the async chat_with_tools method
-        mock.chat_with_tools = AsyncMock(return_value={
-            "content": "Hello, welcome to my inn!",
-            "tool_calls": [],
-            "finish_reason": "stop",
-        })
+        mock.chat_with_tools = AsyncMock(
+            return_value={
+                "content": "Hello, welcome to my inn!",
+                "tool_calls": [],
+                "finish_reason": "stop",
+            }
+        )
         return mock
 
     @pytest.fixture

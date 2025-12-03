@@ -21,7 +21,7 @@ class TestCharacterSpellcasting:
             constitution=12,
             intelligence=16,  # +3 modifier
             wisdom=10,
-            charisma=8
+            charisma=8,
         )
 
     @pytest.fixture
@@ -36,15 +36,12 @@ class TestCharacterSpellcasting:
             ac=12,
             spellcasting_ability="int",
             known_spells=["fire_bolt", "mage_hand", "magic_missile"],
-            prepared_spells=["magic_missile"]
+            prepared_spells=["magic_missile"],
         )
 
         # Add 1st level spell slots
         spell_slots = ResourcePool(
-            name="1st level slots",
-            current=2,
-            maximum=2,
-            recovery_type="long_rest"
+            name="1st level slots", current=2, maximum=2, recovery_type="long_rest"
         )
         character.add_resource_pool(spell_slots)
 
@@ -62,7 +59,7 @@ class TestCharacterSpellcasting:
             range_ft=120,
             components=SpellComponents(verbal=True, somatic=True),
             duration=DurationType.INSTANTANEOUS,
-            description="You hurl a mote of fire at a creature or object within range."
+            description="You hurl a mote of fire at a creature or object within range.",
         )
 
     @pytest.fixture
@@ -77,7 +74,7 @@ class TestCharacterSpellcasting:
             range_ft=120,
             components=SpellComponents(verbal=True, somatic=True),
             duration=DurationType.INSTANTANEOUS,
-            description="You create three darts of magical force."
+            description="You create three darts of magical force.",
         )
 
     @pytest.fixture
@@ -92,7 +89,7 @@ class TestCharacterSpellcasting:
             range_ft=0,
             components=SpellComponents(verbal=True, somatic=True),
             duration=DurationType.TIMED,
-            description="An invisible barrier of magical force appears and protects you."
+            description="An invisible barrier of magical force appears and protects you.",
         )
 
     # Test spellcasting ability and initialization
@@ -132,7 +129,7 @@ class TestCharacterSpellcasting:
             level=1,
             abilities=Abilities(16, 14, 14, 10, 12, 8),
             max_hp=12,
-            ac=16
+            ac=16,
         )
 
         with pytest.raises(ValueError, match="has no spellcasting ability"):
@@ -152,7 +149,7 @@ class TestCharacterSpellcasting:
             level=1,
             abilities=Abilities(16, 14, 14, 10, 12, 8),
             max_hp=12,
-            ac=16
+            ac=16,
         )
 
         with pytest.raises(ValueError, match="has no spellcasting ability"):
@@ -189,7 +186,7 @@ class TestCharacterSpellcasting:
             ac=12,
             spellcasting_ability="int",
             known_spells=["magic_missile"],
-            prepared_spells=["magic_missile"]
+            prepared_spells=["magic_missile"],
         )
         # No spell slot pool added
         assert wizard.can_cast_spell(first_level_spell) is False
@@ -267,7 +264,7 @@ class TestCharacterSpellcasting:
             abilities=Abilities(14, 10, 12, 8, 16, 14),  # WIS +3
             max_hp=10,
             ac=14,
-            spellcasting_ability="wis"
+            spellcasting_ability="wis",
         )
 
         # Spell attack: 2 (prof) + 3 (wis) = 5
@@ -284,7 +281,7 @@ class TestCharacterSpellcasting:
             abilities=Abilities(8, 14, 12, 10, 10, 16),  # CHA +3
             max_hp=8,
             ac=12,
-            spellcasting_ability="cha"
+            spellcasting_ability="cha",
         )
 
         # Spell attack: 2 (prof) + 3 (cha) = 5
@@ -333,7 +330,7 @@ class TestCharacterSpellcasting:
             abilities=Abilities(8, 14, 12, 18, 10, 8),  # INT +4
             max_hp=24,
             ac=12,
-            spellcasting_ability="int"
+            spellcasting_ability="int",
         )
 
         # Level 5: proficiency +3

@@ -85,12 +85,7 @@ class TestDungeonGenerator:
         dungeon = self.generator.generate(level=1)
         rooms = dungeon["rooms"]
 
-        opposites = {
-            "north": "south",
-            "south": "north",
-            "east": "west",
-            "west": "east"
-        }
+        opposites = {"north": "south", "south": "north", "east": "west", "west": "east"}
 
         for room_id, room in rooms.items():
             for direction, target_id in room["exits"].items():
@@ -98,10 +93,12 @@ class TestDungeonGenerator:
                 target_room = rooms[target_id]
 
                 # The target room should have an exit back to this room
-                assert opposite_dir in target_room["exits"], \
+                assert opposite_dir in target_room["exits"], (
                     f"Room {room_id} has {direction} to {target_id}, but {target_id} has no {opposite_dir} back"
-                assert target_room["exits"][opposite_dir] == room_id, \
+                )
+                assert target_room["exits"][opposite_dir] == room_id, (
                     f"Exit mismatch: {room_id}->{target_id} but {target_id} doesn't point back"
+                )
 
     def test_monsters_appropriate_cr(self):
         """Test that monsters in level 1 dungeon are CR 0-1"""
@@ -151,8 +148,9 @@ class TestDungeonGenerator:
         dungeon = self.generator.generate(level=1)
 
         # Find safe rooms
-        safe_rooms = [room_id for room_id, room in dungeon["rooms"].items()
-                     if room.get("safe_rest", False)]
+        safe_rooms = [
+            room_id for room_id, room in dungeon["rooms"].items() if room.get("safe_rest", False)
+        ]
 
         assert len(safe_rooms) >= 1, "Dungeon should have at least one safe rest room"
 
@@ -228,6 +226,7 @@ class TestDungeonGenerator:
         """Test that generated dungeon can be loaded by DataLoader"""
         # Generate and save a dungeon
         import tempfile
+
         with tempfile.TemporaryDirectory() as tmpdir:
             dungeon_path = Path(tmpdir) / "test_dungeon.json"
             dungeon = self.generator.generate(level=1, output_path=dungeon_path)
@@ -251,7 +250,9 @@ class TestDungeonGenerator:
         unique_descriptions = set(descriptions)
         uniqueness_ratio = len(unique_descriptions) / len(descriptions)
 
-        assert uniqueness_ratio > 0.5, f"Only {len(unique_descriptions)}/{len(descriptions)} descriptions are unique"
+        assert uniqueness_ratio > 0.5, (
+            f"Only {len(unique_descriptions)}/{len(descriptions)} descriptions are unique"
+        )
 
     def test_multiple_generation_variety(self):
         """Test that multiple generations produce different dungeons"""

@@ -105,7 +105,7 @@ class SaveSlotManager:
                     slots.append(empty_slot)
                     continue
 
-                with open(slot_path, encoding='utf-8') as f:
+                with open(slot_path, encoding="utf-8") as f:
                     slot_data = json.load(f)
 
                 # Extract metadata
@@ -139,7 +139,7 @@ class SaveSlotManager:
             return SaveSlot.create_empty(slot_number)
 
         try:
-            with open(slot_path, encoding='utf-8') as f:
+            with open(slot_path, encoding="utf-8") as f:
                 slot_data = json.load(f)
 
             metadata = slot_data.get("metadata", {})
@@ -155,7 +155,7 @@ class SaveSlotManager:
         game_state: GameState,
         playtime_delta: int = 0,
         campaign_progress: CampaignProgress | None = None,
-        character_vault: CharacterVaultV2 | None = None
+        character_vault: CharacterVaultV2 | None = None,
     ) -> Path:
         """
         Save game state to a specific slot.
@@ -209,7 +209,7 @@ class SaveSlotManager:
         slot_number: int,
         event_bus: EventBus | None = None,
         data_loader: DataLoader | None = None,
-        dice_roller: DiceRoller | None = None
+        dice_roller: DiceRoller | None = None,
     ) -> tuple[GameState, CampaignProgress | None]:
         """
         Load game state from a specific slot.
@@ -234,7 +234,7 @@ class SaveSlotManager:
 
         # Read slot file
         try:
-            with open(slot_path, encoding='utf-8') as f:
+            with open(slot_path, encoding="utf-8") as f:
                 slot_data = json.load(f)
         except json.JSONDecodeError as e:
             raise ValueError(f"Corrupted slot file: {e}")
@@ -251,17 +251,11 @@ class SaveSlotManager:
         save_version = slot_data.get("version", "1.0.0")
         if not self._is_compatible_version(save_version):
             raise ValueError(
-                f"Incompatible save version: {save_version} "
-                f"(current version: {SAVE_VERSION})"
+                f"Incompatible save version: {save_version} (current version: {SAVE_VERSION})"
             )
 
         # Deserialize game state
-        game_state = self._deserialize_game_state(
-            slot_data,
-            event_bus,
-            data_loader,
-            dice_roller
-        )
+        game_state = self._deserialize_game_state(slot_data, event_bus, data_loader, dice_roller)
 
         # Deserialize campaign progress if present
         campaign_progress = None
@@ -270,7 +264,7 @@ class SaveSlotManager:
 
         # Update last_played timestamp
         slot_data["metadata"]["last_played"] = datetime.now().isoformat()
-        with open(slot_path, 'w', encoding='utf-8') as f:
+        with open(slot_path, "w", encoding="utf-8") as f:
             json.dump(slot_data, f, indent=2, ensure_ascii=False)
 
         return game_state, campaign_progress
@@ -305,12 +299,12 @@ class SaveSlotManager:
         # Load full slot data and update metadata
         slot_path = self._get_slot_path(slot_number)
 
-        with open(slot_path, encoding='utf-8') as f:
+        with open(slot_path, encoding="utf-8") as f:
             slot_data = json.load(f)
 
         slot_data["metadata"]["custom_name"] = slot.custom_name
 
-        with open(slot_path, 'w', encoding='utf-8') as f:
+        with open(slot_path, "w", encoding="utf-8") as f:
             json.dump(slot_data, f, indent=2, ensure_ascii=False)
 
     def _save_slot_file(
@@ -318,7 +312,7 @@ class SaveSlotManager:
         slot_number: int,
         slot: SaveSlot,
         game_state: GameState | None,
-        campaign_progress: CampaignProgress | None = None
+        campaign_progress: CampaignProgress | None = None,
     ) -> Path:
         """
         Save slot data and game state to disk.
@@ -343,8 +337,7 @@ class SaveSlotManager:
         if game_state:
             # Include full game state
             slot_data["party"] = [
-                self._serialize_character(char)
-                for char in game_state.party.characters
+                self._serialize_character(char) for char in game_state.party.characters
             ]
             slot_data["game_state"] = {
                 "dungeon_name": game_state.dungeon_name,
@@ -354,7 +347,7 @@ class SaveSlotManager:
                 "all_dungeon_states": self._serialize_all_dungeon_states(game_state),
                 "in_combat": game_state.in_combat,
                 "action_history": game_state.action_history,
-                "last_entry_direction": game_state.last_entry_direction
+                "last_entry_direction": game_state.last_entry_direction,
             }
             # Include campaign progress if present
             if campaign_progress:
@@ -372,7 +365,7 @@ class SaveSlotManager:
             slot_data["game_state"] = {}
 
         # Write to disk
-        with open(slot_path, 'w', encoding='utf-8') as f:
+        with open(slot_path, "w", encoding="utf-8") as f:
             json.dump(slot_data, f, indent=2, ensure_ascii=False)
 
         return slot_path
@@ -391,7 +384,7 @@ class SaveSlotManager:
             return "Unknown Adventure"
 
         # Convert snake_case to Title Case
-        return dungeon_filename.replace('_', ' ').title()
+        return dungeon_filename.replace("_", " ").title()
 
     def _get_progress_description(self, game_state: GameState) -> str:
         """
@@ -440,7 +433,7 @@ class SaveSlotManager:
             "known_spells": character.known_spells,
             "prepared_spells": character.prepared_spells,
             "vault_id": character.vault_id,
-            "darkvision_range": character.darkvision_range
+            "darkvision_range": character.darkvision_range,
         }
 
     def _serialize_inventory(self, inventory: Inventory) -> dict[str, Any]:
@@ -451,15 +444,15 @@ class SaveSlotManager:
                     "item_id": item.item_id,
                     "category": item.category,
                     "quantity": item.quantity,
-                    "quest_item": item.quest_item
+                    "quest_item": item.quest_item,
                 }
                 for item in inventory.items.values()
             ],
             "equipped": {
                 "weapon": inventory.equipped[EquipmentSlot.WEAPON],
-                "armor": inventory.equipped[EquipmentSlot.ARMOR]
+                "armor": inventory.equipped[EquipmentSlot.ARMOR],
             },
-            "currency": asdict(inventory.currency)
+            "currency": asdict(inventory.currency),
         }
 
     def _serialize_resource_pools(self, character: Character) -> list[dict[str, Any]]:
@@ -469,7 +462,7 @@ class SaveSlotManager:
                 "name": pool.name,
                 "current": pool.current,
                 "maximum": pool.maximum,
-                "recovery_type": pool.recovery_type
+                "recovery_type": pool.recovery_type,
             }
             for pool in character.resource_pools.values()
         ]
@@ -482,14 +475,12 @@ class SaveSlotManager:
             room_states[room_id] = {
                 "searched": room_data.get("searched", False),
                 "enemies": room_data.get("enemies", []),
-                "items": room_data.get("items", [])
+                "items": room_data.get("items", []),
             }
 
         return room_states
 
-    def _serialize_all_dungeon_states(
-        self, game_state: GameState
-    ) -> dict[str, dict[str, Any]]:
+    def _serialize_all_dungeon_states(self, game_state: GameState) -> dict[str, dict[str, Any]]:
         """
         Serialize room states for ALL loaded dungeons.
 
@@ -505,26 +496,18 @@ class SaveSlotManager:
         all_states: dict[str, dict[str, Any]] = {}
 
         # Always include current dungeon
-        all_states[game_state.dungeon_name] = self._serialize_dungeon_state(
-            game_state.dungeon
-        )
+        all_states[game_state.dungeon_name] = self._serialize_dungeon_state(game_state.dungeon)
 
         # Include all other loaded dungeons from registry
         if game_state.room_registry:
-            for dungeon_name, dungeon_data in (
-                game_state.room_registry._loaded_dungeons.items()
-            ):
+            for dungeon_name, dungeon_data in game_state.room_registry._loaded_dungeons.items():
                 if dungeon_name != game_state.dungeon_name:
-                    all_states[dungeon_name] = self._serialize_dungeon_state(
-                        dungeon_data
-                    )
+                    all_states[dungeon_name] = self._serialize_dungeon_state(dungeon_data)
 
         return all_states
 
     def _restore_all_dungeon_states(
-        self,
-        game_state: GameState,
-        all_dungeon_states: dict[str, dict[str, Any]]
+        self, game_state: GameState, all_dungeon_states: dict[str, dict[str, Any]]
     ) -> None:
         """
         Restore room states for all dungeons to the room registry.
@@ -553,29 +536,20 @@ class SaveSlotManager:
             # Apply saved room states
             for room_id, room_state in room_states.items():
                 if room_id in dungeon_data.get("rooms", {}):
-                    dungeon_data["rooms"][room_id]["searched"] = room_state.get(
-                        "searched", False
-                    )
-                    dungeon_data["rooms"][room_id]["enemies"] = room_state.get(
-                        "enemies", []
-                    )
-                    dungeon_data["rooms"][room_id]["items"] = room_state.get(
-                        "items", []
-                    )
+                    dungeon_data["rooms"][room_id]["searched"] = room_state.get("searched", False)
+                    dungeon_data["rooms"][room_id]["enemies"] = room_state.get("enemies", [])
+                    dungeon_data["rooms"][room_id]["items"] = room_state.get("items", [])
 
     def _deserialize_game_state(
         self,
         slot_data: dict[str, Any],
         event_bus: EventBus | None,
         data_loader: DataLoader | None,
-        dice_roller: DiceRoller | None
+        dice_roller: DiceRoller | None,
     ) -> GameState:
         """Deserialize game state from slot data."""
         # Create party from saved characters
-        characters = [
-            self._deserialize_character(char_data)
-            for char_data in slot_data["party"]
-        ]
+        characters = [self._deserialize_character(char_data) for char_data in slot_data["party"]]
         party = Party(characters)
 
         # Get game state data
@@ -590,7 +564,7 @@ class SaveSlotManager:
             event_bus=event_bus,
             data_loader=data_loader,
             dice_roller=dice_roller,
-            skip_initial_room_enter=True
+            skip_initial_room_enter=True,
         )
 
         # Restore room-specific state for current dungeon
@@ -627,14 +601,16 @@ class SaveSlotManager:
 
         # Fire ROOM_ENTER event for the loaded position
         # This ensures discover objectives trigger for the restored room
-        game_state.event_bus.emit(Event(
-            type=EventType.ROOM_ENTER,
-            data={
-                "room_id": game_state.current_room_id,
-                "room_name": game_state.get_current_room().get("name", ""),
-                "dungeon_id": game_state.dungeon_name,
-            }
-        ))
+        game_state.event_bus.emit(
+            Event(
+                type=EventType.ROOM_ENTER,
+                data={
+                    "room_id": game_state.current_room_id,
+                    "room_name": game_state.get_current_room().get("name", ""),
+                    "dungeon_id": game_state.dungeon_name,
+                },
+            )
+        )
 
         return game_state
 
@@ -663,7 +639,7 @@ class SaveSlotManager:
             spellcasting_ability=char_data.get("spellcasting_ability"),
             known_spells=char_data.get("known_spells"),
             prepared_spells=char_data.get("prepared_spells"),
-            vault_id=char_data.get("vault_id")
+            vault_id=char_data.get("vault_id"),
         )
 
         # Restore darkvision range
@@ -690,7 +666,7 @@ class SaveSlotManager:
                 item_id=item_data["item_id"],
                 category=item_data["category"],
                 quantity=item_data["quantity"],
-                quest_item=item_data.get("quest_item", False)
+                quest_item=item_data.get("quest_item", False),
             )
 
         # Restore equipped items
@@ -707,9 +683,7 @@ class SaveSlotManager:
         return inventory
 
     def _sync_characters_to_vault(
-        self,
-        game_state: GameState,
-        character_vault: CharacterVaultV2
+        self, game_state: GameState, character_vault: CharacterVaultV2
     ) -> None:
         """
         Sync character progression to the vault.

@@ -11,8 +11,8 @@ from dnd_engine.core.character import Character
 from dnd_engine.core.combat import AttackResult, CombatEngine
 from dnd_engine.core.creature import Creature
 from dnd_engine.core.dice import DiceRoller, format_dice_with_modifier
-from dnd_engine.core.party import Party
 from dnd_engine.core.npc_manager import NPCManager
+from dnd_engine.core.party import Party
 from dnd_engine.core.quest import QuestManager
 from dnd_engine.core.room_registry import RoomRegistry
 from dnd_engine.rules.loader import DataLoader
@@ -33,7 +33,7 @@ REVERSE_DIRECTIONS = {
     "east": "west",
     "west": "east",
     "up": "down",
-    "down": "up"
+    "down": "up",
 }
 
 
@@ -45,6 +45,7 @@ class CombatEvent:
     Records a single combat action with all relevant details for
     narrative context, analytics, and replay functionality.
     """
+
     timestamp: float
     event_type: str  # "attack", "spell", "miss", "death", "damage", "heal"
     attacker: str
@@ -62,6 +63,7 @@ class CombatantStatus:
 
     Used for battlefield state queries and LLM context.
     """
+
     name: str
     display_name: str  # Includes combat number if applicable (e.g., "Goblin 2")
     current_hp: int
@@ -80,6 +82,7 @@ class BattlefieldState:
     Provides a clean, structured view of combat state for
     UI display, LLM context, analytics, etc.
     """
+
     party_combatants: list[CombatantStatus]
     enemy_combatants: list[CombatantStatus]
     round_number: int
@@ -89,6 +92,7 @@ class BattlefieldState:
 
 class CombatItemResult:
     """Result of using a combat attack item (thrown weapon)."""
+
     def __init__(
         self,
         success: bool,
@@ -96,7 +100,7 @@ class CombatItemResult:
         item_name: str,
         action_type: ActionType,
         special_effects: list[str] | None = None,
-        error_message: str | None = None
+        error_message: str | None = None,
     ):
         self.success = success
         self.attack_result = attack_result
@@ -114,6 +118,7 @@ class CombatItemUseResult:
     Contains all information needed for UI display without requiring
     the CLI to perform any game logic calculations.
     """
+
     success: bool
     item_name: str
     action_type: ActionType
@@ -141,6 +146,7 @@ class CombatSpellResult:
     Contains all information needed for UI display without requiring
     the CLI to perform any game logic calculations.
     """
+
     success: bool
     spell_name: str
     caster_name: str
@@ -191,6 +197,7 @@ class PlayerAttackResult:
     Contains all information needed for UI display without requiring
     the CLI to perform any game logic calculations.
     """
+
     success: bool
     attack_result: AttackResult
     attacker_name: str
@@ -218,6 +225,7 @@ class StabilizeResult:
     Contains all information needed for UI display without requiring
     the CLI to perform any game logic calculations.
     """
+
     success: bool
     helper_name: str
     target_name: str
@@ -231,6 +239,7 @@ class StabilizeResult:
 
 class EnemyTurnAction(Enum):
     """Actions an enemy can take during their turn."""
+
     ATTACK = "attack"
     CONDITION_REMOVAL = "condition_removal"
     INCAPACITATED = "incapacitated"
@@ -247,6 +256,7 @@ class ConditionRemovalOption:
     Contains all information needed for UI to display the removal prompt
     without requiring the CLI to query the game engine multiple times.
     """
+
     condition_id: str
     condition_name: str
     ability: str
@@ -258,6 +268,7 @@ class ConditionRemovalOption:
 @dataclass
 class ConditionRemovalResult:
     """Result of attempting to remove a condition."""
+
     condition_id: str
     attempted: bool
     success: bool
@@ -268,6 +279,7 @@ class ConditionRemovalResult:
 @dataclass
 class TurnEffectResult:
     """Result of a turn-start or turn-end effect."""
+
     effect_type: str  # "damage", "condition_expired", etc.
     condition_id: str
     message: str
@@ -283,6 +295,7 @@ class EnemyTurnResult:
     Contains all information needed for UI display without requiring
     the CLI to perform any game logic calculations.
     """
+
     enemy_name: str
     enemy_display_name: str
     action_taken: EnemyTurnAction
@@ -327,6 +340,7 @@ class EnemyTurnResult:
 @dataclass
 class CharacterRestResult:
     """Result of a single character's rest."""
+
     character_name: str
     hp_recovered: int
     hp_before: int
@@ -344,6 +358,7 @@ class PartyRestResult:
     Contains all information needed for UI display without requiring
     the CLI to perform any game logic calculations.
     """
+
     rest_type: str  # "short" or "long"
     rest_duration_minutes: int  # 60 for short, 480 for long
     character_results: list[CharacterRestResult]
@@ -366,6 +381,7 @@ class PartyRestResult:
 @dataclass
 class PartyMemberLighting:
     """Lighting information for a single party member."""
+
     character_name: str
     effective_lighting: str  # "bright", "dim", or "dark"
     has_darkvision: bool
@@ -374,6 +390,7 @@ class PartyMemberLighting:
 @dataclass
 class VisibleItem:
     """Item visible in a room."""
+
     item_type: str  # "gold", "currency", "item"
     item_id: str | None = None
     item_name: str | None = None
@@ -392,6 +409,7 @@ class RoomDisplayContext:
     Encapsulates all game state queries for room display, allowing
     the CLI to focus purely on presentation logic.
     """
+
     room_id: str
     room_name: str
     description: str
@@ -425,12 +443,12 @@ class RoomDisplayContext:
                 {
                     "character": pl.character_name,
                     "lighting": pl.effective_lighting,
-                    "has_darkvision": pl.has_darkvision
+                    "has_darkvision": pl.has_darkvision,
                 }
                 for pl in self.party_lighting
             ],
             "light_casters": self.light_casters,
-            "previous_room_id": self.previous_room_id
+            "previous_room_id": self.previous_room_id,
         }
 
 
@@ -456,7 +474,7 @@ class GameState:
         dice_roller: DiceRoller | None = None,
         campaign_id: str | None = None,
         campaign_progress: CampaignProgress | None = None,
-        skip_initial_room_enter: bool = False
+        skip_initial_room_enter: bool = False,
     ):
         """
         Initialize the game state.
@@ -541,14 +559,16 @@ class GameState:
                 # Emit initial room enter event to trigger quest auto-activation
                 # Skip if loading from save (save_slot_manager will emit at right time)
                 if not self._skip_initial_room_enter:
-                    self.event_bus.emit(Event(
-                        type=EventType.ROOM_ENTER,
-                        data={
-                            "room_id": self.current_room_id,
-                            "room_name": self.get_current_room()["name"],
-                            "dungeon_id": self.dungeon_name,
-                        }
-                    ))
+                    self.event_bus.emit(
+                        Event(
+                            type=EventType.ROOM_ENTER,
+                            data={
+                                "room_id": self.current_room_id,
+                                "room_name": self.get_current_room()["name"],
+                                "dungeon_id": self.dungeon_name,
+                            },
+                        )
+                    )
             except FileNotFoundError:
                 logger.warning(f"No quest data found for campaign '{self.campaign_id}'")
 
@@ -574,8 +594,7 @@ class GameState:
         # Enemy AI and condition management for enemy turn processing
         self.enemy_ai = EnemyAI()
         self.condition_manager = ConditionManager(
-            dice_roller=self.dice_roller,
-            event_bus=self.event_bus
+            dice_roller=self.dice_roller, event_bus=self.event_bus
         )
 
         # Navigation tracking for flee mechanic
@@ -637,6 +656,7 @@ class GameState:
         # Check for temporary lighting effects (Light spell, torches, etc.)
         # Look for active lighting effects in the time manager
         from dnd_engine.systems.time_manager import EffectType
+
         for effect in self.time_manager.active_effects:
             # Check for Light spell
             if effect.effect_type == EffectType.SPELL and effect.source.lower() == "light":
@@ -653,11 +673,7 @@ class GameState:
         return base_lighting
 
     def _apply_lighting_penalties(
-        self,
-        character: "Character",
-        skill: str,
-        dc: int,
-        action: str
+        self, character: "Character", skill: str, dc: int, action: str
     ) -> tuple[bool, bool, dict[str, Any] | None]:
         """
         Apply lighting penalties to a skill check.
@@ -690,24 +706,26 @@ class GameState:
                 "roll": 0,
                 "modifier": 0,
                 "total": 0,
-                "success": False
+                "success": False,
             }
             # Emit skill check event
-            self.event_bus.emit(Event(
-                type=EventType.SKILL_CHECK,
-                data={
-                    "character": character.name,
-                    "skill": skill,
-                    "dc": dc,
-                    "roll": 0,
-                    "modifier": 0,
-                    "total": 0,
-                    "success": False,
-                    "action": action,
-                    "success_text": None,
-                    "failure_text": "You can't see anything in the complete darkness"
-                }
-            ))
+            self.event_bus.emit(
+                Event(
+                    type=EventType.SKILL_CHECK,
+                    data={
+                        "character": character.name,
+                        "skill": skill,
+                        "dc": dc,
+                        "roll": 0,
+                        "modifier": 0,
+                        "total": 0,
+                        "success": False,
+                        "action": action,
+                        "success_text": None,
+                        "failure_text": "You can't see anything in the complete darkness",
+                    },
+                )
+            )
             return False, False, check_result
         elif lighting == "dim":
             return True, True, None
@@ -773,7 +791,9 @@ class GameState:
         if new_room_id not in self.dungeon.get("rooms", {}):
             # Room not in current dungeon - use registry to find and load it
             if not self.room_registry:
-                logger.warning(f"Room {new_room_id} not in current dungeon and no registry available")
+                logger.warning(
+                    f"Room {new_room_id} not in current dungeon and no registry available"
+                )
                 return False
 
             new_dungeon_name = self.room_registry.get_dungeon_for_room(new_room_id)
@@ -801,14 +821,16 @@ class GameState:
         self.current_room_id = new_room_id
 
         # Emit room enter event
-        self.event_bus.emit(Event(
-            type=EventType.ROOM_ENTER,
-            data={
-                "room_id": new_room_id,
-                "room_name": self.get_current_room()["name"],
-                "dungeon_id": self.dungeon_name,
-            }
-        ))
+        self.event_bus.emit(
+            Event(
+                type=EventType.ROOM_ENTER,
+                data={
+                    "room_id": new_room_id,
+                    "room_name": self.get_current_room()["name"],
+                    "dungeon_id": self.dungeon_name,
+                },
+            )
+        )
 
         # Check for passive perception features on room entry
         self._check_passive_perception()
@@ -842,11 +864,7 @@ class GameState:
 
         # Handle backwards compatibility (string exits)
         if isinstance(exit_data, str):
-            return {
-                "destination": exit_data,
-                "locked": False,
-                "unlock_methods": []
-            }
+            return {"destination": exit_data, "locked": False, "unlock_methods": []}
 
         # Return dict exit as-is
         return exit_data
@@ -978,10 +996,7 @@ class GameState:
         return exit_info.get("unlock_methods", [])
 
     def attempt_unlock(
-        self,
-        direction: str,
-        method_index: int,
-        character: Character
+        self, direction: str, method_index: int, character: Character
     ) -> dict[str, Any]:
         """
         Attempt to unlock a door using a specific method.
@@ -1001,24 +1016,15 @@ class GameState:
         # Validate exit exists and is locked
         exit_info = self.get_exit_info(direction)
         if not exit_info:
-            return {
-                "success": False,
-                "reason": f"No exit in direction '{direction}'"
-            }
+            return {"success": False, "reason": f"No exit in direction '{direction}'"}
 
         if not exit_info.get("locked", False):
-            return {
-                "success": False,
-                "reason": "Door is not locked"
-            }
+            return {"success": False, "reason": "Door is not locked"}
 
         # Get unlock methods
         unlock_methods = exit_info.get("unlock_methods", [])
         if method_index < 0 or method_index >= len(unlock_methods):
-            return {
-                "success": False,
-                "reason": "Invalid unlock method"
-            }
+            return {"success": False, "reason": "Invalid unlock method"}
 
         method = unlock_methods[method_index]
 
@@ -1035,29 +1041,25 @@ class GameState:
                     if not method.get("silent", True):  # Default to silent if not specified
                         destination_room = exit_info.get("destination")
                         if destination_room:
-                            self.set_room_alerted(destination_room, f"loud unlock from {self.current_room_id}")
+                            self.set_room_alerted(
+                                destination_room, f"loud unlock from {self.current_room_id}"
+                            )
 
                     # Emit event
-                    self.event_bus.emit(Event(
-                        type=EventType.SKILL_CHECK,
-                        data={
-                            "character": character.name,
-                            "action": f"unlock door with {item_id}",
-                            "success": True,
-                            "automatic": True
-                        }
-                    ))
-                    return {
-                        "success": True,
-                        "method": method,
-                        "automatic": True
-                    }
+                    self.event_bus.emit(
+                        Event(
+                            type=EventType.SKILL_CHECK,
+                            data={
+                                "character": character.name,
+                                "action": f"unlock door with {item_id}",
+                                "success": True,
+                                "automatic": True,
+                            },
+                        )
+                    )
+                    return {"success": True, "method": method, "automatic": True}
 
-            return {
-                "success": False,
-                "method": method,
-                "reason": f"Party does not have {item_id}"
-            }
+            return {"success": False, "method": method, "reason": f"Party does not have {item_id}"}
 
         # Handle skill-based unlocking
         if "skill" in method:
@@ -1068,7 +1070,10 @@ class GameState:
             tool_proficiency = method.get("tool_proficiency")
             if tool_proficiency:
                 # Load proficiencies data to check if character has the tool
-                if not hasattr(character, 'tool_proficiencies') or tool_proficiency not in character.tool_proficiencies:
+                if (
+                    not hasattr(character, "tool_proficiencies")
+                    or tool_proficiency not in character.tool_proficiencies
+                ):
                     # Character lacks required tool proficiency - they can still attempt but without proficiency bonus
                     pass
 
@@ -1079,19 +1084,21 @@ class GameState:
             check_result = character.make_skill_check(skill, dc, skills_data)
 
             # Emit skill check event
-            self.event_bus.emit(Event(
-                type=EventType.SKILL_CHECK,
-                data={
-                    "character": character.name,
-                    "skill": skill,
-                    "dc": dc,
-                    "roll": check_result["roll"],
-                    "modifier": check_result["modifier"],
-                    "total": check_result["total"],
-                    "success": check_result["success"],
-                    "action": method["description"]
-                }
-            ))
+            self.event_bus.emit(
+                Event(
+                    type=EventType.SKILL_CHECK,
+                    data={
+                        "character": character.name,
+                        "skill": skill,
+                        "dc": dc,
+                        "roll": check_result["roll"],
+                        "modifier": check_result["modifier"],
+                        "total": check_result["total"],
+                        "success": check_result["success"],
+                        "action": method["description"],
+                    },
+                )
+            )
 
             if check_result["success"]:
                 # Unlock the door
@@ -1101,18 +1108,17 @@ class GameState:
                 if not method.get("silent", True):  # Default to silent if not specified
                     destination_room = exit_info.get("destination")
                     if destination_room:
-                        self.set_room_alerted(destination_room, f"loud unlock from {self.current_room_id}")
+                        self.set_room_alerted(
+                            destination_room, f"loud unlock from {self.current_room_id}"
+                        )
 
             return {
                 "success": check_result["success"],
                 "method": method,
-                "skill_check_result": check_result
+                "skill_check_result": check_result,
             }
 
-        return {
-            "success": False,
-            "reason": "Invalid unlock method configuration"
-        }
+        return {"success": False, "reason": "Invalid unlock method configuration"}
 
     def get_examinable_objects(self) -> list[dict[str, Any]]:
         """
@@ -1145,11 +1151,7 @@ class GameState:
 
         return examinable
 
-    def examine_exit(
-        self,
-        direction: str,
-        character: Character
-    ) -> dict[str, Any]:
+    def examine_exit(self, direction: str, character: Character) -> dict[str, Any]:
         """
         Examine an exit (e.g., listen at a door) with a skill check.
 
@@ -1166,10 +1168,7 @@ class GameState:
         # Get exit info
         exit_info = self.get_exit_info(direction)
         if not exit_info:
-            return {
-                "success": False,
-                "error": f"No exit in direction '{direction}'"
-            }
+            return {"success": False, "error": f"No exit in direction '{direction}'"}
 
         # Check if exit has examine_checks
         examine_checks = exit_info.get("examine_checks", [])
@@ -1184,13 +1183,10 @@ class GameState:
                     "direction": direction,
                     "is_locked": True,
                     "unlock_methods": unlock_methods,
-                    "description": f"The door to the {direction} is locked. You notice a sturdy lock mechanism."
+                    "description": f"The door to the {direction} is locked. You notice a sturdy lock mechanism.",
                 }
             else:
-                return {
-                    "success": False,
-                    "error": f"Exit '{direction}' cannot be examined"
-                }
+                return {"success": False, "error": f"Exit '{direction}' cannot be examined"}
 
         # Load skills data
         skills_data = self.data_loader.load_skills()
@@ -1211,58 +1207,64 @@ class GameState:
 
             if not should_continue:
                 # Check auto-failed in darkness
-                results.append({
-                    "skill": skill,
-                    "dc": dc,
-                    "action": action,
-                    "success": False,
-                    "check_result": auto_fail_result
-                })
+                results.append(
+                    {
+                        "skill": skill,
+                        "dc": dc,
+                        "action": action,
+                        "success": False,
+                        "check_result": auto_fail_result,
+                    }
+                )
                 continue
 
             # Make skill check
-            check_result = character.make_skill_check(skill, dc, skills_data, disadvantage=disadvantage)
+            check_result = character.make_skill_check(
+                skill, dc, skills_data, disadvantage=disadvantage
+            )
 
             # Emit skill check event
-            self.event_bus.emit(Event(
-                type=EventType.SKILL_CHECK,
-                data={
-                    "character": character.name,
+            self.event_bus.emit(
+                Event(
+                    type=EventType.SKILL_CHECK,
+                    data={
+                        "character": character.name,
+                        "skill": skill,
+                        "dc": dc,
+                        "roll": check_result["roll"],
+                        "modifier": check_result["modifier"],
+                        "total": check_result["total"],
+                        "success": check_result["success"],
+                        "action": action,
+                        "success_text": check.get("on_success")
+                        if check_result["success"]
+                        else None,
+                        "failure_text": check.get("on_failure")
+                        if not check_result["success"]
+                        else None,
+                    },
+                )
+            )
+
+            results.append(
+                {
                     "skill": skill,
                     "dc": dc,
-                    "roll": check_result["roll"],
-                    "modifier": check_result["modifier"],
-                    "total": check_result["total"],
-                    "success": check_result["success"],
                     "action": action,
+                    "check_result": check_result,
                     "success_text": check.get("on_success") if check_result["success"] else None,
-                    "failure_text": check.get("on_failure") if not check_result["success"] else None
+                    "failure_text": check.get("on_failure")
+                    if not check_result["success"]
+                    else None,
                 }
-            ))
-
-            results.append({
-                "skill": skill,
-                "dc": dc,
-                "action": action,
-                "check_result": check_result,
-                "success_text": check.get("on_success") if check_result["success"] else None,
-                "failure_text": check.get("on_failure") if not check_result["success"] else None
-            })
+            )
 
             if check_result["success"]:
                 any_success = True
 
-        return {
-            "success": any_success,
-            "direction": direction,
-            "results": results
-        }
+        return {"success": any_success, "direction": direction, "results": results}
 
-    def examine_object(
-        self,
-        object_id: str,
-        character: Character
-    ) -> dict[str, Any]:
+    def examine_object(self, object_id: str, character: Character) -> dict[str, Any]:
         """
         Examine an object in the current room with a skill check.
 
@@ -1292,10 +1294,7 @@ class GameState:
                 break
 
         if not obj:
-            return {
-                "success": False,
-                "error": f"Object '{object_id}' not found in room"
-            }
+            return {"success": False, "error": f"Object '{object_id}' not found in room"}
 
         object_name = obj.get("name", object_id)
 
@@ -1305,7 +1304,7 @@ class GameState:
                 "success": False,
                 "object_name": object_name,
                 "already_checked": True,
-                "results": []
+                "results": [],
             }
 
         # Mark as examined
@@ -1329,41 +1328,50 @@ class GameState:
 
             if not should_continue:
                 # Check auto-failed in darkness
-                results.append({
-                    "skill": skill,
-                    "dc": dc,
-                    "success": False,
-                    "check_result": auto_fail_result
-                })
+                results.append(
+                    {"skill": skill, "dc": dc, "success": False, "check_result": auto_fail_result}
+                )
                 continue
 
             # Make skill check
-            check_result = character.make_skill_check(skill, dc, skills_data, disadvantage=disadvantage)
+            check_result = character.make_skill_check(
+                skill, dc, skills_data, disadvantage=disadvantage
+            )
 
             # Emit skill check event
-            self.event_bus.emit(Event(
-                type=EventType.SKILL_CHECK,
-                data={
-                    "character": character.name,
+            self.event_bus.emit(
+                Event(
+                    type=EventType.SKILL_CHECK,
+                    data={
+                        "character": character.name,
+                        "skill": skill,
+                        "dc": dc,
+                        "roll": check_result["roll"],
+                        "modifier": check_result["modifier"],
+                        "total": check_result["total"],
+                        "success": check_result["success"],
+                        "action": f"examine {object_name}",
+                        "success_text": check.get("on_success")
+                        if check_result["success"]
+                        else None,
+                        "failure_text": check.get("on_failure")
+                        if not check_result["success"]
+                        else None,
+                    },
+                )
+            )
+
+            results.append(
+                {
                     "skill": skill,
                     "dc": dc,
-                    "roll": check_result["roll"],
-                    "modifier": check_result["modifier"],
-                    "total": check_result["total"],
-                    "success": check_result["success"],
-                    "action": f"examine {object_name}",
+                    "check_result": check_result,
                     "success_text": check.get("on_success") if check_result["success"] else None,
-                    "failure_text": check.get("on_failure") if not check_result["success"] else None
+                    "failure_text": check.get("on_failure")
+                    if not check_result["success"]
+                    else None,
                 }
-            ))
-
-            results.append({
-                "skill": skill,
-                "dc": dc,
-                "check_result": check_result,
-                "success_text": check.get("on_success") if check_result["success"] else None,
-                "failure_text": check.get("on_failure") if not check_result["success"] else None
-            })
+            )
 
             if check_result["success"]:
                 any_success = True
@@ -1372,13 +1380,10 @@ class GameState:
             "success": any_success,
             "object_name": object_name,
             "already_checked": False,
-            "results": results
+            "results": results,
         }
 
-    def search_room(
-        self,
-        character: Character | None = None
-    ) -> dict[str, Any]:
+    def search_room(self, character: Character | None = None) -> dict[str, Any]:
         """
         Search the current room for items, optionally with skill checks.
 
@@ -1409,7 +1414,7 @@ class GameState:
                 "items": [],
                 "visible_items": [],
                 "hidden_items": [],
-                "error": "This room cannot be searched"
+                "error": "This room cannot be searched",
             }
 
         # Check if already searched
@@ -1427,7 +1432,7 @@ class GameState:
                 "items": room.get("items", []),
                 "visible_items": visible_items,
                 "hidden_items": [],
-                "already_searched": True
+                "already_searched": True,
             }
 
         # Check if room has search_checks
@@ -1441,7 +1446,7 @@ class GameState:
                     "items": [],
                     "visible_items": visible_items,
                     "hidden_items": [],
-                    "error": "Character required for search with skill check"
+                    "error": "Character required for search with skill check",
                 }
 
             # Load skills data
@@ -1462,21 +1467,27 @@ class GameState:
             self.time_manager.advance_time(10, reason="search_room")
 
             # Emit skill check event
-            self.event_bus.emit(Event(
-                type=EventType.SKILL_CHECK,
-                data={
-                    "character": character.name,
-                    "skill": skill,
-                    "dc": dc,
-                    "roll": check_result["roll"],
-                    "modifier": check_result["modifier"],
-                    "total": check_result["total"],
-                    "success": check_result["success"],
-                    "action": "search room",
-                    "success_text": check.get("on_success") if check_result["success"] else None,
-                    "failure_text": check.get("on_failure") if not check_result["success"] else None
-                }
-            ))
+            self.event_bus.emit(
+                Event(
+                    type=EventType.SKILL_CHECK,
+                    data={
+                        "character": character.name,
+                        "skill": skill,
+                        "dc": dc,
+                        "roll": check_result["roll"],
+                        "modifier": check_result["modifier"],
+                        "total": check_result["total"],
+                        "success": check_result["success"],
+                        "action": "search room",
+                        "success_text": check.get("on_success")
+                        if check_result["success"]
+                        else None,
+                        "failure_text": check.get("on_failure")
+                        if not check_result["success"]
+                        else None,
+                    },
+                )
+            )
 
             # Return items only if check succeeded
             if check_result["success"]:
@@ -1488,7 +1499,7 @@ class GameState:
                     "already_searched": False,
                     "check_result": check_result,
                     "success_text": check.get("on_success"),
-                    "failure_text": None
+                    "failure_text": None,
                 }
             else:
                 return {
@@ -1499,7 +1510,7 @@ class GameState:
                     "already_searched": False,
                     "check_result": check_result,
                     "success_text": None,
-                    "failure_text": check.get("on_failure")
+                    "failure_text": check.get("on_failure"),
                 }
         else:
             # No skill check required - automatic success (backwards compatibility)
@@ -1513,7 +1524,7 @@ class GameState:
                 "items": room.get("items", []),
                 "visible_items": visible_items,
                 "hidden_items": hidden_items,
-                "already_searched": False
+                "already_searched": False,
             }
 
     def get_available_items_in_room(self) -> list[dict[str, Any]]:
@@ -1560,7 +1571,12 @@ class GameState:
             if item["type"] == "gold" and item_id.lower() == "gold":
                 item_to_take = item
                 break
-            elif item["type"] == "currency" and item_id.lower() in ["gold", "silver", "copper", "currency"]:
+            elif item["type"] == "currency" and item_id.lower() in [
+                "gold",
+                "silver",
+                "copper",
+                "currency",
+            ]:
                 item_to_take = item
                 break
             elif item["type"] == "item" and item.get("id") == item_id:
@@ -1574,6 +1590,7 @@ class GameState:
         if item_to_take["type"] == "currency":
             # Handle currency with gold, silver, and copper
             from dnd_engine.systems.currency import Currency
+
             gold = item_to_take.get("gold", 0)
             silver = item_to_take.get("silver", 0)
             copper = item_to_take.get("copper", 0)
@@ -1589,10 +1606,12 @@ class GameState:
                 char.inventory.currency.add(split_currency)
 
             # Emit gold acquired event
-            self.event_bus.emit(Event(
-                type=EventType.GOLD_ACQUIRED,
-                data={"amount": gold, "silver": silver, "copper": copper}
-            ))
+            self.event_bus.emit(
+                Event(
+                    type=EventType.GOLD_ACQUIRED,
+                    data={"amount": gold, "silver": silver, "copper": copper},
+                )
+            )
 
         elif item_to_take["type"] == "gold":
             amount = item_to_take["amount"]
@@ -1602,10 +1621,7 @@ class GameState:
                 char.inventory.add_gold(split_amount)
 
             # Emit gold acquired event
-            self.event_bus.emit(Event(
-                type=EventType.GOLD_ACQUIRED,
-                data={"amount": amount}
-            ))
+            self.event_bus.emit(Event(type=EventType.GOLD_ACQUIRED, data={"amount": amount}))
 
         elif item_to_take["type"] == "item":
             category = self._get_item_category(item_id)
@@ -1627,10 +1643,12 @@ class GameState:
             character.inventory.add_item(item_id, category, quest_item=is_quest_item)
 
             # Emit item acquired event
-            self.event_bus.emit(Event(
-                type=EventType.ITEM_ACQUIRED,
-                data={"item_id": item_id, "category": category, "character": character.name}
-            ))
+            self.event_bus.emit(
+                Event(
+                    type=EventType.ITEM_ACQUIRED,
+                    data={"item_id": item_id, "category": category, "character": character.name},
+                )
+            )
 
         # Remove item from room
         room.get("items", []).remove(item_to_take)
@@ -1659,21 +1677,17 @@ class GameState:
 
         if success:
             # Emit event for logging/tracking
-            self.event_bus.emit(Event(
-                type=EventType.SPELLS_PREPARED,
-                data={
-                    "character": character_name,
-                    "spell_count": len(spell_ids)
-                }
-            ))
+            self.event_bus.emit(
+                Event(
+                    type=EventType.SPELLS_PREPARED,
+                    data={"character": character_name, "spell_count": len(spell_ids)},
+                )
+            )
 
         return success
 
     def cast_spell_exploration(
-        self,
-        caster_name: str,
-        spell_id: str,
-        target_name: str | None = None
+        self, caster_name: str, spell_id: str, target_name: str | None = None
     ) -> dict[str, Any]:
         """
         Cast a spell outside of combat during exploration.
@@ -1699,52 +1713,34 @@ class GameState:
         # Find caster
         caster = self.party.get_character_by_name(caster_name)
         if not caster:
-            return {
-                "success": False,
-                "error": f"Character '{caster_name}' not found"
-            }
+            return {"success": False, "error": f"Character '{caster_name}' not found"}
 
         # Load spell data
         spell_data = self.data_loader.load_spells().get(spell_id)
         if not spell_data:
-            return {
-                "success": False,
-                "error": f"Spell '{spell_id}' not found"
-            }
+            return {"success": False, "error": f"Spell '{spell_id}' not found"}
 
         spell_name = spell_data.get("name", spell_id)
         spell_level = spell_data.get("level", 0)
 
         # Check if character knows/has prepared this spell
         if spell_id not in caster.prepared_spells and spell_id not in caster.known_spells:
-            return {
-                "success": False,
-                "error": f"{caster_name} doesn't know {spell_name}"
-            }
+            return {"success": False, "error": f"{caster_name} doesn't know {spell_name}"}
 
         # Check spell slot availability (cantrips are level 0, always available)
         if spell_level > 0:
             available_slots = caster.get_available_spell_slots(spell_level)
             if available_slots <= 0:
-                return {
-                    "success": False,
-                    "error": f"No level {spell_level} spell slots available"
-                }
+                return {"success": False, "error": f"No level {spell_level} spell slots available"}
 
         # Handle healing spells
         if spell_data.get("healing"):
             if not target_name:
-                return {
-                    "success": False,
-                    "error": "Healing spell requires a target"
-                }
+                return {"success": False, "error": "Healing spell requires a target"}
 
             target = self.party.get_character_by_name(target_name)
             if not target:
-                return {
-                    "success": False,
-                    "error": f"Target '{target_name}' not found"
-                }
+                return {"success": False, "error": f"Target '{target_name}' not found"}
 
             # Roll healing: dice + spellcasting modifier
             healing_dice = spell_data["healing"].get("dice", "1d8")
@@ -1780,16 +1776,18 @@ class GameState:
                 self.time_manager.add_effect(effect)
 
             # Emit event
-            self.event_bus.emit(Event(
-                type=EventType.SPELL_CAST,
-                data={
-                    "caster": caster_name,
-                    "spell": spell_name,
-                    "target": target_name,
-                    "healing": actual_healing,
-                    "spell_level": spell_level
-                }
-            ))
+            self.event_bus.emit(
+                Event(
+                    type=EventType.SPELL_CAST,
+                    data={
+                        "caster": caster_name,
+                        "spell": spell_name,
+                        "target": target_name,
+                        "healing": actual_healing,
+                        "spell_level": spell_level,
+                    },
+                )
+            )
 
             return {
                 "success": True,
@@ -1797,7 +1795,7 @@ class GameState:
                 "healing_amount": actual_healing,
                 "spell_name": spell_name,
                 "target": target_name,
-                "spell_level": spell_level
+                "spell_level": spell_level,
             }
 
         # Handle utility spells (Light, Detect Magic, etc.) with duration tracking
@@ -1822,15 +1820,17 @@ class GameState:
                 self.time_manager.add_effect(effect)
 
             # Emit event
-            self.event_bus.emit(Event(
-                type=EventType.SPELL_CAST,
-                data={
-                    "caster": caster_name,
-                    "spell": spell_name,
-                    "spell_level": spell_level,
-                    "target": target_name
-                }
-            ))
+            self.event_bus.emit(
+                Event(
+                    type=EventType.SPELL_CAST,
+                    data={
+                        "caster": caster_name,
+                        "spell": spell_name,
+                        "spell_level": spell_level,
+                        "target": target_name,
+                    },
+                )
+            )
 
             # Return spell description as flavor text
             description = spell_data.get("description", f"{spell_name} takes effect.")
@@ -1842,7 +1842,7 @@ class GameState:
                 "description": description,
                 "spell_level": spell_level,
                 "target": target_name,
-                "has_duration": effect is not None
+                "has_duration": effect is not None,
             }
 
     def cast_spell_combat(
@@ -1850,7 +1850,7 @@ class GameState:
         caster: Character,
         spell_data: dict[str, Any],
         target: Creature | None,
-        spellcasting_ability: str
+        spellcasting_ability: str,
     ) -> "CombatSpellResult":
         """
         Cast a spell during combat.
@@ -1885,7 +1885,7 @@ class GameState:
                     targets=[],
                     is_area_effect=False,
                     spell_type="",
-                    error=f"No {ordinal}-level spell slots available!"
+                    error=f"No {ordinal}-level spell slots available!",
                 )
             # Consume the spell slot
             caster.use_spell_slot(spell_level)
@@ -1908,7 +1908,7 @@ class GameState:
                     is_area_effect=True,
                     spell_type="save",
                     error="No enemies to target",
-                    resources_consumed=resources_consumed
+                    resources_consumed=resources_consumed,
                 )
             is_area = True
         else:
@@ -1926,34 +1926,31 @@ class GameState:
         # Route by spell type and attach resources_consumed to result
         if has_attack:
             result = self._resolve_combat_attack_spell(
-                caster, targets[0], spell_data, spellcasting_ability,
-                spell_name, broke_concentration
+                caster,
+                targets[0],
+                spell_data,
+                spellcasting_ability,
+                spell_name,
+                broke_concentration,
             )
         elif has_hp_pool:
             result = self._resolve_combat_hp_pool_spell(
-                caster, targets, spell_data, spell_name,
-                is_area, broke_concentration
+                caster, targets, spell_data, spell_name, is_area, broke_concentration
             )
         elif has_save:
             result = self._resolve_combat_save_spell(
-                caster, targets, spell_data, spell_name,
-                is_area, broke_concentration
+                caster, targets, spell_data, spell_name, is_area, broke_concentration
             )
         else:
             result = self._resolve_combat_auto_hit_spell(
-                caster, targets[0] if targets else None, spell_data,
-                spell_name, broke_concentration
+                caster, targets[0] if targets else None, spell_data, spell_name, broke_concentration
             )
 
         # Attach consumed resources for middleware auto-refund tracking
         result.resources_consumed = resources_consumed
         return result
 
-    def execute_player_attack(
-        self,
-        attacker: Character,
-        target: Creature
-    ) -> "PlayerAttackResult":
+    def execute_player_attack(self, attacker: Character, target: Creature) -> "PlayerAttackResult":
         """
         Execute a player's attack with their equipped weapon.
 
@@ -1990,9 +1987,7 @@ class GameState:
             # Check if weapon requires ammunition
             weapon_properties = weapon_data.get("properties", [])
             if "ammunition" in weapon_properties:
-                ammo_id = attacker.inventory.get_compatible_ammo(
-                    equipped_weapon, items_data
-                )
+                ammo_id = attacker.inventory.get_compatible_ammo(equipped_weapon, items_data)
                 if not ammo_id:
                     return PlayerAttackResult(
                         success=False,
@@ -2006,12 +2001,12 @@ class GameState:
                             critical_hit=False,
                             damage=0,
                             advantage=False,
-                            disadvantage=False
+                            disadvantage=False,
                         ),
                         attacker_name=attacker.name,
                         target_name=target.name,
                         weapon_name=weapon_name,
-                        error="No ammunition available for this weapon"
+                        error="No ammunition available for this weapon",
                     )
         else:
             # Fallback to unarmed strike
@@ -2027,7 +2022,7 @@ class GameState:
             attack_bonus=attack_bonus,
             damage_dice=damage_dice,
             apply_damage=True,
-            game_state=self
+            game_state=self,
         )
 
         # Consume ammunition after the attack (hit or miss, the ammo is still used)
@@ -2037,10 +2032,7 @@ class GameState:
         # Check concentration if target was hit and took damage
         concentration_broken = None
         if attack_result.hit and attack_result.damage > 0 and isinstance(target, Character):
-            conc_result = self.check_concentration_from_damage(
-                target.name,
-                attack_result.damage
-            )
+            conc_result = self.check_concentration_from_damage(target.name, attack_result.damage)
             if conc_result["concentration_broken"]:
                 concentration_broken = conc_result
 
@@ -2053,11 +2045,10 @@ class GameState:
             "critical": attack_result.critical_hit,
             "damage": attack_result.damage,
             "target_hp_before": (
-                target.current_hp + attack_result.damage if attack_result.hit
-                else target.current_hp
+                target.current_hp + attack_result.damage if attack_result.hit else target.current_hp
             ),
             "target_hp_after": target.current_hp,
-            "target_killed": not target.is_alive
+            "target_killed": not target.is_alive,
         }
 
         return PlayerAttackResult(
@@ -2068,14 +2059,10 @@ class GameState:
             weapon_name=weapon_name,
             concentration_broken=concentration_broken,
             target_killed=not target.is_alive,
-            narrative_context=narrative_context
+            narrative_context=narrative_context,
         )
 
-    def execute_stabilize(
-        self,
-        helper: Character,
-        target: Character
-    ) -> "StabilizeResult":
+    def execute_stabilize(self, helper: Character, target: Character) -> "StabilizeResult":
         """
         Execute an attempt to stabilize a dying character.
 
@@ -2101,14 +2088,16 @@ class GameState:
             target.stabilize_character()
 
             # Emit stabilization event
-            self.event_bus.emit(Event(
-                type=EventType.CHARACTER_STABILIZED,
-                data={
-                    "helper": helper.name,
-                    "target": target.name,
-                    "check_total": check_result["total"]
-                }
-            ))
+            self.event_bus.emit(
+                Event(
+                    type=EventType.CHARACTER_STABILIZED,
+                    data={
+                        "helper": helper.name,
+                        "target": target.name,
+                        "check_total": check_result["total"],
+                    },
+                )
+            )
 
         return StabilizeResult(
             success=check_result["success"],
@@ -2117,7 +2106,7 @@ class GameState:
             roll=check_result["roll"],
             modifier=check_result["modifier"],
             total=check_result["total"],
-            dc=check_result["dc"]
+            dc=check_result["dc"],
         )
 
     def _resolve_combat_attack_spell(
@@ -2127,7 +2116,7 @@ class GameState:
         spell_data: dict[str, Any],
         spellcasting_ability: str,
         spell_name: str,
-        broke_concentration: str | None
+        broke_concentration: str | None,
     ) -> "CombatSpellResult":
         """Resolve attack spell via combat_engine.resolve_spell_attack()."""
         # Delegate to existing combat engine method
@@ -2137,7 +2126,7 @@ class GameState:
             spell=spell_data,
             spellcasting_ability=spellcasting_ability,
             apply_damage=True,
-            event_bus=self.event_bus
+            event_bus=self.event_bus,
         )
 
         # Check target concentration if damage was dealt
@@ -2146,12 +2135,14 @@ class GameState:
             if isinstance(target, Character):
                 conc_result = self.check_concentration_from_damage(target.name, result.damage)
                 if conc_result["concentration_broken"]:
-                    target_conc_breaks.append({
-                        "target": target.name,
-                        "spell": conc_result["spell_name"],
-                        "dc": conc_result["dc"],
-                        "save_result": conc_result["save_result"]
-                    })
+                    target_conc_breaks.append(
+                        {
+                            "target": target.name,
+                            "spell": conc_result["spell_name"],
+                            "dc": conc_result["dc"],
+                            "save_result": conc_result["save_result"],
+                        }
+                    )
 
         # Handle concentration for caster
         now_concentrating = False
@@ -2176,7 +2167,7 @@ class GameState:
             broke_concentration=broke_concentration,
             now_concentrating=now_concentrating,
             target_concentration_breaks=target_conc_breaks,
-            killed_targets=killed
+            killed_targets=killed,
         )
 
     def _resolve_combat_save_spell(
@@ -2186,7 +2177,7 @@ class GameState:
         spell_data: dict[str, Any],
         spell_name: str,
         is_area: bool,
-        broke_concentration: str | None
+        broke_concentration: str | None,
     ) -> "CombatSpellResult":
         """Resolve saving throw spell via combat_engine.resolve_spell_save()."""
         # Delegate to existing combat engine method
@@ -2195,7 +2186,7 @@ class GameState:
             targets=targets,
             spell=spell_data,
             apply_damage=True,
-            event_bus=self.event_bus
+            event_bus=self.event_bus,
         )
 
         # Check concentration breaks for each target that took damage
@@ -2211,12 +2202,14 @@ class GameState:
             if damage > 0 and isinstance(target, Character):
                 conc_result = self.check_concentration_from_damage(target.name, damage)
                 if conc_result["concentration_broken"]:
-                    target_conc_breaks.append({
-                        "target": target.name,
-                        "spell": conc_result["spell_name"],
-                        "dc": conc_result["dc"],
-                        "save_result": conc_result["save_result"]
-                    })
+                    target_conc_breaks.append(
+                        {
+                            "target": target.name,
+                            "spell": conc_result["spell_name"],
+                            "dc": conc_result["dc"],
+                            "save_result": conc_result["save_result"],
+                        }
+                    )
 
             if not target.is_alive:
                 killed.append(target.name)
@@ -2245,7 +2238,7 @@ class GameState:
             broke_concentration=broke_concentration,
             now_concentrating=now_concentrating,
             target_concentration_breaks=target_conc_breaks,
-            killed_targets=killed
+            killed_targets=killed,
         )
 
     def _resolve_combat_hp_pool_spell(
@@ -2255,15 +2248,12 @@ class GameState:
         spell_data: dict[str, Any],
         spell_name: str,
         is_area: bool,
-        broke_concentration: str | None
+        broke_concentration: str | None,
     ) -> "CombatSpellResult":
         """Resolve HP pool spells like Sleep that affect creatures based on HP total."""
         # Delegate to combat engine
         result = self.combat_engine.resolve_spell_hp_pool(
-            caster=caster,
-            targets=targets,
-            spell=spell_data,
-            event_bus=self.event_bus
+            caster=caster, targets=targets, spell=spell_data, event_bus=self.event_bus
         )
 
         # Handle concentration for caster (Sleep is not concentration, but others might be)
@@ -2287,7 +2277,7 @@ class GameState:
             affected_targets=result["affected_targets"],
             unaffected_targets=result["unaffected_targets"],
             broke_concentration=broke_concentration,
-            now_concentrating=now_concentrating
+            now_concentrating=now_concentrating,
         )
 
     def _resolve_combat_auto_hit_spell(
@@ -2296,7 +2286,7 @@ class GameState:
         target: Creature | None,
         spell_data: dict[str, Any],
         spell_name: str,
-        broke_concentration: str | None
+        broke_concentration: str | None,
     ) -> "CombatSpellResult":
         """Resolve auto-hit damage or buff spells."""
         damage = 0
@@ -2312,10 +2302,11 @@ class GameState:
             damage = damage_roll.total
 
             # Apply damage if there's a target
-            if target and hasattr(target, 'take_damage'):
+            if target and hasattr(target, "take_damage"):
                 import inspect
+
                 sig = inspect.signature(target.take_damage)
-                if 'event_bus' in sig.parameters:
+                if "event_bus" in sig.parameters:
                     target.take_damage(damage, event_bus=self.event_bus)
                 else:
                     target.take_damage(damage)
@@ -2324,12 +2315,14 @@ class GameState:
                 if isinstance(target, Character):
                     conc_result = self.check_concentration_from_damage(target.name, damage)
                     if conc_result["concentration_broken"]:
-                        target_conc_breaks.append({
-                            "target": target.name,
-                            "spell": conc_result["spell_name"],
-                            "dc": conc_result["dc"],
-                            "save_result": conc_result["save_result"]
-                        })
+                        target_conc_breaks.append(
+                            {
+                                "target": target.name,
+                                "spell": conc_result["spell_name"],
+                                "dc": conc_result["dc"],
+                                "save_result": conc_result["save_result"],
+                            }
+                        )
 
                 if not target.is_alive:
                     killed.append(target.name)
@@ -2361,7 +2354,7 @@ class GameState:
             broke_concentration=broke_concentration,
             now_concentrating=now_concentrating,
             target_concentration_breaks=target_conc_breaks,
-            killed_targets=killed
+            killed_targets=killed,
         )
 
     def get_concentration_spell(self, character_name: str) -> str | None:
@@ -2403,7 +2396,7 @@ class GameState:
                 "concentration_broken": False,
                 "spell_name": None,
                 "dc": None,
-                "save_result": None
+                "save_result": None,
             }
 
         # Find the character
@@ -2415,7 +2408,7 @@ class GameState:
                 "concentration_broken": False,
                 "spell_name": spell_name,
                 "dc": None,
-                "save_result": None
+                "save_result": None,
             }
 
         # Calculate DC: max(10, damage // 2)
@@ -2433,14 +2426,11 @@ class GameState:
             "concentration_broken": not save_result["success"],
             "spell_name": spell_name,
             "dc": dc,
-            "save_result": save_result
+            "save_result": save_result,
         }
 
     def _create_spell_effect(
-        self,
-        spell_data: dict[str, Any],
-        caster_name: str,
-        target_name: str
+        self, spell_data: dict[str, Any], caster_name: str, target_name: str
     ) -> ActiveEffect | None:
         """
         Create an ActiveEffect from spell data if the spell has a duration.
@@ -2486,7 +2476,7 @@ class GameState:
             description=description,
             concentration=concentration,
             caster_name=caster_name if concentration else None,
-            effect_data=effect_data
+            effect_data=effect_data,
         )
 
         return effect
@@ -2646,7 +2636,7 @@ class GameState:
                 "ac": char._base_ac,
                 "level": char.level,
                 "xp": char.xp,
-                "alive": char.is_alive
+                "alive": char.is_alive,
             }
             for char in self.party.characters
         ]
@@ -2733,21 +2723,23 @@ class GameState:
                 success = passive_perception >= dc
 
                 # Emit event for this check
-                self.event_bus.emit(Event(
-                    type=EventType.SKILL_CHECK,
-                    data={
-                        "character": character.name,
-                        "skill": "perception",
-                        "dc": dc,
-                        "modifier": perception_mod,
-                        "total": passive_perception,
-                        "success": success,
-                        "passive": True,
-                        "action": f"passive perception (DC {dc})",
-                        "success_text": feature.get("on_success") if success else None,
-                        "failure_text": feature.get("on_failure") if not success else None
-                    }
-                ))
+                self.event_bus.emit(
+                    Event(
+                        type=EventType.SKILL_CHECK,
+                        data={
+                            "character": character.name,
+                            "skill": "perception",
+                            "dc": dc,
+                            "modifier": perception_mod,
+                            "total": passive_perception,
+                            "success": success,
+                            "passive": True,
+                            "action": f"passive perception (DC {dc})",
+                            "success_text": feature.get("on_success") if success else None,
+                            "failure_text": feature.get("on_failure") if not success else None,
+                        },
+                    )
+                )
 
     def is_room_alerted(self, room_id: str | None = None) -> bool:
         """Check if a room's occupants are alerted to the party's presence."""
@@ -2816,14 +2808,16 @@ class GameState:
             stealth_results.append(check_result)
 
             # Emit skill check event (UI will handle display)
-            self.event_bus.emit(Event(
-                type=EventType.SKILL_CHECK,
-                data={
-                    "character": character.name,
-                    **check_result,
-                    "action": f"stealth check (vs passive Perception {max_enemy_perception})"
-                }
-            ))
+            self.event_bus.emit(
+                Event(
+                    type=EventType.SKILL_CHECK,
+                    data={
+                        "character": character.name,
+                        **check_result,
+                        "action": f"stealth check (vs passive Perception {max_enemy_perception})",
+                    },
+                )
+            )
 
             # If ANY party member fails, entire party is detected
             if not check_result["success"]:
@@ -2842,7 +2836,7 @@ class GameState:
         return {
             "party_surprised": party_surprised,
             "enemies_surprised": enemies_surprised,
-            "stealth_results": stealth_results
+            "stealth_results": stealth_results,
         }
 
     def _start_combat(self) -> None:
@@ -2869,28 +2863,38 @@ class GameState:
 
         # Emit surprise round event if either side is surprised
         if surprise_result["enemies_surprised"] or surprise_result["party_surprised"]:
-            self.event_bus.emit(Event(
-                type=EventType.SURPRISE_ROUND,
-                data={
-                    "party_surprised": surprise_result["party_surprised"],
-                    "enemies_surprised": surprise_result["enemies_surprised"],
-                    "surprised_creatures": [
-                        e.name for e in self.active_enemies if surprise_result["enemies_surprised"]
-                    ] + [
-                        c.name for c in self.party.get_living_members() if surprise_result["party_surprised"]
-                    ]
-                }
-            ))
+            self.event_bus.emit(
+                Event(
+                    type=EventType.SURPRISE_ROUND,
+                    data={
+                        "party_surprised": surprise_result["party_surprised"],
+                        "enemies_surprised": surprise_result["enemies_surprised"],
+                        "surprised_creatures": [
+                            e.name
+                            for e in self.active_enemies
+                            if surprise_result["enemies_surprised"]
+                        ]
+                        + [
+                            c.name
+                            for c in self.party.get_living_members()
+                            if surprise_result["party_surprised"]
+                        ],
+                    },
+                )
+            )
 
         # Emit combat start event
-        self.event_bus.emit(Event(
-            type=EventType.COMBAT_START,
-            data={
-                "enemies": [e.name for e in self.active_enemies],
-                "party": [c.name for c in self.party.get_living_members()],
-                "surprise_round": surprise_result["enemies_surprised"] or surprise_result["party_surprised"]
-            }
-        ))
+        self.event_bus.emit(
+            Event(
+                type=EventType.COMBAT_START,
+                data={
+                    "enemies": [e.name for e in self.active_enemies],
+                    "party": [c.name for c in self.party.get_living_members()],
+                    "surprise_round": surprise_result["enemies_surprised"]
+                    or surprise_result["party_surprised"],
+                },
+            )
+        )
 
     def _check_combat_end(self) -> None:
         """Check if combat should end and handle cleanup."""
@@ -2906,8 +2910,7 @@ class GameState:
 
             # Check if all party members are unconscious (unable to act)
             all_party_unconscious = all(
-                char.is_unconscious or char.is_dead
-                for char in self.party.characters
+                char.is_unconscious or char.is_dead for char in self.party.characters
             )
 
             if all_enemies_dead or party_wiped or all_party_unconscious:
@@ -2959,15 +2962,19 @@ class GameState:
         self.clear_combat_history()
 
         # Emit combat end event
-        self.event_bus.emit(Event(
-            type=EventType.COMBAT_END,
-            data={
-                "victory": victory,
-                "room_id": self.current_room_id,
-                "xp_gained": total_xp,
-                "xp_per_character": total_xp // len(self.party.characters) if len(self.party.characters) > 0 else 0
-            }
-        ))
+        self.event_bus.emit(
+            Event(
+                type=EventType.COMBAT_END,
+                data={
+                    "victory": victory,
+                    "room_id": self.current_room_id,
+                    "xp_gained": total_xp,
+                    "xp_per_character": total_xp // len(self.party.characters)
+                    if len(self.party.characters) > 0
+                    else 0,
+                },
+            )
+        )
 
         # Check for boss defeat and dungeon completion (campaign progression)
         if victory and room.get("boss_room"):
@@ -2984,22 +2991,24 @@ class GameState:
         # This allows quest objectives to track specific monster kills
         # Must happen before the campaign_tracker guard so quests work independently
         for monster_id in defeated_enemy_ids:
-            self.event_bus.emit(Event(
-                type=EventType.BOSS_DEFEATED,
-                data={
-                    "dungeon_id": self.dungeon_name,
-                    "dungeon_name": self.dungeon.get("name", self.dungeon_name) if self.dungeon else self.dungeon_name,
-                    "monster_id": monster_id,
-                }
-            ))
+            self.event_bus.emit(
+                Event(
+                    type=EventType.BOSS_DEFEATED,
+                    data={
+                        "dungeon_id": self.dungeon_name,
+                        "dungeon_name": self.dungeon.get("name", self.dungeon_name)
+                        if self.dungeon
+                        else self.dungeon_name,
+                        "monster_id": monster_id,
+                    },
+                )
+            )
 
         if not self.campaign_progress or not self.campaign_tracker:
             return
 
         # Record boss defeat for current dungeon
-        self.campaign_tracker.record_boss_defeat(
-            self.campaign_progress, self.dungeon_name
-        )
+        self.campaign_tracker.record_boss_defeat(self.campaign_progress, self.dungeon_name)
 
         # Check if dungeon completion criteria are now met
         self._check_dungeon_completion()
@@ -3017,9 +3026,7 @@ class GameState:
 
         # Try to complete the dungeon
         newly_unlocked = self.campaign_tracker.complete_dungeon(
-            self.campaign_progress,
-            self.dungeon_name,
-            inventory_item_ids
+            self.campaign_progress, self.dungeon_name, inventory_item_ids
         )
 
         if newly_unlocked:
@@ -3035,18 +3042,20 @@ class GameState:
                     unlocked_names.append(dungeon_id)
 
             # Emit dungeon completed event
-            self.event_bus.emit(Event(
-                type=EventType.DUNGEON_COMPLETED,
-                data={
-                    "dungeon_id": self.dungeon_name,
-                    "dungeon_name": self.dungeon.get("name", self.dungeon_name),
-                    "newly_unlocked": newly_unlocked,
-                    "unlocked_names": unlocked_names,
-                    "campaign_complete": self.campaign_tracker.is_campaign_complete(
-                        self.campaign_progress
-                    )
-                }
-            ))
+            self.event_bus.emit(
+                Event(
+                    type=EventType.DUNGEON_COMPLETED,
+                    data={
+                        "dungeon_id": self.dungeon_name,
+                        "dungeon_name": self.dungeon.get("name", self.dungeon_name),
+                        "newly_unlocked": newly_unlocked,
+                        "unlocked_names": unlocked_names,
+                        "campaign_complete": self.campaign_tracker.is_campaign_complete(
+                            self.campaign_progress
+                        ),
+                    },
+                )
+            )
 
     def _on_quest_completed(self, event: Event) -> None:
         """
@@ -3069,9 +3078,7 @@ class GameState:
         # Mark current dungeon as completed and unlock the specified dungeons
         # First record boss defeat if not already done
         if self.dungeon_name not in self.campaign_progress.boss_defeats:
-            self.campaign_tracker.record_boss_defeat(
-                self.campaign_progress, self.dungeon_name
-            )
+            self.campaign_tracker.record_boss_defeat(self.campaign_progress, self.dungeon_name)
 
         # Get current inventory items for completion check
         inventory_item_ids = []
@@ -3082,9 +3089,7 @@ class GameState:
         # Try to complete the dungeon (this will unlock the dungeons specified
         # in the campaign definition if all criteria are met)
         newly_unlocked = self.campaign_tracker.complete_dungeon(
-            self.campaign_progress,
-            self.dungeon_name,
-            inventory_item_ids
+            self.campaign_progress, self.dungeon_name, inventory_item_ids
         )
 
         if newly_unlocked:
@@ -3100,18 +3105,20 @@ class GameState:
                     unlocked_names.append(dungeon_id)
 
             # Emit dungeon completed event
-            self.event_bus.emit(Event(
-                type=EventType.DUNGEON_COMPLETED,
-                data={
-                    "dungeon_id": self.dungeon_name,
-                    "dungeon_name": self.dungeon.get("name", self.dungeon_name),
-                    "newly_unlocked": newly_unlocked,
-                    "unlocked_names": unlocked_names,
-                    "campaign_complete": self.campaign_tracker.is_campaign_complete(
-                        self.campaign_progress
-                    )
-                }
-            ))
+            self.event_bus.emit(
+                Event(
+                    type=EventType.DUNGEON_COMPLETED,
+                    data={
+                        "dungeon_id": self.dungeon_name,
+                        "dungeon_name": self.dungeon.get("name", self.dungeon_name),
+                        "newly_unlocked": newly_unlocked,
+                        "unlocked_names": unlocked_names,
+                        "campaign_complete": self.campaign_tracker.is_campaign_complete(
+                            self.campaign_progress
+                        ),
+                    },
+                )
+            )
 
     def record_combat_event(self, event: CombatEvent) -> None:
         """
@@ -3122,7 +3129,7 @@ class GameState:
         """
         self.combat_history.append(event)
         if len(self.combat_history) > self.max_combat_history_size:
-            self.combat_history = self.combat_history[-self.max_combat_history_size:]
+            self.combat_history = self.combat_history[-self.max_combat_history_size :]
 
     def get_recent_combat_history(self, count: int = 12) -> list[CombatEvent]:
         """
@@ -3158,7 +3165,7 @@ class GameState:
                 enemy_combatants=[],
                 round_number=0,
                 current_turn="",
-                in_combat=False
+                in_combat=False,
             )
 
         party_combatants = []
@@ -3177,9 +3184,9 @@ class GameState:
                 current_hp=creature.current_hp,
                 max_hp=creature.max_hp,
                 is_alive=creature.is_alive,
-                conditions=list(creature.conditions) if hasattr(creature, 'conditions') else [],
+                conditions=list(creature.conditions) if hasattr(creature, "conditions") else [],
                 is_player=creature in [c for c in self.party.characters],
-                ac=creature.ac
+                ac=creature.ac,
             )
 
             if status.is_player:
@@ -3192,7 +3199,7 @@ class GameState:
             enemy_combatants=enemy_combatants,
             round_number=self.initiative_tracker.round_number,
             current_turn=current_turn,
-            in_combat=True
+            in_combat=True,
         )
 
     def get_room_display_context(self) -> RoomDisplayContext:
@@ -3242,12 +3249,10 @@ class GameState:
             npc_display_names=npc_display_names,
             room_searched=room.get("searched", False),
             monsters_data=monsters_data,
-            party_size=len(self.party.characters)
+            party_size=len(self.party.characters),
         )
 
-    def _get_room_monster_info(
-        self, room: dict[str, Any]
-    ) -> tuple[list[str], dict[str, Any]]:
+    def _get_room_monster_info(self, room: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
         """
         Get monster names and data for the current room.
 
@@ -3294,11 +3299,13 @@ class GameState:
         party_lighting = []
         for char in self.party.characters:
             lighting = self.get_effective_lighting(char)
-            party_lighting.append(PartyMemberLighting(
-                character_name=char.name,
-                effective_lighting=lighting,
-                has_darkvision=char.darkvision_range > 0
-            ))
+            party_lighting.append(
+                PartyMemberLighting(
+                    character_name=char.name,
+                    effective_lighting=lighting,
+                    has_darkvision=char.darkvision_range > 0,
+                )
+            )
         return party_lighting
 
     def _get_active_light_casters(self) -> list[str]:
@@ -3334,25 +3341,26 @@ class GameState:
 
             item_type = item["type"]
             if item_type == "gold":
-                visible_items.append(VisibleItem(
-                    item_type="gold",
-                    amount=item.get("amount", 0)
-                ))
+                visible_items.append(VisibleItem(item_type="gold", amount=item.get("amount", 0)))
             elif item_type == "currency":
-                visible_items.append(VisibleItem(
-                    item_type="currency",
-                    gold=item.get("gold", 0),
-                    silver=item.get("silver", 0),
-                    copper=item.get("copper", 0),
-                    platinum=item.get("platinum", 0)
-                ))
+                visible_items.append(
+                    VisibleItem(
+                        item_type="currency",
+                        gold=item.get("gold", 0),
+                        silver=item.get("silver", 0),
+                        copper=item.get("copper", 0),
+                        platinum=item.get("platinum", 0),
+                    )
+                )
             else:
                 item_id = item.get("id", "an item")
-                visible_items.append(VisibleItem(
-                    item_type="item",
-                    item_id=item_id,
-                    item_name=item_id.replace("_", " ").title()
-                ))
+                visible_items.append(
+                    VisibleItem(
+                        item_type="item",
+                        item_id=item_id,
+                        item_name=item_id.replace("_", " ").title(),
+                    )
+                )
 
         return visible_items
 
@@ -3390,8 +3398,7 @@ class GameState:
         return enemy.name
 
     def _should_enemy_attempt_condition_removal(
-        self,
-        enemy: Creature
+        self, enemy: Creature
     ) -> ConditionRemovalResult | None:
         """
         Determine if enemy should attempt condition removal and execute it.
@@ -3407,34 +3414,29 @@ class GameState:
                 continue
 
             # Use AI to decide if condition should be removed
-            if condition_id == "on_fire" and self.enemy_ai.should_attempt_condition_removal(
-                enemy
-            ):
+            if condition_id == "on_fire" and self.enemy_ai.should_attempt_condition_removal(enemy):
                 # Attempt removal
-                result = self.condition_manager.attempt_condition_removal(
-                    enemy, condition_id
-                )
+                result = self.condition_manager.attempt_condition_removal(enemy, condition_id)
 
                 if result:
                     return ConditionRemovalResult(
                         condition_id=condition_id,
                         attempted=True,
                         success=result.success,
-                        message=result.message
+                        message=result.message,
                     )
 
                 return ConditionRemovalResult(
                     condition_id=condition_id,
                     attempted=True,
                     success=False,
-                    message=f"{enemy.name} failed to remove {condition_id}"
+                    message=f"{enemy.name} failed to remove {condition_id}",
                 )
 
         return None
 
     def get_removable_conditions(
-        self,
-        creature: Character | Creature
+        self, creature: Character | Creature
     ) -> list[ConditionRemovalOption]:
         """
         Get conditions that can be removed this turn.
@@ -3452,8 +3454,7 @@ class GameState:
 
         # Get turn state for action availability check
         turn_state = (
-            self.initiative_tracker.get_current_turn_state()
-            if self.initiative_tracker else None
+            self.initiative_tracker.get_current_turn_state() if self.initiative_tracker else None
         )
 
         for condition_id in list(creature.conditions):
@@ -3470,7 +3471,7 @@ class GameState:
                 "action": ActionType.ACTION,
                 "bonus_action": ActionType.BONUS_ACTION,
                 "free_object": ActionType.FREE_OBJECT,
-                "no_action": ActionType.NO_ACTION
+                "no_action": ActionType.NO_ACTION,
             }
             action_cost = action_type_map.get(action_cost_str, ActionType.ACTION)
 
@@ -3478,21 +3479,21 @@ class GameState:
             if turn_state and not turn_state.is_action_available(action_cost):
                 continue
 
-            options.append(ConditionRemovalOption(
-                condition_id=condition_id,
-                condition_name=prompt_info.get("condition_name", condition_id),
-                ability=prompt_info.get("ability", "dexterity"),
-                dc=prompt_info.get("dc", 10),
-                action_cost=action_cost,
-                description=prompt_info.get("description", "")
-            ))
+            options.append(
+                ConditionRemovalOption(
+                    condition_id=condition_id,
+                    condition_name=prompt_info.get("condition_name", condition_id),
+                    ability=prompt_info.get("ability", "dexterity"),
+                    dc=prompt_info.get("dc", 10),
+                    action_cost=action_cost,
+                    description=prompt_info.get("description", ""),
+                )
+            )
 
         return options
 
     def attempt_player_condition_removal(
-        self,
-        creature: Character | Creature,
-        condition_id: str
+        self, creature: Character | Creature, condition_id: str
     ) -> ConditionRemovalResult:
         """
         Attempt to remove a condition from a player character.
@@ -3516,7 +3517,7 @@ class GameState:
                 condition_id=condition_id,
                 attempted=False,
                 success=False,
-                message=f"Condition {condition_id} cannot be removed early"
+                message=f"Condition {condition_id} cannot be removed early",
             )
 
         prompt_info = self.condition_manager.get_removal_prompt_info(condition_id)
@@ -3525,7 +3526,7 @@ class GameState:
                 condition_id=condition_id,
                 attempted=False,
                 success=False,
-                message=f"No removal information for {condition_id}"
+                message=f"No removal information for {condition_id}",
             )
 
         # Determine action cost
@@ -3534,14 +3535,13 @@ class GameState:
             "action": ActionType.ACTION,
             "bonus_action": ActionType.BONUS_ACTION,
             "free_object": ActionType.FREE_OBJECT,
-            "no_action": ActionType.NO_ACTION
+            "no_action": ActionType.NO_ACTION,
         }
         action_cost = action_type_map.get(action_cost_str, ActionType.ACTION)
 
         # Validate and consume action
         turn_state = (
-            self.initiative_tracker.get_current_turn_state()
-            if self.initiative_tracker else None
+            self.initiative_tracker.get_current_turn_state() if self.initiative_tracker else None
         )
 
         if not turn_state:
@@ -3549,7 +3549,7 @@ class GameState:
                 condition_id=condition_id,
                 attempted=False,
                 success=False,
-                message="Unable to get current turn state"
+                message="Unable to get current turn state",
             )
 
         if not turn_state.is_action_available(action_cost):
@@ -3558,7 +3558,7 @@ class GameState:
                 condition_id=condition_id,
                 attempted=False,
                 success=False,
-                message=f"No {action_name} available this turn"
+                message=f"No {action_name} available this turn",
             )
 
         # Consume the action
@@ -3567,13 +3567,11 @@ class GameState:
                 condition_id=condition_id,
                 attempted=False,
                 success=False,
-                message=f"Failed to consume {action_cost_str}"
+                message=f"Failed to consume {action_cost_str}",
             )
 
         # Attempt the removal via ConditionManager
-        ability_result = self.condition_manager.attempt_condition_removal(
-            creature, condition_id
-        )
+        ability_result = self.condition_manager.attempt_condition_removal(creature, condition_id)
 
         if ability_result:
             return ConditionRemovalResult(
@@ -3581,7 +3579,7 @@ class GameState:
                 attempted=True,
                 success=ability_result.success,
                 message=ability_result.message,
-                action_consumed=action_cost
+                action_consumed=action_cost,
             )
 
         # Fallback if ConditionManager returns None
@@ -3590,7 +3588,7 @@ class GameState:
             attempted=True,
             success=False,
             message=f"{creature.name} failed to remove {condition_id}",
-            action_consumed=action_cost
+            action_consumed=action_cost,
         )
 
     def process_enemy_turn(self) -> EnemyTurnResult | None:
@@ -3633,19 +3631,21 @@ class GameState:
                 enemy_name=enemy.name,
                 enemy_display_name=enemy_display_name,
                 action_taken=EnemyTurnAction.DIED_START_OF_TURN,
-                turn_advanced=True
+                turn_advanced=True,
             )
 
         # Process turn-start effects (e.g., ongoing fire damage)
         start_results = self.condition_manager.process_turn_start_effects(enemy)
         for result in start_results:
-            turn_start_effects.append(TurnEffectResult(
-                effect_type=result.effect_type,
-                condition_id=result.condition_id,
-                message=result.message,
-                damage=result.amount,
-                creature_died=not enemy.is_alive
-            ))
+            turn_start_effects.append(
+                TurnEffectResult(
+                    effect_type=result.effect_type,
+                    condition_id=result.condition_id,
+                    message=result.message,
+                    damage=result.amount,
+                    creature_died=not enemy.is_alive,
+                )
+            )
 
         # Check if enemy died from turn-start effects
         if not enemy.is_alive:
@@ -3655,7 +3655,7 @@ class GameState:
                 enemy_display_name=enemy_display_name,
                 action_taken=EnemyTurnAction.DIED_START_OF_TURN,
                 turn_start_effects=turn_start_effects,
-                turn_advanced=True
+                turn_advanced=True,
             )
 
         # Check if enemy can act (not incapacitated or surprised)
@@ -3665,11 +3665,13 @@ class GameState:
             end_results = enemy.process_end_of_turn_conditions(self.event_bus)
             for result in end_results:
                 if result["type"] == "condition_expired":
-                    turn_end_effects.append(TurnEffectResult(
-                        effect_type="condition_expired",
-                        condition_id=result["condition"],
-                        message=f"{result['condition'].upper()} on {enemy.name} has expired!"
-                    ))
+                    turn_end_effects.append(
+                        TurnEffectResult(
+                            effect_type="condition_expired",
+                            condition_id=result["condition"],
+                            message=f"{result['condition'].upper()} on {enemy.name} has expired!",
+                        )
+                    )
 
             self.initiative_tracker.next_turn()
             return EnemyTurnResult(
@@ -3679,7 +3681,7 @@ class GameState:
                 incapacitating_conditions=incapacitating,
                 turn_start_effects=turn_start_effects,
                 turn_end_effects=turn_end_effects,
-                turn_advanced=True
+                turn_advanced=True,
             )
 
         # Enemy AI: Check if should attempt to remove conditions
@@ -3692,7 +3694,7 @@ class GameState:
                 action_taken=EnemyTurnAction.CONDITION_REMOVAL,
                 condition_removal=condition_removal,
                 turn_start_effects=turn_start_effects,
-                turn_advanced=True
+                turn_advanced=True,
             )
 
         # Choose target from living party members using AI
@@ -3707,7 +3709,7 @@ class GameState:
                     action_taken=EnemyTurnAction.NO_TARGETS,
                     turn_start_effects=turn_start_effects,
                     combat_ended=True,
-                    turn_advanced=False
+                    turn_advanced=False,
                 )
             # Combat continues (e.g., stabilized characters), advance turn
             self.initiative_tracker.next_turn()
@@ -3716,7 +3718,7 @@ class GameState:
                 enemy_display_name=enemy_display_name,
                 action_taken=EnemyTurnAction.NO_TARGETS,
                 turn_start_effects=turn_start_effects,
-                turn_advanced=True
+                turn_advanced=True,
             )
 
         # Use smart targeting based on enemy intelligence and combat history
@@ -3744,7 +3746,7 @@ class GameState:
                 target_name=target.name,
                 turn_start_effects=turn_start_effects,
                 error="No monster data or actions found",
-                turn_advanced=True
+                turn_advanced=True,
             )
 
         # Find first weapon attack action (skip Multiattack, etc.)
@@ -3763,12 +3765,12 @@ class GameState:
                 target_name=target.name,
                 turn_start_effects=turn_start_effects,
                 error="No valid attack actions",
-                turn_advanced=True
+                turn_advanced=True,
             )
 
         # Track conditions before attack (for saving throw detection)
         conditions_before = set()
-        if hasattr(target, 'active_conditions'):
+        if hasattr(target, "active_conditions"):
             conditions_before = set(target.active_conditions.keys())
 
         # Resolve attack
@@ -3780,16 +3782,13 @@ class GameState:
             apply_damage=True,
             event_bus=self.event_bus,
             action=action,
-            game_state=self
+            game_state=self,
         )
 
         # Check concentration if target was hit and took damage
         concentration_broken = None
         if attack_result.hit and attack_result.damage > 0:
-            conc_result = self.check_concentration_from_damage(
-                target.name,
-                attack_result.damage
-            )
+            conc_result = self.check_concentration_from_damage(target.name, attack_result.damage)
             if conc_result["concentration_broken"]:
                 concentration_broken = conc_result
 
@@ -3807,7 +3806,7 @@ class GameState:
             saving_throw_triggered = True
 
             # Check if condition was applied (save failed)
-            if hasattr(target, 'active_conditions'):
+            if hasattr(target, "active_conditions"):
                 conditions_after = set(target.active_conditions.keys())
                 new_conditions = conditions_after - conditions_before
                 if new_conditions:
@@ -3820,11 +3819,13 @@ class GameState:
         end_results = enemy.process_end_of_turn_conditions(self.event_bus)
         for result in end_results:
             if result["type"] == "condition_expired":
-                turn_end_effects.append(TurnEffectResult(
-                    effect_type="condition_expired",
-                    condition_id=result["condition"],
-                    message=f"{result['condition'].upper()} on {enemy.name} has expired!"
-                ))
+                turn_end_effects.append(
+                    TurnEffectResult(
+                        effect_type="condition_expired",
+                        condition_id=result["condition"],
+                        message=f"{result['condition'].upper()} on {enemy.name} has expired!",
+                    )
+                )
 
         # Advance turn
         self.initiative_tracker.next_turn()
@@ -3843,9 +3844,8 @@ class GameState:
             "hit": attack_result.hit,
             "damage": attack_result.damage if attack_result.hit else 0,
             "critical": attack_result.critical_hit,
-            "target_hp_before": target.current_hp + (
-                attack_result.damage if attack_result.hit else 0
-            ),
+            "target_hp_before": target.current_hp
+            + (attack_result.damage if attack_result.hit else 0),
             "target_hp_after": target.current_hp,
             "target_killed": not target.is_alive,
         }
@@ -3868,7 +3868,7 @@ class GameState:
             turn_end_effects=turn_end_effects,
             narrative_context=narrative_context,
             turn_advanced=True,
-            combat_ended=combat_ended
+            combat_ended=combat_ended,
         )
 
     def flee_combat(self) -> dict[str, Any]:
@@ -3893,17 +3893,14 @@ class GameState:
 
         # Check if we can retreat (need previous direction)
         if not self.last_entry_direction:
-            return {
-                "success": False,
-                "reason": "Nowhere to retreat! You're trapped in this room."
-            }
+            return {"success": False, "reason": "Nowhere to retreat! You're trapped in this room."}
 
         # Calculate retreat direction
         retreat_direction = REVERSE_DIRECTIONS.get(self.last_entry_direction)
         if not retreat_direction:
             return {
                 "success": False,
-                "reason": f"Cannot determine retreat direction from '{self.last_entry_direction}'"
+                "reason": f"Cannot determine retreat direction from '{self.last_entry_direction}'",
             }
 
         # Track flee results
@@ -3921,6 +3918,7 @@ class GameState:
             for enemy in living_enemies:
                 # Pick a random living party member to attack
                 import random
+
                 target = random.choice(living_party)
 
                 # Find enemy's attack data
@@ -3945,27 +3943,28 @@ class GameState:
                             attack_bonus=action["attack_bonus"],
                             damage_dice=action["damage"],
                             apply_damage=True,
-                            game_state=self
+                            game_state=self,
                         )
                         opportunity_attacks.append(result)
 
                         # Emit damage event if hit
                         if result.hit:
-                            self.event_bus.emit(Event(
-                                type=EventType.DAMAGE_DEALT,
-                                data={
-                                    "attacker": enemy.name,
-                                    "defender": target.name,
-                                    "damage": result.damage,
-                                    "opportunity_attack": True
-                                }
-                            ))
+                            self.event_bus.emit(
+                                Event(
+                                    type=EventType.DAMAGE_DEALT,
+                                    data={
+                                        "attacker": enemy.name,
+                                        "defender": target.name,
+                                        "damage": result.damage,
+                                        "opportunity_attack": True,
+                                    },
+                                )
+                            )
 
                             # Check concentration if target took damage
                             if result.damage > 0:
                                 concentration_result = self.check_concentration_from_damage(
-                                    target.name,
-                                    result.damage
+                                    target.name, result.damage
                                 )
                                 if concentration_result["concentration_broken"]:
                                     # Store result for later display
@@ -3975,10 +3974,9 @@ class GameState:
                         # Track casualties
                         if not target.is_alive:
                             casualties.append(target.name)
-                            self.event_bus.emit(Event(
-                                type=EventType.CHARACTER_DEATH,
-                                data={"name": target.name}
-                            ))
+                            self.event_bus.emit(
+                                Event(type=EventType.CHARACTER_DEATH, data={"name": target.name})
+                            )
 
                 # Update living party list if someone died
                 living_party = self.party.get_living_members()
@@ -4000,7 +3998,7 @@ class GameState:
             # This shouldn't happen if direction tracking is correct, but handle gracefully
             return {
                 "success": False,
-                "reason": f"Failed to retreat {retreat_direction} - exit may not exist"
+                "reason": f"Failed to retreat {retreat_direction} - exit may not exist",
             }
 
         # Get new room info for return data
@@ -4008,23 +4006,25 @@ class GameState:
         retreat_room_name = new_room.get("name", "Unknown")
 
         # Emit flee event
-        self.event_bus.emit(Event(
-            type=EventType.COMBAT_FLED,
-            data={
-                "opportunity_attacks": len(opportunity_attacks),
-                "casualties": casualties,
-                "surviving_party": [c.name for c in self.party.get_living_members()],
-                "retreat_direction": retreat_direction,
-                "retreat_room": retreat_room_name
-            }
-        ))
+        self.event_bus.emit(
+            Event(
+                type=EventType.COMBAT_FLED,
+                data={
+                    "opportunity_attacks": len(opportunity_attacks),
+                    "casualties": casualties,
+                    "surviving_party": [c.name for c in self.party.get_living_members()],
+                    "retreat_direction": retreat_direction,
+                    "retreat_room": retreat_room_name,
+                },
+            )
+        )
 
         return {
             "success": True,
             "opportunity_attacks": opportunity_attacks,
             "casualties": casualties,
             "retreat_direction": retreat_direction,
-            "retreat_room": retreat_room_name
+            "retreat_room": retreat_room_name,
         }
 
     def reset_dungeon(self, new_dungeon_name: str | None = None) -> None:
@@ -4041,25 +4041,23 @@ class GameState:
             new_dungeon_name: If provided, switch to a different dungeon
         """
         # Emit reset started event
-        self.event_bus.emit(Event(
-            type=EventType.RESET_STARTED,
-            data={
-                "old_dungeon": self.dungeon_name,
-                "new_dungeon": new_dungeon_name or self.dungeon_name
-            }
-        ))
+        self.event_bus.emit(
+            Event(
+                type=EventType.RESET_STARTED,
+                data={
+                    "old_dungeon": self.dungeon_name,
+                    "new_dungeon": new_dungeon_name or self.dungeon_name,
+                },
+            )
+        )
 
         # Load new dungeon if specified, otherwise reload current one
         if new_dungeon_name:
             self.dungeon_name = new_dungeon_name
-            self.dungeon = self.data_loader.load_dungeon(
-                new_dungeon_name, self.campaign_id
-            )
+            self.dungeon = self.data_loader.load_dungeon(new_dungeon_name, self.campaign_id)
         else:
             # Reload current dungeon from disk to reset state
-            self.dungeon = self.data_loader.load_dungeon(
-                self.dungeon_name, self.campaign_id
-            )
+            self.dungeon = self.data_loader.load_dungeon(self.dungeon_name, self.campaign_id)
 
         # Reset to start room
         self.current_room_id = self.dungeon["start_room"]
@@ -4077,13 +4075,12 @@ class GameState:
         self.action_history = []
 
         # Emit reset complete event
-        self.event_bus.emit(Event(
-            type=EventType.RESET_COMPLETE,
-            data={
-                "dungeon": self.dungeon_name,
-                "current_room": self.current_room_id
-            }
-        ))
+        self.event_bus.emit(
+            Event(
+                type=EventType.RESET_COMPLETE,
+                data={"dungeon": self.dungeon_name, "current_room": self.current_room_id},
+            )
+        )
 
     def reset_party_hp(self) -> None:
         """
@@ -4104,10 +4101,7 @@ class GameState:
             character.active_conditions.clear()
 
     def use_combat_attack_item(
-        self,
-        user: Character,
-        item_id: str,
-        target: Creature
+        self, user: Character, item_id: str, target: Creature
     ) -> CombatItemResult:
         """
         Use a combat attack item (thrown weapon) on a target during combat.
@@ -4144,7 +4138,7 @@ class GameState:
                 attack_result=None,
                 item_name=item_id,
                 action_type=ActionType.ACTION,
-                error_message=f"Item '{item_id}' not found"
+                error_message=f"Item '{item_id}' not found",
             )
 
         item_name = item_data.get("name", item_id)
@@ -4155,19 +4149,21 @@ class GameState:
             "action": ActionType.ACTION,
             "bonus_action": ActionType.BONUS_ACTION,
             "free_object": ActionType.FREE_OBJECT,
-            "no_action": ActionType.NO_ACTION
+            "no_action": ActionType.NO_ACTION,
         }
         action_required = action_type_map.get(action_required_str, ActionType.ACTION)
 
         # Validate action economy
-        turn_state = self.initiative_tracker.get_current_turn_state() if self.initiative_tracker else None
+        turn_state = (
+            self.initiative_tracker.get_current_turn_state() if self.initiative_tracker else None
+        )
         if not turn_state:
             return CombatItemResult(
                 success=False,
                 attack_result=None,
                 item_name=item_name,
                 action_type=action_required,
-                error_message="Unable to get current turn state"
+                error_message="Unable to get current turn state",
             )
 
         if not turn_state.is_action_available(action_required):
@@ -4177,7 +4173,7 @@ class GameState:
                 attack_result=None,
                 item_name=item_name,
                 action_type=action_required,
-                error_message=f"No {action_name} available this turn"
+                error_message=f"No {action_name} available this turn",
             )
 
         # Consume the action
@@ -4187,7 +4183,7 @@ class GameState:
                 attack_result=None,
                 item_name=item_name,
                 action_type=action_required,
-                error_message=f"Failed to consume {action_required_str}"
+                error_message=f"Failed to consume {action_required_str}",
             )
 
         # Use the item from inventory (removes it)
@@ -4203,12 +4199,12 @@ class GameState:
                 attack_result=None,
                 item_name=item_name,
                 action_type=action_required,
-                error_message=f"Failed to use {item_name} from inventory"
+                error_message=f"Failed to use {item_name} from inventory",
             )
 
         # Calculate attack bonus (DEX-based improvised ranged weapon)
         attack_bonus = user.abilities.dex_mod
-        if hasattr(user, 'proficiency_bonus'):
+        if hasattr(user, "proficiency_bonus"):
             attack_bonus += user.proficiency_bonus
 
         # Get damage from item
@@ -4223,7 +4219,7 @@ class GameState:
             damage_dice=damage_dice,
             apply_damage=True,
             event_bus=self.event_bus,
-            game_state=self
+            game_state=self,
         )
 
         # Apply special effects on hit
@@ -4236,33 +4232,32 @@ class GameState:
                 special_effects.append(applies_condition)
 
         # Emit item used event
-        self.event_bus.emit(Event(
-            type=EventType.ITEM_USED,
-            data={
-                "character": user.name,
-                "target": target.name,
-                "item_id": item_id,
-                "item_name": item_name,
-                "effect_type": "attack",
-                "action_cost": action_required_str,
-                "success": attack_result.hit,
-                "damage": attack_result.damage if attack_result.hit else 0
-            }
-        ))
+        self.event_bus.emit(
+            Event(
+                type=EventType.ITEM_USED,
+                data={
+                    "character": user.name,
+                    "target": target.name,
+                    "item_id": item_id,
+                    "item_name": item_name,
+                    "effect_type": "attack",
+                    "action_cost": action_required_str,
+                    "success": attack_result.hit,
+                    "damage": attack_result.damage if attack_result.hit else 0,
+                },
+            )
+        )
 
         return CombatItemResult(
             success=True,
             attack_result=attack_result,
             item_name=item_name,
             action_type=action_required,
-            special_effects=special_effects
+            special_effects=special_effects,
         )
 
     def use_item_combat(
-        self,
-        user: Character,
-        item_id: str,
-        target: Character | Creature
+        self, user: Character, item_id: str, target: Character | Creature
     ) -> CombatItemUseResult:
         """
         Use a consumable item during combat (non-attack items like potions).
@@ -4296,7 +4291,7 @@ class GameState:
                 action_type=ActionType.ACTION,
                 user_name=user.name,
                 target_name=target.name,
-                error_message=f"Item '{item_id}' not found in consumables"
+                error_message=f"Item '{item_id}' not found in consumables",
             )
 
         item_name = item_data.get("name", item_id)
@@ -4307,12 +4302,14 @@ class GameState:
             "action": ActionType.ACTION,
             "bonus_action": ActionType.BONUS_ACTION,
             "free_object": ActionType.FREE_OBJECT,
-            "no_action": ActionType.NO_ACTION
+            "no_action": ActionType.NO_ACTION,
         }
         action_required = action_type_map.get(action_required_str, ActionType.ACTION)
 
         # Validate action economy
-        turn_state = self.initiative_tracker.get_current_turn_state() if self.initiative_tracker else None
+        turn_state = (
+            self.initiative_tracker.get_current_turn_state() if self.initiative_tracker else None
+        )
         if not turn_state:
             return CombatItemUseResult(
                 success=False,
@@ -4320,7 +4317,7 @@ class GameState:
                 action_type=action_required,
                 user_name=user.name,
                 target_name=target.name,
-                error_message="Unable to get current turn state"
+                error_message="Unable to get current turn state",
             )
 
         if not turn_state.is_action_available(action_required):
@@ -4331,7 +4328,7 @@ class GameState:
                 action_type=action_required,
                 user_name=user.name,
                 target_name=target.name,
-                error_message=f"No {action_name} available this turn"
+                error_message=f"No {action_name} available this turn",
             )
 
         # Consume the action
@@ -4342,7 +4339,7 @@ class GameState:
                 action_type=action_required,
                 user_name=user.name,
                 target_name=target.name,
-                error_message=f"Failed to consume {action_required_str}"
+                error_message=f"Failed to consume {action_required_str}",
             )
 
         # Track HP before for healing display
@@ -4362,7 +4359,7 @@ class GameState:
                 action_type=action_required,
                 user_name=user.name,
                 target_name=target.name,
-                error_message=f"Failed to use {item_name} from inventory"
+                error_message=f"Failed to use {item_name} from inventory",
             )
 
         # Apply the item's effect
@@ -4371,25 +4368,27 @@ class GameState:
             target=target,
             dice_roller=self.dice_roller,
             event_bus=self.event_bus,
-            time_manager=self.time_manager
+            time_manager=self.time_manager,
         )
 
         # Track HP after for healing display
         hp_after = target.current_hp
 
         # Emit item used event
-        self.event_bus.emit(Event(
-            type=EventType.ITEM_USED,
-            data={
-                "character": user.name,
-                "target": target.name,
-                "item_id": item_id,
-                "item_name": item_name,
-                "effect_type": effect_result.effect_type,
-                "action_cost": action_required_str,
-                "success": effect_result.success
-            }
-        ))
+        self.event_bus.emit(
+            Event(
+                type=EventType.ITEM_USED,
+                data={
+                    "character": user.name,
+                    "target": target.name,
+                    "item_id": item_id,
+                    "item_name": item_name,
+                    "effect_type": effect_result.effect_type,
+                    "action_cost": action_required_str,
+                    "success": effect_result.success,
+                },
+            )
+        )
 
         return CombatItemUseResult(
             success=True,
@@ -4401,7 +4400,7 @@ class GameState:
             effect_message=effect_result.message,
             effect_amount=effect_result.amount,
             hp_before=hp_before,
-            hp_after=hp_after
+            hp_after=hp_after,
         )
 
     def party_rest(self, rest_type: str) -> PartyRestResult:
@@ -4449,7 +4448,7 @@ class GameState:
                 hp_after=hp_after,
                 max_hp=character.max_hp,
                 resources_recovered=result["resources_recovered"],
-                can_prepare_spells=result.get("can_prepare_spells", False)
+                can_prepare_spells=result.get("can_prepare_spells", False),
             )
             character_results.append(char_result)
 
@@ -4465,8 +4464,8 @@ class GameState:
                 "party": [char.name for char in self.party.characters],
                 "rest_type": rest_type,
                 "hp_recovered": hp_recovered_total,
-                "resources_recovered": resources_recovered_total
-            }
+                "resources_recovered": resources_recovered_total,
+            },
         )
         self.event_bus.emit(event)
 
@@ -4477,5 +4476,5 @@ class GameState:
         return PartyRestResult(
             rest_type=rest_type,
             rest_duration_minutes=rest_duration_minutes,
-            character_results=character_results
+            character_results=character_results,
         )

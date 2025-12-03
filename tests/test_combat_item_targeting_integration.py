@@ -47,12 +47,7 @@ def dice_roller():
 def conscious_fighter():
     """Create a conscious fighter with healing potion."""
     abilities = Abilities(
-        strength=16,
-        dexterity=10,
-        constitution=14,
-        intelligence=10,
-        wisdom=12,
-        charisma=10
+        strength=16, dexterity=10, constitution=14, intelligence=10, wisdom=12, charisma=10
     )
     fighter = Character(
         name="Bob",
@@ -62,7 +57,7 @@ def conscious_fighter():
         max_hp=12,
         ac=16,
         weapon_proficiencies=["simple", "martial"],
-        armor_proficiencies=["light", "medium", "heavy", "shields"]
+        armor_proficiencies=["light", "medium", "heavy", "shields"],
     )
     # Give fighter healing potions
     fighter.inventory.add_item("potion_of_healing", "consumables", quantity=3)
@@ -73,12 +68,7 @@ def conscious_fighter():
 def unconscious_wizard():
     """Create an unconscious wizard at 0 HP."""
     abilities = Abilities(
-        strength=8,
-        dexterity=14,
-        constitution=12,
-        intelligence=16,
-        wisdom=13,
-        charisma=10
+        strength=8, dexterity=14, constitution=12, intelligence=16, wisdom=13, charisma=10
     )
     wizard = Character(
         name="Tim",
@@ -88,7 +78,7 @@ def unconscious_wizard():
         max_hp=8,
         ac=12,
         weapon_proficiencies=["simple"],
-        armor_proficiencies=[]
+        armor_proficiencies=[],
     )
     # Set wizard to unconscious state (0 HP automatically makes is_unconscious True)
     wizard.current_hp = 0
@@ -106,12 +96,7 @@ def party_with_unconscious(conscious_fighter, unconscious_wizard):
 def enemy():
     """Create a basic enemy for combat context."""
     abilities = Abilities(10, 10, 11, 3, 10, 3)
-    return Creature(
-        name="Skeleton",
-        max_hp=12,
-        ac=13,
-        abilities=abilities
-    )
+    return Creature(name="Skeleton", max_hp=12, ac=13, abilities=abilities)
 
 
 class TestCombatItemTargeting:
@@ -146,10 +131,7 @@ class TestCombatItemTargeting:
 
         # Apply healing effect to unconscious target
         result = apply_item_effect(
-            item_info=item_info,
-            target=target,
-            dice_roller=dice_roller,
-            event_bus=event_bus
+            item_info=item_info, target=target, dice_roller=dice_roller, event_bus=event_bus
         )
 
         # Assert: Target should be healed and conscious
@@ -188,10 +170,7 @@ class TestCombatItemTargeting:
         assert success is True
 
         result = apply_item_effect(
-            item_info=item_info,
-            target=character,
-            dice_roller=dice_roller,
-            event_bus=event_bus
+            item_info=item_info, target=character, dice_roller=dice_roller, event_bus=event_bus
         )
 
         # Assert: Should heal self
@@ -218,7 +197,7 @@ class TestCombatItemTargeting:
             max_hp=10,
             ac=14,
             weapon_proficiencies=["simple"],
-            armor_proficiencies=["light"]
+            armor_proficiencies=["light"],
         )
         ally.current_hp = 10  # Full health
 
@@ -229,10 +208,7 @@ class TestCombatItemTargeting:
         assert success is True
 
         result = apply_item_effect(
-            item_info=item_info,
-            target=ally,
-            dice_roller=dice_roller,
-            event_bus=event_bus
+            item_info=item_info, target=ally, dice_roller=dice_roller, event_bus=event_bus
         )
 
         # Assert: Item system returns False when healing at full HP (no healing needed)
@@ -264,10 +240,7 @@ class TestCombatItemTargeting:
         # Here we test that even if applied, dead state should prevent resurrection via potion.
 
         result = apply_item_effect(
-            item_info=item_info,
-            target=dead_character,
-            dice_roller=dice_roller,
-            event_bus=event_bus
+            item_info=item_info, target=dead_character, dice_roller=dice_roller, event_bus=event_bus
         )
 
         # Assert: Healing should work at the item effect level

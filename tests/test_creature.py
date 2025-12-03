@@ -13,12 +13,7 @@ class TestAbilities:
     def test_abilities_creation(self):
         """Test creating abilities"""
         abilities = Abilities(
-            strength=16,
-            dexterity=14,
-            constitution=15,
-            intelligence=10,
-            wisdom=12,
-            charisma=8
+            strength=16, dexterity=14, constitution=15, intelligence=10, wisdom=12, charisma=8
         )
         assert abilities.strength == 16
         assert abilities.dexterity == 14
@@ -43,7 +38,7 @@ class TestAbilities:
                 constitution=10,
                 intelligence=10,
                 wisdom=10,
-                charisma=10
+                charisma=10,
             )
             assert abilities.str_mod == expected_mod
 
@@ -55,7 +50,7 @@ class TestAbilities:
             constitution=15,  # +2
             intelligence=10,  # +0
             wisdom=12,  # +1
-            charisma=8  # -1
+            charisma=8,  # -1
         )
 
         assert abilities.str_mod == 3
@@ -72,22 +67,12 @@ class TestCreature:
     def setup_method(self):
         """Set up test fixtures"""
         self.abilities = Abilities(
-            strength=16,
-            dexterity=14,
-            constitution=15,
-            intelligence=10,
-            wisdom=12,
-            charisma=8
+            strength=16, dexterity=14, constitution=15, intelligence=10, wisdom=12, charisma=8
         )
 
     def test_creature_creation(self):
         """Test creating a basic creature"""
-        creature = Creature(
-            name="Goblin",
-            max_hp=7,
-            ac=15,
-            abilities=self.abilities
-        )
+        creature = Creature(name="Goblin", max_hp=7, ac=15, abilities=self.abilities)
 
         assert creature.name == "Goblin"
         assert creature.max_hp == 7
@@ -97,12 +82,7 @@ class TestCreature:
 
     def test_creature_take_damage(self):
         """Test creature taking damage"""
-        creature = Creature(
-            name="Goblin",
-            max_hp=10,
-            ac=15,
-            abilities=self.abilities
-        )
+        creature = Creature(name="Goblin", max_hp=10, ac=15, abilities=self.abilities)
 
         creature.take_damage(5)
         assert creature.current_hp == 5
@@ -110,12 +90,7 @@ class TestCreature:
 
     def test_creature_death(self):
         """Test creature dying when HP reaches 0"""
-        creature = Creature(
-            name="Goblin",
-            max_hp=10,
-            ac=15,
-            abilities=self.abilities
-        )
+        creature = Creature(name="Goblin", max_hp=10, ac=15, abilities=self.abilities)
 
         creature.take_damage(10)
         assert creature.current_hp == 0
@@ -123,12 +98,7 @@ class TestCreature:
 
     def test_creature_overkill_damage(self):
         """Test that HP doesn't go below 0"""
-        creature = Creature(
-            name="Goblin",
-            max_hp=10,
-            ac=15,
-            abilities=self.abilities
-        )
+        creature = Creature(name="Goblin", max_hp=10, ac=15, abilities=self.abilities)
 
         creature.take_damage(20)
         assert creature.current_hp == 0
@@ -136,12 +106,7 @@ class TestCreature:
 
     def test_creature_healing(self):
         """Test creature healing"""
-        creature = Creature(
-            name="Goblin",
-            max_hp=10,
-            ac=15,
-            abilities=self.abilities
-        )
+        creature = Creature(name="Goblin", max_hp=10, ac=15, abilities=self.abilities)
 
         creature.take_damage(7)
         assert creature.current_hp == 3
@@ -151,12 +116,7 @@ class TestCreature:
 
     def test_creature_overhealing(self):
         """Test that healing doesn't exceed max HP"""
-        creature = Creature(
-            name="Goblin",
-            max_hp=10,
-            ac=15,
-            abilities=self.abilities
-        )
+        creature = Creature(name="Goblin", max_hp=10, ac=15, abilities=self.abilities)
 
         creature.take_damage(3)
         creature.heal(10)  # Try to heal for more than max
@@ -164,12 +124,7 @@ class TestCreature:
 
     def test_creature_cannot_heal_if_dead(self):
         """Test that dead creatures cannot be healed (requires resurrection)"""
-        creature = Creature(
-            name="Goblin",
-            max_hp=10,
-            ac=15,
-            abilities=self.abilities
-        )
+        creature = Creature(name="Goblin", max_hp=10, ac=15, abilities=self.abilities)
 
         creature.take_damage(10)
         assert creature.is_alive is False
@@ -181,12 +136,7 @@ class TestCreature:
 
     def test_creature_conditions(self):
         """Test adding and removing conditions"""
-        creature = Creature(
-            name="Fighter",
-            max_hp=20,
-            ac=16,
-            abilities=self.abilities
-        )
+        creature = Creature(name="Fighter", max_hp=20, ac=16, abilities=self.abilities)
 
         assert not creature.has_condition("prone")
 
@@ -195,12 +145,7 @@ class TestCreature:
 
     def test_apply_condition_with_metadata(self):
         """Test applying conditions with duration and repeat save metadata"""
-        creature = Creature(
-            name="Fighter",
-            max_hp=20,
-            ac=16,
-            abilities=self.abilities
-        )
+        creature = Creature(name="Fighter", max_hp=20, ac=16, abilities=self.abilities)
 
         creature.apply_condition_with_metadata(
             condition="paralyzed",
@@ -209,7 +154,7 @@ class TestCreature:
             dc=10,
             ability="constitution",
             allow_repeat_save=True,
-            repeat_timing="end_of_turn"
+            repeat_timing="end_of_turn",
         )
 
         assert creature.has_condition("paralyzed")
@@ -223,12 +168,7 @@ class TestCreature:
 
     def test_can_take_actions_when_paralyzed(self):
         """Test that paralyzed creatures cannot take actions"""
-        creature = Creature(
-            name="Fighter",
-            max_hp=20,
-            ac=16,
-            abilities=self.abilities
-        )
+        creature = Creature(name="Fighter", max_hp=20, ac=16, abilities=self.abilities)
 
         assert creature.can_take_actions() is True
 
@@ -237,12 +177,7 @@ class TestCreature:
 
     def test_can_take_actions_with_various_conditions(self):
         """Test incapacitating vs non-incapacitating conditions"""
-        creature = Creature(
-            name="Fighter",
-            max_hp=20,
-            ac=16,
-            abilities=self.abilities
-        )
+        creature = Creature(name="Fighter", max_hp=20, ac=16, abilities=self.abilities)
 
         # Non-incapacitating conditions
         creature.add_condition("prone")
@@ -262,12 +197,7 @@ class TestCreature:
 
     def test_process_end_of_turn_conditions_duration_countdown(self):
         """Test that round-based conditions countdown each turn"""
-        creature = Creature(
-            name="Fighter",
-            max_hp=20,
-            ac=16,
-            abilities=self.abilities
-        )
+        creature = Creature(name="Fighter", max_hp=20, ac=16, abilities=self.abilities)
 
         creature.apply_condition_with_metadata(
             condition="paralyzed",
@@ -275,7 +205,7 @@ class TestCreature:
             duration=3,
             dc=10,
             ability="constitution",
-            allow_repeat_save=False
+            allow_repeat_save=False,
         )
 
         # After turn 1
@@ -304,14 +234,9 @@ class TestCreature:
             constitution=20,  # +5 modifier
             intelligence=10,
             wisdom=10,
-            charisma=10
+            charisma=10,
         )
-        creature = Creature(
-            name="Fighter",
-            max_hp=20,
-            ac=16,
-            abilities=high_con_abilities
-        )
+        creature = Creature(name="Fighter", max_hp=20, ac=16, abilities=high_con_abilities)
 
         creature.apply_condition_with_metadata(
             condition="paralyzed",
@@ -320,7 +245,7 @@ class TestCreature:
             dc=10,
             ability="constitution",
             allow_repeat_save=True,
-            repeat_timing="end_of_turn"
+            repeat_timing="end_of_turn",
         )
 
         # Keep processing until save succeeds (high CON should eventually pass)
@@ -346,14 +271,9 @@ class TestCreature:
             constitution=3,  # -4 modifier
             intelligence=10,
             wisdom=10,
-            charisma=10
+            charisma=10,
         )
-        creature = Creature(
-            name="Weakling",
-            max_hp=20,
-            ac=16,
-            abilities=low_con_abilities
-        )
+        creature = Creature(name="Weakling", max_hp=20, ac=16, abilities=low_con_abilities)
 
         creature.apply_condition_with_metadata(
             condition="paralyzed",
@@ -362,7 +282,7 @@ class TestCreature:
             dc=20,  # High DC
             ability="constitution",
             allow_repeat_save=True,
-            repeat_timing="end_of_turn"
+            repeat_timing="end_of_turn",
         )
 
         # Process several turns - should stay paralyzed
@@ -374,16 +294,14 @@ class TestCreature:
             if creature.has_condition("paralyzed"):
                 # Failed save - with repeat saves enabled, duration does NOT decrement
                 # The repeat save is the primary mechanism for ending the condition
-                assert creature.active_conditions["paralyzed"]["duration_remaining"] == initial_duration
+                assert (
+                    creature.active_conditions["paralyzed"]["duration_remaining"]
+                    == initial_duration
+                )
 
     def test_process_end_of_turn_removes_surprised(self):
         """Test that surprised condition is automatically removed at end of turn"""
-        creature = Creature(
-            name="Fighter",
-            max_hp=20,
-            ac=16,
-            abilities=self.abilities
-        )
+        creature = Creature(name="Fighter", max_hp=20, ac=16, abilities=self.abilities)
 
         # Add surprised condition
         creature.add_condition("surprised")
@@ -402,12 +320,7 @@ class TestCreature:
 
     def test_conditions_backward_compatibility(self):
         """Test that conditions property returns set of condition names"""
-        creature = Creature(
-            name="Fighter",
-            max_hp=20,
-            ac=16,
-            abilities=self.abilities
-        )
+        creature = Creature(name="Fighter", max_hp=20, ac=16, abilities=self.abilities)
 
         creature.add_condition("prone")
         creature.add_condition("poisoned")
@@ -424,12 +337,7 @@ class TestCreature:
 
     def test_creature_multiple_conditions(self):
         """Test managing multiple conditions"""
-        creature = Creature(
-            name="Fighter",
-            max_hp=20,
-            ac=16,
-            abilities=self.abilities
-        )
+        creature = Creature(name="Fighter", max_hp=20, ac=16, abilities=self.abilities)
 
         creature.add_condition("prone")
         creature.add_condition("stunned")
@@ -440,12 +348,7 @@ class TestCreature:
 
     def test_creature_initiative_modifier(self):
         """Test that initiative uses dexterity modifier"""
-        creature = Creature(
-            name="Goblin",
-            max_hp=7,
-            ac=15,
-            abilities=self.abilities
-        )
+        creature = Creature(name="Goblin", max_hp=7, ac=15, abilities=self.abilities)
 
         # Initiative modifier should be dexterity modifier
         assert creature.initiative_modifier == self.abilities.dex_mod
@@ -457,12 +360,7 @@ class TestCharacter:
     def setup_method(self):
         """Set up test fixtures"""
         self.abilities = Abilities(
-            strength=16,
-            dexterity=14,
-            constitution=15,
-            intelligence=10,
-            wisdom=12,
-            charisma=8
+            strength=16, dexterity=14, constitution=15, intelligence=10, wisdom=12, charisma=8
         )
 
     def test_character_creation(self):
@@ -473,7 +371,7 @@ class TestCharacter:
             level=1,
             abilities=self.abilities,
             max_hp=12,
-            ac=16
+            ac=16,
         )
 
         assert character.name == "Thorin"
@@ -502,7 +400,7 @@ class TestCharacter:
                 level=level,
                 abilities=self.abilities,
                 max_hp=10,
-                ac=16
+                ac=16,
             )
             assert character.proficiency_bonus == expected_bonus
 
@@ -514,7 +412,7 @@ class TestCharacter:
             level=1,
             abilities=self.abilities,
             max_hp=12,
-            ac=16
+            ac=16,
         )
 
         character.gain_xp(100)
@@ -531,7 +429,7 @@ class TestCharacter:
             level=1,
             abilities=self.abilities,
             max_hp=12,
-            ac=16
+            ac=16,
         )
 
         # Level 1 fighter: proficiency +2, STR mod +3 = +5
@@ -545,7 +443,7 @@ class TestCharacter:
             level=1,
             abilities=self.abilities,
             max_hp=12,
-            ac=16
+            ac=16,
         )
 
         # Damage bonus should be strength modifier
@@ -559,7 +457,7 @@ class TestCharacter:
             level=1,
             abilities=self.abilities,
             max_hp=12,
-            ac=16
+            ac=16,
         )
 
         # Should have creature methods

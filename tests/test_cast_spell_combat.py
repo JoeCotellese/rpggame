@@ -40,7 +40,7 @@ class TestCastSpellCombat:
             constitution=14,
             intelligence=16,  # +3 modifier
             wisdom=10,
-            charisma=10
+            charisma=10,
         )
 
     @pytest.fixture
@@ -55,35 +55,24 @@ class TestCastSpellCombat:
             ac=12,
             spellcasting_ability="int",
             known_spells=["fire_bolt", "burning_hands", "magic_missile", "mage_armor", "shield"],
-            prepared_spells=["fire_bolt", "burning_hands", "magic_missile", "mage_armor", "shield"]
+            prepared_spells=["fire_bolt", "burning_hands", "magic_missile", "mage_armor", "shield"],
         )
-        wizard.add_resource_pool(ResourcePool(
-            name="spell_slots_level_1",
-            current=4,
-            maximum=4,
-            recovery_type="long_rest"
-        ))
+        wizard.add_resource_pool(
+            ResourcePool(
+                name="spell_slots_level_1", current=4, maximum=4, recovery_type="long_rest"
+            )
+        )
         return wizard
 
     @pytest.fixture
     def goblin(self):
         """Create a goblin enemy"""
-        return Creature(
-            name="Goblin",
-            max_hp=7,
-            ac=13,
-            abilities=Abilities(8, 14, 10, 10, 8, 8)
-        )
+        return Creature(name="Goblin", max_hp=7, ac=13, abilities=Abilities(8, 14, 10, 10, 8, 8))
 
     @pytest.fixture
     def skeleton(self):
         """Create a skeleton enemy"""
-        return Creature(
-            name="Skeleton",
-            max_hp=13,
-            ac=13,
-            abilities=Abilities(10, 14, 15, 6, 8, 5)
-        )
+        return Creature(name="Skeleton", max_hp=13, ac=13, abilities=Abilities(10, 14, 15, 6, 8, 5))
 
     @pytest.fixture
     def game_state(self, wizard, goblin, event_bus, data_loader, dice_roller):
@@ -94,7 +83,7 @@ class TestCastSpellCombat:
             dungeon_name="test_dungeon",
             event_bus=event_bus,
             data_loader=data_loader,
-            dice_roller=dice_roller
+            dice_roller=dice_roller,
         )
         game_state.active_enemies = [goblin]
         return game_state
@@ -108,10 +97,7 @@ class TestAttackSpells(TestCastSpellCombat):
         spell_data = data_loader.load_spells()["fire_bolt"]
 
         result = game_state.cast_spell_combat(
-            caster=wizard,
-            spell_data=spell_data,
-            target=goblin,
-            spellcasting_ability="int"
+            caster=wizard, spell_data=spell_data, target=goblin, spellcasting_ability="int"
         )
 
         assert isinstance(result, CombatSpellResult)
@@ -127,10 +113,7 @@ class TestAttackSpells(TestCastSpellCombat):
         spell_data = data_loader.load_spells()["fire_bolt"]
 
         result = game_state.cast_spell_combat(
-            caster=wizard,
-            spell_data=spell_data,
-            target=goblin,
-            spellcasting_ability="int"
+            caster=wizard, spell_data=spell_data, target=goblin, spellcasting_ability="int"
         )
 
         assert result.attack_result is not None
@@ -153,16 +136,13 @@ class TestAttackSpells(TestCastSpellCombat):
                 dungeon_name="test_dungeon",
                 event_bus=event_bus,
                 data_loader=data_loader,
-                dice_roller=dice_roller
+                dice_roller=dice_roller,
             )
             game_state.active_enemies = [goblin]
             goblin.current_hp = initial_hp  # Reset
 
             result = game_state.cast_spell_combat(
-                caster=wizard,
-                spell_data=spell_data,
-                target=goblin,
-                spellcasting_ability="int"
+                caster=wizard, spell_data=spell_data, target=goblin, spellcasting_ability="int"
             )
 
             if result.attack_result.hit:
@@ -185,16 +165,13 @@ class TestAttackSpells(TestCastSpellCombat):
                 dungeon_name="test_dungeon",
                 event_bus=event_bus,
                 data_loader=data_loader,
-                dice_roller=dice_roller
+                dice_roller=dice_roller,
             )
             game_state.active_enemies = [goblin]
             goblin.current_hp = 1  # Near death
 
             result = game_state.cast_spell_combat(
-                caster=wizard,
-                spell_data=spell_data,
-                target=goblin,
-                spellcasting_ability="int"
+                caster=wizard, spell_data=spell_data, target=goblin, spellcasting_ability="int"
             )
 
             if result.attack_result.hit and not goblin.is_alive:
@@ -216,7 +193,7 @@ class TestSaveSpells(TestCastSpellCombat):
             caster=wizard,
             spell_data=spell_data,
             target=None,  # Area effect
-            spellcasting_ability="int"
+            spellcasting_ability="int",
         )
 
         assert result.success is True
@@ -231,26 +208,22 @@ class TestSaveSpells(TestCastSpellCombat):
         spell_data = data_loader.load_spells()["burning_hands"]
 
         result = game_state.cast_spell_combat(
-            caster=wizard,
-            spell_data=spell_data,
-            target=goblin,
-            spellcasting_ability="int"
+            caster=wizard, spell_data=spell_data, target=goblin, spellcasting_ability="int"
         )
 
         assert result.save_dc is not None
         assert result.save_ability is not None
         assert result.save_dc > 0
 
-    def test_save_spell_has_per_target_results(self, game_state, wizard, goblin, skeleton, data_loader):
+    def test_save_spell_has_per_target_results(
+        self, game_state, wizard, goblin, skeleton, data_loader
+    ):
         """Save spell has per-target save results"""
         spell_data = data_loader.load_spells()["burning_hands"]
         game_state.active_enemies = [goblin, skeleton]
 
         result = game_state.cast_spell_combat(
-            caster=wizard,
-            spell_data=spell_data,
-            target=None,
-            spellcasting_ability="int"
+            caster=wizard, spell_data=spell_data, target=None, spellcasting_ability="int"
         )
 
         assert result.save_results is not None
@@ -265,10 +238,7 @@ class TestSaveSpells(TestCastSpellCombat):
         initial_hp = goblin.current_hp
 
         result = game_state.cast_spell_combat(
-            caster=wizard,
-            spell_data=spell_data,
-            target=goblin,
-            spellcasting_ability="int"
+            caster=wizard, spell_data=spell_data, target=goblin, spellcasting_ability="int"
         )
 
         # Burning hands always does some damage (half on save)
@@ -285,10 +255,7 @@ class TestBuffSpells(TestCastSpellCombat):
         spell_data = data_loader.load_spells()["mage_armor"]
 
         result = game_state.cast_spell_combat(
-            caster=wizard,
-            spell_data=spell_data,
-            target=wizard,
-            spellcasting_ability="int"
+            caster=wizard, spell_data=spell_data, target=wizard, spellcasting_ability="int"
         )
 
         assert result.success is True
@@ -301,10 +268,7 @@ class TestBuffSpells(TestCastSpellCombat):
         spell_data = data_loader.load_spells()["shield"]
 
         result = game_state.cast_spell_combat(
-            caster=wizard,
-            spell_data=spell_data,
-            target=wizard,
-            spellcasting_ability="int"
+            caster=wizard, spell_data=spell_data, target=wizard, spellcasting_ability="int"
         )
 
         assert result.success is True
@@ -326,17 +290,18 @@ class TestConcentration(TestCastSpellCombat):
             ac=12,
             spellcasting_ability="int",
             known_spells=["hold_person", "detect_magic"],
-            prepared_spells=["hold_person", "detect_magic"]
+            prepared_spells=["hold_person", "detect_magic"],
         )
-        wizard.add_resource_pool(ResourcePool(
-            name="spell_slots_level_2",
-            current=3,
-            maximum=3,
-            recovery_type="long_rest"
-        ))
+        wizard.add_resource_pool(
+            ResourcePool(
+                name="spell_slots_level_2", current=3, maximum=3, recovery_type="long_rest"
+            )
+        )
         return wizard
 
-    def test_concentration_spell_tracked(self, event_bus, data_loader, dice_roller, wizard_with_concentration_spells, goblin):
+    def test_concentration_spell_tracked(
+        self, event_bus, data_loader, dice_roller, wizard_with_concentration_spells, goblin
+    ):
         """Casting concentration spell sets now_concentrating"""
         party = Party([wizard_with_concentration_spells])
         game_state = GameState(
@@ -344,7 +309,7 @@ class TestConcentration(TestCastSpellCombat):
             dungeon_name="test_dungeon",
             event_bus=event_bus,
             data_loader=data_loader,
-            dice_roller=dice_roller
+            dice_roller=dice_roller,
         )
         game_state.active_enemies = [goblin]
 
@@ -357,7 +322,7 @@ class TestConcentration(TestCastSpellCombat):
             caster=wizard_with_concentration_spells,
             spell_data=spell_data,
             target=goblin,
-            spellcasting_ability="int"
+            spellcasting_ability="int",
         )
 
         if spell_data.get("concentration"):
@@ -374,10 +339,7 @@ class TestSpellSlotManagement(TestCastSpellCombat):
         assert initial_slots > 0, "Test requires available spell slots"
 
         result = game_state.cast_spell_combat(
-            caster=wizard,
-            spell_data=spell_data,
-            target=goblin,
-            spellcasting_ability="int"
+            caster=wizard, spell_data=spell_data, target=goblin, spellcasting_ability="int"
         )
 
         assert result.success is True
@@ -388,10 +350,7 @@ class TestSpellSlotManagement(TestCastSpellCombat):
         spell_data = data_loader.load_spells()["burning_hands"]
 
         result = game_state.cast_spell_combat(
-            caster=wizard,
-            spell_data=spell_data,
-            target=goblin,
-            spellcasting_ability="int"
+            caster=wizard, spell_data=spell_data, target=goblin, spellcasting_ability="int"
         )
 
         assert result.success is True
@@ -406,10 +365,7 @@ class TestSpellSlotManagement(TestCastSpellCombat):
         pool.current = 0
 
         result = game_state.cast_spell_combat(
-            caster=wizard,
-            spell_data=spell_data,
-            target=goblin,
-            spellcasting_ability="int"
+            caster=wizard, spell_data=spell_data, target=goblin, spellcasting_ability="int"
         )
 
         assert result.success is False
@@ -423,10 +379,7 @@ class TestSpellSlotManagement(TestCastSpellCombat):
         pool.current = 0
 
         result = game_state.cast_spell_combat(
-            caster=wizard,
-            spell_data=spell_data,
-            target=goblin,
-            spellcasting_ability="int"
+            caster=wizard, spell_data=spell_data, target=goblin, spellcasting_ability="int"
         )
 
         assert result.success is False
@@ -440,10 +393,7 @@ class TestSpellSlotManagement(TestCastSpellCombat):
         initial_slots = wizard.get_available_spell_slots(1)
 
         result = game_state.cast_spell_combat(
-            caster=wizard,
-            spell_data=spell_data,
-            target=goblin,
-            spellcasting_ability="int"
+            caster=wizard, spell_data=spell_data, target=goblin, spellcasting_ability="int"
         )
 
         assert result.success is True
@@ -461,10 +411,7 @@ class TestSpellSlotManagement(TestCastSpellCombat):
         initial_slots = wizard.get_available_spell_slots(1)
 
         result = game_state.cast_spell_combat(
-            caster=wizard,
-            spell_data=spell_data,
-            target=None,
-            spellcasting_ability="int"
+            caster=wizard, spell_data=spell_data, target=None, spellcasting_ability="int"
         )
 
         assert result.success is False
@@ -474,7 +421,9 @@ class TestSpellSlotManagement(TestCastSpellCombat):
         assert len(result.resources_consumed) == 1
         assert result.resources_consumed[0] == ("spell_slots_level_1", 1)
 
-    def test_higher_level_spell_slot_tracking(self, wizard_abilities, event_bus, data_loader, dice_roller, goblin):
+    def test_higher_level_spell_slot_tracking(
+        self, wizard_abilities, event_bus, data_loader, dice_roller, goblin
+    ):
         """Higher level spells track correct slot level in resources_consumed"""
         # Create wizard with level 2 slots and hold_person spell
         wizard = Character(
@@ -486,21 +435,20 @@ class TestSpellSlotManagement(TestCastSpellCombat):
             ac=12,
             spellcasting_ability="int",
             known_spells=["hold_person"],
-            prepared_spells=["hold_person"]
+            prepared_spells=["hold_person"],
         )
-        wizard.add_resource_pool(ResourcePool(
-            name="spell_slots_level_2",
-            current=3,
-            maximum=3,
-            recovery_type="long_rest"
-        ))
+        wizard.add_resource_pool(
+            ResourcePool(
+                name="spell_slots_level_2", current=3, maximum=3, recovery_type="long_rest"
+            )
+        )
         party = Party([wizard])
         game_state = GameState(
             party=party,
             dungeon_name="test_dungeon",
             event_bus=event_bus,
             data_loader=data_loader,
-            dice_roller=dice_roller
+            dice_roller=dice_roller,
         )
         game_state.active_enemies = [goblin]
 
@@ -509,10 +457,7 @@ class TestSpellSlotManagement(TestCastSpellCombat):
             pytest.skip("hold_person spell not in data")
 
         result = game_state.cast_spell_combat(
-            caster=wizard,
-            spell_data=spell_data,
-            target=goblin,
-            spellcasting_ability="int"
+            caster=wizard, spell_data=spell_data, target=goblin, spellcasting_ability="int"
         )
 
         assert wizard.get_available_spell_slots(2) == 2
@@ -540,13 +485,13 @@ class TestSpellSlotRefundIntegration(TestCastSpellCombat):
         3. CLI sets context.result = FAILED and propagates resources_consumed
         4. ResourceCleanupMiddleware refunds the slot
         """
-        from unittest.mock import Mock, patch
+        from unittest.mock import patch
+
+        from dnd_engine.systems.action_economy import ActionType
         from dnd_engine.systems.combat_middleware import (
             ActionResult,
-            CombatActionContext,
             CombatActionExecutor,
         )
-        from dnd_engine.systems.action_economy import ActionType
 
         # Setup game state with combat active
         party = Party([wizard])
@@ -555,13 +500,14 @@ class TestSpellSlotRefundIntegration(TestCastSpellCombat):
             dungeon_name="test_dungeon",
             event_bus=event_bus,
             data_loader=data_loader,
-            dice_roller=dice_roller
+            dice_roller=dice_roller,
         )
         game_state.active_enemies = []  # No enemies - will cause spell to fail
 
         # Start combat to enable turn tracking
         game_state.in_combat = True
         from dnd_engine.systems.initiative import InitiativeTracker
+
         tracker = InitiativeTracker()
         tracker.add_combatant(wizard)
         game_state.initiative_tracker = tracker
@@ -581,7 +527,7 @@ class TestSpellSlotRefundIntegration(TestCastSpellCombat):
                 caster=wizard,
                 spell_data=spell_data,
                 target=None,  # Area effect
-                spellcasting_ability="int"
+                spellcasting_ability="int",
             )
 
             # Propagate consumed resources for middleware refund
@@ -595,14 +541,14 @@ class TestSpellSlotRefundIntegration(TestCastSpellCombat):
             return True
 
         # Execute through middleware chain (patching logging to avoid side effects)
-        with patch('dnd_engine.utils.logging_config.get_logging_config', return_value=None):
+        with patch("dnd_engine.utils.logging_config.get_logging_config", return_value=None):
             context = executor.execute(
                 actor=wizard,
                 action_type=ActionType.ACTION,
                 action_name="cast_spell",
                 action_handler=execute_spell_action,
                 spell="Burning Hands",
-                target="area"
+                target="area",
             )
 
         # Verify the spell failed
@@ -612,8 +558,7 @@ class TestSpellSlotRefundIntegration(TestCastSpellCombat):
         # Verify the spell slot was REFUNDED by middleware
         final_slots = wizard.get_available_spell_slots(1)
         assert final_slots == initial_slots, (
-            f"Spell slot should have been refunded. "
-            f"Expected {initial_slots}, got {final_slots}"
+            f"Spell slot should have been refunded. Expected {initial_slots}, got {final_slots}"
         )
 
     def test_no_slots_error_no_refund_needed(self, wizard, data_loader, event_bus, dice_roller):
@@ -622,13 +567,13 @@ class TestSpellSlotRefundIntegration(TestCastSpellCombat):
 
         This is a validation failure - slot consumption should never happen.
         """
-        from unittest.mock import Mock, patch
+        from unittest.mock import patch
+
+        from dnd_engine.systems.action_economy import ActionType
         from dnd_engine.systems.combat_middleware import (
             ActionResult,
-            CombatActionContext,
             CombatActionExecutor,
         )
-        from dnd_engine.systems.action_economy import ActionType
 
         # Exhaust all level 1 slots
         pool = wizard.resource_pools.get("spell_slots_level_1")
@@ -641,16 +586,16 @@ class TestSpellSlotRefundIntegration(TestCastSpellCombat):
             dungeon_name="test_dungeon",
             event_bus=event_bus,
             data_loader=data_loader,
-            dice_roller=dice_roller
+            dice_roller=dice_roller,
         )
-        game_state.active_enemies = [Creature(
-            name="Goblin", max_hp=7, ac=13,
-            abilities=Abilities(8, 14, 10, 10, 8, 8)
-        )]
+        game_state.active_enemies = [
+            Creature(name="Goblin", max_hp=7, ac=13, abilities=Abilities(8, 14, 10, 10, 8, 8))
+        ]
 
         # Start combat
         game_state.in_combat = True
         from dnd_engine.systems.initiative import InitiativeTracker
+
         tracker = InitiativeTracker()
         tracker.add_combatant(wizard)
         game_state.initiative_tracker = tracker
@@ -663,7 +608,7 @@ class TestSpellSlotRefundIntegration(TestCastSpellCombat):
                 caster=wizard,
                 spell_data=spell_data,
                 target=game_state.active_enemies[0],
-                spellcasting_ability="int"
+                spellcasting_ability="int",
             )
 
             ctx.resources_consumed = result.resources_consumed
@@ -675,14 +620,14 @@ class TestSpellSlotRefundIntegration(TestCastSpellCombat):
 
             return True
 
-        with patch('dnd_engine.utils.logging_config.get_logging_config', return_value=None):
+        with patch("dnd_engine.utils.logging_config.get_logging_config", return_value=None):
             context = executor.execute(
                 actor=wizard,
                 action_type=ActionType.ACTION,
                 action_name="cast_spell",
                 action_handler=execute_spell_action,
                 spell="Burning Hands",
-                target="Goblin"
+                target="Goblin",
             )
 
         # Verify the spell failed due to no slots
@@ -703,10 +648,7 @@ class TestErrorCases(TestCastSpellCombat):
         game_state.active_enemies = []  # No enemies
 
         result = game_state.cast_spell_combat(
-            caster=wizard,
-            spell_data=spell_data,
-            target=None,
-            spellcasting_ability="int"
+            caster=wizard, spell_data=spell_data, target=None, spellcasting_ability="int"
         )
 
         assert result.success is False

@@ -21,14 +21,9 @@ class TestInitiativeTracker:
             constitution=15,
             intelligence=10,
             wisdom=12,
-            charisma=8
+            charisma=8,
         )
-        self.fighter = Creature(
-            name="Fighter",
-            max_hp=20,
-            ac=16,
-            abilities=self.fighter_abilities
-        )
+        self.fighter = Creature(name="Fighter", max_hp=20, ac=16, abilities=self.fighter_abilities)
 
         self.goblin_abilities = Abilities(
             strength=8,
@@ -36,14 +31,9 @@ class TestInitiativeTracker:
             constitution=10,
             intelligence=10,
             wisdom=8,
-            charisma=8
+            charisma=8,
         )
-        self.goblin = Creature(
-            name="Goblin",
-            max_hp=7,
-            ac=15,
-            abilities=self.goblin_abilities
-        )
+        self.goblin = Creature(name="Goblin", max_hp=7, ac=15, abilities=self.goblin_abilities)
 
         self.wizard_abilities = Abilities(
             strength=8,
@@ -51,14 +41,9 @@ class TestInitiativeTracker:
             constitution=12,
             intelligence=16,
             wisdom=12,
-            charisma=10
+            charisma=10,
         )
-        self.wizard = Creature(
-            name="Wizard",
-            max_hp=15,
-            ac=13,
-            abilities=self.wizard_abilities
-        )
+        self.wizard = Creature(name="Wizard", max_hp=15, ac=13, abilities=self.wizard_abilities)
 
     def test_tracker_creation(self):
         """Test creating an initiative tracker"""
@@ -118,7 +103,10 @@ class TestInitiativeTracker:
 
         # If they rolled the same, higher DEX should be first
         if tracker.combatants[0].initiative_roll == tracker.combatants[1].initiative_roll:
-            assert tracker.combatants[0].creature.initiative_modifier >= tracker.combatants[1].creature.initiative_modifier
+            assert (
+                tracker.combatants[0].creature.initiative_modifier
+                >= tracker.combatants[1].creature.initiative_modifier
+            )
 
     def test_get_current_combatant(self):
         """Test getting the current combatant"""
@@ -211,6 +199,7 @@ class TestInitiativeTracker:
         assert self.tracker.current_turn_index == 0
         turn_state = self.tracker.get_current_turn_state()
         from dnd_engine.systems.action_economy import ActionType
+
         turn_state.consume_action(ActionType.ACTION)
         assert not turn_state.action_available
 
@@ -235,7 +224,9 @@ class TestInitiativeTracker:
         # This is the bug fix - without it, they'd still have no action
         turn_state = self.tracker.get_current_turn_state()
         assert turn_state is not None
-        assert turn_state.action_available, "Turn state should be reset when wrapping back to this combatant"
+        assert turn_state.action_available, (
+            "Turn state should be reset when wrapping back to this combatant"
+        )
         assert turn_state.bonus_action_available
         assert not turn_state.free_object_interaction_used
 
@@ -285,18 +276,8 @@ class TestInitiativeTracker:
     def test_multiple_enemies_same_name_turn_states(self):
         """Test that multiple enemies with the same name have independent turn states (Issue #89)"""
         # Create two goblins with identical names
-        goblin1 = Creature(
-            name="Goblin",
-            max_hp=7,
-            ac=15,
-            abilities=Abilities(8, 14, 10, 10, 8, 8)
-        )
-        goblin2 = Creature(
-            name="Goblin",
-            max_hp=7,
-            ac=15,
-            abilities=Abilities(8, 14, 10, 10, 8, 8)
-        )
+        goblin1 = Creature(name="Goblin", max_hp=7, ac=15, abilities=Abilities(8, 14, 10, 10, 8, 8))
+        goblin2 = Creature(name="Goblin", max_hp=7, ac=15, abilities=Abilities(8, 14, 10, 10, 8, 8))
 
         # Add both goblins to initiative
         self.tracker.add_combatant(goblin1)
@@ -318,6 +299,7 @@ class TestInitiativeTracker:
 
         # Use an action on goblin1's turn state
         from dnd_engine.systems.action_economy import ActionType
+
         success = goblin1_state.consume_action(ActionType.ACTION)
         assert success is True
         assert goblin1_state.action_available is False
@@ -326,18 +308,8 @@ class TestInitiativeTracker:
     def test_multiple_enemies_same_name_remove_one(self):
         """Test that removing one enemy with duplicate name doesn't affect the other"""
         # Create two goblins with identical names
-        goblin1 = Creature(
-            name="Goblin",
-            max_hp=7,
-            ac=15,
-            abilities=Abilities(8, 14, 10, 10, 8, 8)
-        )
-        goblin2 = Creature(
-            name="Goblin",
-            max_hp=7,
-            ac=15,
-            abilities=Abilities(8, 14, 10, 10, 8, 8)
-        )
+        goblin1 = Creature(name="Goblin", max_hp=7, ac=15, abilities=Abilities(8, 14, 10, 10, 8, 8))
+        goblin2 = Creature(name="Goblin", max_hp=7, ac=15, abilities=Abilities(8, 14, 10, 10, 8, 8))
 
         # Add both goblins
         self.tracker.add_combatant(goblin1)

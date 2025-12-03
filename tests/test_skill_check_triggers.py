@@ -23,7 +23,7 @@ def high_perception_character():
         abilities=abilities,
         max_hp=20,
         ac=14,
-        skill_proficiencies=["perception"]  # +2 prof + 5 WIS = +7, Passive = 17
+        skill_proficiencies=["perception"],  # +2 prof + 5 WIS = +7, Passive = 17
     )
     return char
 
@@ -39,7 +39,7 @@ def low_perception_character():
         level=2,
         abilities=abilities,
         max_hp=22,
-        ac=16
+        ac=16,
         # No perception proficiency
     )
     return char
@@ -57,7 +57,7 @@ def medicine_proficient_character():
         abilities=abilities,
         max_hp=20,
         ac=14,
-        skill_proficiencies=["medicine", "perception"]
+        skill_proficiencies=["medicine", "perception"],
     )
     return char
 
@@ -79,7 +79,7 @@ def mock_dungeon_with_skill_checks():
                         "on_success": "You notice skeletal figures in the eastern chamber.",
                         "on_failure": None,
                         "trigger": "on_enter",
-                        "once_per_room": True
+                        "once_per_room": True,
                     }
                 ],
                 "examinable_objects": [
@@ -92,9 +92,9 @@ def mock_dungeon_with_skill_checks():
                                 "skill": "medicine",
                                 "dc": 12,
                                 "on_success": "The victim's skull was surgically removed with precision.",
-                                "on_failure": "You see signs of violence but cannot determine specifics."
+                                "on_failure": "You see signs of violence but cannot determine specifics.",
                             }
-                        ]
+                        ],
                     }
                 ],
                 "exits": {
@@ -106,9 +106,9 @@ def mock_dungeon_with_skill_checks():
                                 "dc": 14,
                                 "action": "listen at the door",
                                 "on_success": "You hear scraping sounds - bone dragging on stone.",
-                                "on_failure": "You hear nothing unusual through the thick wood."
+                                "on_failure": "You hear nothing unusual through the thick wood.",
                             }
-                        ]
+                        ],
                     },
                     "south": "hallway",  # Simple exit for testing
                     "west": {
@@ -120,16 +120,16 @@ def mock_dungeon_with_skill_checks():
                                 "tool_proficiency": "thieves_tools",
                                 "dc": 12,
                                 "description": "pick the lock",
-                                "silent": True
+                                "silent": True,
                             },
                             {
                                 "skill": "athletics",
                                 "dc": 12,
                                 "description": "break down the door",
-                                "silent": False
-                            }
-                        ]
-                    }
+                                "silent": False,
+                            },
+                        ],
+                    },
                 },
                 "enemies": [],
                 "items": [],
@@ -139,9 +139,9 @@ def mock_dungeon_with_skill_checks():
                         "skill": "investigation",
                         "dc": 12,
                         "on_success": "You find a hidden compartment!",
-                        "on_failure": "You find nothing beyond the obvious."
+                        "on_failure": "You find nothing beyond the obvious.",
                     }
-                ]
+                ],
             },
             "chamber": {
                 "name": "Northern Chamber",
@@ -149,7 +149,7 @@ def mock_dungeon_with_skill_checks():
                 "exits": {"south": "entrance"},
                 "enemies": [],
                 "items": [],
-                "searchable": False
+                "searchable": False,
             },
             "hallway": {
                 "name": "Southern Hallway",
@@ -157,7 +157,7 @@ def mock_dungeon_with_skill_checks():
                 "exits": {"north": "entrance"},
                 "enemies": [],
                 "items": [],
-                "searchable": False
+                "searchable": False,
             },
             "locked_chamber": {
                 "name": "Locked Chamber",
@@ -165,9 +165,9 @@ def mock_dungeon_with_skill_checks():
                 "exits": {"east": "entrance"},
                 "enemies": [],
                 "items": [],
-                "searchable": False
-            }
-        }
+                "searchable": False,
+            },
+        },
     }
 
 
@@ -184,9 +184,7 @@ def data_loader(mock_dungeon_with_skill_checks, monkeypatch):
 
     # Mock load_dungeon to return our test dungeon (accepts optional campaign_id)
     monkeypatch.setattr(
-        loader,
-        'load_dungeon',
-        lambda name, campaign_id=None: mock_dungeon_with_skill_checks
+        loader, "load_dungeon", lambda name, campaign_id=None: mock_dungeon_with_skill_checks
     )
 
     return loader
@@ -196,18 +194,12 @@ class TestPassivePerception:
     """Test passive Perception checks on room entry."""
 
     def test_high_perception_notices_feature(
-        self,
-        high_perception_character,
-        data_loader,
-        event_bus
+        self, high_perception_character, data_loader, event_bus
     ):
         """Character with Passive Perception 17 should notice DC 16 feature."""
         party = Party([high_perception_character])
         game_state = GameState(
-            party=party,
-            dungeon_name="test_crypt",
-            event_bus=event_bus,
-            data_loader=data_loader
+            party=party, dungeon_name="test_crypt", event_bus=event_bus, data_loader=data_loader
         )
 
         # Track events
@@ -234,19 +226,11 @@ class TestPassivePerception:
         assert event_data["success"] is True
         assert "skeletal figures" in event_data["success_text"]
 
-    def test_low_perception_misses_feature(
-        self,
-        low_perception_character,
-        data_loader,
-        event_bus
-    ):
+    def test_low_perception_misses_feature(self, low_perception_character, data_loader, event_bus):
         """Character with Passive Perception 9 should miss DC 16 feature."""
         party = Party([low_perception_character])
         game_state = GameState(
-            party=party,
-            dungeon_name="test_crypt",
-            event_bus=event_bus,
-            data_loader=data_loader
+            party=party, dungeon_name="test_crypt", event_bus=event_bus, data_loader=data_loader
         )
 
         skill_check_events = []
@@ -266,18 +250,12 @@ class TestPassivePerception:
         assert event_data["success_text"] is None
 
     def test_passive_check_only_once_per_room(
-        self,
-        high_perception_character,
-        data_loader,
-        event_bus
+        self, high_perception_character, data_loader, event_bus
     ):
         """Passive checks should only trigger once per room."""
         party = Party([high_perception_character])
         game_state = GameState(
-            party=party,
-            dungeon_name="test_crypt",
-            event_bus=event_bus,
-            data_loader=data_loader
+            party=party, dungeon_name="test_crypt", event_bus=event_bus, data_loader=data_loader
         )
 
         skill_check_events = []
@@ -300,19 +278,12 @@ class TestPassivePerception:
         assert len(skill_check_events) == 1
 
     def test_multiple_characters_checked(
-        self,
-        high_perception_character,
-        low_perception_character,
-        data_loader,
-        event_bus
+        self, high_perception_character, low_perception_character, data_loader, event_bus
     ):
         """All party members should be checked for passive Perception."""
         party = Party([high_perception_character, low_perception_character])
         game_state = GameState(
-            party=party,
-            dungeon_name="test_crypt",
-            event_bus=event_bus,
-            data_loader=data_loader
+            party=party, dungeon_name="test_crypt", event_bus=event_bus, data_loader=data_loader
         )
 
         skill_check_events = []
@@ -341,10 +312,7 @@ class TestExaminableObjects:
         """Should be able to list examinable objects in room."""
         party = Party([medicine_proficient_character])
         game_state = GameState(
-            party=party,
-            dungeon_name="test_crypt",
-            event_bus=event_bus,
-            data_loader=data_loader
+            party=party, dungeon_name="test_crypt", event_bus=event_bus, data_loader=data_loader
         )
 
         game_state.start()
@@ -354,19 +322,11 @@ class TestExaminableObjects:
         assert objects[0]["id"] == "cultist_corpse"
         assert objects[0]["name"] == "fresh corpse"
 
-    def test_examine_object_success(
-        self,
-        medicine_proficient_character,
-        data_loader,
-        event_bus
-    ):
+    def test_examine_object_success(self, medicine_proficient_character, data_loader, event_bus):
         """Examining object with successful skill check should reveal information."""
         party = Party([medicine_proficient_character])
         game_state = GameState(
-            party=party,
-            dungeon_name="test_crypt",
-            event_bus=event_bus,
-            data_loader=data_loader
+            party=party, dungeon_name="test_crypt", event_bus=event_bus, data_loader=data_loader
         )
 
         game_state.start()
@@ -374,7 +334,9 @@ class TestExaminableObjects:
         skill_check_events = []
 
         def capture_event(event):
-            if event.type == EventType.SKILL_CHECK and event.data.get("action", "").startswith("examine"):
+            if event.type == EventType.SKILL_CHECK and event.data.get("action", "").startswith(
+                "examine"
+            ):
                 skill_check_events.append(event)
 
         event_bus.subscribe(EventType.SKILL_CHECK, capture_event)
@@ -394,18 +356,12 @@ class TestExaminableObjects:
         assert event_data["dc"] == 12
 
     def test_examine_already_checked_object(
-        self,
-        medicine_proficient_character,
-        data_loader,
-        event_bus
+        self, medicine_proficient_character, data_loader, event_bus
     ):
         """Re-examining an object should show already checked message."""
         party = Party([medicine_proficient_character])
         game_state = GameState(
-            party=party,
-            dungeon_name="test_crypt",
-            event_bus=event_bus,
-            data_loader=data_loader
+            party=party, dungeon_name="test_crypt", event_bus=event_bus, data_loader=data_loader
         )
 
         game_state.start()
@@ -421,18 +377,12 @@ class TestExaminableObjects:
         assert len(result["results"]) == 0
 
     def test_examine_nonexistent_object(
-        self,
-        medicine_proficient_character,
-        data_loader,
-        event_bus
+        self, medicine_proficient_character, data_loader, event_bus
     ):
         """Examining non-existent object should return error."""
         party = Party([medicine_proficient_character])
         game_state = GameState(
-            party=party,
-            dungeon_name="test_crypt",
-            event_bus=event_bus,
-            data_loader=data_loader
+            party=party, dungeon_name="test_crypt", event_bus=event_bus, data_loader=data_loader
         )
 
         game_state.start()
@@ -446,19 +396,11 @@ class TestExaminableObjects:
 class TestExaminableExits:
     """Test examinable exits (listening at doors)."""
 
-    def test_get_examinable_exits(
-        self,
-        high_perception_character,
-        data_loader,
-        event_bus
-    ):
+    def test_get_examinable_exits(self, high_perception_character, data_loader, event_bus):
         """Should be able to list examinable exits."""
         party = Party([high_perception_character])
         game_state = GameState(
-            party=party,
-            dungeon_name="test_crypt",
-            event_bus=event_bus,
-            data_loader=data_loader
+            party=party, dungeon_name="test_crypt", event_bus=event_bus, data_loader=data_loader
         )
 
         game_state.start()
@@ -467,19 +409,11 @@ class TestExaminableExits:
         assert "north" in exits
         assert "south" not in exits  # Simple exit, not examinable
 
-    def test_examine_exit(
-        self,
-        high_perception_character,
-        data_loader,
-        event_bus
-    ):
+    def test_examine_exit(self, high_perception_character, data_loader, event_bus):
         """Examining an exit should perform skill check."""
         party = Party([high_perception_character])
         game_state = GameState(
-            party=party,
-            dungeon_name="test_crypt",
-            event_bus=event_bus,
-            data_loader=data_loader
+            party=party, dungeon_name="test_crypt", event_bus=event_bus, data_loader=data_loader
         )
 
         game_state.start()
@@ -505,19 +439,11 @@ class TestExaminableExits:
         assert event_data["dc"] == 14
         assert "listen at the door" in event_data["action"]
 
-    def test_examine_non_examinable_exit(
-        self,
-        high_perception_character,
-        data_loader,
-        event_bus
-    ):
+    def test_examine_non_examinable_exit(self, high_perception_character, data_loader, event_bus):
         """Examining a non-examinable exit should return error."""
         party = Party([high_perception_character])
         game_state = GameState(
-            party=party,
-            dungeon_name="test_crypt",
-            event_bus=event_bus,
-            data_loader=data_loader
+            party=party, dungeon_name="test_crypt", event_bus=event_bus, data_loader=data_loader
         )
 
         game_state.start()
@@ -527,19 +453,11 @@ class TestExaminableExits:
         assert result["success"] is False
         assert "error" in result
 
-    def test_locked_door_is_examinable(
-        self,
-        high_perception_character,
-        data_loader,
-        event_bus
-    ):
+    def test_locked_door_is_examinable(self, high_perception_character, data_loader, event_bus):
         """Locked doors should be examinable even without examine_checks."""
         party = Party([high_perception_character])
         game_state = GameState(
-            party=party,
-            dungeon_name="test_crypt",
-            event_bus=event_bus,
-            data_loader=data_loader
+            party=party, dungeon_name="test_crypt", event_bus=event_bus, data_loader=data_loader
         )
 
         game_state.start()
@@ -549,19 +467,11 @@ class TestExaminableExits:
         assert "north" in exits  # Door with examine_checks
         assert "south" not in exits  # Simple exit
 
-    def test_examine_locked_door(
-        self,
-        high_perception_character,
-        data_loader,
-        event_bus
-    ):
+    def test_examine_locked_door(self, high_perception_character, data_loader, event_bus):
         """Examining a locked door should return lock information."""
         party = Party([high_perception_character])
         game_state = GameState(
-            party=party,
-            dungeon_name="test_crypt",
-            event_bus=event_bus,
-            data_loader=data_loader
+            party=party, dungeon_name="test_crypt", event_bus=event_bus, data_loader=data_loader
         )
 
         game_state.start()
@@ -583,19 +493,11 @@ class TestExaminableExits:
 class TestEnhancedSearch:
     """Test enhanced search with skill checks."""
 
-    def test_search_with_skill_check(
-        self,
-        high_perception_character,
-        data_loader,
-        event_bus
-    ):
+    def test_search_with_skill_check(self, high_perception_character, data_loader, event_bus):
         """Searching room with search_checks should require skill check."""
         party = Party([high_perception_character])
         game_state = GameState(
-            party=party,
-            dungeon_name="test_crypt",
-            event_bus=event_bus,
-            data_loader=data_loader
+            party=party, dungeon_name="test_crypt", event_bus=event_bus, data_loader=data_loader
         )
 
         game_state.start()
@@ -625,19 +527,11 @@ class TestEnhancedSearch:
         assert "already_searched" in result
         assert result["already_searched"] is False
 
-    def test_search_already_searched_room(
-        self,
-        high_perception_character,
-        data_loader,
-        event_bus
-    ):
+    def test_search_already_searched_room(self, high_perception_character, data_loader, event_bus):
         """Re-searching a room should not require another check."""
         party = Party([high_perception_character])
         game_state = GameState(
-            party=party,
-            dungeon_name="test_crypt",
-            event_bus=event_bus,
-            data_loader=data_loader
+            party=party, dungeon_name="test_crypt", event_bus=event_bus, data_loader=data_loader
         )
 
         game_state.start()
@@ -655,18 +549,12 @@ class TestEnhancedSearch:
         assert result["already_searched"] is True
 
     def test_search_failed_check_marks_searched(
-        self,
-        low_perception_character,
-        data_loader,
-        event_bus
+        self, low_perception_character, data_loader, event_bus
     ):
         """Failed search check should still mark room as searched."""
         party = Party([low_perception_character])
         game_state = GameState(
-            party=party,
-            dungeon_name="test_crypt",
-            event_bus=event_bus,
-            data_loader=data_loader
+            party=party, dungeon_name="test_crypt", event_bus=event_bus, data_loader=data_loader
         )
 
         game_state.start()

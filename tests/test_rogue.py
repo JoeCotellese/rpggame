@@ -28,20 +28,24 @@ class TestSneakAttack:
 
     def test_rogue_gets_sneak_attack_at_level_1(self):
         """Test Rogue gets 1d6 sneak attack at level 1"""
-        abilities = Abilities(strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8)
+        abilities = Abilities(
+            strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8
+        )
         rogue = Character(
             name="Test Rogue",
             character_class=CharacterClass.ROGUE,
             level=1,
             abilities=abilities,
             max_hp=8,
-            ac=14
+            ac=14,
         )
         assert rogue.get_sneak_attack_dice() == "1d6"
 
     def test_rogue_sneak_attack_scales_by_level(self):
         """Test Sneak Attack dice scale with level"""
-        abilities = Abilities(strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8)
+        abilities = Abilities(
+            strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8
+        )
 
         test_cases = [
             (1, "1d6"),
@@ -63,85 +67,99 @@ class TestSneakAttack:
                 level=level,
                 abilities=abilities,
                 max_hp=8,
-                ac=14
+                ac=14,
             )
-            assert rogue.get_sneak_attack_dice() == expected_dice, f"Level {level} should have {expected_dice}"
+            assert rogue.get_sneak_attack_dice() == expected_dice, (
+                f"Level {level} should have {expected_dice}"
+            )
 
     def test_fighter_no_sneak_attack(self):
         """Test Fighter class cannot use Sneak Attack"""
-        abilities = Abilities(strength=16, dexterity=13, constitution=14, intelligence=10, wisdom=12, charisma=8)
+        abilities = Abilities(
+            strength=16, dexterity=13, constitution=14, intelligence=10, wisdom=12, charisma=8
+        )
         fighter = Character(
             name="Test Fighter",
             character_class=CharacterClass.FIGHTER,
             level=3,
             abilities=abilities,
             max_hp=30,
-            ac=18
+            ac=18,
         )
         assert fighter.get_sneak_attack_dice() is None
 
     def test_can_sneak_attack_with_advantage(self):
         """Test Rogue can use sneak attack when attack has advantage"""
-        abilities = Abilities(strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8)
+        abilities = Abilities(
+            strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8
+        )
         rogue = Character(
             name="Test Rogue",
             character_class=CharacterClass.ROGUE,
             level=1,
             abilities=abilities,
             max_hp=8,
-            ac=14
+            ac=14,
         )
         assert rogue.can_sneak_attack(has_advantage=True) is True
 
     def test_cannot_sneak_attack_without_conditions(self):
         """Test Rogue cannot use sneak attack without advantage or ally"""
-        abilities = Abilities(strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8)
+        abilities = Abilities(
+            strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8
+        )
         rogue = Character(
             name="Test Rogue",
             character_class=CharacterClass.ROGUE,
             level=1,
             abilities=abilities,
             max_hp=8,
-            ac=14
+            ac=14,
         )
         assert rogue.can_sneak_attack(has_advantage=False, ally_nearby=False) is False
 
     def test_cannot_sneak_attack_with_disadvantage(self):
         """Test Rogue cannot use sneak attack if attack has disadvantage"""
-        abilities = Abilities(strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8)
+        abilities = Abilities(
+            strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8
+        )
         rogue = Character(
             name="Test Rogue",
             character_class=CharacterClass.ROGUE,
             level=1,
             abilities=abilities,
             max_hp=8,
-            ac=14
+            ac=14,
         )
         assert rogue.can_sneak_attack(has_advantage=True, has_disadvantage=True) is False
 
     def test_sneak_attack_with_ally_nearby(self):
         """Test Rogue can use sneak attack when ally is nearby"""
-        abilities = Abilities(strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8)
+        abilities = Abilities(
+            strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8
+        )
         rogue = Character(
             name="Test Rogue",
             character_class=CharacterClass.ROGUE,
             level=1,
             abilities=abilities,
             max_hp=8,
-            ac=14
+            ac=14,
         )
         assert rogue.can_sneak_attack(has_advantage=False, ally_nearby=True) is True
 
     def test_fighter_cannot_sneak_attack(self):
         """Test Fighter cannot use sneak attack"""
-        abilities = Abilities(strength=16, dexterity=13, constitution=14, intelligence=10, wisdom=12, charisma=8)
+        abilities = Abilities(
+            strength=16, dexterity=13, constitution=14, intelligence=10, wisdom=12, charisma=8
+        )
         fighter = Character(
             name="Test Fighter",
             character_class=CharacterClass.FIGHTER,
             level=3,
             abilities=abilities,
             max_hp=30,
-            ac=18
+            ac=18,
         )
         assert fighter.can_sneak_attack(has_advantage=True) is False
 
@@ -151,7 +169,9 @@ class TestExpertise:
 
     def test_rogue_has_expertise_skills(self):
         """Test Rogue can have expertise skills"""
-        abilities = Abilities(strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8)
+        abilities = Abilities(
+            strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8
+        )
         rogue = Character(
             name="Test Rogue",
             character_class=CharacterClass.ROGUE,
@@ -160,13 +180,15 @@ class TestExpertise:
             max_hp=8,
             ac=14,
             skill_proficiencies=["stealth", "perception", "acrobatics", "deception"],
-            expertise_skills=["stealth", "acrobatics"]
+            expertise_skills=["stealth", "acrobatics"],
         )
         assert rogue.expertise_skills == ["stealth", "acrobatics"]
 
     def test_expertise_doubles_proficiency_bonus(self):
         """Test expertise doubles proficiency bonus for skill checks"""
-        abilities = Abilities(strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8)
+        abilities = Abilities(
+            strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8
+        )
         rogue = Character(
             name="Test Rogue",
             character_class=CharacterClass.ROGUE,
@@ -175,7 +197,7 @@ class TestExpertise:
             max_hp=8,
             ac=14,
             skill_proficiencies=["stealth", "perception"],
-            expertise_skills=["stealth"]
+            expertise_skills=["stealth"],
         )
 
         # Load skills data
@@ -194,7 +216,9 @@ class TestExpertise:
 
     def test_fighter_no_expertise(self):
         """Test Fighter doesn't get double proficiency bonus"""
-        abilities = Abilities(strength=16, dexterity=13, constitution=14, intelligence=10, wisdom=12, charisma=8)
+        abilities = Abilities(
+            strength=16, dexterity=13, constitution=14, intelligence=10, wisdom=12, charisma=8
+        )
         fighter = Character(
             name="Test Fighter",
             character_class=CharacterClass.FIGHTER,
@@ -202,7 +226,7 @@ class TestExpertise:
             abilities=abilities,
             max_hp=10,
             ac=18,
-            skill_proficiencies=["athletics", "perception"]
+            skill_proficiencies=["athletics", "perception"],
         )
 
         # Load skills data
@@ -319,25 +343,25 @@ class TestSneakAttackInCombat:
         event_bus = EventBus()
 
         # Create a Rogue attacker
-        rogue_abilities = Abilities(strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8)
+        rogue_abilities = Abilities(
+            strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8
+        )
         rogue = Character(
             name="Bob the Rogue",
             character_class=CharacterClass.ROGUE,
             level=3,
             abilities=rogue_abilities,
             max_hp=16,
-            ac=14
+            ac=14,
         )
 
         # Create a goblin defender
-        goblin_abilities = Abilities(strength=8, dexterity=14, constitution=10, intelligence=10, wisdom=8, charisma=8)
-        from dnd_engine.core.creature import Creature
-        goblin = Creature(
-            name="Goblin",
-            max_hp=7,
-            ac=15,
-            abilities=goblin_abilities
+        goblin_abilities = Abilities(
+            strength=8, dexterity=14, constitution=10, intelligence=10, wisdom=8, charisma=8
         )
+        from dnd_engine.core.creature import Creature
+
+        goblin = Creature(name="Goblin", max_hp=7, ac=15, abilities=goblin_abilities)
 
         # Attack with advantage (triggers sneak attack)
         result = combat.resolve_attack(
@@ -346,12 +370,14 @@ class TestSneakAttackInCombat:
             attack_bonus=5,  # +3 DEX, +2 proficiency
             damage_dice="1d8+3",  # Rapier + DEX
             advantage=True,
-            event_bus=event_bus
+            event_bus=event_bus,
         )
 
         # If hit, should have sneak attack damage
         if result.hit:
-            assert result.sneak_attack_dice == "2d6", f"Expected 2d6 for level 3, got {result.sneak_attack_dice}"
+            assert result.sneak_attack_dice == "2d6", (
+                f"Expected 2d6 for level 3, got {result.sneak_attack_dice}"
+            )
             assert result.sneak_attack_damage > 0, "Sneak attack damage should be > 0"
             assert result.total_damage == result.damage + result.sneak_attack_damage
 
@@ -361,33 +387,29 @@ class TestSneakAttackInCombat:
         combat = CombatEngine(dice_roller)
 
         # Create a Rogue attacker
-        rogue_abilities = Abilities(strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8)
+        rogue_abilities = Abilities(
+            strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8
+        )
         rogue = Character(
             name="Bob the Rogue",
             character_class=CharacterClass.ROGUE,
             level=1,
             abilities=rogue_abilities,
             max_hp=8,
-            ac=14
+            ac=14,
         )
 
         # Create a goblin defender
-        goblin_abilities = Abilities(strength=8, dexterity=14, constitution=10, intelligence=10, wisdom=8, charisma=8)
-        from dnd_engine.core.creature import Creature
-        goblin = Creature(
-            name="Goblin",
-            max_hp=7,
-            ac=15,
-            abilities=goblin_abilities
+        goblin_abilities = Abilities(
+            strength=8, dexterity=14, constitution=10, intelligence=10, wisdom=8, charisma=8
         )
+        from dnd_engine.core.creature import Creature
+
+        goblin = Creature(name="Goblin", max_hp=7, ac=15, abilities=goblin_abilities)
 
         # Attack without advantage (no sneak attack)
         result = combat.resolve_attack(
-            attacker=rogue,
-            defender=goblin,
-            attack_bonus=5,
-            damage_dice="1d8+3",
-            advantage=False
+            attacker=rogue, defender=goblin, attack_bonus=5, damage_dice="1d8+3", advantage=False
         )
 
         # Should not have sneak attack damage
@@ -400,14 +422,16 @@ class TestRogueCombatStats:
 
     def test_rogue_uses_dex_for_finesse_weapons(self):
         """Test Rogue finesse attack bonus uses DEX"""
-        abilities = Abilities(strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8)
+        abilities = Abilities(
+            strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8
+        )
         rogue = Character(
             name="Test Rogue",
             character_class=CharacterClass.ROGUE,
             level=1,
             abilities=abilities,
             max_hp=8,
-            ac=14
+            ac=14,
         )
 
         # Finesse attack bonus should be: proficiency (2) + DEX mod (3) = 5
@@ -415,14 +439,16 @@ class TestRogueCombatStats:
 
     def test_rogue_ranged_attack_bonus(self):
         """Test Rogue ranged attack bonus uses DEX"""
-        abilities = Abilities(strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8)
+        abilities = Abilities(
+            strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8
+        )
         rogue = Character(
             name="Test Rogue",
             character_class=CharacterClass.ROGUE,
             level=1,
             abilities=abilities,
             max_hp=8,
-            ac=14
+            ac=14,
         )
 
         # Ranged attack bonus should be: proficiency (2) + DEX mod (3) = 5

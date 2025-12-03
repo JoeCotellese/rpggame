@@ -27,7 +27,7 @@ class TestSkillModifierCalculation:
             constitution=10,  # modifier: 0
             intelligence=12,  # modifier: 1
             wisdom=16,  # modifier: 3
-            charisma=10  # modifier: 0
+            charisma=10,  # modifier: 0
         )
         character = Character(
             name="Test Fighter",
@@ -36,7 +36,7 @@ class TestSkillModifierCalculation:
             abilities=abilities,
             max_hp=10,
             ac=10,
-            skill_proficiencies=[]
+            skill_proficiencies=[],
         )
         return character
 
@@ -49,7 +49,7 @@ class TestSkillModifierCalculation:
             constitution=10,  # modifier: 0
             intelligence=12,  # modifier: 1
             wisdom=16,  # modifier: 3
-            charisma=10  # modifier: 0
+            charisma=10,  # modifier: 0
         )
         character = Character(
             name="Proficient Fighter",
@@ -58,11 +58,13 @@ class TestSkillModifierCalculation:
             abilities=abilities,
             max_hp=10,
             ac=10,
-            skill_proficiencies=["stealth", "perception"]
+            skill_proficiencies=["stealth", "perception"],
         )
         return character
 
-    def test_get_skill_modifier_without_proficiency(self, character_with_no_proficiencies, skills_data):
+    def test_get_skill_modifier_without_proficiency(
+        self, character_with_no_proficiencies, skills_data
+    ):
         """Test that skill modifier without proficiency is just ability modifier"""
         # Stealth uses DEX (2)
         modifier = character_with_no_proficiencies.get_skill_modifier("stealth", skills_data)
@@ -80,7 +82,9 @@ class TestSkillModifierCalculation:
         modifier = character_with_proficiencies.get_skill_modifier("perception", skills_data)
         assert modifier == 5  # WIS 3 + proficiency 2
 
-    def test_get_skill_modifier_unrelated_proficiency(self, character_with_proficiencies, skills_data):
+    def test_get_skill_modifier_unrelated_proficiency(
+        self, character_with_proficiencies, skills_data
+    ):
         """Test that lack of proficiency means no bonus applied"""
         # Investigation uses INT (1), not proficient
         modifier = character_with_proficiencies.get_skill_modifier("investigation", skills_data)
@@ -94,33 +98,44 @@ class TestSkillModifierCalculation:
     def test_skill_modifier_at_different_levels(self, skills_data):
         """Test that proficiency bonus scales with level"""
         abilities = Abilities(
-            strength=10, dexterity=14, constitution=10,
-            intelligence=12, wisdom=16, charisma=10
+            strength=10, dexterity=14, constitution=10, intelligence=12, wisdom=16, charisma=10
         )
 
         # Level 1: proficiency +2
         char_level1 = Character(
-            name="Level 1", character_class=CharacterClass.FIGHTER,
-            level=1, abilities=abilities, max_hp=10, ac=10,
-            skill_proficiencies=["stealth"]
+            name="Level 1",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=abilities,
+            max_hp=10,
+            ac=10,
+            skill_proficiencies=["stealth"],
         )
         modifier_level1 = char_level1.get_skill_modifier("stealth", skills_data)
         assert modifier_level1 == 4  # 2 (DEX) + 2 (proficiency)
 
         # Level 5: proficiency +3
         char_level5 = Character(
-            name="Level 5", character_class=CharacterClass.FIGHTER,
-            level=5, abilities=abilities, max_hp=30, ac=10,
-            skill_proficiencies=["stealth"]
+            name="Level 5",
+            character_class=CharacterClass.FIGHTER,
+            level=5,
+            abilities=abilities,
+            max_hp=30,
+            ac=10,
+            skill_proficiencies=["stealth"],
         )
         modifier_level5 = char_level5.get_skill_modifier("stealth", skills_data)
         assert modifier_level5 == 5  # 2 (DEX) + 3 (proficiency)
 
         # Level 9: proficiency +4
         char_level9 = Character(
-            name="Level 9", character_class=CharacterClass.FIGHTER,
-            level=9, abilities=abilities, max_hp=70, ac=10,
-            skill_proficiencies=["stealth"]
+            name="Level 9",
+            character_class=CharacterClass.FIGHTER,
+            level=9,
+            abilities=abilities,
+            max_hp=70,
+            ac=10,
+            skill_proficiencies=["stealth"],
         )
         modifier_level9 = char_level9.get_skill_modifier("stealth", skills_data)
         assert modifier_level9 == 6  # 2 (DEX) + 4 (proficiency)
@@ -139,8 +154,7 @@ class TestSkillChecks:
     def character(self, skills_data):
         """Create a character with specific proficiencies for testing"""
         abilities = Abilities(
-            strength=10, dexterity=14, constitution=10,
-            intelligence=12, wisdom=16, charisma=10
+            strength=10, dexterity=14, constitution=10, intelligence=12, wisdom=16, charisma=10
         )
         character = Character(
             name="Test Fighter",
@@ -149,7 +163,7 @@ class TestSkillChecks:
             abilities=abilities,
             max_hp=10,
             ac=10,
-            skill_proficiencies=["stealth", "perception", "athletics"]
+            skill_proficiencies=["stealth", "perception", "athletics"],
         )
         return character
 
@@ -157,7 +171,16 @@ class TestSkillChecks:
         """Test that skill check returns all required fields"""
         result = character.make_skill_check("stealth", dc=12, skills_data=skills_data)
 
-        required_fields = ["skill", "ability", "dc", "roll", "modifier", "total", "success", "proficient"]
+        required_fields = [
+            "skill",
+            "ability",
+            "dc",
+            "roll",
+            "modifier",
+            "total",
+            "success",
+            "proficient",
+        ]
         for field in required_fields:
             assert field in result, f"Missing field: {field}"
 
@@ -189,13 +212,16 @@ class TestSkillChecks:
 
         # Character with athletics +2 (10 STR) not proficient
         abilities = Abilities(
-            strength=10, dexterity=10, constitution=10,
-            intelligence=10, wisdom=10, charisma=10
+            strength=10, dexterity=10, constitution=10, intelligence=10, wisdom=10, charisma=10
         )
         char = Character(
-            name="Test", character_class=CharacterClass.FIGHTER,
-            level=1, abilities=abilities, max_hp=10, ac=10,
-            skill_proficiencies=[]
+            name="Test",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=abilities,
+            max_hp=10,
+            ac=10,
+            skill_proficiencies=[],
         )
         char._dice_roller = DiceRoller(seed=42)
 
@@ -216,20 +242,25 @@ class TestSkillChecks:
     def test_skill_check_with_advantage(self, skills_data):
         """Test that advantage increases chances of success"""
         abilities = Abilities(
-            strength=10, dexterity=10, constitution=10,
-            intelligence=10, wisdom=10, charisma=10
+            strength=10, dexterity=10, constitution=10, intelligence=10, wisdom=10, charisma=10
         )
         character = Character(
-            name="Test", character_class=CharacterClass.FIGHTER,
-            level=1, abilities=abilities, max_hp=10, ac=10,
-            skill_proficiencies=[]
+            name="Test",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=abilities,
+            max_hp=10,
+            ac=10,
+            skill_proficiencies=[],
         )
 
         # Set seed for reproducibility
         character._dice_roller = DiceRoller(seed=42)
 
         # Roll with advantage
-        result_advantage = character.make_skill_check("stealth", dc=10, skills_data=skills_data, advantage=True)
+        result_advantage = character.make_skill_check(
+            "stealth", dc=10, skills_data=skills_data, advantage=True
+        )
 
         # The advantage should be reflected in the dice roll
         assert "roll" in result_advantage
@@ -238,20 +269,25 @@ class TestSkillChecks:
     def test_skill_check_with_disadvantage(self, skills_data):
         """Test that disadvantage decreases chances of success"""
         abilities = Abilities(
-            strength=10, dexterity=10, constitution=10,
-            intelligence=10, wisdom=10, charisma=10
+            strength=10, dexterity=10, constitution=10, intelligence=10, wisdom=10, charisma=10
         )
         character = Character(
-            name="Test", character_class=CharacterClass.FIGHTER,
-            level=1, abilities=abilities, max_hp=10, ac=10,
-            skill_proficiencies=[]
+            name="Test",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=abilities,
+            max_hp=10,
+            ac=10,
+            skill_proficiencies=[],
         )
 
         # Set seed for reproducibility
         character._dice_roller = DiceRoller(seed=42)
 
         # Roll with disadvantage
-        result_disadvantage = character.make_skill_check("stealth", dc=10, skills_data=skills_data, disadvantage=True)
+        result_disadvantage = character.make_skill_check(
+            "stealth", dc=10, skills_data=skills_data, disadvantage=True
+        )
 
         # The disadvantage should be reflected in the dice roll
         assert "roll" in result_disadvantage
@@ -267,11 +303,24 @@ class TestAllSkillsDefinition:
         skills_data = loader.load_skills()
 
         expected_skills = [
-            "acrobatics", "animal_handling", "arcana", "athletics",
-            "deception", "history", "insight", "intimidation",
-            "investigation", "medicine", "nature", "perception",
-            "performance", "persuasion", "religion", "sleight_of_hand",
-            "stealth", "survival"
+            "acrobatics",
+            "animal_handling",
+            "arcana",
+            "athletics",
+            "deception",
+            "history",
+            "insight",
+            "intimidation",
+            "investigation",
+            "medicine",
+            "nature",
+            "perception",
+            "performance",
+            "persuasion",
+            "religion",
+            "sleight_of_hand",
+            "stealth",
+            "survival",
         ]
 
         for skill in expected_skills:

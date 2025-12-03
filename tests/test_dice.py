@@ -127,12 +127,12 @@ class TestDiceRoller:
     def test_roll_result_attributes(self):
         """Test that DiceRoll result has correct attributes"""
         result = self.roller.roll("2d6+3")
-        assert hasattr(result, 'rolls')
-        assert hasattr(result, 'modifier')
-        assert hasattr(result, 'total')
-        assert hasattr(result, 'notation')
-        assert hasattr(result, 'advantage')
-        assert hasattr(result, 'disadvantage')
+        assert hasattr(result, "rolls")
+        assert hasattr(result, "modifier")
+        assert hasattr(result, "total")
+        assert hasattr(result, "notation")
+        assert hasattr(result, "advantage")
+        assert hasattr(result, "disadvantage")
         assert result.notation == "2d6+3"
 
     def test_advantage_and_disadvantage_mutually_exclusive(self):
@@ -173,11 +173,7 @@ class TestDiceRoll:
     def test_dice_roll_creation(self):
         """Test creating a DiceRoll result"""
         roll = DiceRoll(
-            rolls=[15],
-            modifier=3,
-            notation="1d20+3",
-            advantage=False,
-            disadvantage=False
+            rolls=[15], modifier=3, notation="1d20+3", advantage=False, disadvantage=False
         )
         assert roll.total == 18
         assert roll.rolls == [15]
@@ -186,11 +182,7 @@ class TestDiceRoll:
     def test_dice_roll_string_representation(self):
         """Test string representation of DiceRoll"""
         roll = DiceRoll(
-            rolls=[4, 6],
-            modifier=2,
-            notation="2d6+2",
-            advantage=False,
-            disadvantage=False
+            rolls=[4, 6], modifier=2, notation="2d6+2", advantage=False, disadvantage=False
         )
         str_rep = str(roll)
         assert "2d6+2" in str_rep
@@ -199,11 +191,7 @@ class TestDiceRoll:
     def test_dice_roll_advantage_total(self):
         """Test that advantage correctly calculates total"""
         roll = DiceRoll(
-            rolls=[12, 8],
-            modifier=3,
-            notation="1d20+3",
-            advantage=True,
-            disadvantage=False
+            rolls=[12, 8], modifier=3, notation="1d20+3", advantage=True, disadvantage=False
         )
         # Should take max (12) and add modifier
         assert roll.total == 15
@@ -211,11 +199,7 @@ class TestDiceRoll:
     def test_dice_roll_disadvantage_total(self):
         """Test that disadvantage correctly calculates total"""
         roll = DiceRoll(
-            rolls=[12, 8],
-            modifier=3,
-            notation="1d20+3",
-            advantage=False,
-            disadvantage=True
+            rolls=[12, 8], modifier=3, notation="1d20+3", advantage=False, disadvantage=True
         )
         # Should take min (8) and add modifier
         assert roll.total == 11

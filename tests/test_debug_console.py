@@ -161,7 +161,7 @@ class TestCharacterManipulation:
             level=1,
             max_hp=10,
             ac=10,
-            abilities=Abilities(10, 10, 10, 16, 14, 12)
+            abilities=Abilities(10, 10, 10, 16, 14, 12),
         )
         # Reduce HP to 0 and add death save failures
         character.take_damage(character.current_hp)
@@ -189,7 +189,7 @@ class TestCharacterManipulation:
             level=1,
             max_hp=10,
             ac=10,
-            abilities=Abilities(10, 10, 10, 16, 14, 12)
+            abilities=Abilities(10, 10, 10, 16, 14, 12),
         )
 
         party = Party([character])
@@ -212,7 +212,7 @@ class TestCharacterManipulation:
             level=1,
             max_hp=10,
             ac=10,
-            abilities=Abilities(10, 10, 10, 16, 14, 12)
+            abilities=Abilities(10, 10, 10, 16, 14, 12),
         )
 
         party = Party([character])
@@ -234,7 +234,7 @@ class TestCharacterManipulation:
             level=1,
             max_hp=10,
             ac=10,
-            abilities=Abilities(10, 10, 10, 16, 14, 12)
+            abilities=Abilities(10, 10, 10, 16, 14, 12),
         )
         max_hp = character.max_hp
 
@@ -257,7 +257,7 @@ class TestCharacterManipulation:
             level=1,
             max_hp=10,
             ac=10,
-            abilities=Abilities(10, 10, 10, 16, 14, 12)
+            abilities=Abilities(10, 10, 10, 16, 14, 12),
         )
 
         party = Party([character])
@@ -279,7 +279,7 @@ class TestCharacterManipulation:
             level=1,
             max_hp=10,
             ac=10,
-            abilities=Abilities(10, 10, 10, 16, 14, 12)
+            abilities=Abilities(10, 10, 10, 16, 14, 12),
         )
         initial_hp = character.current_hp
 
@@ -302,7 +302,7 @@ class TestCharacterManipulation:
             level=1,
             max_hp=10,
             ac=10,
-            abilities=Abilities(10, 10, 10, 16, 14, 12)
+            abilities=Abilities(10, 10, 10, 16, 14, 12),
         )
         character.current_hp = character.max_hp // 2
 
@@ -325,7 +325,7 @@ class TestCharacterManipulation:
             level=1,
             max_hp=10,
             ac=10,
-            abilities=Abilities(10, 10, 10, 16, 14, 12)
+            abilities=Abilities(10, 10, 10, 16, 14, 12),
         )
 
         party = Party([character])
@@ -349,7 +349,7 @@ class TestCharacterManipulation:
             level=1,
             max_hp=10,
             ac=10,
-            abilities=Abilities(10, 10, 10, 16, 14, 12)
+            abilities=Abilities(10, 10, 10, 16, 14, 12),
         )
 
         party = Party([character])
@@ -371,7 +371,7 @@ class TestCharacterManipulation:
             level=1,
             max_hp=10,
             ac=10,
-            abilities=Abilities(10, 10, 10, 16, 14, 12)
+            abilities=Abilities(10, 10, 10, 16, 14, 12),
         )
         initial_xp = character.xp
 
@@ -394,7 +394,7 @@ class TestCharacterManipulation:
             level=1,
             max_hp=10,
             ac=10,
-            abilities=Abilities(10, 10, 10, 16, 14, 12)
+            abilities=Abilities(10, 10, 10, 16, 14, 12),
         )
 
         party = Party([character])
@@ -447,7 +447,7 @@ class TestInventoryManipulation:
             level=1,
             abilities=Abilities(10, 10, 10, 10, 10, 10),
             max_hp=10,
-            ac=10
+            ac=10,
         )
         party = Party([character])
         game_state = GameState(party, "test_dungeon")
@@ -470,7 +470,7 @@ class TestInventoryManipulation:
             level=1,
             abilities=Abilities(10, 10, 10, 10, 10, 10),
             max_hp=10,
-            ac=10
+            ac=10,
         )
         party = Party([character])
         game_state = GameState(party, "test_dungeon")
@@ -499,7 +499,7 @@ class TestHelperMethods:
             level=1,
             max_hp=10,
             ac=10,
-            abilities=Abilities(10, 10, 10, 16, 14, 12)
+            abilities=Abilities(10, 10, 10, 16, 14, 12),
         )
 
         party = Party([character])
@@ -704,14 +704,14 @@ class TestPartyManagementCommands:
             level=1,
             abilities=abilities,
             max_hp=10,
-            ac=10
+            ac=10,
         )
         party = Party([char])
         game_state = GameState(party, "test_dungeon")
         console = DebugConsole(game_state, enabled=True)
 
         # Mock user confirmation
-        monkeypatch.setattr('builtins.input', lambda _: 'y')
+        monkeypatch.setattr("builtins.input", lambda _: "y")
 
         # Remove the character
         console.cmd_remove_character(["TestChar"])
@@ -729,14 +729,14 @@ class TestPartyManagementCommands:
             level=1,
             abilities=abilities,
             max_hp=10,
-            ac=10
+            ac=10,
         )
         party = Party([char])
         game_state = GameState(party, "test_dungeon")
         console = DebugConsole(game_state, enabled=True)
 
         # Mock user cancellation
-        monkeypatch.setattr('builtins.input', lambda _: 'n')
+        monkeypatch.setattr("builtins.input", lambda _: "n")
 
         # Try to remove the character
         console.cmd_remove_character(["TestChar"])
@@ -765,7 +765,7 @@ class TestPartyManagementCommands:
             level=1,
             abilities=abilities,
             max_hp=10,
-            ac=10
+            ac=10,
         )
         party = Party([char])
         game_state = GameState(party, "test_dungeon")

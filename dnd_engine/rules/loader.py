@@ -70,7 +70,7 @@ class DataLoader:
             constitution=data["abilities"]["con"],
             intelligence=data["abilities"]["int"],
             wisdom=data["abilities"]["wis"],
-            charisma=data["abilities"]["cha"]
+            charisma=data["abilities"]["cha"],
         )
 
         # Roll HP from dice notation
@@ -78,12 +78,7 @@ class DataLoader:
         max_hp = max(1, hp_roll.total)  # Minimum 1 HP
 
         # Create the creature
-        creature = Creature(
-            name=data["name"],
-            max_hp=max_hp,
-            ac=data["ac"],
-            abilities=abilities
-        )
+        creature = Creature(name=data["name"], max_hp=max_hp, ac=data["ac"], abilities=abilities)
 
         return creature
 
@@ -107,14 +102,10 @@ class DataLoader:
         # Load campaign-specific items if campaign_id provided
         if campaign_id:
             # Try new path structure first: campaigns/{campaign_id}/quests.json
-            quest_file = (
-                self.data_path / "content" / "campaigns" / campaign_id / "quests.json"
-            )
+            quest_file = self.data_path / "content" / "campaigns" / campaign_id / "quests.json"
             # Fall back to legacy path: quests/{campaign_id}.json
             if not quest_file.exists():
-                quest_file = (
-                    self.data_path / "content" / "quests" / f"{campaign_id}.json"
-                )
+                quest_file = self.data_path / "content" / "quests" / f"{campaign_id}.json"
             if quest_file.exists():
                 with open(quest_file, encoding="utf-8") as f:
                     quest_data = json.load(f)
@@ -127,9 +118,7 @@ class DataLoader:
 
         return items
 
-    def load_dungeon(
-        self, dungeon_name: str, campaign_id: str | None = None
-    ) -> dict[str, Any]:
+    def load_dungeon(self, dungeon_name: str, campaign_id: str | None = None) -> dict[str, Any]:
         """
         Load a dungeon definition from JSON.
 
@@ -156,9 +145,7 @@ class DataLoader:
             )
         else:
             # Fallback for standalone/test dungeons
-            dungeon_file = (
-                self.data_path / "content" / "dungeons" / f"{dungeon_name}.json"
-            )
+            dungeon_file = self.data_path / "content" / "dungeons" / f"{dungeon_name}.json"
 
         if not dungeon_file.exists():
             raise FileNotFoundError(f"Dungeon file not found: {dungeon_file}")
@@ -279,13 +266,7 @@ class DataLoader:
         Raises:
             FileNotFoundError: If quest file doesn't exist
         """
-        quest_file = (
-            self.data_path
-            / "content"
-            / "campaigns"
-            / campaign_id
-            / "quests.json"
-        )
+        quest_file = self.data_path / "content" / "campaigns" / campaign_id / "quests.json"
 
         if not quest_file.exists():
             raise FileNotFoundError(f"Quest file not found: {quest_file}")
@@ -306,13 +287,7 @@ class DataLoader:
         Raises:
             FileNotFoundError: If NPC file doesn't exist
         """
-        npc_file = (
-            self.data_path
-            / "content"
-            / "campaigns"
-            / campaign_id
-            / "npcs.json"
-        )
+        npc_file = self.data_path / "content" / "campaigns" / campaign_id / "npcs.json"
 
         if not npc_file.exists():
             raise FileNotFoundError(f"NPC file not found: {npc_file}")

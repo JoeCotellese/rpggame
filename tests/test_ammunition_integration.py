@@ -39,7 +39,7 @@ def archer():
         constitution=14,
         intelligence=10,
         wisdom=12,
-        charisma=10
+        charisma=10,
     )
     archer = Character(
         name="Archer",
@@ -49,7 +49,7 @@ def archer():
         max_hp=10,
         ac=13,
         weapon_proficiencies=["simple"],
-        armor_proficiencies=["light"]
+        armor_proficiencies=["light"],
     )
     # Equip shortbow
     archer.inventory.add_item("shortbow", "weapons", 1)
@@ -72,35 +72,23 @@ def game_state(archer):
 def enemy():
     """Create a generic enemy for testing"""
     abilities = Abilities(
-        strength=10,
-        dexterity=10,
-        constitution=11,
-        intelligence=3,
-        wisdom=10,
-        charisma=3
+        strength=10, dexterity=10, constitution=11, intelligence=3, wisdom=10, charisma=3
     )
     return Creature(
         name="Goblin",
         max_hp=100,  # High HP so it survives multiple attacks
         ac=10,  # Low AC for reliable hits
-        abilities=abilities
+        abilities=abilities,
     )
 
 
 class TestStartingAmmunition:
     """Tests for automatic ammunition in starting equipment"""
 
-    def test_rogue_receives_arrows_with_shortbow(
-        self, classes_data, items_data
-    ):
+    def test_rogue_receives_arrows_with_shortbow(self, classes_data, items_data):
         """Rogues starting with shortbow should automatically get arrows"""
         abilities = Abilities(
-            strength=10,
-            dexterity=16,
-            constitution=14,
-            intelligence=12,
-            wisdom=13,
-            charisma=8
+            strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8
         )
         rogue = Character(
             name="Test Rogue",
@@ -109,7 +97,7 @@ class TestStartingAmmunition:
             abilities=abilities,
             max_hp=8,
             ac=14,
-            inventory=Inventory()
+            inventory=Inventory(),
         )
 
         # Apply starting equipment
@@ -124,12 +112,7 @@ class TestStartingAmmunition:
     def test_fighter_with_longbow_receives_arrows(self, items_data):
         """Characters given longbow via starting equipment should get arrows"""
         abilities = Abilities(
-            strength=12,
-            dexterity=16,
-            constitution=14,
-            intelligence=10,
-            wisdom=12,
-            charisma=10
+            strength=12, dexterity=16, constitution=14, intelligence=10, wisdom=12, charisma=10
         )
         fighter = Character(
             name="Archer Fighter",
@@ -138,14 +121,11 @@ class TestStartingAmmunition:
             abilities=abilities,
             max_hp=12,
             ac=10,
-            inventory=Inventory()
+            inventory=Inventory(),
         )
 
         # Simulate class data that includes a longbow
-        class_data = {
-            "starting_equipment": ["longbow", "leather_armor"],
-            "starting_gold": 10
-        }
+        class_data = {"starting_equipment": ["longbow", "leather_armor"], "starting_gold": 10}
 
         CharacterFactory.apply_starting_equipment(fighter, class_data, items_data)
 
@@ -156,12 +136,7 @@ class TestStartingAmmunition:
     def test_crossbow_user_receives_bolts(self, items_data):
         """Characters with crossbow should get bolts, not arrows"""
         abilities = Abilities(
-            strength=10,
-            dexterity=14,
-            constitution=14,
-            intelligence=10,
-            wisdom=12,
-            charisma=10
+            strength=10, dexterity=14, constitution=14, intelligence=10, wisdom=12, charisma=10
         )
         character = Character(
             name="Crossbowman",
@@ -170,13 +145,10 @@ class TestStartingAmmunition:
             abilities=abilities,
             max_hp=12,
             ac=10,
-            inventory=Inventory()
+            inventory=Inventory(),
         )
 
-        class_data = {
-            "starting_equipment": ["light_crossbow"],
-            "starting_gold": 10
-        }
+        class_data = {"starting_equipment": ["light_crossbow"], "starting_gold": 10}
 
         CharacterFactory.apply_starting_equipment(character, class_data, items_data)
 
@@ -188,12 +160,7 @@ class TestStartingAmmunition:
     def test_melee_weapon_does_not_receive_ammo(self, items_data):
         """Characters with only melee weapons should not get ammunition"""
         abilities = Abilities(
-            strength=16,
-            dexterity=10,
-            constitution=14,
-            intelligence=10,
-            wisdom=12,
-            charisma=10
+            strength=16, dexterity=10, constitution=14, intelligence=10, wisdom=12, charisma=10
         )
         fighter = Character(
             name="Melee Fighter",
@@ -202,13 +169,10 @@ class TestStartingAmmunition:
             abilities=abilities,
             max_hp=12,
             ac=10,
-            inventory=Inventory()
+            inventory=Inventory(),
         )
 
-        class_data = {
-            "starting_equipment": ["longsword", "chain_mail"],
-            "starting_gold": 10
-        }
+        class_data = {"starting_equipment": ["longsword", "chain_mail"], "starting_gold": 10}
 
         CharacterFactory.apply_starting_equipment(fighter, class_data, items_data)
 
@@ -236,9 +200,7 @@ class TestAmmunitionConsumptionInCombat:
         # One arrow should be consumed
         assert archer.inventory.get_ammo_count("arrows") == initial_count - 1
 
-    def test_multiple_attacks_consume_multiple_arrows(
-        self, archer, enemy, game_state
-    ):
+    def test_multiple_attacks_consume_multiple_arrows(self, archer, enemy, game_state):
         """Multiple attacks should consume one arrow each"""
         archer.inventory.add_item("arrows", "ammunition", quantity=5)
 
@@ -282,12 +244,7 @@ class TestAmmunitionConsumptionInCombat:
     def test_melee_attack_does_not_consume_ammo(self, enemy):
         """Melee weapon attacks should not require or consume ammunition"""
         abilities = Abilities(
-            strength=16,
-            dexterity=10,
-            constitution=14,
-            intelligence=10,
-            wisdom=12,
-            charisma=10
+            strength=16, dexterity=10, constitution=14, intelligence=10, wisdom=12, charisma=10
         )
         fighter = Character(
             name="Melee Fighter",
@@ -297,7 +254,7 @@ class TestAmmunitionConsumptionInCombat:
             max_hp=12,
             ac=10,
             weapon_proficiencies=["simple", "martial"],
-            armor_proficiencies=["light", "medium", "heavy", "shields"]
+            armor_proficiencies=["light", "medium", "heavy", "shields"],
         )
         fighter.inventory.add_item("longsword", "weapons", 1)
         fighter.inventory.equip_item("longsword", EquipmentSlot.WEAPON)
@@ -320,12 +277,7 @@ class TestAmmunitionWithDifferentWeapons:
     def test_arrows_work_with_longbow(self, enemy):
         """Arrows should work with longbow"""
         abilities = Abilities(
-            strength=10,
-            dexterity=16,
-            constitution=14,
-            intelligence=10,
-            wisdom=12,
-            charisma=10
+            strength=10, dexterity=16, constitution=14, intelligence=10, wisdom=12, charisma=10
         )
         archer = Character(
             name="Longbow Archer",
@@ -334,7 +286,7 @@ class TestAmmunitionWithDifferentWeapons:
             abilities=abilities,
             max_hp=12,
             ac=10,
-            weapon_proficiencies=["simple", "martial"]
+            weapon_proficiencies=["simple", "martial"],
         )
         archer.inventory.add_item("longbow", "weapons", 1)
         archer.inventory.equip_item("longbow", EquipmentSlot.WEAPON)
@@ -351,12 +303,7 @@ class TestAmmunitionWithDifferentWeapons:
     def test_bolts_work_with_crossbow(self, enemy):
         """Bolts should work with crossbow"""
         abilities = Abilities(
-            strength=10,
-            dexterity=14,
-            constitution=14,
-            intelligence=10,
-            wisdom=12,
-            charisma=10
+            strength=10, dexterity=14, constitution=14, intelligence=10, wisdom=12, charisma=10
         )
         crossbowman = Character(
             name="Crossbowman",
@@ -365,7 +312,7 @@ class TestAmmunitionWithDifferentWeapons:
             abilities=abilities,
             max_hp=12,
             ac=10,
-            weapon_proficiencies=["simple", "martial"]
+            weapon_proficiencies=["simple", "martial"],
         )
         crossbowman.inventory.add_item("light_crossbow", "weapons", 1)
         crossbowman.inventory.equip_item("light_crossbow", EquipmentSlot.WEAPON)
@@ -382,12 +329,7 @@ class TestAmmunitionWithDifferentWeapons:
     def test_wrong_ammo_type_fails(self, enemy):
         """Using wrong ammo type should fail (bolts with bow)"""
         abilities = Abilities(
-            strength=10,
-            dexterity=16,
-            constitution=14,
-            intelligence=10,
-            wisdom=12,
-            charisma=10
+            strength=10, dexterity=16, constitution=14, intelligence=10, wisdom=12, charisma=10
         )
         archer = Character(
             name="Confused Archer",
@@ -396,7 +338,7 @@ class TestAmmunitionWithDifferentWeapons:
             abilities=abilities,
             max_hp=12,
             ac=10,
-            weapon_proficiencies=["simple", "martial"]
+            weapon_proficiencies=["simple", "martial"],
         )
         archer.inventory.add_item("shortbow", "weapons", 1)
         archer.inventory.equip_item("shortbow", EquipmentSlot.WEAPON)

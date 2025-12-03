@@ -20,7 +20,7 @@ class TestWizardSpellPreparation:
             constitution=12,
             intelligence=16,  # +3 modifier
             wisdom=10,
-            charisma=8
+            charisma=8,
         )
 
     @pytest.fixture
@@ -34,8 +34,16 @@ class TestWizardSpellPreparation:
             max_hp=8,
             ac=12,
             spellcasting_ability="int",
-            known_spells=["fire_bolt", "mage_hand", "light", "magic_missile", "shield", "mage_armor", "detect_magic"],
-            prepared_spells=["magic_missile", "shield", "mage_armor"]
+            known_spells=[
+                "fire_bolt",
+                "mage_hand",
+                "light",
+                "magic_missile",
+                "shield",
+                "mage_armor",
+                "detect_magic",
+            ],
+            prepared_spells=["magic_missile", "shield", "mage_armor"],
         )
         return character
 
@@ -149,13 +157,38 @@ class TestWizardSpellPreparation:
         """Test get_preparable_spells separates cantrips from leveled spells"""
         # Mock spells data
         spells_data = {
-            "fire_bolt": {"id": "fire_bolt", "name": "Fire Bolt", "level": 0, "school": "evocation"},
-            "mage_hand": {"id": "mage_hand", "name": "Mage Hand", "level": 0, "school": "conjuration"},
+            "fire_bolt": {
+                "id": "fire_bolt",
+                "name": "Fire Bolt",
+                "level": 0,
+                "school": "evocation",
+            },
+            "mage_hand": {
+                "id": "mage_hand",
+                "name": "Mage Hand",
+                "level": 0,
+                "school": "conjuration",
+            },
             "light": {"id": "light", "name": "Light", "level": 0, "school": "evocation"},
-            "magic_missile": {"id": "magic_missile", "name": "Magic Missile", "level": 1, "school": "evocation"},
+            "magic_missile": {
+                "id": "magic_missile",
+                "name": "Magic Missile",
+                "level": 1,
+                "school": "evocation",
+            },
             "shield": {"id": "shield", "name": "Shield", "level": 1, "school": "abjuration"},
-            "mage_armor": {"id": "mage_armor", "name": "Mage Armor", "level": 1, "school": "abjuration"},
-            "detect_magic": {"id": "detect_magic", "name": "Detect Magic", "level": 1, "school": "divination"}
+            "mage_armor": {
+                "id": "mage_armor",
+                "name": "Mage Armor",
+                "level": 1,
+                "school": "abjuration",
+            },
+            "detect_magic": {
+                "id": "detect_magic",
+                "name": "Detect Magic",
+                "level": 1,
+                "school": "divination",
+            },
         }
 
         cantrips, leveled_spells = level_1_wizard.get_preparable_spells(spells_data)
@@ -173,11 +206,21 @@ class TestWizardSpellPreparation:
         """Test get_preparable_spells sorts leveled spells by level then name"""
         # Mock spells data with mixed levels
         spells_data = {
-            "fire_bolt": {"id": "fire_bolt", "name": "Fire Bolt", "level": 0, "school": "evocation"},
+            "fire_bolt": {
+                "id": "fire_bolt",
+                "name": "Fire Bolt",
+                "level": 0,
+                "school": "evocation",
+            },
             "fireball": {"id": "fireball", "name": "Fireball", "level": 3, "school": "evocation"},
             "shield": {"id": "shield", "name": "Shield", "level": 1, "school": "abjuration"},
-            "magic_missile": {"id": "magic_missile", "name": "Magic Missile", "level": 1, "school": "evocation"},
-            "fly": {"id": "fly", "name": "Fly", "level": 3, "school": "transmutation"}
+            "magic_missile": {
+                "id": "magic_missile",
+                "name": "Magic Missile",
+                "level": 1,
+                "school": "evocation",
+            },
+            "fly": {"id": "fly", "name": "Fly", "level": 3, "school": "transmutation"},
         }
 
         # Update wizard's known spells for this test
@@ -190,7 +233,7 @@ class TestWizardSpellPreparation:
             ("magic_missile", 1),  # Level 1, M comes before S
             ("shield", 1),
             ("fireball", 3),  # Level 3, F comes before F
-            ("fly", 3)
+            ("fly", 3),
         ]
 
         for idx, (spell_id, level) in enumerate(expected_order):
@@ -208,7 +251,7 @@ class TestWizardSpellPreparation:
             ac=12,
             spellcasting_ability="int",
             known_spells=[],
-            prepared_spells=[]
+            prepared_spells=[],
         )
 
         spells_data = {}
@@ -234,7 +277,7 @@ class TestWizardSpellPreparation:
             level=1,
             abilities=Abilities(16, 14, 14, 10, 10, 10),
             max_hp=12,
-            ac=16
+            ac=16,
         )
 
         result = fighter.take_long_rest()
@@ -263,12 +306,7 @@ class TestWizardArcaneRecovery:
     def wizard_abilities(self):
         """Create abilities for a wizard"""
         return Abilities(
-            strength=8,
-            dexterity=14,
-            constitution=12,
-            intelligence=16,
-            wisdom=10,
-            charisma=8
+            strength=8, dexterity=14, constitution=12, intelligence=16, wisdom=10, charisma=8
         )
 
     @pytest.fixture
@@ -281,7 +319,7 @@ class TestWizardArcaneRecovery:
             abilities=wizard_abilities,
             max_hp=8,
             ac=12,
-            spellcasting_ability="int"
+            spellcasting_ability="int",
         )
 
         # Add spell slots
@@ -289,16 +327,13 @@ class TestWizardArcaneRecovery:
             name="1st level slots",
             current=0,  # All used
             maximum=2,
-            recovery_type="long_rest"
+            recovery_type="long_rest",
         )
         character.add_resource_pool(spell_slots)
 
         # Add Arcane Recovery resource
         arcane_recovery = ResourcePool(
-            name="arcane_recovery",
-            current=1,
-            maximum=1,
-            recovery_type="long_rest"
+            name="arcane_recovery", current=1, maximum=1, recovery_type="long_rest"
         )
         character.add_resource_pool(arcane_recovery)
 
@@ -314,7 +349,7 @@ class TestWizardArcaneRecovery:
             abilities=wizard_abilities,
             max_hp=18,
             ac=12,
-            spellcasting_ability="int"
+            spellcasting_ability="int",
         )
 
         # Add 1st level spell slots
@@ -322,7 +357,7 @@ class TestWizardArcaneRecovery:
             name="1st level slots",
             current=1,  # 3 used
             maximum=4,
-            recovery_type="long_rest"
+            recovery_type="long_rest",
         )
         character.add_resource_pool(slots_1st)
 
@@ -331,16 +366,13 @@ class TestWizardArcaneRecovery:
             name="2nd level slots",
             current=0,  # 2 used
             maximum=2,
-            recovery_type="long_rest"
+            recovery_type="long_rest",
         )
         character.add_resource_pool(slots_2nd)
 
         # Add Arcane Recovery
         arcane_recovery = ResourcePool(
-            name="arcane_recovery",
-            current=1,
-            maximum=1,
-            recovery_type="long_rest"
+            name="arcane_recovery", current=1, maximum=1, recovery_type="long_rest"
         )
         character.add_resource_pool(arcane_recovery)
 

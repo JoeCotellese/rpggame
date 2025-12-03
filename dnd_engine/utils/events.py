@@ -17,6 +17,7 @@ class EventType(Enum):
     Events enable loose coupling between systems by allowing components
     to react to game state changes without direct dependencies.
     """
+
     # Combat events
     COMBAT_START = "combat_start"
     COMBAT_END = "combat_end"
@@ -98,6 +99,7 @@ class Event:
     Events are emitted by game systems and can be subscribed to by
     other components (LLM enhancement, UI, logging, etc.).
     """
+
     type: EventType
     data: dict[str, Any] = field(default_factory=dict)
 
@@ -170,6 +172,7 @@ class EventBus:
         """
         # Log the event if debug mode is enabled
         from dnd_engine.utils.logging_config import get_logging_config
+
         logging_config = get_logging_config()
         if logging_config and logging_config.debug_enabled:
             logging_config.log_event(event.type.name, event.data)
@@ -182,10 +185,7 @@ class EventBus:
                 handler(event)
             except Exception as e:
                 # Log the exception but continue calling other handlers
-                logger.error(
-                    f"Error in event handler for {event.type.value}: {e}",
-                    exc_info=True
-                )
+                logger.error(f"Error in event handler for {event.type.value}: {e}", exc_info=True)
 
     def clear_subscribers(self, event_type: EventType) -> None:
         """

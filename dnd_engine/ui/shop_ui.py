@@ -341,9 +341,7 @@ class ShopUI:
         # Consumables and equipment are usable by all - no status needed
         return ""
 
-    def _purchase_item(
-        self, shop_item: ShopItem, item_data: dict[str, Any]
-    ) -> None:
+    def _purchase_item(self, shop_item: ShopItem, item_data: dict[str, Any]) -> None:
         """Handle item purchase with quantity selection."""
         char = self.active_character
         if not char:
@@ -398,7 +396,7 @@ class ShopUI:
         cost = Currency()
         cost._from_copper(total_cp)
         if not char.inventory.currency.subtract(cost):
-            print(f"Transaction failed - insufficient funds.")
+            print("Transaction failed - insufficient funds.")
             return
 
         # Add item to inventory

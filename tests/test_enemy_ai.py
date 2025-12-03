@@ -107,7 +107,9 @@ class TestEnemyAIConditionRemoval:
         assert ai.should_attempt_condition_removal(enemy_at_threshold) is True
 
         # Above threshold: should not attempt
-        enemy_above_threshold = MockCreature("Goblin", current_hp=5, max_hp=10, conditions={"on_fire"})
+        enemy_above_threshold = MockCreature(
+            "Goblin", current_hp=5, max_hp=10, conditions={"on_fire"}
+        )
         assert ai.should_attempt_condition_removal(enemy_above_threshold) is False
 
 
@@ -325,7 +327,9 @@ class TestEnemyAIFindRecentAttacker:
         ai = EnemyAI()
         combat_history = [
             MockCombatEvent(event_type="attack", attacker="Fighter", defender="Goblin", damage=5),
-            MockCombatEvent(event_type="attack", attacker="Wizard", defender="Goblin", damage=0),  # Miss
+            MockCombatEvent(
+                event_type="attack", attacker="Wizard", defender="Goblin", damage=0
+            ),  # Miss
         ]
 
         result = ai._find_recent_attacker(combat_history, "Goblin")

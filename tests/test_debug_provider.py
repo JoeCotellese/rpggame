@@ -70,10 +70,7 @@ Add vivid sensory details."""
     def test_init_with_custom_args(self) -> None:
         """Test that custom initialization args are accepted but ignored."""
         provider = DebugProvider(
-            api_key="custom_key",
-            model="custom_model",
-            timeout=5.0,
-            max_tokens=100
+            api_key="custom_key", model="custom_model", timeout=5.0, max_tokens=100
         )
 
         # Args are stored but not used

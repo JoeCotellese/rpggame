@@ -15,6 +15,7 @@ class ActionType(Enum):
     - One FREE_OBJECT interaction (draw weapon, open door, etc.)
     - Any number of NO_ACTION activities (dropping items, speaking, etc.)
     """
+
     ACTION = "action"
     BONUS_ACTION = "bonus_action"
     FREE_OBJECT = "free_object"

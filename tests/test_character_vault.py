@@ -32,12 +32,7 @@ def vault(temp_vault_dir):
 def sample_character():
     """Create a sample character for testing"""
     abilities = Abilities(
-        strength=16,
-        dexterity=14,
-        constitution=15,
-        intelligence=10,
-        wisdom=12,
-        charisma=8
+        strength=16, dexterity=14, constitution=15, intelligence=10, wisdom=12, charisma=8
     )
 
     inventory = Inventory()
@@ -58,7 +53,7 @@ def sample_character():
         saving_throw_proficiencies=["str", "con"],
         skill_proficiencies=["athletics", "intimidation"],
         weapon_proficiencies=["simple", "martial"],
-        armor_proficiencies=["light", "medium", "heavy", "shields"]
+        armor_proficiencies=["light", "medium", "heavy", "shields"],
     )
 
     # Add a resource pool
@@ -139,9 +134,7 @@ class TestSaveCharacter:
     def test_save_character_active_state(self, vault, sample_character):
         """Test saving a character with ACTIVE state"""
         character_id = vault.save_character(
-            sample_character,
-            state=CharacterState.ACTIVE,
-            campaign_name="Test Campaign"
+            sample_character, state=CharacterState.ACTIVE, campaign_name="Test Campaign"
         )
 
         character_file = vault.vault_dir / f"{character_id}.json"
@@ -160,9 +153,7 @@ class TestSaveCharacter:
         """Test that non-active state with campaign name raises error"""
         with pytest.raises(ValueError, match="Only active characters can have a campaign_name"):
             vault.save_character(
-                sample_character,
-                state=CharacterState.AVAILABLE,
-                campaign_name="Test Campaign"
+                sample_character, state=CharacterState.AVAILABLE, campaign_name="Test Campaign"
             )
 
     def test_save_character_data_structure(self, vault, sample_character):
@@ -290,7 +281,7 @@ class TestLoadCharacter:
         character_file = temp_vault_dir / f"{character_id}.json"
 
         # Write invalid JSON
-        with open(character_file, 'w') as f:
+        with open(character_file, "w") as f:
             f.write("{invalid json")
 
         with pytest.raises(ValueError, match="Corrupted character file"):
@@ -302,7 +293,7 @@ class TestLoadCharacter:
         character_file = temp_vault_dir / f"{character_id}.json"
 
         # Write valid JSON but missing required fields
-        with open(character_file, 'w') as f:
+        with open(character_file, "w") as f:
             json.dump({"version": "1.0.0"}, f)
 
         with pytest.raises(ValueError, match="Invalid character file"):
@@ -380,9 +371,7 @@ class TestListCharacters:
     def test_list_characters_active_state(self, vault, sample_character):
         """Test listing characters shows active state and campaign"""
         vault.save_character(
-            sample_character,
-            state=CharacterState.ACTIVE,
-            campaign_name="Epic Quest"
+            sample_character, state=CharacterState.ACTIVE, campaign_name="Epic Quest"
         )
 
         characters = vault.list_characters()
@@ -397,7 +386,7 @@ class TestListCharacters:
 
         # Create corrupted file
         corrupted_file = temp_vault_dir / "corrupted.json"
-        with open(corrupted_file, 'w') as f:
+        with open(corrupted_file, "w") as f:
             f.write("{invalid")
 
         # Should still list the valid character
@@ -514,7 +503,7 @@ class TestImportCharacter:
     def test_import_character_invalid_json(self, vault, tmp_path):
         """Test importing invalid JSON"""
         import_path = tmp_path / "invalid.json"
-        with open(import_path, 'w') as f:
+        with open(import_path, "w") as f:
             f.write("{invalid json")
 
         with pytest.raises(ValueError, match="Invalid import file"):
@@ -523,7 +512,7 @@ class TestImportCharacter:
     def test_import_character_missing_data(self, vault, tmp_path):
         """Test importing file with missing character data"""
         import_path = tmp_path / "incomplete.json"
-        with open(import_path, 'w') as f:
+        with open(import_path, "w") as f:
             json.dump({"version": "1.0.0"}, f)
 
         with pytest.raises(ValueError, match="missing 'character' data"):
@@ -563,9 +552,7 @@ class TestCloneCharacter:
         """Test that clones are always in AVAILABLE state"""
         # Save an active character
         original_id = vault.save_character(
-            sample_character,
-            state=CharacterState.ACTIVE,
-            campaign_name="Test Campaign"
+            sample_character, state=CharacterState.ACTIVE, campaign_name="Test Campaign"
         )
 
         # Clone it
@@ -618,9 +605,7 @@ class TestUpdateCharacterState:
         character_id = vault.save_character(sample_character)
 
         vault.update_character_state(
-            character_id,
-            CharacterState.ACTIVE,
-            campaign_name="New Campaign"
+            character_id, CharacterState.ACTIVE, campaign_name="New Campaign"
         )
 
         characters = vault.list_characters()
@@ -646,9 +631,7 @@ class TestUpdateCharacterState:
     def test_update_state_to_available(self, vault, sample_character):
         """Test updating state from ACTIVE to AVAILABLE"""
         character_id = vault.save_character(
-            sample_character,
-            state=CharacterState.ACTIVE,
-            campaign_name="Old Campaign"
+            sample_character, state=CharacterState.ACTIVE, campaign_name="Old Campaign"
         )
 
         vault.update_character_state(character_id, CharacterState.AVAILABLE)
@@ -671,9 +654,7 @@ class TestUpdateCharacterState:
 
         with pytest.raises(ValueError, match="Only active characters can have a campaign_name"):
             vault.update_character_state(
-                character_id,
-                CharacterState.AVAILABLE,
-                campaign_name="Test Campaign"
+                character_id, CharacterState.AVAILABLE, campaign_name="Test Campaign"
             )
 
     def test_update_state_not_found(self, vault):
@@ -695,6 +676,7 @@ class TestUpdateCharacterState:
 
         # Wait a tiny bit to ensure timestamp difference
         import time
+
         time.sleep(0.01)
 
         # Update state

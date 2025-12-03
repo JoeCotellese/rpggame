@@ -27,7 +27,7 @@ class OpenAIProvider(LLMProvider):
         api_key: str,
         model: str = "gpt-4o-mini",
         timeout: float = 10.0,
-        max_tokens: int = 1000
+        max_tokens: int = 1000,
     ) -> None:
         """
         Initialize OpenAI provider.
@@ -41,11 +41,7 @@ class OpenAIProvider(LLMProvider):
         super().__init__(api_key, model, timeout, max_tokens)
         self.client = AsyncOpenAI(api_key=api_key)
 
-    async def generate(
-        self,
-        prompt: str,
-        temperature: float = 0.7
-    ) -> str | None:
+    async def generate(self, prompt: str, temperature: float = 0.7) -> str | None:
         """
         Generate text using OpenAI API.
 
@@ -67,20 +63,17 @@ class OpenAIProvider(LLMProvider):
                                 "You are a narrator for a classic radio drama adventure serial. "
                                 "Your audience cannot see - they can only hear your words. "
                                 "Paint vivid pictures using rich sensory details: sights, sounds, smells, textures, atmosphere. "
-                                "Write in present tense, second person (\"you step into...\", \"the air hangs heavy...\"). "
+                                'Write in present tense, second person ("you step into...", "the air hangs heavy..."). '
                                 "Be dramatic and atmospheric, but keep it concise (2-3 sentences). "
                                 "Make every word count to transport listeners into the scene."
-                            )
+                            ),
                         },
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
+                        {"role": "user", "content": prompt},
                     ],
                     temperature=temperature,
-                    max_tokens=self.max_tokens
+                    max_tokens=self.max_tokens,
                 ),
-                timeout=self.timeout
+                timeout=self.timeout,
             )
 
             return response.choices[0].message.content.strip()
@@ -156,9 +149,7 @@ class OpenAIProvider(LLMProvider):
             }
 
         except TimeoutError:
-            print_status_message(
-                f"OpenAI request timed out after {self.timeout}s", "warning"
-            )
+            print_status_message(f"OpenAI request timed out after {self.timeout}s", "warning")
             return None
         except Exception as e:
             print_error(f"OpenAI API error: {e}")

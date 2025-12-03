@@ -23,7 +23,7 @@ class AnthropicProvider(LLMProvider):
         api_key: str,
         model: str = "claude-3-5-haiku-20241022",
         timeout: float = 10.0,
-        max_tokens: int = 1000
+        max_tokens: int = 1000,
     ) -> None:
         """
         Initialize Anthropic provider.
@@ -37,11 +37,7 @@ class AnthropicProvider(LLMProvider):
         super().__init__(api_key, model, timeout, max_tokens)
         self.client = AsyncAnthropic(api_key=api_key)
 
-    async def generate(
-        self,
-        prompt: str,
-        temperature: float = 0.7
-    ) -> str | None:
+    async def generate(self, prompt: str, temperature: float = 0.7) -> str | None:
         """
         Generate text using Anthropic API.
 
@@ -62,18 +58,13 @@ class AnthropicProvider(LLMProvider):
                         "You are a narrator for a classic radio drama adventure serial. "
                         "Your audience cannot see - they can only hear your words. "
                         "Paint vivid pictures using rich sensory details: sights, sounds, smells, textures, atmosphere. "
-                        "Write in present tense, second person (\"you step into...\", \"the air hangs heavy...\"). "
+                        'Write in present tense, second person ("you step into...", "the air hangs heavy..."). '
                         "Be dramatic and atmospheric, but keep it concise (2-3 sentences). "
                         "Make every word count to transport listeners into the scene."
                     ),
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ]
+                    messages=[{"role": "user", "content": prompt}],
                 ),
-                timeout=self.timeout
+                timeout=self.timeout,
             )
 
             return response.content[0].text.strip()

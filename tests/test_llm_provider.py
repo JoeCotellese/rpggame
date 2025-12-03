@@ -18,16 +18,13 @@ class TestOpenAIProvider:
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = "A dark and foreboding chamber."
 
-        with patch('dnd_engine.llm.openai_provider.AsyncOpenAI') as mock_client_class:
+        with patch("dnd_engine.llm.openai_provider.AsyncOpenAI") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
             mock_client_class.return_value = mock_client
 
             provider = OpenAIProvider(
-                api_key="test-key",
-                model="gpt-4o-mini",
-                timeout=10.0,
-                max_tokens=150
+                api_key="test-key", model="gpt-4o-mini", timeout=10.0, max_tokens=150
             )
 
             result = await provider.generate("Describe a dungeon room")
@@ -40,19 +37,13 @@ class TestOpenAIProvider:
         """Test that OpenAI provider handles timeouts gracefully."""
         from dnd_engine.llm.openai_provider import OpenAIProvider
 
-        with patch('dnd_engine.llm.openai_provider.AsyncOpenAI') as mock_client_class:
+        with patch("dnd_engine.llm.openai_provider.AsyncOpenAI") as mock_client_class:
             mock_client = AsyncMock()
             # Simulate a timeout
-            mock_client.chat.completions.create = AsyncMock(
-                side_effect=TimeoutError()
-            )
+            mock_client.chat.completions.create = AsyncMock(side_effect=TimeoutError())
             mock_client_class.return_value = mock_client
 
-            provider = OpenAIProvider(
-                api_key="test-key",
-                model="gpt-4o-mini",
-                timeout=1.0
-            )
+            provider = OpenAIProvider(api_key="test-key", model="gpt-4o-mini", timeout=1.0)
 
             result = await provider.generate("Test prompt")
 
@@ -63,18 +54,13 @@ class TestOpenAIProvider:
         """Test that OpenAI provider handles API errors gracefully."""
         from dnd_engine.llm.openai_provider import OpenAIProvider
 
-        with patch('dnd_engine.llm.openai_provider.AsyncOpenAI') as mock_client_class:
+        with patch("dnd_engine.llm.openai_provider.AsyncOpenAI") as mock_client_class:
             mock_client = AsyncMock()
             # Simulate an API error
-            mock_client.chat.completions.create = AsyncMock(
-                side_effect=Exception("API Error")
-            )
+            mock_client.chat.completions.create = AsyncMock(side_effect=Exception("API Error"))
             mock_client_class.return_value = mock_client
 
-            provider = OpenAIProvider(
-                api_key="test-key",
-                model="gpt-4o-mini"
-            )
+            provider = OpenAIProvider(api_key="test-key", model="gpt-4o-mini")
 
             result = await provider.generate("Test prompt")
 
@@ -89,7 +75,7 @@ class TestOpenAIProvider:
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = "Test response"
 
-        with patch('dnd_engine.llm.openai_provider.AsyncOpenAI') as mock_client_class:
+        with patch("dnd_engine.llm.openai_provider.AsyncOpenAI") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
             mock_client_class.return_value = mock_client
@@ -99,13 +85,13 @@ class TestOpenAIProvider:
 
             # Verify temperature was passed
             call_args = mock_client.chat.completions.create.call_args
-            assert call_args.kwargs['temperature'] == 0.9
+            assert call_args.kwargs["temperature"] == 0.9
 
     def test_openai_provider_name(self) -> None:
         """Test that provider name is returned correctly."""
         from dnd_engine.llm.openai_provider import OpenAIProvider
 
-        with patch('dnd_engine.llm.openai_provider.AsyncOpenAI'):
+        with patch("dnd_engine.llm.openai_provider.AsyncOpenAI"):
             provider = OpenAIProvider(api_key="test-key", model="gpt-4o-mini")
             assert "OpenAI" in provider.get_provider_name()
             assert "gpt-4o-mini" in provider.get_provider_name()
@@ -124,16 +110,13 @@ class TestAnthropicProvider:
         mock_response.content = [MagicMock()]
         mock_response.content[0].text = "The goblin sneers menacingly."
 
-        with patch('dnd_engine.llm.anthropic_provider.AsyncAnthropic') as mock_client_class:
+        with patch("dnd_engine.llm.anthropic_provider.AsyncAnthropic") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.messages.create = AsyncMock(return_value=mock_response)
             mock_client_class.return_value = mock_client
 
             provider = AnthropicProvider(
-                api_key="test-key",
-                model="claude-3-5-haiku-20241022",
-                timeout=10.0,
-                max_tokens=150
+                api_key="test-key", model="claude-3-5-haiku-20241022", timeout=10.0, max_tokens=150
             )
 
             result = await provider.generate("Describe a goblin")
@@ -146,15 +129,13 @@ class TestAnthropicProvider:
         """Test that Anthropic provider handles timeouts gracefully."""
         from dnd_engine.llm.anthropic_provider import AnthropicProvider
 
-        with patch('dnd_engine.llm.anthropic_provider.AsyncAnthropic') as mock_client_class:
+        with patch("dnd_engine.llm.anthropic_provider.AsyncAnthropic") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.messages.create = AsyncMock(side_effect=TimeoutError())
             mock_client_class.return_value = mock_client
 
             provider = AnthropicProvider(
-                api_key="test-key",
-                model="claude-3-5-haiku-20241022",
-                timeout=1.0
+                api_key="test-key", model="claude-3-5-haiku-20241022", timeout=1.0
             )
 
             result = await provider.generate("Test prompt")
@@ -166,15 +147,12 @@ class TestAnthropicProvider:
         """Test that Anthropic provider handles API errors gracefully."""
         from dnd_engine.llm.anthropic_provider import AnthropicProvider
 
-        with patch('dnd_engine.llm.anthropic_provider.AsyncAnthropic') as mock_client_class:
+        with patch("dnd_engine.llm.anthropic_provider.AsyncAnthropic") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.messages.create = AsyncMock(side_effect=Exception("API Error"))
             mock_client_class.return_value = mock_client
 
-            provider = AnthropicProvider(
-                api_key="test-key",
-                model="claude-3-5-haiku-20241022"
-            )
+            provider = AnthropicProvider(api_key="test-key", model="claude-3-5-haiku-20241022")
 
             result = await provider.generate("Test prompt")
 
@@ -184,10 +162,7 @@ class TestAnthropicProvider:
         """Test that provider name is returned correctly."""
         from dnd_engine.llm.anthropic_provider import AnthropicProvider
 
-        with patch('dnd_engine.llm.anthropic_provider.AsyncAnthropic'):
-            provider = AnthropicProvider(
-                api_key="test-key",
-                model="claude-3-5-haiku-20241022"
-            )
+        with patch("dnd_engine.llm.anthropic_provider.AsyncAnthropic"):
+            provider = AnthropicProvider(api_key="test-key", model="claude-3-5-haiku-20241022")
             assert "Anthropic" in provider.get_provider_name()
             assert "claude-3-5-haiku-20241022" in provider.get_provider_name()

@@ -21,7 +21,7 @@ def wizard_abilities():
         constitution=12,
         intelligence=16,  # +3 modifier
         wisdom=10,
-        charisma=8
+        charisma=8,
     )
 
 
@@ -37,16 +37,16 @@ def level_1_wizard(wizard_abilities):
         ac=12,
         spellcasting_ability="int",
         known_spells=[
-            "fire_bolt",      # cantrip
-            "mage_hand",      # cantrip
-            "light",          # cantrip
+            "fire_bolt",  # cantrip
+            "mage_hand",  # cantrip
+            "light",  # cantrip
             "magic_missile",  # level 1
-            "shield",         # level 1
-            "mage_armor",     # level 1
-            "detect_magic",   # level 1
-            "burning_hands"   # level 1
+            "shield",  # level 1
+            "mage_armor",  # level 1
+            "detect_magic",  # level 1
+            "burning_hands",  # level 1
         ],
-        prepared_spells=[]
+        prepared_spells=[],
     )
 
 
@@ -73,7 +73,7 @@ def game_state_with_wizard(level_1_wizard, event_bus, data_loader):
         dungeon_name="test_dungeon",
         event_bus=event_bus,
         data_loader=data_loader,
-        dice_roller=dice_roller
+        dice_roller=dice_roller,
     )
 
     return game_state
@@ -88,19 +88,21 @@ class TestSpellPreparationWorkflow:
 
         # Track events
         events_received = []
+
         def event_handler(event):
             events_received.append(event)
+
         event_bus.subscribe(EventType.SPELLS_PREPARED, event_handler)
 
         # Prepare spells (cantrips + 4 leveled spells, max is INT mod 3 + level 1 = 4 leveled)
         spell_ids = [
-            "fire_bolt",      # cantrip (doesn't count)
-            "mage_hand",      # cantrip (doesn't count)
-            "light",          # cantrip (doesn't count)
+            "fire_bolt",  # cantrip (doesn't count)
+            "mage_hand",  # cantrip (doesn't count)
+            "light",  # cantrip (doesn't count)
             "magic_missile",  # level 1 (1)
-            "shield",         # level 1 (2)
-            "mage_armor",     # level 1 (3)
-            "detect_magic"    # level 1 (4)
+            "shield",  # level 1 (2)
+            "mage_armor",  # level 1 (3)
+            "detect_magic",  # level 1 (4)
         ]
 
         result = game_state_with_wizard.prepare_spells("Test Wizard", spell_ids)
@@ -124,8 +126,10 @@ class TestSpellPreparationWorkflow:
 
         # Track events
         events_received = []
+
         def event_handler(event):
             events_received.append(event)
+
         event_bus.subscribe(EventType.SPELLS_PREPARED, event_handler)
 
         # Try to prepare a spell the wizard doesn't know
@@ -146,8 +150,10 @@ class TestSpellPreparationWorkflow:
         """Test preparing spells for nonexistent character fails"""
         # Track events
         events_received = []
+
         def event_handler(event):
             events_received.append(event)
+
         event_bus.subscribe(EventType.SPELLS_PREPARED, event_handler)
 
         result = game_state_with_wizard.prepare_spells("Nonexistent Wizard", ["magic_missile"])
@@ -167,8 +173,10 @@ class TestSpellPreparationWorkflow:
 
         # Track events
         events_received = []
+
         def event_handler(event):
             events_received.append(event)
+
         event_bus.subscribe(EventType.SPELLS_PREPARED, event_handler)
 
         # Prepare empty list
@@ -205,12 +213,12 @@ class TestSpellPreparationAfterLongRest:
                 constitution=14,
                 intelligence=8,
                 wisdom=16,  # +3 modifier
-                charisma=12
+                charisma=12,
             ),
             max_hp=10,
             ac=16,
             spellcasting_ability="wis",
-            known_spells=["sacred_flame", "cure_wounds", "bless", "shield_of_faith"]
+            known_spells=["sacred_flame", "cure_wounds", "bless", "shield_of_faith"],
         )
 
         result = cleric.take_long_rest()
@@ -224,15 +232,10 @@ class TestSpellPreparationAfterLongRest:
             character_class=CharacterClass.FIGHTER,
             level=1,
             abilities=Abilities(
-                strength=16,
-                dexterity=14,
-                constitution=15,
-                intelligence=10,
-                wisdom=12,
-                charisma=8
+                strength=16, dexterity=14, constitution=15, intelligence=10, wisdom=12, charisma=8
             ),
             max_hp=12,
-            ac=16
+            ac=16,
         )
 
         result = fighter.take_long_rest()
@@ -285,8 +288,10 @@ class TestSpellPreparationWithRealData:
 
         # Track events
         events_received = []
+
         def event_handler(event):
             events_received.append(event)
+
         event_bus.subscribe(EventType.SPELLS_PREPARED, event_handler)
 
         # Prepare only cantrips
@@ -323,18 +328,13 @@ class TestSpellPreparationEdgeCases:
             character_class=CharacterClass.WIZARD,
             level=1,
             abilities=Abilities(
-                strength=8,
-                dexterity=14,
-                constitution=12,
-                intelligence=16,
-                wisdom=10,
-                charisma=8
+                strength=8, dexterity=14, constitution=12, intelligence=16, wisdom=10, charisma=8
             ),
             max_hp=8,
             ac=12,
             spellcasting_ability="int",
             known_spells=[],  # No known spells
-            prepared_spells=[]
+            prepared_spells=[],
         )
 
         party = Party([wizard])
@@ -343,7 +343,7 @@ class TestSpellPreparationEdgeCases:
             dungeon_name="test_dungeon",
             event_bus=event_bus,
             data_loader=data_loader,
-            dice_roller=DiceRoller()
+            dice_roller=DiceRoller(),
         )
 
         # Can successfully prepare empty list
@@ -361,18 +361,13 @@ class TestSpellPreparationEdgeCases:
             character_class=CharacterClass.WIZARD,
             level=1,
             abilities=Abilities(
-                strength=8,
-                dexterity=14,
-                constitution=12,
-                intelligence=16,
-                wisdom=10,
-                charisma=8
+                strength=8, dexterity=14, constitution=12, intelligence=16, wisdom=10, charisma=8
             ),
             max_hp=8,
             ac=12,
             spellcasting_ability="int",
             known_spells=[],
-            prepared_spells=[]
+            prepared_spells=[],
         )
 
         spells_data = data_loader.load_spells()

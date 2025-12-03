@@ -24,19 +24,16 @@ def wizard():
             constitution=14,
             intelligence=16,  # +3 modifier
             wisdom=10,
-            charisma=10
+            charisma=10,
         ),
         max_hp=8,
         ac=12,
-        spellcasting_ability="int"
+        spellcasting_ability="int",
     )
     # Add level 1 spell slots
-    wizard.add_resource_pool(ResourcePool(
-        name="spell_slots_level_1",
-        current=2,
-        maximum=2,
-        recovery_type="long_rest"
-    ))
+    wizard.add_resource_pool(
+        ResourcePool(name="spell_slots_level_1", current=2, maximum=2, recovery_type="long_rest")
+    )
     return wizard
 
 
@@ -50,16 +47,10 @@ def burning_hands_spell():
         "school": "evocation",
         "casting_time": "1 action",
         "range_ft": 0,  # Cast from self
-        "damage": {
-            "dice": "3d6",
-            "damage_type": "fire"
-        },
-        "saving_throw": {
-            "ability": "dexterity",
-            "on_success": "half"
-        },
+        "damage": {"dice": "3d6", "damage_type": "fire"},
+        "saving_throw": {"ability": "dexterity", "on_success": "half"},
         "area_of_effect": "15-foot cone",
-        "classes": ["wizard", "sorcerer"]
+        "classes": ["wizard", "sorcerer"],
     }
 
 
@@ -76,8 +67,8 @@ def skeletons():
             constitution=15,
             intelligence=6,
             wisdom=8,
-            charisma=5
-        )
+            charisma=5,
+        ),
     )
 
     skeleton2 = Creature(
@@ -90,8 +81,8 @@ def skeletons():
             constitution=15,
             intelligence=6,
             wisdom=8,
-            charisma=5
-        )
+            charisma=5,
+        ),
     )
 
     return [skeleton1, skeleton2]
@@ -108,7 +99,7 @@ def test_burning_hands_hits_multiple_enemies(wizard, burning_hands_spell, skelet
         targets=skeletons,
         spell=burning_hands_spell,
         apply_damage=True,
-        event_bus=event_bus
+        event_bus=event_bus,
     )
 
     # Verify spell details in result
@@ -146,7 +137,7 @@ def test_burning_hands_save_mechanics(wizard, burning_hands_spell, skeletons):
         caster=wizard,
         targets=skeletons,
         spell=burning_hands_spell,
-        apply_damage=False  # Don't apply so we can inspect damage amounts
+        apply_damage=False,  # Don't apply so we can inspect damage amounts
     )
 
     # At least one should have different damage from the other due to saves
@@ -171,13 +162,8 @@ def test_burning_hands_doesnt_hit_caster(wizard, burning_hands_spell):
         max_hp=7,
         ac=15,
         abilities=Abilities(
-            strength=8,
-            dexterity=14,
-            constitution=10,
-            intelligence=10,
-            wisdom=8,
-            charisma=8
-        )
+            strength=8, dexterity=14, constitution=10, intelligence=10, wisdom=8, charisma=8
+        ),
     )
 
     # Cast Burning Hands with only the enemy as target
@@ -186,7 +172,7 @@ def test_burning_hands_doesnt_hit_caster(wizard, burning_hands_spell):
         targets=[enemy],
         spell=burning_hands_spell,
         apply_damage=True,
-        event_bus=event_bus
+        event_bus=event_bus,
     )
 
     # Caster should not be damaged
@@ -202,13 +188,13 @@ def test_area_effect_detection():
         "id": "burning_hands",
         "name": "Burning Hands",
         "range_ft": 0,
-        "area_of_effect": "15-foot cone"
+        "area_of_effect": "15-foot cone",
     }
 
     shield = {
         "id": "shield",
         "name": "Shield",
-        "range_ft": 0
+        "range_ft": 0,
         # No area_of_effect
     }
 
@@ -226,16 +212,10 @@ def thunderwave_spell():
         "school": "evocation",
         "casting_time": "1 action",
         "range_ft": 0,
-        "damage": {
-            "dice": "2d8",
-            "damage_type": "thunder"
-        },
-        "saving_throw": {
-            "ability": "constitution",
-            "on_success": "half"
-        },
+        "damage": {"dice": "2d8", "damage_type": "thunder"},
+        "saving_throw": {"ability": "constitution", "on_success": "half"},
         "area_of_effect": "15-foot cube",
-        "classes": ["wizard", "sorcerer", "bard", "druid"]
+        "classes": ["wizard", "sorcerer", "bard", "druid"],
     }
 
 
@@ -250,7 +230,7 @@ def test_thunderwave_hits_multiple_enemies(wizard, thunderwave_spell, skeletons)
         targets=skeletons,
         spell=thunderwave_spell,
         apply_damage=True,
-        event_bus=event_bus
+        event_bus=event_bus,
     )
 
     # Verify spell details in result
@@ -284,19 +264,16 @@ def test_thunderwave_uses_constitution_save(wizard, thunderwave_spell):
         ac=11,
         abilities=Abilities(
             strength=19,
-            dexterity=8,   # -1 DEX modifier
+            dexterity=8,  # -1 DEX modifier
             constitution=16,  # +3 CON modifier
             intelligence=5,
             wisdom=7,
-            charisma=7
-        )
+            charisma=7,
+        ),
     )
 
     result = combat.resolve_spell_save(
-        caster=wizard,
-        targets=[tough_enemy],
-        spell=thunderwave_spell,
-        apply_damage=False
+        caster=wizard, targets=[tough_enemy], spell=thunderwave_spell, apply_damage=False
     )
 
     # Verify the save used CON modifier (+3)

@@ -35,7 +35,7 @@ class MainMenu:
     def __init__(
         self,
         campaign_manager: CampaignManager | None = None,
-        character_vault: CharacterVault | None = None
+        character_vault: CharacterVault | None = None,
     ):
         """
         Initialize the main menu.
@@ -64,7 +64,7 @@ class MainMenu:
             {"number": "3", "text": "New Campaign"},
             {"number": "4", "text": "Load Campaign"},
             {"number": "5", "text": "Character Vault"},
-            {"number": "6", "text": "Exit"}
+            {"number": "6", "text": "Exit"},
         ]
 
         print_choice_menu("Main Menu", options)
@@ -78,7 +78,7 @@ class MainMenu:
             "3": "new",
             "4": "load",
             "5": "vault",
-            "6": "exit"
+            "6": "exit",
         }
 
         return choice_map.get(choice)
@@ -94,8 +94,7 @@ class MainMenu:
 
         if campaign is None:
             print_status_message(
-                "No campaigns found. Please create a new campaign first.",
-                "warning"
+                "No campaigns found. Please create a new campaign first.", "warning"
             )
             return None
 
@@ -109,7 +108,10 @@ class MainMenu:
 
         table.add_row("Campaign", f"[bold]{campaign.name}[/bold]")
         table.add_row("Dungeon", campaign.current_dungeon or "Unknown")
-        table.add_row("Party", ", ".join(campaign.party_character_ids) if campaign.party_character_ids else "None")
+        table.add_row(
+            "Party",
+            ", ".join(campaign.party_character_ids) if campaign.party_character_ids else "None",
+        )
         table.add_row("Playtime", campaign.get_playtime_display())
         table.add_row("Last played", campaign.get_last_played_display())
 
@@ -117,7 +119,9 @@ class MainMenu:
         console.print()
 
         # Confirm
-        confirm = console.input("[bold cyan]Continue this campaign? [Y/n]:[/bold cyan] ").strip().lower()
+        confirm = (
+            console.input("[bold cyan]Continue this campaign? [Y/n]:[/bold cyan] ").strip().lower()
+        )
 
         if confirm in ["", "y", "yes"]:
             return campaign.name
@@ -135,8 +139,7 @@ class MainMenu:
 
         if not campaigns:
             print_status_message(
-                "No campaigns found. Please create a new campaign first.",
-                "warning"
+                "No campaigns found. Please create a new campaign first.", "warning"
             )
             return None
 
@@ -167,7 +170,7 @@ class MainMenu:
                 "\n".join(panel_content),
                 title=f"[bold cyan][{i}][/bold cyan] [bold white]{campaign.name}[/bold white]",
                 border_style="cyan",
-                padding=(0, 2)
+                padding=(0, 2),
             )
             console.print(panel)
             console.print()
@@ -208,10 +211,7 @@ class MainMenu:
             return None
 
         if not save_slots:
-            print_status_message(
-                f"No save files found for campaign '{campaign_name}'.",
-                "warning"
-            )
+            print_status_message(f"No save files found for campaign '{campaign_name}'.", "warning")
             return None
 
         console.print()
@@ -220,15 +220,11 @@ class MainMenu:
 
         # Display save slots
         for i, slot in enumerate(save_slots, 1):
-            save_type_icon = {
-                "auto": "🔄",
-                "quick": "⚡",
-                "manual": "💾"
-            }.get(slot.save_type, "💾")
+            save_type_icon = {"auto": "🔄", "quick": "⚡", "manual": "💾"}.get(slot.save_type, "💾")
 
             panel_content = [
                 f"[cyan]Type:[/cyan] {save_type_icon} {slot.save_type.title()} Save",
-                f"[cyan]Saved:[/cyan] {slot.get_time_display()}"
+                f"[cyan]Saved:[/cyan] {slot.get_time_display()}",
             ]
 
             if slot.location:
@@ -238,7 +234,7 @@ class MainMenu:
                 "\n".join(panel_content),
                 title=f"[bold cyan][{i}][/bold cyan] [bold white]{slot.slot_name}[/bold white]",
                 border_style="yellow" if slot.save_type == "auto" else "cyan",
-                padding=(0, 2)
+                padding=(0, 2),
             )
             console.print(panel)
             console.print()
@@ -278,33 +274,22 @@ class MainMenu:
             # Try to load auto-save first, fall back to most recent save
             try:
                 game_state = self.campaign_manager.load_campaign_state(
-                    campaign_name,
-                    slot_name="auto"
+                    campaign_name, slot_name="auto"
                 )
-                print_status_message(
-                    f"Loaded auto-save for '{campaign_name}'",
-                    "success"
-                )
+                print_status_message(f"Loaded auto-save for '{campaign_name}'", "success")
                 return game_state
             except FileNotFoundError:
                 # No auto-save, show save slot selection
-                print_status_message(
-                    "No auto-save found. Please select a save slot:",
-                    "info"
-                )
+                print_status_message("No auto-save found. Please select a save slot:", "info")
                 slot_name = self.show_campaign_save_slots(campaign_name)
 
                 if slot_name is None:
                     return None
 
                 game_state = self.campaign_manager.load_campaign_state(
-                    campaign_name,
-                    slot_name=slot_name
+                    campaign_name, slot_name=slot_name
                 )
-                print_status_message(
-                    f"Loaded save '{slot_name}' for '{campaign_name}'",
-                    "success"
-                )
+                print_status_message(f"Loaded save '{slot_name}' for '{campaign_name}'", "success")
                 return game_state
 
         except FileNotFoundError as e:
@@ -336,13 +321,9 @@ class MainMenu:
         # Step 3: Load the game
         try:
             game_state = self.campaign_manager.load_campaign_state(
-                campaign_name,
-                slot_name=slot_name
+                campaign_name, slot_name=slot_name
             )
-            print_status_message(
-                f"Loaded '{campaign_name}' - {slot_name}",
-                "success"
-            )
+            print_status_message(f"Loaded '{campaign_name}' - {slot_name}", "success")
             return game_state
         except FileNotFoundError as e:
             print_error("Save file not found", e)
@@ -361,8 +342,7 @@ class MainMenu:
             GameState if successful, None otherwise
         """
         print_status_message(
-            "Quick Start feature coming soon! Please use 'New Campaign' instead.",
-            "info"
+            "Quick Start feature coming soon! Please use 'New Campaign' instead.", "info"
         )
         return None
 
@@ -374,8 +354,7 @@ class MainMenu:
             GameState if campaign created and ready to play, None otherwise
         """
         wizard = CampaignCreationWizard(
-            campaign_manager=self.campaign_manager,
-            character_vault=self.character_vault
+            campaign_manager=self.campaign_manager, character_vault=self.character_vault
         )
 
         campaign_name = wizard.run()
@@ -385,23 +364,14 @@ class MainMenu:
 
         # Load the newly created campaign
         try:
-            game_state = self.campaign_manager.load_campaign_state(
-                campaign_name,
-                slot_name="auto"
-            )
-            print_status_message(
-                f"Starting '{campaign_name}'...",
-                "success"
-            )
+            game_state = self.campaign_manager.load_campaign_state(campaign_name, slot_name="auto")
+            print_status_message(f"Starting '{campaign_name}'...", "success")
             return game_state
         except FileNotFoundError:
             # No auto-save yet, that's OK - campaign was just created
             # We'll need to initialize a new game state
             # For now, return None and let the user load it normally
-            print_status_message(
-                "Campaign created! Use 'Load Campaign' to start playing.",
-                "info"
-            )
+            print_status_message("Campaign created! Use 'Load Campaign' to start playing.", "info")
             return None
         except Exception as e:
             print_error(f"Failed to load campaign: {str(e)}")
@@ -413,10 +383,7 @@ class MainMenu:
 
         NOTE: Character Vault UI will be implemented in a future iteration.
         """
-        print_status_message(
-            "Character Vault UI coming soon!",
-            "info"
-        )
+        print_status_message("Character Vault UI coming soon!", "info")
         # TODO: Implement Character Vault UI in future iteration
         # This will show the vault menu from Issue #81
 

@@ -103,7 +103,7 @@ class LoggingConfig:
         self._rotate_logs(log_dir)
 
         # Open log file with UTF-8 encoding
-        self.log_file = open(self.log_file_path, 'w', encoding='utf-8', buffering=1)
+        self.log_file = open(self.log_file_path, "w", encoding="utf-8", buffering=1)
 
         # Set up Python logging
         self._setup_python_logging()
@@ -118,14 +118,12 @@ class LoggingConfig:
         """
         # Get all log files sorted by modification time (newest first)
         log_files = sorted(
-            log_dir.glob("dnd_game_*.log"),
-            key=lambda p: p.stat().st_mtime,
-            reverse=True
+            log_dir.glob("dnd_game_*.log"), key=lambda p: p.stat().st_mtime, reverse=True
         )
 
         # Delete old log files (keep only the most recent keep_count-1,
         # since we're about to create a new one)
-        for old_log in log_files[keep_count - 1:]:
+        for old_log in log_files[keep_count - 1 :]:
             try:
                 old_log.unlink()
             except OSError as e:
@@ -140,16 +138,12 @@ class LoggingConfig:
 
         # Create file handler
         if self.log_file_path:
-            file_handler = logging.FileHandler(
-                self.log_file_path,
-                encoding='utf-8'
-            )
+            file_handler = logging.FileHandler(self.log_file_path, encoding="utf-8")
             file_handler.setLevel(logging.DEBUG)
 
             # Create formatter with timestamp
             formatter = logging.Formatter(
-                '[%(asctime)s] [%(levelname)s] %(name)s: %(message)s',
-                datefmt='%Y-%m-%d %H:%M:%S'
+                "[%(asctime)s] [%(levelname)s] %(name)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
             )
             file_handler.setFormatter(formatter)
 
@@ -173,7 +167,7 @@ class LoggingConfig:
                 file=tee_file,
                 force_terminal=True,  # Keep colors for terminal
                 legacy_windows=False,
-                width=MAX_CONSOLE_WIDTH
+                width=MAX_CONSOLE_WIDTH,
             )
 
             return self.tee_console
@@ -198,12 +192,17 @@ class LoggingConfig:
         # Format event data
         data_str = ", ".join(f"{k}={v}" for k, v in data.items())
 
-        logger.info(
-            f"[EVENT #{self._event_counter:03d}] {event_type}: {{{data_str}}}"
-        )
+        logger.info(f"[EVENT #{self._event_counter:03d}] {event_type}: {{{data_str}}}")
 
-    def log_dice_roll(self, notation: str, rolls: list, modifier: int, total: int,
-                      advantage: bool = False, disadvantage: bool = False) -> None:
+    def log_dice_roll(
+        self,
+        notation: str,
+        rolls: list,
+        modifier: int,
+        total: int,
+        advantage: bool = False,
+        disadvantage: bool = False,
+    ) -> None:
         """
         Log a dice roll with full details.
 
@@ -226,12 +225,11 @@ class LoggingConfig:
         elif disadvantage:
             adv_status = " (disadvantage)"
 
-        logger.info(
-            f"[DICE] {notation}{adv_status} → {rolls} + {modifier} = {total}"
-        )
+        logger.info(f"[DICE] {notation}{adv_status} → {rolls} + {modifier} = {total}")
 
-    def log_llm_call(self, prompt_type: str, latency_ms: float,
-                     response_length: int, success: bool = True) -> None:
+    def log_llm_call(
+        self, prompt_type: str, latency_ms: float, response_length: int, success: bool = True
+    ) -> None:
         """
         Log an LLM API call.
 

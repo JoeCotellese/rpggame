@@ -276,9 +276,21 @@ class TestCurrencyConsolidation:
         """Test that consolidating twice gives same result"""
         currency = Currency(copper=1234)
         currency.consolidate()
-        state_after_first = (currency.copper, currency.silver, currency.electrum, currency.gold, currency.platinum)
+        state_after_first = (
+            currency.copper,
+            currency.silver,
+            currency.electrum,
+            currency.gold,
+            currency.platinum,
+        )
         currency.consolidate()
-        state_after_second = (currency.copper, currency.silver, currency.electrum, currency.gold, currency.platinum)
+        state_after_second = (
+            currency.copper,
+            currency.silver,
+            currency.electrum,
+            currency.gold,
+            currency.platinum,
+        )
         assert state_after_first == state_after_second
 
 
@@ -335,7 +347,6 @@ class TestCurrencyComparison:
         assert c1 >= c2
         assert c3 >= c1
         assert not (c1 >= c3)
-
 
 
 class TestCurrencyDisplay:

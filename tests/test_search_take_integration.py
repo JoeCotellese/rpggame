@@ -20,15 +20,10 @@ def sample_characters():
         character_class=CharacterClass.FIGHTER,
         level=3,
         abilities=Abilities(
-            strength=16,
-            dexterity=12,
-            constitution=14,
-            intelligence=10,
-            wisdom=12,
-            charisma=8
+            strength=16, dexterity=12, constitution=14, intelligence=10, wisdom=12, charisma=8
         ),
         max_hp=28,
-        ac=18
+        ac=18,
     )
 
     wizard = Character(
@@ -36,15 +31,10 @@ def sample_characters():
         character_class=CharacterClass.WIZARD,
         level=3,
         abilities=Abilities(
-            strength=8,
-            dexterity=14,
-            constitution=12,
-            intelligence=16,
-            wisdom=13,
-            charisma=10
+            strength=8, dexterity=14, constitution=12, intelligence=16, wisdom=13, charisma=10
         ),
         max_hp=18,
-        ac=12
+        ac=12,
     )
 
     return [fighter, wizard]
@@ -56,7 +46,7 @@ def game_state_multi_char(sample_characters):
     party = Party(sample_characters)
     event_bus = EventBus()
 
-    with patch('dnd_engine.core.game_state.DataLoader') as mock_loader_class:
+    with patch("dnd_engine.core.game_state.DataLoader") as mock_loader_class:
         mock_loader = Mock()
         mock_loader.load_dungeon.return_value = {
             "name": "Test Dungeon",
@@ -69,73 +59,29 @@ def game_state_multi_char(sample_characters):
                     "searchable": True,
                     "searched": False,
                     "items": [
-                        {
-                            "type": "currency",
-                            "gold": 100,
-                            "silver": 50,
-                            "visible": True
-                        },
-                        {
-                            "type": "item",
-                            "id": "longsword",
-                            "visible": True
-                        },
-                        {
-                            "type": "item",
-                            "id": "scroll_of_magic_missile",
-                            "visible": False
-                        },
-                        {
-                            "type": "item",
-                            "id": "potion_of_healing",
-                            "visible": True
-                        },
-                        {
-                            "type": "item",
-                            "id": "ring_of_protection",
-                            "visible": False
-                        }
-                    ]
+                        {"type": "currency", "gold": 100, "silver": 50, "visible": True},
+                        {"type": "item", "id": "longsword", "visible": True},
+                        {"type": "item", "id": "scroll_of_magic_missile", "visible": False},
+                        {"type": "item", "id": "potion_of_healing", "visible": True},
+                        {"type": "item", "id": "ring_of_protection", "visible": False},
+                    ],
                 }
-            }
+            },
         }
         mock_loader.load_skills.return_value = {
-            "investigation": {
-                "name": "Investigation",
-                "ability": "intelligence"
-            }
+            "investigation": {"name": "Investigation", "ability": "intelligence"}
         }
         mock_loader.load_items.return_value = {
-            "weapons": {
-                "longsword": {
-                    "name": "Longsword",
-                    "type": "martial weapon"
-                }
-            },
+            "weapons": {"longsword": {"name": "Longsword", "type": "martial weapon"}},
             "consumables": {
-                "potion_of_healing": {
-                    "name": "Potion of Healing",
-                    "type": "potion"
-                },
-                "scroll_of_magic_missile": {
-                    "name": "Scroll of Magic Missile",
-                    "type": "scroll"
-                }
+                "potion_of_healing": {"name": "Potion of Healing", "type": "potion"},
+                "scroll_of_magic_missile": {"name": "Scroll of Magic Missile", "type": "scroll"},
             },
-            "armor": {
-                "ring_of_protection": {
-                    "name": "Ring of Protection",
-                    "type": "ring"
-                }
-            }
+            "armor": {"ring_of_protection": {"name": "Ring of Protection", "type": "ring"}},
         }
         mock_loader_class.return_value = mock_loader
 
-        game_state = GameState(
-            party=party,
-            dungeon_name="test_dungeon",
-            event_bus=event_bus
-        )
+        game_state = GameState(party=party, dungeon_name="test_dungeon", event_bus=event_bus)
 
     game_state.current_room_id = "treasure_room"
     return game_state

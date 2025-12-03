@@ -39,7 +39,7 @@ class TestCastSpellExploration:
             constitution=14,
             intelligence=8,
             wisdom=16,  # +3 modifier
-            charisma=12
+            charisma=12,
         )
 
     @pytest.fixture
@@ -56,21 +56,19 @@ class TestCastSpellExploration:
             ac=16,
             spellcasting_ability="wis",
             known_spells=["sacred_flame", "light", "cure_wounds", "detect_magic"],
-            prepared_spells=["sacred_flame", "light", "cure_wounds", "detect_magic"]
+            prepared_spells=["sacred_flame", "light", "cure_wounds", "detect_magic"],
         )
         # Set up spell slots using ResourcePools
-        cleric.add_resource_pool(ResourcePool(
-            name="spell_slots_level_1",
-            current=4,
-            maximum=4,
-            recovery_type="long_rest"
-        ))
-        cleric.add_resource_pool(ResourcePool(
-            name="spell_slots_level_2",
-            current=2,
-            maximum=2,
-            recovery_type="long_rest"
-        ))
+        cleric.add_resource_pool(
+            ResourcePool(
+                name="spell_slots_level_1", current=4, maximum=4, recovery_type="long_rest"
+            )
+        )
+        cleric.add_resource_pool(
+            ResourcePool(
+                name="spell_slots_level_2", current=2, maximum=2, recovery_type="long_rest"
+            )
+        )
         return cleric
 
     @pytest.fixture
@@ -82,13 +80,15 @@ class TestCastSpellExploration:
             level=3,
             abilities=Abilities(16, 14, 15, 10, 12, 8),
             max_hp=25,
-            ac=18
+            ac=18,
         )
         fighter.current_hp = 10  # Injured
         return fighter
 
     @pytest.fixture
-    def game_state_with_party(self, cleric_with_spells, injured_fighter, event_bus, data_loader, dice_roller):
+    def game_state_with_party(
+        self, cleric_with_spells, injured_fighter, event_bus, data_loader, dice_roller
+    ):
         """Create game state with a party"""
         party = Party([cleric_with_spells, injured_fighter])
         game_state = GameState(
@@ -96,7 +96,7 @@ class TestCastSpellExploration:
             dungeon_name="test_dungeon",
             event_bus=event_bus,
             data_loader=data_loader,
-            dice_roller=dice_roller
+            dice_roller=dice_roller,
         )
         return game_state
 
@@ -104,15 +104,15 @@ class TestCastSpellExploration:
         """Test successfully casting a healing spell"""
         # Track events
         events_received = []
+
         def event_handler(event):
             events_received.append(event)
+
         event_bus.subscribe(EventType.SPELL_CAST, event_handler)
 
         # Cast cure wounds on injured fighter
         result = game_state_with_party.cast_spell_exploration(
-            caster_name="Brother Marcus",
-            spell_id="cure_wounds",
-            target_name="Bruenor"
+            caster_name="Brother Marcus", spell_id="cure_wounds", target_name="Bruenor"
         )
 
         # Verify success
@@ -137,9 +137,7 @@ class TestCastSpellExploration:
         initial_hp = fighter.current_hp
 
         result = game_state_with_party.cast_spell_exploration(
-            caster_name="Brother Marcus",
-            spell_id="cure_wounds",
-            target_name="Bruenor"
+            caster_name="Brother Marcus", spell_id="cure_wounds", target_name="Bruenor"
         )
 
         assert result["success"] is True
@@ -152,9 +150,7 @@ class TestCastSpellExploration:
         initial_slots = cleric.get_available_spell_slots(1)
 
         result = game_state_with_party.cast_spell_exploration(
-            caster_name="Brother Marcus",
-            spell_id="cure_wounds",
-            target_name="Bruenor"
+            caster_name="Brother Marcus", spell_id="cure_wounds", target_name="Bruenor"
         )
 
         assert result["success"] is True
@@ -167,8 +163,7 @@ class TestCastSpellExploration:
         initial_slots_level2 = cleric.get_available_spell_slots(2)
 
         result = game_state_with_party.cast_spell_exploration(
-            caster_name="Brother Marcus",
-            spell_id="light"
+            caster_name="Brother Marcus", spell_id="light"
         )
 
         assert result["success"] is True
@@ -178,8 +173,7 @@ class TestCastSpellExploration:
     def test_utility_spell_returns_description(self, game_state_with_party):
         """Test that utility spells return flavor text"""
         result = game_state_with_party.cast_spell_exploration(
-            caster_name="Brother Marcus",
-            spell_id="light"
+            caster_name="Brother Marcus", spell_id="light"
         )
 
         assert result["success"] is True
@@ -191,7 +185,7 @@ class TestCastSpellExploration:
         """Test that healing spells require a target"""
         result = game_state_with_party.cast_spell_exploration(
             caster_name="Brother Marcus",
-            spell_id="cure_wounds"
+            spell_id="cure_wounds",
             # No target_name provided
         )
 
@@ -202,9 +196,7 @@ class TestCastSpellExploration:
     def test_nonexistent_caster_fails(self, game_state_with_party):
         """Test that casting with invalid caster name fails"""
         result = game_state_with_party.cast_spell_exploration(
-            caster_name="Nonexistent Wizard",
-            spell_id="cure_wounds",
-            target_name="Bruenor"
+            caster_name="Nonexistent Wizard", spell_id="cure_wounds", target_name="Bruenor"
         )
 
         assert result["success"] is False
@@ -214,9 +206,7 @@ class TestCastSpellExploration:
     def test_nonexistent_target_fails(self, game_state_with_party):
         """Test that healing nonexistent target fails"""
         result = game_state_with_party.cast_spell_exploration(
-            caster_name="Brother Marcus",
-            spell_id="cure_wounds",
-            target_name="Nonexistent Fighter"
+            caster_name="Brother Marcus", spell_id="cure_wounds", target_name="Nonexistent Fighter"
         )
 
         assert result["success"] is False
@@ -228,7 +218,7 @@ class TestCastSpellExploration:
         result = game_state_with_party.cast_spell_exploration(
             caster_name="Brother Marcus",
             spell_id="fireball",  # Cleric doesn't know this
-            target_name="Bruenor"
+            target_name="Bruenor",
         )
 
         assert result["success"] is False
@@ -243,9 +233,7 @@ class TestCastSpellExploration:
         pool.current = 0
 
         result = game_state_with_party.cast_spell_exploration(
-            caster_name="Brother Marcus",
-            spell_id="cure_wounds",
-            target_name="Bruenor"
+            caster_name="Brother Marcus", spell_id="cure_wounds", target_name="Bruenor"
         )
 
         assert result["success"] is False
@@ -258,9 +246,7 @@ class TestCastSpellExploration:
         fighter.current_hp = fighter.max_hp - 2  # Almost full
 
         result = game_state_with_party.cast_spell_exploration(
-            caster_name="Brother Marcus",
-            spell_id="cure_wounds",
-            target_name="Bruenor"
+            caster_name="Brother Marcus", spell_id="cure_wounds", target_name="Bruenor"
         )
 
         assert result["success"] is True
@@ -273,9 +259,7 @@ class TestCastSpellExploration:
         wisdom_modifier = cleric.abilities.wis_mod
 
         result = game_state_with_party.cast_spell_exploration(
-            caster_name="Brother Marcus",
-            spell_id="cure_wounds",
-            target_name="Bruenor"
+            caster_name="Brother Marcus", spell_id="cure_wounds", target_name="Bruenor"
         )
 
         assert result["success"] is True
@@ -285,8 +269,7 @@ class TestCastSpellExploration:
     def test_nonexistent_spell_data_fails(self, game_state_with_party):
         """Test that spell ID not in spells.json fails"""
         result = game_state_with_party.cast_spell_exploration(
-            caster_name="Brother Marcus",
-            spell_id="totally_fake_spell"
+            caster_name="Brother Marcus", spell_id="totally_fake_spell"
         )
 
         assert result["success"] is False
@@ -300,8 +283,7 @@ class TestCastSpellExploration:
 
         # Detect Magic is a ritual but we're not implementing ritual casting yet
         result = game_state_with_party.cast_spell_exploration(
-            caster_name="Brother Marcus",
-            spell_id="detect_magic"
+            caster_name="Brother Marcus", spell_id="detect_magic"
         )
 
         assert result["success"] is True
@@ -316,7 +298,7 @@ class TestCastSpellExploration:
         result = game_state_with_party.cast_spell_exploration(
             caster_name="Brother Marcus",
             spell_id="cure_wounds",
-            target_name="Brother Marcus"  # Self-target
+            target_name="Brother Marcus",  # Self-target
         )
 
         assert result["success"] is True
@@ -325,13 +307,14 @@ class TestCastSpellExploration:
     def test_event_data_for_utility_spell(self, game_state_with_party, event_bus):
         """Test that utility spells emit proper event data"""
         events_received = []
+
         def event_handler(event):
             events_received.append(event)
+
         event_bus.subscribe(EventType.SPELL_CAST, event_handler)
 
         result = game_state_with_party.cast_spell_exploration(
-            caster_name="Brother Marcus",
-            spell_id="light"
+            caster_name="Brother Marcus", spell_id="light"
         )
 
         assert result["success"] is True

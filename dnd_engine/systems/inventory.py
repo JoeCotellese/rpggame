@@ -10,6 +10,7 @@ from dnd_engine.systems.currency import Currency
 
 class EquipmentSlot(Enum):
     """Equipment slots for weapons and armor"""
+
     WEAPON = "weapon"
     ARMOR = "armor"
 
@@ -22,6 +23,7 @@ class InventoryItem:
     Items are stored by ID referencing the items.json data.
     The item category determines where to look up full item data.
     """
+
     item_id: str
     category: str  # "weapons", "armor", "consumables"
     quantity: int = 1
@@ -59,16 +61,12 @@ class Inventory:
         self.items: dict[str, InventoryItem] = {}  # item_id -> InventoryItem
         self.equipped: dict[EquipmentSlot, str | None] = {
             EquipmentSlot.WEAPON: None,
-            EquipmentSlot.ARMOR: None
+            EquipmentSlot.ARMOR: None,
         }
         self.currency: Currency = Currency()
 
     def add_item(
-        self,
-        item_id: str,
-        category: str,
-        quantity: int = 1,
-        quest_item: bool = False
+        self, item_id: str, category: str, quantity: int = 1, quest_item: bool = False
     ) -> bool:
         """
         Add an item to the inventory.
@@ -102,10 +100,7 @@ class Inventory:
 
         # Add new item
         self.items[item_id] = InventoryItem(
-            item_id=item_id,
-            category=category,
-            quantity=quantity,
-            quest_item=quest_item
+            item_id=item_id, category=category, quantity=quantity, quest_item=quest_item
         )
         return True
 
@@ -159,10 +154,7 @@ class Inventory:
         Returns:
             List of item IDs that were removed
         """
-        quest_item_ids = [
-            item_id for item_id, item in self.items.items()
-            if item.quest_item
-        ]
+        quest_item_ids = [item_id for item_id, item in self.items.items() if item.quest_item]
 
         for item_id in quest_item_ids:
             # Unequip if it was equipped
@@ -397,7 +389,9 @@ class Inventory:
 
         return total
 
-    def use_item(self, item_id: str, item_data: dict[str, dict[str, Any]]) -> tuple[bool, dict[str, Any] | None]:
+    def use_item(
+        self, item_id: str, item_data: dict[str, dict[str, Any]]
+    ) -> tuple[bool, dict[str, Any] | None]:
         """
         Use a consumable item from inventory.
 
@@ -447,9 +441,7 @@ class Inventory:
         return True, item_info
 
     def get_compatible_ammo(
-        self,
-        weapon_id: str,
-        items_data: dict[str, dict[str, Any]]
+        self, weapon_id: str, items_data: dict[str, dict[str, Any]]
     ) -> str | None:
         """
         Find compatible ammunition for a weapon in inventory.

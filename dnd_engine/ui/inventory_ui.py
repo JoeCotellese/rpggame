@@ -92,9 +92,7 @@ class InventoryUI:
 
         try:
             result = questionary.select(
-                "Select a character:",
-                choices=choices,
-                use_arrow_keys=True
+                "Select a character:", choices=choices, use_arrow_keys=True
             ).ask()
             if result == "__BACK__" or result is None:
                 return None
@@ -126,7 +124,7 @@ class InventoryUI:
             result = questionary.select(
                 f"{char.name}'s Inventory ({gold} GP, {hp_str}):",
                 choices=choices,
-                use_arrow_keys=True
+                use_arrow_keys=True,
             ).ask()
             return result or "exit"
         except (EOFError, KeyboardInterrupt):
@@ -152,7 +150,9 @@ class InventoryUI:
         lines.append("[bold cyan]EQUIPPED:[/bold cyan]")
         if equipped_weapon:
             weapon_data = self._get_item_data(equipped_weapon, "weapons")
-            weapon_name = weapon_data.get("name", equipped_weapon) if weapon_data else equipped_weapon
+            weapon_name = (
+                weapon_data.get("name", equipped_weapon) if weapon_data else equipped_weapon
+            )
             weapon_info = self._get_weapon_info(weapon_data) if weapon_data else ""
             lines.append(f"  Weapon: {weapon_name} {weapon_info}")
         else:
@@ -175,7 +175,9 @@ class InventoryUI:
             for inv_item in weapons:
                 item_data = self._get_item_data(inv_item.item_id, "weapons")
                 name = item_data.get("name", inv_item.item_id) if item_data else inv_item.item_id
-                equipped_marker = " [green][equipped][/green]" if inv_item.item_id == equipped_weapon else ""
+                equipped_marker = (
+                    " [green][equipped][/green]" if inv_item.item_id == equipped_weapon else ""
+                )
                 prof_marker = self._get_proficiency_marker(char, inv_item.item_id, "weapon")
                 qty_str = f" (x{inv_item.quantity})" if inv_item.quantity > 1 else ""
                 lines.append(f"  {name}{qty_str}{equipped_marker}{prof_marker}")
@@ -188,7 +190,9 @@ class InventoryUI:
             for inv_item in armor_items:
                 item_data = self._get_item_data(inv_item.item_id, "armor")
                 name = item_data.get("name", inv_item.item_id) if item_data else inv_item.item_id
-                equipped_marker = " [green][equipped][/green]" if inv_item.item_id == equipped_armor else ""
+                equipped_marker = (
+                    " [green][equipped][/green]" if inv_item.item_id == equipped_armor else ""
+                )
                 prof_marker = self._get_proficiency_marker(char, inv_item.item_id, "armor")
                 lines.append(f"  {name}{equipped_marker}{prof_marker}")
             lines.append("")
@@ -217,7 +221,7 @@ class InventoryUI:
             title=f"[bold white]{char.name}'s Items[/bold white]",
             subtitle=f"[dim]Gold: {inventory.gold} GP[/dim]",
             border_style="cyan",
-            padding=(1, 2)
+            padding=(1, 2),
         )
         console.print(panel)
 
@@ -240,30 +244,26 @@ class InventoryUI:
             weapon_name = "None"
             if equipped_weapon:
                 weapon_data = self._get_item_data(equipped_weapon, "weapons")
-                weapon_name = weapon_data.get("name", equipped_weapon) if weapon_data else equipped_weapon
+                weapon_name = (
+                    weapon_data.get("name", equipped_weapon) if weapon_data else equipped_weapon
+                )
 
             armor_name = "None"
             if equipped_armor:
                 armor_data = self._get_item_data(equipped_armor, "armor")
-                armor_name = armor_data.get("name", equipped_armor) if armor_data else equipped_armor
+                armor_name = (
+                    armor_data.get("name", equipped_armor) if armor_data else equipped_armor
+                )
 
             choices = [
-                questionary.Choice(
-                    title=f"Change Weapon (current: {weapon_name})",
-                    value="weapon"
-                ),
-                questionary.Choice(
-                    title=f"Change Armor (current: {armor_name})",
-                    value="armor"
-                ),
+                questionary.Choice(title=f"Change Weapon (current: {weapon_name})", value="weapon"),
+                questionary.Choice(title=f"Change Armor (current: {armor_name})", value="armor"),
                 questionary.Choice(title="← Back", value="__BACK__"),
             ]
 
             try:
                 action = questionary.select(
-                    f"Manage Equipment - {char.name}:",
-                    choices=choices,
-                    use_arrow_keys=True
+                    f"Manage Equipment - {char.name}:", choices=choices, use_arrow_keys=True
                 ).ask()
             except (EOFError, KeyboardInterrupt):
                 return
@@ -308,10 +308,7 @@ class InventoryUI:
 
         # Add unequip option if something is equipped
         if currently_equipped:
-            choices.append(questionary.Choice(
-                title=f"Unequip {slot_name}",
-                value="__UNEQUIP__"
-            ))
+            choices.append(questionary.Choice(title=f"Unequip {slot_name}", value="__UNEQUIP__"))
 
         choices.append(questionary.Choice(title="← Cancel", value="__CANCEL__"))
 
@@ -321,9 +318,7 @@ class InventoryUI:
 
         try:
             selected = questionary.select(
-                f"Select {slot_name} for {char.name}:",
-                choices=choices,
-                use_arrow_keys=True
+                f"Select {slot_name} for {char.name}:", choices=choices, use_arrow_keys=True
             ).ask()
         except (EOFError, KeyboardInterrupt):
             return
@@ -385,12 +380,7 @@ class InventoryUI:
             return f"[dim](AC {ac})[/dim]"
         return ""
 
-    def _get_proficiency_marker(
-        self,
-        char: Character,
-        item_id: str,
-        item_type: str
-    ) -> str:
+    def _get_proficiency_marker(self, char: Character, item_id: str, item_type: str) -> str:
         """
         Get proficiency marker for an item (Rich markup version for panels).
 
@@ -417,12 +407,7 @@ class InventoryUI:
 
         return ""
 
-    def _get_proficiency_marker_plain(
-        self,
-        char: Character,
-        item_id: str,
-        item_type: str
-    ) -> str:
+    def _get_proficiency_marker_plain(self, char: Character, item_id: str, item_type: str) -> str:
         """
         Get proficiency marker for an item (plain text version for questionary).
 

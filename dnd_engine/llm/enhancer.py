@@ -25,10 +25,7 @@ class LLMEnhancer:
     """
 
     def __init__(
-        self,
-        provider: LLMProvider | None,
-        event_bus: EventBus,
-        enable_cache: bool = True
+        self, provider: LLMProvider | None, event_bus: EventBus, enable_cache: bool = True
     ) -> None:
         """
         Initialize LLM enhancer.
@@ -53,17 +50,12 @@ class LLMEnhancer:
             # Subscribe to events
             # NOTE: DAMAGE_DEALT and CHARACTER_DEATH are now handled synchronously
             # in CLI via get_combat_narrative_sync() and get_death_narrative_sync()
-            self.event_bus.subscribe(
-                EventType.ROOM_ENTER,
-                self._handle_room_enter
-            )
-            self.event_bus.subscribe(
-                EventType.COMBAT_END,
-                self._handle_victory
-            )
+            self.event_bus.subscribe(EventType.ROOM_ENTER, self._handle_room_enter)
+            self.event_bus.subscribe(EventType.COMBAT_END, self._handle_victory)
 
     def _start_event_loop(self) -> None:
         """Start background thread with event loop for async tasks."""
+
         def run_loop():
             self._loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self._loop)
@@ -157,10 +149,10 @@ class LLMEnhancer:
             return
 
         room_data = event.data
-        combat_starting = room_data.get('combat_starting', False)
-        monsters = room_data.get('monsters', [])
-        monsters_data = room_data.get('monsters_data')
-        party_size = room_data.get('party_size', 1)
+        combat_starting = room_data.get("combat_starting", False)
+        monsters = room_data.get("monsters", [])
+        monsters_data = room_data.get("monsters_data")
+        party_size = room_data.get("party_size", 1)
 
         # Build cache key that includes monster presence, lighting, and room transition state
         # to avoid stale descriptions after combat ends, lighting changes, or when re-examining a room
@@ -170,7 +162,7 @@ class LLMEnhancer:
             monster_suffix = f"_combat_{len(monsters)}_monsters"
 
         # Include party lighting state in cache key (use best available lighting)
-        party_lighting = room_data.get('party_lighting', [])
+        party_lighting = room_data.get("party_lighting", [])
         lighting_state = "dark"
         for char_lighting in party_lighting:
             if char_lighting.get("lighting") == "bright":
@@ -180,8 +172,8 @@ class LLMEnhancer:
                 lighting_state = "dim"
 
         # Detect room transition
-        room_id = room_data.get('id', 'unknown')
-        previous_room_id = room_data.get('previous_room_id')
+        room_id = room_data.get("id", "unknown")
+        previous_room_id = room_data.get("previous_room_id")
         is_entering = previous_room_id != room_id if previous_room_id is not None else True
         transition_suffix = "_entering" if is_entering else "_looking"
 
@@ -196,7 +188,7 @@ class LLMEnhancer:
                 room_data,
                 combat_starting=combat_starting,
                 monsters_data=monsters_data,
-                party_size=party_size
+                party_size=party_size,
             )
             start_time = time.time()
             enhanced = await self.provider.generate(prompt)
@@ -204,13 +196,14 @@ class LLMEnhancer:
 
             # Log LLM call
             from ..utils.logging_config import get_logging_config
+
             logging_config = get_logging_config()
             if logging_config:
                 logging_config.log_llm_call(
                     prompt_type="room_description",
                     latency_ms=latency_ms,
                     response_length=len(enhanced) if enhanced else 0,
-                    success=bool(enhanced)
+                    success=bool(enhanced),
                 )
 
             # Fallback if generation failed
@@ -222,10 +215,9 @@ class LLMEnhancer:
                 self.cache[cache_key] = enhanced
 
         # Emit enhanced description
-        self.event_bus.emit(Event(
-            EventType.DESCRIPTION_ENHANCED,
-            {"type": "room", "text": enhanced}
-        ))
+        self.event_bus.emit(
+            Event(EventType.DESCRIPTION_ENHANCED, {"type": "room", "text": enhanced})
+        )
 
     async def _enhance_combat_action(self, event: Event) -> None:
         """
@@ -238,10 +230,7 @@ class LLMEnhancer:
             return
 
         # Emit started event immediately
-        self.event_bus.emit(Event(
-            EventType.ENHANCEMENT_STARTED,
-            {"type": "combat"}
-        ))
+        self.event_bus.emit(Event(EventType.ENHANCEMENT_STARTED, {"type": "combat"}))
 
         action_data = event.data
         prompt = build_combat_action_prompt(action_data)
@@ -253,13 +242,14 @@ class LLMEnhancer:
 
         # Log LLM call
         from ..utils.logging_config import get_logging_config
+
         logging_config = get_logging_config()
         if logging_config:
             logging_config.log_llm_call(
                 prompt_type="combat_action",
                 latency_ms=latency_ms,
                 response_length=len(enhanced) if enhanced else 0,
-                success=bool(enhanced)
+                success=bool(enhanced),
             )
 
         # Fallback
@@ -270,10 +260,9 @@ class LLMEnhancer:
             enhanced = f"{attacker} strikes {target} for {damage} damage!"
 
         # Emit enhanced narration
-        self.event_bus.emit(Event(
-            EventType.DESCRIPTION_ENHANCED,
-            {"type": "combat", "text": enhanced}
-        ))
+        self.event_bus.emit(
+            Event(EventType.DESCRIPTION_ENHANCED, {"type": "combat", "text": enhanced})
+        )
 
     async def _enhance_victory(self, event: Event) -> None:
         """
@@ -295,23 +284,23 @@ class LLMEnhancer:
 
         # Log LLM call
         from ..utils.logging_config import get_logging_config
+
         logging_config = get_logging_config()
         if logging_config:
             logging_config.log_llm_call(
                 prompt_type="victory",
                 latency_ms=latency_ms,
                 response_length=len(enhanced) if enhanced else 0,
-                success=bool(enhanced)
+                success=bool(enhanced),
             )
 
         # Fallback
         if not enhanced:
             enhanced = "Victory! The enemies have been defeated."
 
-        self.event_bus.emit(Event(
-            EventType.DESCRIPTION_ENHANCED,
-            {"type": "victory", "text": enhanced}
-        ))
+        self.event_bus.emit(
+            Event(EventType.DESCRIPTION_ENHANCED, {"type": "victory", "text": enhanced})
+        )
 
     async def _enhance_death(self, event: Event) -> None:
         """
@@ -324,10 +313,7 @@ class LLMEnhancer:
             return
 
         # Emit started event immediately
-        self.event_bus.emit(Event(
-            EventType.ENHANCEMENT_STARTED,
-            {"type": "death"}
-        ))
+        self.event_bus.emit(Event(EventType.ENHANCEMENT_STARTED, {"type": "death"}))
 
         character_data = event.data
         prompt = build_death_prompt(character_data)
@@ -339,13 +325,14 @@ class LLMEnhancer:
 
         # Log LLM call
         from ..utils.logging_config import get_logging_config
+
         logging_config = get_logging_config()
         if logging_config:
             logging_config.log_llm_call(
                 prompt_type="death",
                 latency_ms=latency_ms,
                 response_length=len(enhanced) if enhanced else 0,
-                success=bool(enhanced)
+                success=bool(enhanced),
             )
 
         # Fallback
@@ -353,10 +340,9 @@ class LLMEnhancer:
             name = character_data.get("name", "The hero")
             enhanced = f"{name} has fallen..."
 
-        self.event_bus.emit(Event(
-            EventType.DESCRIPTION_ENHANCED,
-            {"type": "death", "text": enhanced}
-        ))
+        self.event_bus.emit(
+            Event(EventType.DESCRIPTION_ENHANCED, {"type": "death", "text": enhanced})
+        )
 
     # Public synchronous API for blocking narrative generation
 
@@ -383,13 +369,14 @@ class LLMEnhancer:
 
             # Log LLM call
             from ..utils.logging_config import get_logging_config
+
             logging_config = get_logging_config()
             if logging_config:
                 logging_config.log_llm_call(
                     prompt_type="combat_action",
                     latency_ms=latency_ms,
                     response_length=len(result) if result else 0,
-                    success=bool(result)
+                    success=bool(result),
                 )
 
             return result
@@ -419,13 +406,14 @@ class LLMEnhancer:
 
             # Log LLM call
             from ..utils.logging_config import get_logging_config
+
             logging_config = get_logging_config()
             if logging_config:
                 logging_config.log_llm_call(
                     prompt_type="death",
                     latency_ms=latency_ms,
                     response_length=len(result) if result else 0,
-                    success=bool(result)
+                    success=bool(result),
                 )
 
             return result
@@ -446,10 +434,10 @@ class LLMEnhancer:
         if not self.provider:
             return None
 
-        combat_starting = room_data.get('combat_starting', False)
-        monsters = room_data.get('monsters', [])
-        monsters_data = room_data.get('monsters_data')
-        party_size = room_data.get('party_size', 1)
+        combat_starting = room_data.get("combat_starting", False)
+        monsters = room_data.get("monsters", [])
+        monsters_data = room_data.get("monsters_data")
+        party_size = room_data.get("party_size", 1)
 
         # Build cache key that includes monster presence, lighting, and room transition state
         # to avoid stale descriptions after combat ends, lighting changes, or when re-examining a room
@@ -459,7 +447,7 @@ class LLMEnhancer:
             monster_suffix = f"_combat_{len(monsters)}_monsters"
 
         # Include party lighting state in cache key (use best available lighting)
-        party_lighting = room_data.get('party_lighting', [])
+        party_lighting = room_data.get("party_lighting", [])
         lighting_state = "dark"
         for char_lighting in party_lighting:
             if char_lighting.get("lighting") == "bright":
@@ -469,8 +457,8 @@ class LLMEnhancer:
                 lighting_state = "dim"
 
         # Detect room transition
-        room_id = room_data.get('id', 'unknown')
-        previous_room_id = room_data.get('previous_room_id')
+        room_id = room_data.get("id", "unknown")
+        previous_room_id = room_data.get("previous_room_id")
         is_entering = previous_room_id != room_id if previous_room_id is not None else True
         transition_suffix = "_entering" if is_entering else "_looking"
 
@@ -483,7 +471,7 @@ class LLMEnhancer:
             room_data,
             combat_starting=combat_starting,
             monsters_data=monsters_data,
-            party_size=party_size
+            party_size=party_size,
         )
 
         async def generate():
@@ -493,13 +481,14 @@ class LLMEnhancer:
 
             # Log LLM call
             from ..utils.logging_config import get_logging_config
+
             logging_config = get_logging_config()
             if logging_config:
                 logging_config.log_llm_call(
                     prompt_type="room_description",
                     latency_ms=latency_ms,
                     response_length=len(result) if result else 0,
-                    success=bool(result)
+                    success=bool(result),
                 )
 
             # Cache the result
@@ -510,7 +499,9 @@ class LLMEnhancer:
 
         return self._run_sync(generate(), timeout=timeout)
 
-    def get_combat_start_narrative_sync(self, combat_data: dict, timeout: float = 20.0) -> str | None:
+    def get_combat_start_narrative_sync(
+        self, combat_data: dict, timeout: float = 20.0
+    ) -> str | None:
         """
         Generate combat start narrative synchronously with timeout.
 
@@ -533,13 +524,14 @@ class LLMEnhancer:
 
             # Log LLM call
             from ..utils.logging_config import get_logging_config
+
             logging_config = get_logging_config()
             if logging_config:
                 logging_config.log_llm_call(
                     prompt_type="combat_start",
                     latency_ms=latency_ms,
                     response_length=len(result) if result else 0,
-                    success=bool(result)
+                    success=bool(result),
                 )
 
             return result

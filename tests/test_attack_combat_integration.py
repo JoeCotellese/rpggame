@@ -36,7 +36,7 @@ def dex_fighter():
         constitution=14,
         intelligence=10,
         wisdom=12,
-        charisma=10
+        charisma=10,
     )
     fighter = Character(
         name="Archer",
@@ -46,7 +46,7 @@ def dex_fighter():
         max_hp=12,
         ac=10,
         weapon_proficiencies=["simple", "martial"],
-        armor_proficiencies=["light", "medium", "heavy", "shields"]
+        armor_proficiencies=["light", "medium", "heavy", "shields"],
     )
     # Equip longbow
     fighter.inventory.add_item("longbow", "weapons", 1)
@@ -63,7 +63,7 @@ def str_fighter():
         constitution=14,
         intelligence=10,
         wisdom=12,
-        charisma=10
+        charisma=10,
     )
     fighter = Character(
         name="Swordmaster",
@@ -73,7 +73,7 @@ def str_fighter():
         max_hp=12,
         ac=10,
         weapon_proficiencies=["simple", "martial"],
-        armor_proficiencies=["light", "medium", "heavy", "shields"]
+        armor_proficiencies=["light", "medium", "heavy", "shields"],
     )
     # Equip longsword
     fighter.inventory.add_item("longsword", "weapons", 1)
@@ -90,7 +90,7 @@ def finesse_fighter():
         constitution=14,
         intelligence=10,
         wisdom=12,
-        charisma=10
+        charisma=10,
     )
     fighter = Character(
         name="Duelist",
@@ -100,7 +100,7 @@ def finesse_fighter():
         max_hp=12,
         ac=10,
         weapon_proficiencies=["simple", "martial"],
-        armor_proficiencies=["light", "medium", "heavy", "shields"]
+        armor_proficiencies=["light", "medium", "heavy", "shields"],
     )
     # Equip rapier (doesn't exist in items.json but shortsword is finesse)
     fighter.inventory.add_item("shortsword", "weapons", 1)
@@ -112,27 +112,15 @@ def finesse_fighter():
 def enemy():
     """Create a generic enemy for testing"""
     abilities = Abilities(
-        strength=10,
-        dexterity=10,
-        constitution=11,
-        intelligence=3,
-        wisdom=10,
-        charisma=3
+        strength=10, dexterity=10, constitution=11, intelligence=3, wisdom=10, charisma=3
     )
-    return Creature(
-        name="Goblin",
-        max_hp=7,
-        ac=15,
-        abilities=abilities
-    )
+    return Creature(name="Goblin", max_hp=7, ac=15, abilities=abilities)
 
 
 class TestRangedAttackInCombat:
     """Integration tests for ranged combat"""
 
-    def test_dex_fighter_ranged_attack(
-        self, dex_fighter, enemy, items_data, combat_engine
-    ):
+    def test_dex_fighter_ranged_attack(self, dex_fighter, enemy, items_data, combat_engine):
         """Verify DEX fighter can make effective ranged attack"""
         # Get attack bonus using DEX
         attack_bonus = dex_fighter.get_attack_bonus("longbow", items_data)
@@ -144,16 +132,14 @@ class TestRangedAttackInCombat:
             defender=enemy,
             attack_bonus=attack_bonus,
             damage_dice="1d8+3",
-            apply_damage=False  # Don't apply damage yet
+            apply_damage=False,  # Don't apply damage yet
         )
 
         # Attack should hit more often with DEX-based roll
         assert result.attacker_name == "Archer"
         assert result.defender_name == "Goblin"
 
-    def test_dex_fighter_ranged_damage_uses_dex(
-        self, dex_fighter, items_data
-    ):
+    def test_dex_fighter_ranged_damage_uses_dex(self, dex_fighter, items_data):
         """Verify ranged damage bonus uses DEX"""
         damage_bonus = dex_fighter.get_damage_bonus("longbow", items_data)
         assert damage_bonus == 3  # DEX modifier
@@ -174,18 +160,14 @@ class TestRangedAttackInCombat:
 class TestFinesseAttackInCombat:
     """Integration tests for finesse weapon combat"""
 
-    def test_finesse_fighter_uses_higher_ability(
-        self, finesse_fighter, items_data
-    ):
+    def test_finesse_fighter_uses_higher_ability(self, finesse_fighter, items_data):
         """Verify finesse fighter uses highest of STR/DEX"""
         # Finesse fighter has DEX +3, STR +1
         attack_bonus = finesse_fighter.get_attack_bonus("shortsword", items_data)
         # Should use DEX: +3 + 2 (prof) = 5
         assert attack_bonus == 5
 
-    def test_finesse_damage_bonus_uses_higher_ability(
-        self, finesse_fighter, items_data
-    ):
+    def test_finesse_damage_bonus_uses_higher_ability(self, finesse_fighter, items_data):
         """Verify finesse weapon uses higher of STR/DEX for damage"""
         # Finesse fighter has DEX +3, STR +1
         damage_bonus = finesse_fighter.get_damage_bonus("shortsword", items_data)
@@ -196,9 +178,7 @@ class TestFinesseAttackInCombat:
 class TestMeleeAttackInCombat:
     """Integration tests for melee combat"""
 
-    def test_str_fighter_melee_attack(
-        self, str_fighter, enemy, items_data, combat_engine
-    ):
+    def test_str_fighter_melee_attack(self, str_fighter, enemy, items_data, combat_engine):
         """Verify STR fighter makes effective melee attack"""
         attack_bonus = str_fighter.get_attack_bonus("longsword", items_data)
         assert attack_bonus == 5  # +3 (STR) + 2 (prof)
@@ -208,7 +188,7 @@ class TestMeleeAttackInCombat:
             defender=enemy,
             attack_bonus=attack_bonus,
             damage_dice="1d8+3",
-            apply_damage=False
+            apply_damage=False,
         )
 
         assert result.attacker_name == "Swordmaster"
@@ -285,16 +265,18 @@ class TestBackwardCompatibilityInCombat:
         assert str_fighter.melee_attack_bonus == 5
         assert str_fighter.melee_damage_bonus == 3
 
-    def test_wizard_with_negative_str_generates_valid_dice_notation(self, combat_engine, items_data):
+    def test_wizard_with_negative_str_generates_valid_dice_notation(
+        self, combat_engine, items_data
+    ):
         """Test that wizard with negative STR modifier generates valid dice notation (1d8-1 not 1d8+-1)"""
         # Create a wizard with low STR (typical for spellcasters)
         abilities = Abilities(
-            strength=8,   # -1 modifier
+            strength=8,  # -1 modifier
             dexterity=14,  # +2 modifier
             constitution=12,
             intelligence=16,
             wisdom=10,
-            charisma=10
+            charisma=10,
         )
         wizard = Character(
             name="Tim",
@@ -304,7 +286,7 @@ class TestBackwardCompatibilityInCombat:
             max_hp=7,
             ac=12,
             weapon_proficiencies=["simple"],
-            armor_proficiencies=[]
+            armor_proficiencies=[],
         )
 
         # Create a goblin target
@@ -313,13 +295,8 @@ class TestBackwardCompatibilityInCombat:
             max_hp=7,
             ac=15,
             abilities=Abilities(
-                strength=8,
-                dexterity=14,
-                constitution=10,
-                intelligence=10,
-                wisdom=8,
-                charisma=8
-            )
+                strength=8, dexterity=14, constitution=10, intelligence=10, wisdom=8, charisma=8
+            ),
         )
 
         # Verify wizard has negative damage bonus
@@ -340,7 +317,7 @@ class TestBackwardCompatibilityInCombat:
             defender=goblin,
             attack_bonus=wizard.melee_attack_bonus,
             damage_dice=damage_dice,
-            apply_damage=False  # Don't actually apply damage, just test notation
+            apply_damage=False,  # Don't actually apply damage, just test notation
         )
 
         # If we got here without raising ValueError, the notation was valid

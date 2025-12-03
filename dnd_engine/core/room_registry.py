@@ -41,9 +41,7 @@ class RoomRegistry:
         elif campaign_id and content_path:
             self.dungeons_path = content_path / "campaigns" / campaign_id / "dungeons"
         else:
-            raise ValueError(
-                "Must provide either dungeons_path or (campaign_id + content_path)"
-            )
+            raise ValueError("Must provide either dungeons_path or (campaign_id + content_path)")
 
         # Maps room GUID prefix to dungeon filename (without .json)
         self._prefix_to_dungeon: dict[str, str] = {}

@@ -19,7 +19,7 @@ def basic_abilities():
         constitution=10,
         intelligence=10,
         wisdom=14,  # +2 modifier for Perception
-        charisma=10
+        charisma=10,
     )
 
 
@@ -34,7 +34,7 @@ def human_character(basic_abilities):
         max_hp=12,
         ac=16,
         race="human",
-        skill_proficiencies=["perception"]
+        skill_proficiencies=["perception"],
     )
     char.darkvision_range = 0  # Humans have no darkvision
     return char
@@ -51,7 +51,7 @@ def dwarf_character(basic_abilities):
         max_hp=14,
         ac=16,
         race="mountain_dwarf",
-        skill_proficiencies=["perception"]
+        skill_proficiencies=["perception"],
     )
     char.darkvision_range = 60  # Dwarves have 60 ft darkvision
     return char
@@ -212,9 +212,9 @@ class TestPerceptionPenalties:
                     "dc": 12,
                     "trigger": "on_enter",
                     "on_success": "You notice something",
-                    "on_failure": None
+                    "on_failure": None,
                 }
-            ]
+            ],
         }
         game_state.current_room_id = "test_dim_room"
 

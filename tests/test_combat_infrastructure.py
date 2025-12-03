@@ -29,18 +29,13 @@ def create_test_character(name: str, char_class: str = "fighter", level: int = 1
         abilities=Abilities(15, 14, 13, 10, 12, 8),
         max_hp=10,
         ac=15,
-        race="human"
+        race="human",
     )
 
 
 def create_test_creature(name: str, max_hp: int = 7, ac: int = 15) -> Creature:
     """Helper to create a test creature (enemy) with minimal setup."""
-    return Creature(
-        name=name,
-        max_hp=max_hp,
-        ac=ac,
-        abilities=Abilities(10, 10, 10, 10, 10, 10)
-    )
+    return Creature(name=name, max_hp=max_hp, ac=ac, abilities=Abilities(10, 10, 10, 10, 10, 10))
 
 
 class TestCombatEventTracking:
@@ -58,7 +53,7 @@ class TestCombatEventTracking:
             defender="Goblin 1",
             damage=5,
             critical=False,
-            description="Frodo hit Goblin 1 for 5 damage"
+            description="Frodo hit Goblin 1 for 5 damage",
         )
 
         game_state.record_combat_event(event)
@@ -78,7 +73,7 @@ class TestCombatEventTracking:
                 attacker=f"Attacker{i}",
                 defender=f"Defender{i}",
                 damage=i,
-                description=f"Action {i}"
+                description=f"Action {i}",
             )
             game_state.record_combat_event(event)
 
@@ -98,7 +93,7 @@ class TestCombatEventTracking:
                 attacker=f"Attacker{i}",
                 defender="Target",
                 damage=i,
-                description=f"Action {i}"
+                description=f"Action {i}",
             )
             game_state.record_combat_event(event)
 
@@ -121,7 +116,7 @@ class TestCombatEventTracking:
                 attacker=f"Attacker{i}",
                 defender="Target",
                 damage=i,
-                description=f"Action {i}"
+                description=f"Action {i}",
             )
             game_state.record_combat_event(event)
 
@@ -144,7 +139,7 @@ class TestCombatEventTracking:
                 attacker=f"Attacker{i}",
                 defender="Target",
                 damage=i,
-                description=f"Action {i}"
+                description=f"Action {i}",
             )
             game_state.record_combat_event(event)
 
@@ -165,7 +160,7 @@ class TestCombatEventTracking:
                 attacker=f"Attacker{i}",
                 defender="Target",
                 damage=i,
-                description=f"Action {i}"
+                description=f"Action {i}",
             )
             game_state.record_combat_event(event)
 
@@ -192,8 +187,8 @@ class TestCombatEventTracking:
                 "spell_name": "Fireball",
                 "spell_level": 3,
                 "save_dc": 15,
-                "area": "20ft radius"
-            }
+                "area": "20ft radius",
+            },
         )
 
         game_state.record_combat_event(event)

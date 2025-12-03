@@ -23,7 +23,7 @@ def fighter_str_high():
         constitution=14,
         intelligence=10,
         wisdom=12,
-        charisma=10
+        charisma=10,
     )
     return Character(
         name="Thorgrim",
@@ -33,7 +33,7 @@ def fighter_str_high():
         max_hp=12,
         ac=10,
         weapon_proficiencies=["simple", "martial"],
-        armor_proficiencies=["light", "medium", "heavy", "shields"]
+        armor_proficiencies=["light", "medium", "heavy", "shields"],
     )
 
 
@@ -46,7 +46,7 @@ def fighter_dex_high():
         constitution=14,
         intelligence=10,
         wisdom=12,
-        charisma=10
+        charisma=10,
     )
     return Character(
         name="Shadowstrike",
@@ -56,7 +56,7 @@ def fighter_dex_high():
         max_hp=12,
         ac=10,
         weapon_proficiencies=["simple", "martial"],
-        armor_proficiencies=["light", "medium", "heavy", "shields"]
+        armor_proficiencies=["light", "medium", "heavy", "shields"],
     )
 
 
@@ -69,7 +69,7 @@ def fighter_both_high():
         constitution=14,
         intelligence=10,
         wisdom=12,
-        charisma=10
+        charisma=10,
     )
     return Character(
         name="Champion",
@@ -79,7 +79,7 @@ def fighter_both_high():
         max_hp=12,
         ac=10,
         weapon_proficiencies=["simple", "martial"],
-        armor_proficiencies=["light", "medium", "heavy", "shields"]
+        armor_proficiencies=["light", "medium", "heavy", "shields"],
     )
 
 
@@ -261,13 +261,9 @@ class TestBackwardCompatibility:
         # STR +3
         assert fighter_str_high.melee_damage_bonus == 3
 
-    def test_old_methods_match_new_for_str_melee(
-        self, fighter_str_high, items_data
-    ):
+    def test_old_methods_match_new_for_str_melee(self, fighter_str_high, items_data):
         """Verify old melee properties match new get_attack_bonus for STR melee"""
-        longsword_bonus = fighter_str_high.get_attack_bonus(
-            "longsword", items_data
-        )
+        longsword_bonus = fighter_str_high.get_attack_bonus("longsword", items_data)
         assert longsword_bonus == fighter_str_high.melee_attack_bonus
 
         longsword_dmg = fighter_str_high.get_damage_bonus("longsword", items_data)

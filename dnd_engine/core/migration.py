@@ -28,7 +28,7 @@ class MigrationManager:
         self,
         old_campaigns_dir: Path | None = None,
         new_save_dir: Path | None = None,
-        new_vault_path: Path | None = None
+        new_vault_path: Path | None = None,
     ):
         """
         Initialize migration manager.
@@ -61,7 +61,9 @@ class MigrationManager:
             True if old campaigns exist and new system is not initialized
         """
         # Old system exists
-        has_old_campaigns = self.old_campaigns_dir.exists() and any(self.old_campaigns_dir.iterdir())
+        has_old_campaigns = self.old_campaigns_dir.exists() and any(
+            self.old_campaigns_dir.iterdir()
+        )
 
         # New system not initialized (or has empty slots only)
         has_new_saves = False
@@ -84,7 +86,7 @@ class MigrationManager:
                 "total_campaigns": 0,
                 "migratable_campaigns": 0,
                 "total_characters": 0,
-                "campaigns_to_migrate": []
+                "campaigns_to_migrate": [],
             }
 
         campaigns_to_migrate = []
@@ -120,21 +122,26 @@ class MigrationManager:
                             char_level = char_data.get("level", 1)
 
                             if char_name:
-                                if char_name not in all_characters or char_level > all_characters[char_name]["level"]:
+                                if (
+                                    char_name not in all_characters
+                                    or char_level > all_characters[char_name]["level"]
+                                ):
                                     all_characters[char_name] = {
                                         "name": char_name,
                                         "level": char_level,
-                                        "class": char_data.get("character_class", "Unknown")
+                                        "class": char_data.get("character_class", "Unknown"),
                                     }
                     except (json.JSONDecodeError, KeyError):
                         continue
 
-                campaigns_to_migrate.append({
-                    "name": campaign.name,
-                    "last_played": campaign.last_played.isoformat(),
-                    "playtime": campaign.get_playtime_display(),
-                    "save_count": len(save_files)
-                })
+                campaigns_to_migrate.append(
+                    {
+                        "name": campaign.name,
+                        "last_played": campaign.last_played.isoformat(),
+                        "playtime": campaign.get_playtime_display(),
+                        "save_count": len(save_files),
+                    }
+                )
 
             except (json.JSONDecodeError, KeyError, ValueError):
                 continue
@@ -147,7 +154,7 @@ class MigrationManager:
             "migratable_campaigns": min(len(campaigns_to_migrate), 10),
             "total_characters": len(all_characters),
             "campaigns_to_migrate": campaigns_to_migrate[:10],  # Only show first 10
-            "unique_characters": list(all_characters.values())
+            "unique_characters": list(all_characters.values()),
         }
 
     def migrate(self, dry_run: bool = False) -> tuple[bool, str, dict[str, Any]]:
@@ -163,12 +170,7 @@ class MigrationManager:
         if not self.should_migrate():
             return (False, "No migration needed or new system already has data", {})
 
-        stats = {
-            "campaigns_migrated": 0,
-            "characters_migrated": 0,
-            "slots_used": 0,
-            "errors": []
-        }
+        stats = {"campaigns_migrated": 0, "characters_migrated": 0, "slots_used": 0, "errors": []}
 
         try:
             # Step 1: Create backup
@@ -204,12 +206,7 @@ class MigrationManager:
 
                 for slot_num, (campaign, save_path) in enumerate(campaigns, start=1):
                     try:
-                        self._migrate_campaign_to_slot(
-                            slot_manager,
-                            slot_num,
-                            campaign,
-                            save_path
-                        )
+                        self._migrate_campaign_to_slot(slot_manager, slot_num, campaign, save_path)
                         stats["campaigns_migrated"] += 1
                         stats["slots_used"] += 1
                     except Exception as e:
@@ -292,8 +289,7 @@ class MigrationManager:
         return campaigns
 
     def _collect_unique_characters(
-        self,
-        campaigns: list[tuple[Campaign, Path]]
+        self, campaigns: list[tuple[Campaign, Path]]
     ) -> dict[str, dict[str, Any]]:
         """
         Collect unique characters across all campaigns (highest level version).
@@ -317,7 +313,9 @@ class MigrationManager:
 
                     if char_name:
                         # Keep highest level version
-                        if char_name not in character_map or char_level > character_map[char_name].get("level", 0):
+                        if char_name not in character_map or char_level > character_map[
+                            char_name
+                        ].get("level", 0):
                             character_map[char_name] = char_data
 
             except (json.JSONDecodeError, KeyError):
@@ -326,11 +324,7 @@ class MigrationManager:
         return character_map
 
     def _migrate_campaign_to_slot(
-        self,
-        slot_manager: SaveSlotManager,
-        slot_number: int,
-        campaign: Campaign,
-        save_path: Path
+        self, slot_manager: SaveSlotManager, slot_number: int, campaign: Campaign, save_path: Path
     ) -> None:
         """
         Migrate a single campaign to a save slot.
@@ -355,11 +349,13 @@ class MigrationManager:
             last_played=campaign.last_played,
             playtime_seconds=campaign.playtime_seconds,
             adventure_name=campaign.current_dungeon,
-            adventure_progress=f"Room {campaign.current_room}" if campaign.current_room else "Unknown",
+            adventure_progress=f"Room {campaign.current_room}"
+            if campaign.current_room
+            else "Unknown",
             party_composition=[c.get("name") for c in save_data.get("party", [])],
             party_levels=[c.get("level", 1) for c in save_data.get("party", [])],
             custom_name=None,  # No custom name on migration
-            save_version="2.0.0"
+            save_version="2.0.0",
         )
 
         # Write slot file
@@ -369,10 +365,10 @@ class MigrationManager:
             "version": "2.0.0",
             "metadata": slot.to_dict(),
             "party": save_data.get("party", []),
-            "game_state": save_data.get("game_state", {})
+            "game_state": save_data.get("game_state", {}),
         }
 
-        with open(slot_path, 'w', encoding='utf-8') as f:
+        with open(slot_path, "w", encoding="utf-8") as f:
             json.dump(migrated_data, f, indent=2, ensure_ascii=False)
 
     def _deserialize_character(self, char_data: dict[str, Any]):
@@ -401,7 +397,7 @@ class MigrationManager:
             inventory.add_item(
                 item_id=item_data["item_id"],
                 category=item_data["category"],
-                quantity=item_data["quantity"]
+                quantity=item_data["quantity"],
             )
 
         equipped_data = inv_data.get("equipped", {})
@@ -427,7 +423,7 @@ class MigrationManager:
             subclass=char_data.get("subclass"),
             spellcasting_ability=char_data.get("spellcasting_ability"),
             known_spells=char_data.get("known_spells"),
-            prepared_spells=char_data.get("prepared_spells")
+            prepared_spells=char_data.get("prepared_spells"),
         )
 
         # Restore conditions

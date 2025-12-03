@@ -29,12 +29,9 @@ class TestResolveSpellHpPool:
             "hp_pool": {
                 "dice": "5d8",
                 "higher_levels_dice": "2d8",
-                "immune_types": ["undead", "construct"]
+                "immune_types": ["undead", "construct"],
             },
-            "effect": {
-                "condition": "unconscious",
-                "duration_rounds": 10
-            }
+            "effect": {"condition": "unconscious", "duration_rounds": 10},
         }
 
     @pytest.fixture
@@ -80,15 +77,11 @@ class TestResolveSpellHpPool:
         target.add_condition = MagicMock()
         return target
 
-    def test_sleep_affects_low_hp_creature(
-        self, combat_engine, sleep_spell, caster, low_hp_target
-    ):
+    def test_sleep_affects_low_hp_creature(self, combat_engine, sleep_spell, caster, low_hp_target):
         """Sleep should affect creatures with HP <= pool."""
         # Seed dice to get predictable HP pool (5d8 with seed 42)
         result = combat_engine.resolve_spell_hp_pool(
-            caster=caster,
-            targets=[low_hp_target],
-            spell=sleep_spell
+            caster=caster, targets=[low_hp_target], spell=sleep_spell
         )
 
         assert result["spell_name"] == "Sleep"
@@ -98,9 +91,7 @@ class TestResolveSpellHpPool:
         assert result["affected_targets"][0]["name"] == "Goblin"
         assert result["affected_targets"][0]["condition"] == "unconscious"
         low_hp_target.apply_condition_with_metadata.assert_called_once_with(
-            condition="unconscious",
-            duration_type="rounds",
-            duration=10
+            condition="unconscious", duration_type="rounds", duration=10
         )
 
     def test_sleep_does_not_affect_high_hp_creature(
@@ -108,9 +99,7 @@ class TestResolveSpellHpPool:
     ):
         """Sleep should not affect creatures with HP > pool."""
         result = combat_engine.resolve_spell_hp_pool(
-            caster=caster,
-            targets=[high_hp_target],
-            spell=sleep_spell
+            caster=caster, targets=[high_hp_target], spell=sleep_spell
         )
 
         # With 5d8 (max 40), a 50 HP creature should not be affected
@@ -151,9 +140,7 @@ class TestResolveSpellHpPool:
         targets = [target_15hp, target_5hp, target_10hp]
 
         result = combat_engine.resolve_spell_hp_pool(
-            caster=caster,
-            targets=targets,
-            spell=sleep_spell
+            caster=caster, targets=targets, spell=sleep_spell
         )
 
         # Should affect lowest HP first
@@ -162,14 +149,10 @@ class TestResolveSpellHpPool:
         if affected_names:
             assert affected_names[0] == "Goblin1"
 
-    def test_sleep_ignores_undead(
-        self, combat_engine, sleep_spell, caster, undead_target
-    ):
+    def test_sleep_ignores_undead(self, combat_engine, sleep_spell, caster, undead_target):
         """Sleep should not affect undead creatures."""
         result = combat_engine.resolve_spell_hp_pool(
-            caster=caster,
-            targets=[undead_target],
-            spell=sleep_spell
+            caster=caster, targets=[undead_target], spell=sleep_spell
         )
 
         assert len(result["affected_targets"]) == 0
@@ -188,9 +171,7 @@ class TestResolveSpellHpPool:
         dead_target.add_condition = MagicMock()
 
         result = combat_engine.resolve_spell_hp_pool(
-            caster=caster,
-            targets=[dead_target],
-            spell=sleep_spell
+            caster=caster, targets=[dead_target], spell=sleep_spell
         )
 
         assert len(result["affected_targets"]) == 0
@@ -212,9 +193,7 @@ class TestResolveSpellHpPool:
             targets.append(target)
 
         result = combat_engine.resolve_spell_hp_pool(
-            caster=caster,
-            targets=targets,
-            spell=sleep_spell
+            caster=caster, targets=targets, spell=sleep_spell
         )
 
         # With 5d8 (avg 22.5), should affect ~3 goblins at 7 HP each
@@ -230,9 +209,7 @@ class TestResolveSpellHpPool:
     ):
         """Sleep should return the remaining HP pool after affecting targets."""
         result = combat_engine.resolve_spell_hp_pool(
-            caster=caster,
-            targets=[low_hp_target],
-            spell=sleep_spell
+            caster=caster, targets=[low_hp_target], spell=sleep_spell
         )
 
         # Remaining should be: rolled - affected HP
@@ -244,10 +221,7 @@ class TestResolveSpellHpPool:
         event_bus = MagicMock()
 
         result = combat_engine.resolve_spell_hp_pool(
-            caster=caster,
-            targets=[low_hp_target],
-            spell=sleep_spell,
-            event_bus=event_bus
+            caster=caster, targets=[low_hp_target], spell=sleep_spell, event_bus=event_bus
         )
 
         event_bus.emit.assert_called_once()
@@ -264,7 +238,7 @@ class TestGameStateCastSpellCombatHpPool:
         """Create a mock game state with necessary components."""
         from dnd_engine.core.game_state import GameState
 
-        with patch.object(GameState, '__init__', lambda self: None):
+        with patch.object(GameState, "__init__", lambda self: None):
             gs = GameState()
             gs.combat_engine = MagicMock()
             gs.event_bus = MagicMock()
@@ -290,18 +264,16 @@ class TestGameStateCastSpellCombatHpPool:
             "hp_pool": {
                 "dice": "5d8",
                 "higher_levels_dice": "2d8",
-                "immune_types": ["undead", "construct"]
+                "immune_types": ["undead", "construct"],
             },
-            "effect": {
-                "condition": "unconscious",
-                "duration_rounds": 10
-            }
+            "effect": {"condition": "unconscious", "duration_rounds": 10},
         }
 
     @pytest.fixture
     def caster(self):
         """Create a caster character."""
         from dnd_engine.core.character import Character
+
         caster = MagicMock(spec=Character)
         caster.name = "TestWizard"
         caster.level = 1
@@ -309,9 +281,7 @@ class TestGameStateCastSpellCombatHpPool:
         caster.use_spell_slot.return_value = True
         return caster
 
-    def test_cast_spell_combat_routes_to_hp_pool(
-        self, mock_game_state, sleep_spell_data, caster
-    ):
+    def test_cast_spell_combat_routes_to_hp_pool(self, mock_game_state, sleep_spell_data, caster):
         """cast_spell_combat should route hp_pool spells correctly."""
         # Setup mock enemy
         enemy = MagicMock()
@@ -327,14 +297,14 @@ class TestGameStateCastSpellCombatHpPool:
             "hp_pool_rolled": 25,
             "hp_pool_remaining": 18,
             "affected_targets": [{"name": "Goblin", "hp": 7, "condition": "unconscious"}],
-            "unaffected_targets": []
+            "unaffected_targets": [],
         }
 
         result = mock_game_state.cast_spell_combat(
             caster=caster,
             spell_data=sleep_spell_data,
             target=None,  # Area spell
-            spellcasting_ability="int"
+            spellcasting_ability="int",
         )
 
         # Verify routing
@@ -343,9 +313,7 @@ class TestGameStateCastSpellCombatHpPool:
         assert result.hp_pool_rolled == 25
         assert len(result.affected_targets) == 1
 
-    def test_hp_pool_spell_result_fields(
-        self, mock_game_state, sleep_spell_data, caster
-    ):
+    def test_hp_pool_spell_result_fields(self, mock_game_state, sleep_spell_data, caster):
         """CombatSpellResult should have correct hp_pool fields."""
         enemy = MagicMock()
         enemy.name = "Goblin"
@@ -358,14 +326,13 @@ class TestGameStateCastSpellCombatHpPool:
             "hp_pool_rolled": 30,
             "hp_pool_remaining": 5,
             "affected_targets": [{"name": "Goblin", "hp": 7, "condition": "unconscious"}],
-            "unaffected_targets": [{"name": "Ogre", "hp": 50, "reason": "not enough HP pool remaining"}]
+            "unaffected_targets": [
+                {"name": "Ogre", "hp": 50, "reason": "not enough HP pool remaining"}
+            ],
         }
 
         result = mock_game_state.cast_spell_combat(
-            caster=caster,
-            spell_data=sleep_spell_data,
-            target=None,
-            spellcasting_ability="int"
+            caster=caster, spell_data=sleep_spell_data, target=None, spellcasting_ability="int"
         )
 
         assert result.success is True

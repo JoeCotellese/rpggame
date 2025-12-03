@@ -5,8 +5,9 @@ import asyncio
 import json
 import logging
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 from dnd_engine.core.npc import NPC
 from dnd_engine.ui.rich_ui import print_status_message
@@ -236,9 +237,7 @@ class NPCChatManager:
             logger.error(f"NPC chat error: {e}")
             return None
 
-    def start_conversation_sync(
-        self, npc: NPC, timeout: float = 30.0
-    ) -> str | None:
+    def start_conversation_sync(self, npc: NPC, timeout: float = 30.0) -> str | None:
         """
         Start a conversation with an NPC (synchronous).
 
@@ -259,15 +258,11 @@ class NPCChatManager:
 
         # Build system prompt with context
         system_prompt = npc.build_system_prompt(game_context)
-        self._current_conversation.messages.append(
-            {"role": "system", "content": system_prompt}
-        )
+        self._current_conversation.messages.append({"role": "system", "content": system_prompt})
 
         # Build initial message describing what the NPC sees
         initial_message = self._build_initial_approach_message(game_context)
-        self._current_conversation.messages.append(
-            {"role": "user", "content": initial_message}
-        )
+        self._current_conversation.messages.append({"role": "user", "content": initial_message})
 
         # Get initial greeting from LLM
         response = self._run_sync(self._get_npc_response(), timeout=timeout)
@@ -299,13 +294,17 @@ class NPCChatManager:
                 if char.inventory.has_item(item_id):
                     # Get item description from content registry
                     item_data = self._get_item_data(item_id)
-                    visible_items.append({
-                        "item_id": item_id,
-                        "item_name": item_data.get("name", item_id) if item_data else item_id,
-                        "item_description": item_data.get("description", "") if item_data else "",
-                        "quest_state": item_info["quest_state"],
-                        "relevance_type": item_info["relevance_type"],
-                    })
+                    visible_items.append(
+                        {
+                            "item_id": item_id,
+                            "item_name": item_data.get("name", item_id) if item_data else item_id,
+                            "item_description": item_data.get("description", "")
+                            if item_data
+                            else "",
+                            "quest_state": item_info["quest_state"],
+                            "relevance_type": item_info["relevance_type"],
+                        }
+                    )
                     break  # Only count once per item type
 
         return {"visible_quest_items": visible_items}
@@ -316,9 +315,7 @@ class NPCChatManager:
             return self.game_state.content_registry.get_item(item_id)
         return None
 
-    def _build_initial_approach_message(
-        self, game_context: dict[str, Any]
-    ) -> str:
+    def _build_initial_approach_message(self, game_context: dict[str, Any]) -> str:
         """
         Build the initial approach message describing what the NPC sees.
 
@@ -367,9 +364,7 @@ class NPCChatManager:
             return self._get_fallback_response(player_message), ended
 
         # Add player message
-        self._current_conversation.messages.append(
-            {"role": "user", "content": player_message}
-        )
+        self._current_conversation.messages.append({"role": "user", "content": player_message})
 
         # Get response (may involve multiple tool calls)
         response = self._run_sync(self._get_npc_response(), timeout=timeout)
@@ -427,17 +422,11 @@ class NPCChatManager:
 
                 # Execute tools and add results
                 for tool_call in response["tool_calls"]:
-                    result = self._dispatch_tool(
-                        tool_call["name"], tool_call["arguments"]
-                    )
-                    logger.info(
-                        f"[TOOL] {tool_call['name']}({tool_call['arguments']}) -> {result}"
-                    )
+                    result = self._dispatch_tool(tool_call["name"], tool_call["arguments"])
+                    logger.info(f"[TOOL] {tool_call['name']}({tool_call['arguments']}) -> {result}")
 
                     # Show visible feedback to user (like dice rolls)
-                    self._show_tool_feedback(
-                        tool_call["name"], tool_call["arguments"], result
-                    )
+                    self._show_tool_feedback(tool_call["name"], tool_call["arguments"], result)
 
                     self._current_conversation.messages.append(
                         {
@@ -459,9 +448,7 @@ class NPCChatManager:
 
             return None
 
-    def _dispatch_tool(
-        self, tool_name: str, arguments: dict[str, Any]
-    ) -> dict[str, Any]:
+    def _dispatch_tool(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Dispatch a tool call to its handler."""
         handler = self._tool_handlers.get(tool_name)
         if not handler:
@@ -483,18 +470,14 @@ class NPCChatManager:
                 quest_name = result.get("quest_name", quest_id)
                 print_status_message(f"📜 Quest activated: {quest_name}", "success")
             else:
-                print_status_message(
-                    f"📜 Quest activation failed: {result.get('error')}", "error"
-                )
+                print_status_message(f"📜 Quest activation failed: {result.get('error')}", "error")
 
         elif tool_name == "give_item":
             item_id = arguments.get("item_id", "item")
             if result.get("success"):
                 print_status_message(f"🎁 Received: {item_id}", "success")
             else:
-                print_status_message(
-                    f"🎁 Failed to receive item: {result.get('error')}", "error"
-                )
+                print_status_message(f"🎁 Failed to receive item: {result.get('error')}", "error")
 
         elif tool_name == "get_player_gold":
             gold = result.get("gold", 0)
@@ -522,6 +505,7 @@ class NPCChatManager:
             npc_id = self._current_conversation.npc.id
             if quest.quest_giver == npc_id:
                 from dnd_engine.core.quest import QuestState
+
                 qm._quest_states[quest_id] = QuestState.AVAILABLE
 
         success = self.game_state.quest_manager.activate_quest(quest_id)
@@ -658,9 +642,8 @@ class NPCChatManager:
 
         # Check if any character in party has this item
         item_holder = next(
-            (char for char in self.game_state.party.characters
-             if char.inventory.has_item(item_id)),
-            None
+            (char for char in self.game_state.party.characters if char.inventory.has_item(item_id)),
+            None,
         )
 
         if not item_holder:
@@ -674,9 +657,7 @@ class NPCChatManager:
         if deliver_result.get("success"):
             # Remove item from player inventory
             item_holder.inventory.remove_item(item_id)
-            print_status_message(
-                f"🎁 Gave {item_id} to {npc.display_name}", "success"
-            )
+            print_status_message(f"🎁 Gave {item_id} to {npc.display_name}", "success")
             return {
                 "success": True,
                 "item_received": item_id,
@@ -698,12 +679,8 @@ class NPCChatManager:
             if reward_category:
                 reward_recipient.inventory.add_item(bonus.reward_item, reward_category)
 
-            print_status_message(
-                f"🎁 Gave {item_id} to {npc.display_name}", "success"
-            )
-            print_status_message(
-                f"🎁 Received: {bonus.reward_item}", "success"
-            )
+            print_status_message(f"🎁 Gave {item_id} to {npc.display_name}", "success")
+            print_status_message(f"🎁 Received: {bonus.reward_item}", "success")
 
             return {
                 "success": True,
@@ -728,9 +705,7 @@ class NPCChatManager:
 
         # NPC accepts the item but no special reward
         item_holder.inventory.remove_item(item_id)
-        print_status_message(
-            f"🎁 Gave {item_id} to {npc.display_name}", "success"
-        )
+        print_status_message(f"🎁 Gave {item_id} to {npc.display_name}", "success")
 
         return {
             "success": True,
@@ -758,8 +733,7 @@ class NPCChatManager:
                 leader.inventory.gold += reward_gold
 
                 print_status_message(
-                    f"💰 Received {reward_gold} gold for completing "
-                    f"'{result['quest_name']}'",
+                    f"💰 Received {reward_gold} gold for completing '{result['quest_name']}'",
                     "success",
                 )
 

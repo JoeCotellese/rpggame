@@ -46,9 +46,7 @@ class TestClearObjectiveHandler:
             unlocked_by_default=True,
         )
 
-    def test_clear_handler_triggers_on_victory(
-        self, quest_manager, event_bus, clear_quest
-    ):
+    def test_clear_handler_triggers_on_victory(self, quest_manager, event_bus, clear_quest):
         """CLEAR handler should check objectives when combat ends in victory."""
         quest_manager.quests[clear_quest.id] = clear_quest
         quest_manager._quest_states[clear_quest.id] = QuestState.AVAILABLE
@@ -66,9 +64,7 @@ class TestClearObjectiveHandler:
         quest = quest_manager.quests["clear_cellar"]
         assert quest.objectives[0].completed is True
 
-    def test_clear_handler_ignores_defeat(
-        self, quest_manager, event_bus, clear_quest
-    ):
+    def test_clear_handler_ignores_defeat(self, quest_manager, event_bus, clear_quest):
         """CLEAR handler should not complete objective on defeat."""
         quest_manager.quests[clear_quest.id] = clear_quest
         quest_manager._quest_states[clear_quest.id] = QuestState.AVAILABLE
@@ -86,9 +82,7 @@ class TestClearObjectiveHandler:
         quest = quest_manager.quests["clear_cellar"]
         assert quest.objectives[0].completed is False
 
-    def test_clear_handler_requires_matching_room(
-        self, quest_manager, event_bus, clear_quest
-    ):
+    def test_clear_handler_requires_matching_room(self, quest_manager, event_bus, clear_quest):
         """CLEAR handler should only complete objective for matching room."""
         quest_manager.quests[clear_quest.id] = clear_quest
         quest_manager._quest_states[clear_quest.id] = QuestState.AVAILABLE
@@ -156,9 +150,7 @@ class TestClearObjectiveHandler:
         assert quest_manager.get_quest_state("clear_cellar") == QuestState.COMPLETED
         assert quest_manager.quests["clear_cellar"].unlocks_dungeons == ["laboratory"]
 
-    def test_clear_only_checks_active_quests(
-        self, quest_manager, event_bus, clear_quest
-    ):
+    def test_clear_only_checks_active_quests(self, quest_manager, event_bus, clear_quest):
         """CLEAR handler should only check active quests (not locked quests)."""
         quest_manager.quests[clear_quest.id] = clear_quest
         quest_manager._quest_states[clear_quest.id] = QuestState.LOCKED

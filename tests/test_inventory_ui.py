@@ -20,37 +20,33 @@ def mock_items_data():
                 "type": "weapon",
                 "weapon_type": "martial",
                 "damage": "1d8",
-                "damage_type": "slashing"
+                "damage_type": "slashing",
             },
             "dagger": {
                 "name": "Dagger",
                 "type": "weapon",
                 "weapon_type": "simple",
                 "damage": "1d4",
-                "damage_type": "piercing"
-            }
+                "damage_type": "piercing",
+            },
         },
         "armor": {
             "chain_mail": {
                 "name": "Chain Mail",
                 "type": "armor",
                 "armor_type": "heavy",
-                "ac_base": 16
+                "ac_base": 16,
             },
             "leather_armor": {
                 "name": "Leather Armor",
                 "type": "armor",
                 "armor_type": "light",
-                "ac_base": 11
-            }
+                "ac_base": 11,
+            },
         },
         "consumables": {
-            "healing_potion": {
-                "name": "Healing Potion",
-                "type": "consumable",
-                "effect": "heal"
-            }
-        }
+            "healing_potion": {"name": "Healing Potion", "type": "consumable", "effect": "heal"}
+        },
     }
 
 
@@ -131,7 +127,7 @@ class TestInventoryUIInit:
 
     def test_init_creates_default_loader(self, mock_character):
         """Test that initialization creates default loader if not provided."""
-        with patch('dnd_engine.ui.inventory_ui.DataLoader') as mock_loader_class:
+        with patch("dnd_engine.ui.inventory_ui.DataLoader") as mock_loader_class:
             mock_loader_instance = Mock()
             mock_loader_instance.load_items.return_value = {}
             mock_loader_class.return_value = mock_loader_instance
@@ -144,7 +140,7 @@ class TestInventoryUIInit:
 class TestCharacterSelection:
     """Test character selection functionality."""
 
-    @patch('dnd_engine.ui.inventory_ui.questionary')
+    @patch("dnd_engine.ui.inventory_ui.questionary")
     def test_select_character_shows_all_living_members(
         self, mock_questionary, mock_character, mock_rogue, mock_data_loader
     ):
@@ -162,7 +158,7 @@ class TestCharacterSelection:
         call_kwargs = mock_questionary.select.call_args
         assert "Select a character:" in str(call_kwargs)
 
-    @patch('dnd_engine.ui.inventory_ui.questionary')
+    @patch("dnd_engine.ui.inventory_ui.questionary")
     def test_select_character_returns_none_on_back(
         self, mock_questionary, mock_character, mock_data_loader
     ):
@@ -176,7 +172,7 @@ class TestCharacterSelection:
 
         assert result is None
 
-    @patch('dnd_engine.ui.inventory_ui.questionary')
+    @patch("dnd_engine.ui.inventory_ui.questionary")
     def test_select_character_handles_keyboard_interrupt(
         self, mock_questionary, mock_character, mock_data_loader
     ):
@@ -194,7 +190,7 @@ class TestCharacterSelection:
 class TestMainMenu:
     """Test main menu functionality."""
 
-    @patch('dnd_engine.ui.inventory_ui.questionary')
+    @patch("dnd_engine.ui.inventory_ui.questionary")
     def test_show_main_menu_with_character(
         self, mock_questionary, mock_character, mock_data_loader
     ):
@@ -213,7 +209,7 @@ class TestMainMenu:
         assert "TestHero" in prompt
         assert "50 GP" in prompt
 
-    @patch('dnd_engine.ui.inventory_ui.questionary')
+    @patch("dnd_engine.ui.inventory_ui.questionary")
     def test_show_main_menu_returns_exit_without_character(
         self, mock_questionary, mock_character, mock_data_loader
     ):
@@ -229,7 +225,7 @@ class TestMainMenu:
 class TestEquipmentManagement:
     """Test equipment management functionality."""
 
-    @patch('dnd_engine.ui.inventory_ui.questionary')
+    @patch("dnd_engine.ui.inventory_ui.questionary")
     def test_change_equipment_shows_available_weapons(
         self, mock_questionary, mock_character, mock_data_loader, mock_items_data
     ):
@@ -253,8 +249,8 @@ class TestEquipmentManagement:
         call_args = mock_questionary.select.call_args
         assert "weapon" in call_args[0][0].lower()
 
-    @patch('dnd_engine.ui.inventory_ui.questionary')
-    @patch('dnd_engine.ui.inventory_ui.print_status_message')
+    @patch("dnd_engine.ui.inventory_ui.questionary")
+    @patch("dnd_engine.ui.inventory_ui.print_status_message")
     def test_change_equipment_equips_selected_item(
         self, mock_print, mock_questionary, mock_character, mock_data_loader
     ):
@@ -276,8 +272,8 @@ class TestEquipmentManagement:
             "longsword", EquipmentSlot.WEAPON
         )
 
-    @patch('dnd_engine.ui.inventory_ui.questionary')
-    @patch('dnd_engine.ui.inventory_ui.print_status_message')
+    @patch("dnd_engine.ui.inventory_ui.questionary")
+    @patch("dnd_engine.ui.inventory_ui.print_status_message")
     def test_change_equipment_unequips_on_unequip_selection(
         self, mock_print, mock_questionary, mock_character, mock_data_loader
     ):
@@ -296,9 +292,7 @@ class TestEquipmentManagement:
 
         ui._change_equipment(EquipmentSlot.WEAPON)
 
-        mock_character.inventory.unequip_item.assert_called_once_with(
-            EquipmentSlot.WEAPON
-        )
+        mock_character.inventory.unequip_item.assert_called_once_with(EquipmentSlot.WEAPON)
 
 
 class TestProficiencyMarkers:
@@ -366,9 +360,7 @@ class TestItemDataLookup:
 
         assert result is None
 
-    def test_get_item_data_wrong_category(
-        self, mock_character, mock_data_loader, mock_items_data
-    ):
+    def test_get_item_data_wrong_category(self, mock_character, mock_data_loader, mock_items_data):
         """Test that None is returned when looking in wrong category."""
         ui = InventoryUI(party=[mock_character], data_loader=mock_data_loader)
 
@@ -380,9 +372,7 @@ class TestItemDataLookup:
 class TestWeaponArmorInfo:
     """Test weapon and armor info display helpers."""
 
-    def test_get_weapon_info_with_damage(
-        self, mock_character, mock_data_loader, mock_items_data
-    ):
+    def test_get_weapon_info_with_damage(self, mock_character, mock_data_loader, mock_items_data):
         """Test weapon info includes damage."""
         ui = InventoryUI(party=[mock_character], data_loader=mock_data_loader)
 
@@ -400,9 +390,7 @@ class TestWeaponArmorInfo:
 
         assert result == ""
 
-    def test_get_armor_info_with_ac(
-        self, mock_character, mock_data_loader, mock_items_data
-    ):
+    def test_get_armor_info_with_ac(self, mock_character, mock_data_loader, mock_items_data):
         """Test armor info includes AC."""
         ui = InventoryUI(party=[mock_character], data_loader=mock_data_loader)
 
@@ -423,7 +411,7 @@ class TestWeaponArmorInfo:
 class TestRunMethod:
     """Test the main run method."""
 
-    @patch('dnd_engine.ui.inventory_ui.print_status_message')
+    @patch("dnd_engine.ui.inventory_ui.print_status_message")
     def test_run_with_empty_party(self, mock_print, mock_data_loader):
         """Test run exits early with empty party."""
         ui = InventoryUI(party=[], data_loader=mock_data_loader)
@@ -432,7 +420,7 @@ class TestRunMethod:
 
         mock_print.assert_called_with("No party members available.", "warning")
 
-    @patch('dnd_engine.ui.inventory_ui.print_status_message')
+    @patch("dnd_engine.ui.inventory_ui.print_status_message")
     def test_run_with_all_dead_party(self, mock_print, mock_character, mock_data_loader):
         """Test run exits early with all dead party members."""
         mock_character.is_alive = False

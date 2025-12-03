@@ -65,7 +65,7 @@ class TestCombatActionContext:
             actor=mock_character,
             action_type=ActionType.ACTION,
             action_name="attack",
-            details={"target": "goblin"}
+            details={"target": "goblin"},
         )
 
         assert context.game_state == mock_game_state
@@ -86,7 +86,7 @@ class TestCombatActionContext:
             action_type=ActionType.ACTION,
             action_name="cast_spell",
             details={},
-            resources_consumed=resources
+            resources_consumed=resources,
         )
 
         assert context.resources_consumed == resources
@@ -105,7 +105,7 @@ class TestTurnValidationMiddleware:
             actor=mock_character,
             action_type=ActionType.ACTION,
             action_name="attack",
-            details={}
+            details={},
         )
 
         next_middleware = Mock(return_value=True)
@@ -126,7 +126,7 @@ class TestTurnValidationMiddleware:
             actor=mock_character,
             action_type=ActionType.ACTION,
             action_name="attack",
-            details={}
+            details={},
         )
 
         next_middleware = Mock()
@@ -152,7 +152,7 @@ class TestTurnValidationMiddleware:
             actor=mock_character,
             action_type=ActionType.ACTION,
             action_name="attack",
-            details={}
+            details={},
         )
 
         next_middleware = Mock()
@@ -174,7 +174,7 @@ class TestTurnValidationMiddleware:
             actor=mock_character,
             action_type=ActionType.ACTION,
             action_name="attack",
-            details={}
+            details={},
         )
 
         next_middleware = Mock()
@@ -199,7 +199,7 @@ class TestActionEconomyMiddleware:
             actor=mock_character,
             action_type=ActionType.ACTION,
             action_name="attack",
-            details={}
+            details={},
         )
 
         next_middleware = Mock(return_value=True)
@@ -222,7 +222,7 @@ class TestActionEconomyMiddleware:
             actor=mock_character,
             action_type=ActionType.ACTION,
             action_name="attack",
-            details={}
+            details={},
         )
 
         next_middleware = Mock()
@@ -244,7 +244,7 @@ class TestActionEconomyMiddleware:
             actor=mock_character,
             action_type=ActionType.ACTION,
             action_name="attack",
-            details={}
+            details={},
         )
 
         next_middleware = Mock()
@@ -259,7 +259,7 @@ class TestActionEconomyMiddleware:
 class TestLoggingMiddleware:
     """Test logging middleware."""
 
-    @patch('dnd_engine.utils.logging_config.get_logging_config')
+    @patch("dnd_engine.utils.logging_config.get_logging_config")
     def test_logging_success(self, mock_get_logging, mock_game_state, mock_character):
         """Test action is logged when logging is available."""
         mock_logger = Mock()
@@ -271,7 +271,7 @@ class TestLoggingMiddleware:
             actor=mock_character,
             action_type=ActionType.ACTION,
             action_name="attack",
-            details={"target": "goblin"}
+            details={"target": "goblin"},
         )
 
         next_middleware = Mock(return_value=True)
@@ -279,13 +279,11 @@ class TestLoggingMiddleware:
 
         assert result is True
         mock_logger.log_player_action.assert_called_once_with(
-            character="TestHero",
-            action="attack",
-            details="target=goblin"
+            character="TestHero", action="attack", details="target=goblin"
         )
         next_middleware.assert_called_once()
 
-    @patch('dnd_engine.utils.logging_config.get_logging_config')
+    @patch("dnd_engine.utils.logging_config.get_logging_config")
     def test_logging_not_configured(self, mock_get_logging, mock_game_state, mock_character):
         """Test middleware continues when logging is not configured."""
         mock_get_logging.return_value = None
@@ -296,7 +294,7 @@ class TestLoggingMiddleware:
             actor=mock_character,
             action_type=ActionType.ACTION,
             action_name="attack",
-            details={}
+            details={},
         )
 
         next_middleware = Mock(return_value=True)
@@ -305,8 +303,10 @@ class TestLoggingMiddleware:
         assert result is True
         next_middleware.assert_called_once()
 
-    @patch('dnd_engine.utils.logging_config.get_logging_config')
-    def test_logging_failure_doesnt_break_chain(self, mock_get_logging, mock_game_state, mock_character):
+    @patch("dnd_engine.utils.logging_config.get_logging_config")
+    def test_logging_failure_doesnt_break_chain(
+        self, mock_get_logging, mock_game_state, mock_character
+    ):
         """Test middleware continues even if logging throws exception."""
         mock_logger = Mock()
         mock_logger.log_player_action.side_effect = Exception("Logging failed")
@@ -318,7 +318,7 @@ class TestLoggingMiddleware:
             actor=mock_character,
             action_type=ActionType.ACTION,
             action_name="attack",
-            details={}
+            details={},
         )
 
         next_middleware = Mock(return_value=True)
@@ -345,7 +345,7 @@ class TestResourceCleanupMiddleware:
             action_type=ActionType.ACTION,
             action_name="cast_spell",
             details={},
-            resources_consumed=[("spell_slots_level_1", 1)]
+            resources_consumed=[("spell_slots_level_1", 1)],
         )
 
         next_middleware = Mock(return_value=True)
@@ -370,7 +370,7 @@ class TestResourceCleanupMiddleware:
             action_type=ActionType.ACTION,
             action_name="cast_spell",
             details={},
-            resources_consumed=[("spell_slots_level_1", 1)]
+            resources_consumed=[("spell_slots_level_1", 1)],
         )
 
         def fail_next(ctx, _):
@@ -397,7 +397,7 @@ class TestResourceCleanupMiddleware:
             action_type=ActionType.ACTION,
             action_name="cast_spell",
             details={},
-            resources_consumed=[("spell_slots_level_2", 1)]
+            resources_consumed=[("spell_slots_level_2", 1)],
         )
 
         def cancel_next(ctx, _):
@@ -433,7 +433,7 @@ class TestResourceCleanupMiddleware:
             action_type=ActionType.ACTION,
             action_name="use_item",
             details={},
-            resources_consumed=[("resource1", 2), ("resource2", 1)]
+            resources_consumed=[("resource1", 2), ("resource2", 1)],
         )
 
         def fail_next(ctx, _):
@@ -450,7 +450,9 @@ class TestResourceCleanupMiddleware:
 class TestCombatActionExecutor:
     """Test the complete combat action executor with middleware chain."""
 
-    def test_full_chain_success(self, mock_game_state, mock_character, mock_combatant, mock_turn_state):
+    def test_full_chain_success(
+        self, mock_game_state, mock_character, mock_combatant, mock_turn_state
+    ):
         """Test a successful action through the full middleware chain."""
         mock_game_state.initiative_tracker.get_current_combatant.return_value = mock_combatant
         mock_game_state.initiative_tracker.get_current_turn_state.return_value = mock_turn_state
@@ -464,13 +466,13 @@ class TestCombatActionExecutor:
             action_executed = True
             return True
 
-        with patch('dnd_engine.utils.logging_config.get_logging_config', return_value=None):
+        with patch("dnd_engine.utils.logging_config.get_logging_config", return_value=None):
             context = executor.execute(
                 actor=mock_character,
                 action_type=ActionType.ACTION,
                 action_name="attack",
                 action_handler=action_handler,
-                target="goblin"
+                target="goblin",
             )
 
         assert context.result == ActionResult.SUCCESS
@@ -495,14 +497,16 @@ class TestCombatActionExecutor:
             actor=mock_character,
             action_type=ActionType.ACTION,
             action_name="attack",
-            action_handler=action_handler
+            action_handler=action_handler,
         )
 
         assert context.result == ActionResult.FAILED
         assert "not in combat" in context.error_message.lower()
         assert action_executed is False
 
-    def test_full_chain_with_resource_refund(self, mock_game_state, mock_character, mock_combatant, mock_turn_state):
+    def test_full_chain_with_resource_refund(
+        self, mock_game_state, mock_character, mock_combatant, mock_turn_state
+    ):
         """Test resource refund works through full chain."""
         mock_game_state.initiative_tracker.get_current_combatant.return_value = mock_combatant
         mock_game_state.initiative_tracker.get_current_turn_state.return_value = mock_turn_state
@@ -518,13 +522,13 @@ class TestCombatActionExecutor:
             ctx.error_message = "Action failed"
             return False
 
-        with patch('dnd_engine.utils.logging_config.get_logging_config', return_value=None):
+        with patch("dnd_engine.utils.logging_config.get_logging_config", return_value=None):
             context = executor.execute(
                 actor=mock_character,
                 action_type=ActionType.ACTION,
                 action_name="cast_spell",
                 action_handler=failing_handler,
-                resources_consumed=[("spell_slots_level_1", 1)]
+                resources_consumed=[("spell_slots_level_1", 1)],
             )
 
         assert context.result == ActionResult.FAILED

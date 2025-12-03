@@ -45,18 +45,13 @@ class TestProcessEnemyTurn:
             level=3,
             abilities=Abilities(16, 12, 14, 10, 10, 10),
             max_hp=28,
-            ac=16
+            ac=16,
         )
 
     @pytest.fixture
     def goblin(self):
         """Create a goblin enemy."""
-        return Creature(
-            name="Goblin",
-            max_hp=7,
-            ac=13,
-            abilities=Abilities(8, 14, 10, 10, 8, 8)
-        )
+        return Creature(name="Goblin", max_hp=7, ac=13, abilities=Abilities(8, 14, 10, 10, 8, 8))
 
     @pytest.fixture
     def game_state(self, fighter, goblin, event_bus, data_loader, dice_roller):
@@ -67,7 +62,7 @@ class TestProcessEnemyTurn:
             dungeon_name="test_dungeon",
             event_bus=event_bus,
             data_loader=data_loader,
-            dice_roller=dice_roller
+            dice_roller=dice_roller,
         )
         game_state.active_enemies = [goblin]
         game_state.in_combat = True
@@ -301,31 +296,19 @@ class TestProcessEnemyTurnMultipleEnemies:
             level=3,
             abilities=Abilities(16, 12, 14, 10, 10, 10),
             max_hp=28,
-            ac=16
+            ac=16,
         )
 
     @pytest.fixture
     def goblin1(self):
-        return Creature(
-            name="Goblin",
-            max_hp=7,
-            ac=13,
-            abilities=Abilities(8, 14, 10, 10, 8, 8)
-        )
+        return Creature(name="Goblin", max_hp=7, ac=13, abilities=Abilities(8, 14, 10, 10, 8, 8))
 
     @pytest.fixture
     def goblin2(self):
-        return Creature(
-            name="Goblin",
-            max_hp=7,
-            ac=13,
-            abilities=Abilities(8, 14, 10, 10, 8, 8)
-        )
+        return Creature(name="Goblin", max_hp=7, ac=13, abilities=Abilities(8, 14, 10, 10, 8, 8))
 
     @pytest.fixture
-    def game_state_multi(
-        self, fighter, goblin1, goblin2, event_bus, data_loader, dice_roller
-    ):
+    def game_state_multi(self, fighter, goblin1, goblin2, event_bus, data_loader, dice_roller):
         """Create game state with multiple enemies."""
         party = Party([fighter])
         game_state = GameState(
@@ -333,7 +316,7 @@ class TestProcessEnemyTurnMultipleEnemies:
             dungeon_name="test_dungeon",
             event_bus=event_bus,
             data_loader=data_loader,
-            dice_roller=dice_roller
+            dice_roller=dice_roller,
         )
         game_state.active_enemies = [goblin1, goblin2]
         game_state.in_combat = True
@@ -343,9 +326,7 @@ class TestProcessEnemyTurnMultipleEnemies:
         goblin1_entry = InitiativeEntry(creature=goblin1, initiative_roll=20)
         goblin2_entry = InitiativeEntry(creature=goblin2, initiative_roll=15)
         fighter_entry = InitiativeEntry(creature=fighter, initiative_roll=10)
-        game_state.initiative_tracker.combatants = [
-            goblin1_entry, goblin2_entry, fighter_entry
-        ]
+        game_state.initiative_tracker.combatants = [goblin1_entry, goblin2_entry, fighter_entry]
         game_state.initiative_tracker.turn_states[goblin1] = TurnState()
         game_state.initiative_tracker.turn_states[goblin2] = TurnState()
         game_state.initiative_tracker.turn_states[fighter] = TurnState()

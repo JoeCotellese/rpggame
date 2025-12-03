@@ -34,7 +34,7 @@ def fighter_proficient():
         max_hp=12,
         ac=10,
         weapon_proficiencies=["simple", "martial"],
-        armor_proficiencies=["light", "medium", "heavy", "shields"]
+        armor_proficiencies=["light", "medium", "heavy", "shields"],
     )
 
 
@@ -50,7 +50,7 @@ def wizard_unproficient():
         max_hp=6,
         ac=10,
         weapon_proficiencies=["simple"],
-        armor_proficiencies=["light"]
+        armor_proficiencies=["light"],
     )
 
 
@@ -64,7 +64,7 @@ def dummy_defender():
         level=1,
         abilities=abilities,
         max_hp=10,
-        ac=10
+        ac=10,
     )
 
 
@@ -89,13 +89,17 @@ class TestWeaponProficiencyAttackBonus:
         attack_bonus = wizard_unproficient.get_attack_bonus("dagger", items_data)
         assert attack_bonus == 4
 
-    def test_wizard_attack_bonus_with_non_proficient_longsword(self, wizard_unproficient, items_data):
+    def test_wizard_attack_bonus_with_non_proficient_longsword(
+        self, wizard_unproficient, items_data
+    ):
         """Wizard without longsword proficiency should NOT include proficiency bonus"""
         # Wizard: STR +0 (no proficiency bonus for martial weapons)
         attack_bonus = wizard_unproficient.get_attack_bonus("longsword", items_data)
         assert attack_bonus == 0
 
-    def test_fighter_attack_bonus_with_non_proficient_exotic_weapon(self, fighter_proficient, items_data):
+    def test_fighter_attack_bonus_with_non_proficient_exotic_weapon(
+        self, fighter_proficient, items_data
+    ):
         """Character without proficiency for a weapon should not include bonus"""
         # Fighter is only proficient with simple and martial
         # Using longbow which is martial but let's verify
@@ -131,7 +135,9 @@ class TestWeaponProficiencyAttackBonus:
 class TestProficiencyInCombat:
     """Test attack resolution with proficiency"""
 
-    def test_fighter_attack_with_proficient_weapon(self, fighter_proficient, dummy_defender, combat_engine, items_data):
+    def test_fighter_attack_with_proficient_weapon(
+        self, fighter_proficient, dummy_defender, combat_engine, items_data
+    ):
         """Fighter's attack with proficient weapon should use correct bonus"""
         attack_bonus = fighter_proficient.get_attack_bonus("longsword", items_data)
         damage = items_data["weapons"]["longsword"].get("damage", "1d8")
@@ -140,13 +146,15 @@ class TestProficiencyInCombat:
             attacker=fighter_proficient,
             defender=dummy_defender,
             attack_bonus=attack_bonus,
-            damage_dice=f"{damage}+{fighter_proficient.abilities.str_mod}"
+            damage_dice=f"{damage}+{fighter_proficient.abilities.str_mod}",
         )
 
         # Verify attack bonus was applied
         assert result.attack_bonus == attack_bonus
 
-    def test_wizard_attack_with_non_proficient_weapon(self, wizard_unproficient, dummy_defender, combat_engine, items_data):
+    def test_wizard_attack_with_non_proficient_weapon(
+        self, wizard_unproficient, dummy_defender, combat_engine, items_data
+    ):
         """Wizard's attack with non-proficient weapon should not include proficiency bonus"""
         attack_bonus = wizard_unproficient.get_attack_bonus("longsword", items_data)
         # Should be just STR modifier (0) without proficiency bonus (+2)
@@ -158,13 +166,15 @@ class TestProficiencyInCombat:
             attacker=wizard_unproficient,
             defender=dummy_defender,
             attack_bonus=attack_bonus,
-            damage_dice=f"{damage}+{wizard_unproficient.abilities.str_mod}"
+            damage_dice=f"{damage}+{wizard_unproficient.abilities.str_mod}",
         )
 
         # Verify the lower bonus was applied
         assert result.attack_bonus == attack_bonus
 
-    def test_attack_bonus_difference_proficient_vs_not(self, fighter_proficient, wizard_unproficient, items_data):
+    def test_attack_bonus_difference_proficient_vs_not(
+        self, fighter_proficient, wizard_unproficient, items_data
+    ):
         """Proficient and non-proficient characters should have different attack bonuses"""
         # Both using longsword
         fighter_bonus = fighter_proficient.get_attack_bonus("longsword", items_data)
@@ -179,7 +189,9 @@ class TestProficiencyInCombat:
         # Clear difference due to proficiency
         assert fighter_bonus > wizard_bonus
 
-    def test_hit_chance_with_proficiency_advantage(self, fighter_proficient, wizard_unproficient, dummy_defender, combat_engine, items_data):
+    def test_hit_chance_with_proficiency_advantage(
+        self, fighter_proficient, wizard_unproficient, dummy_defender, combat_engine, items_data
+    ):
         """
         Character with proficiency should have advantage in hitting.
 
@@ -234,7 +246,9 @@ class TestMultipleWeaponProficiency:
 
         # Longbow: martial ranged, DEX +2 (no proficiency for martial)
         longbow_bonus = wizard_unproficient.get_attack_bonus("longbow", items_data)
-        assert longbow_bonus == 2, "Wizard should NOT be proficient with longbow, but gets DEX modifier"
+        assert longbow_bonus == 2, (
+            "Wizard should NOT be proficient with longbow, but gets DEX modifier"
+        )
 
     def test_proficiency_bonus_scales_with_level(self, items_data):
         """Attack bonus should scale with character level"""
@@ -248,7 +262,7 @@ class TestMultipleWeaponProficiency:
             abilities=abilities,
             max_hp=12,
             ac=10,
-            weapon_proficiencies=["simple", "martial"]
+            weapon_proficiencies=["simple", "martial"],
         )
         bonus_level1 = fighter_level1.get_attack_bonus("longsword", items_data)
         # STR +3 + prof +2 = +5
@@ -262,7 +276,7 @@ class TestMultipleWeaponProficiency:
             abilities=abilities,
             max_hp=12,
             ac=10,
-            weapon_proficiencies=["simple", "martial"]
+            weapon_proficiencies=["simple", "martial"],
         )
         bonus_level5 = fighter_level5.get_attack_bonus("longsword", items_data)
         # STR +3 + prof +3 = +6
@@ -281,7 +295,7 @@ class TestMultipleWeaponProficiency:
             abilities=Abilities(18, 10, 14, 10, 12, 10),
             max_hp=12,
             ac=10,
-            weapon_proficiencies=["simple", "martial"]
+            weapon_proficiencies=["simple", "martial"],
         )
 
         # Low STR fighter
@@ -292,7 +306,7 @@ class TestMultipleWeaponProficiency:
             abilities=Abilities(10, 10, 14, 10, 12, 10),
             max_hp=12,
             ac=10,
-            weapon_proficiencies=["simple", "martial"]
+            weapon_proficiencies=["simple", "martial"],
         )
 
         bonus_high_str = fighter_high_str.get_attack_bonus("longsword", items_data)

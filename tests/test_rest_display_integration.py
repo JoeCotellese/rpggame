@@ -29,12 +29,7 @@ class TestRestDisplayIntegration:
     def healthy_character(self):
         """Create a healthy character at full HP"""
         abilities = Abilities(
-            strength=16,
-            dexterity=14,
-            constitution=14,
-            intelligence=10,
-            wisdom=12,
-            charisma=8
+            strength=16, dexterity=14, constitution=14, intelligence=10, wisdom=12, charisma=8
         )
         character = Character(
             name="Bob",
@@ -43,15 +38,12 @@ class TestRestDisplayIntegration:
             abilities=abilities,
             max_hp=12,
             ac=16,
-            current_hp=12  # Full HP
+            current_hp=12,  # Full HP
         )
 
         # Add a short rest resource
         second_wind = ResourcePool(
-            name="second_wind",
-            current=0,
-            maximum=1,
-            recovery_type="short_rest"
+            name="second_wind", current=0, maximum=1, recovery_type="short_rest"
         )
         character.add_resource_pool(second_wind)
 
@@ -61,12 +53,7 @@ class TestRestDisplayIntegration:
     def unconscious_character(self):
         """Create an unconscious character at 0 HP"""
         abilities = Abilities(
-            strength=10,
-            dexterity=14,
-            constitution=12,
-            intelligence=14,
-            wisdom=10,
-            charisma=10
+            strength=10, dexterity=14, constitution=12, intelligence=14, wisdom=10, charisma=10
         )
         character = Character(
             name="Tim",
@@ -75,7 +62,7 @@ class TestRestDisplayIntegration:
             abilities=abilities,
             max_hp=8,
             ac=12,
-            current_hp=0  # Unconscious!
+            current_hp=0,  # Unconscious!
         )
         return character
 
@@ -100,7 +87,7 @@ class TestRestDisplayIntegration:
                     hp_before=12,
                     hp_after=12,
                     max_hp=12,
-                    resources_recovered={"second_wind": 1}
+                    resources_recovered={"second_wind": 1},
                 ),
                 CharacterRestResult(
                     character_name="Tim",
@@ -108,9 +95,9 @@ class TestRestDisplayIntegration:
                     hp_before=0,
                     hp_after=0,
                     max_hp=8,
-                    resources_recovered={}
-                )
-            ]
+                    resources_recovered={},
+                ),
+            ],
         )
 
         cli = CLI(mock_game_state, Mock(), "test_campaign")
@@ -122,10 +109,13 @@ class TestRestDisplayIntegration:
             printed_messages.append(str(message))
 
         # Mock the print functions to capture output and mock user input for short rest choice
-        with patch('dnd_engine.ui.rich_ui.print_message', side_effect=capture_print):
-            with patch('dnd_engine.ui.rich_ui.print_section', side_effect=capture_print):
-                with patch('dnd_engine.ui.rich_ui.print_status_message', side_effect=lambda msg, status: capture_print(msg)):
-                    with patch('builtins.input', return_value='1'):  # Choose short rest
+        with patch("dnd_engine.ui.rich_ui.print_message", side_effect=capture_print):
+            with patch("dnd_engine.ui.rich_ui.print_section", side_effect=capture_print):
+                with patch(
+                    "dnd_engine.ui.rich_ui.print_status_message",
+                    side_effect=lambda msg, status: capture_print(msg),
+                ):
+                    with patch("builtins.input", return_value="1"):  # Choose short rest
                         cli.handle_rest()
 
         # Join all messages for easier assertion
@@ -133,7 +123,10 @@ class TestRestDisplayIntegration:
 
         # Verify the unconscious character gets the warning
         assert "Tim" in full_output
-        assert "Still unconscious (0 HP)" in full_output or "⚠️  Still unconscious (0 HP)" in full_output
+        assert (
+            "Still unconscious (0 HP)" in full_output
+            or "⚠️  Still unconscious (0 HP)" in full_output
+        )
 
         # Verify the healthy character gets appropriate message
         assert "Bob" in full_output
@@ -145,12 +138,7 @@ class TestRestDisplayIntegration:
         """Test that healthy character with no resources to recover shows 'Already at full health'"""
         # Create a character at full HP with no resources
         abilities = Abilities(
-            strength=16,
-            dexterity=14,
-            constitution=14,
-            intelligence=10,
-            wisdom=12,
-            charisma=8
+            strength=16, dexterity=14, constitution=14, intelligence=10, wisdom=12, charisma=8
         )
         character = Character(
             name="Alice",
@@ -159,7 +147,7 @@ class TestRestDisplayIntegration:
             abilities=abilities,
             max_hp=12,
             ac=16,
-            current_hp=12  # Full HP
+            current_hp=12,  # Full HP
         )
         # Don't add any resource pools
 
@@ -178,9 +166,9 @@ class TestRestDisplayIntegration:
                     hp_before=12,
                     hp_after=12,
                     max_hp=12,
-                    resources_recovered={}
+                    resources_recovered={},
                 )
-            ]
+            ],
         )
 
         cli = CLI(mock_game_state, Mock(), "test_campaign")
@@ -191,10 +179,13 @@ class TestRestDisplayIntegration:
         def capture_print(message):
             printed_messages.append(str(message))
 
-        with patch('dnd_engine.ui.rich_ui.print_message', side_effect=capture_print):
-            with patch('dnd_engine.ui.rich_ui.print_section', side_effect=capture_print):
-                with patch('dnd_engine.ui.rich_ui.print_status_message', side_effect=lambda msg, status: capture_print(msg)):
-                    with patch('builtins.input', return_value='1'):  # Choose short rest
+        with patch("dnd_engine.ui.rich_ui.print_message", side_effect=capture_print):
+            with patch("dnd_engine.ui.rich_ui.print_section", side_effect=capture_print):
+                with patch(
+                    "dnd_engine.ui.rich_ui.print_status_message",
+                    side_effect=lambda msg, status: capture_print(msg),
+                ):
+                    with patch("builtins.input", return_value="1"):  # Choose short rest
                         cli.handle_rest()
 
         full_output = "\n".join(printed_messages)
@@ -222,9 +213,9 @@ class TestRestDisplayIntegration:
                     hp_before=0,
                     hp_after=8,
                     max_hp=8,
-                    resources_recovered={}
+                    resources_recovered={},
                 )
-            ]
+            ],
         )
 
         cli = CLI(mock_game_state, Mock(), "test_campaign")
@@ -235,10 +226,13 @@ class TestRestDisplayIntegration:
         def capture_print(message):
             printed_messages.append(str(message))
 
-        with patch('dnd_engine.ui.rich_ui.print_message', side_effect=capture_print):
-            with patch('dnd_engine.ui.rich_ui.print_section', side_effect=capture_print):
-                with patch('dnd_engine.ui.rich_ui.print_status_message', side_effect=lambda msg, status: capture_print(msg)):
-                    with patch('builtins.input', return_value='2'):  # Choose long rest
+        with patch("dnd_engine.ui.rich_ui.print_message", side_effect=capture_print):
+            with patch("dnd_engine.ui.rich_ui.print_section", side_effect=capture_print):
+                with patch(
+                    "dnd_engine.ui.rich_ui.print_status_message",
+                    side_effect=lambda msg, status: capture_print(msg),
+                ):
+                    with patch("builtins.input", return_value="2"):  # Choose long rest
                         cli.handle_rest()
 
         full_output = "\n".join(printed_messages)
@@ -273,7 +267,7 @@ class TestRestDisplayIntegration:
                     hp_before=6,
                     hp_after=12,
                     max_hp=12,
-                    resources_recovered={"second_wind": 1}
+                    resources_recovered={"second_wind": 1},
                 ),
                 CharacterRestResult(
                     character_name="Tim",
@@ -281,9 +275,9 @@ class TestRestDisplayIntegration:
                     hp_before=0,
                     hp_after=8,
                     max_hp=8,
-                    resources_recovered={}
-                )
-            ]
+                    resources_recovered={},
+                ),
+            ],
         )
 
         cli = CLI(mock_game_state, Mock(), "test_campaign")
@@ -294,10 +288,13 @@ class TestRestDisplayIntegration:
         def capture_print(message):
             printed_messages.append(str(message))
 
-        with patch('dnd_engine.ui.rich_ui.print_message', side_effect=capture_print):
-            with patch('dnd_engine.ui.rich_ui.print_section', side_effect=capture_print):
-                with patch('dnd_engine.ui.rich_ui.print_status_message', side_effect=lambda msg, status: capture_print(msg)):
-                    with patch('builtins.input', return_value='2'):  # Choose long rest
+        with patch("dnd_engine.ui.rich_ui.print_message", side_effect=capture_print):
+            with patch("dnd_engine.ui.rich_ui.print_section", side_effect=capture_print):
+                with patch(
+                    "dnd_engine.ui.rich_ui.print_status_message",
+                    side_effect=lambda msg, status: capture_print(msg),
+                ):
+                    with patch("builtins.input", return_value="2"):  # Choose long rest
                         cli.handle_rest()
 
         full_output = "\n".join(printed_messages)

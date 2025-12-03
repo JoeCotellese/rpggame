@@ -16,12 +16,7 @@ class TestRogueCharacterCreation:
     def test_create_basic_rogue(self):
         """Test creating a basic Rogue character"""
         abilities = Abilities(
-            strength=10,
-            dexterity=16,
-            constitution=14,
-            intelligence=12,
-            wisdom=13,
-            charisma=8
+            strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8
         )
         rogue = Character(
             name="Test Rogue",
@@ -31,7 +26,7 @@ class TestRogueCharacterCreation:
             max_hp=8,
             ac=14,
             skill_proficiencies=["stealth", "acrobatics", "perception", "deception"],
-            expertise_skills=["stealth", "acrobatics"]
+            expertise_skills=["stealth", "acrobatics"],
         )
 
         assert rogue.character_class == CharacterClass.ROGUE
@@ -47,12 +42,7 @@ class TestRogueCharacterCreation:
         items_data = data_loader.load_items()
 
         abilities = Abilities(
-            strength=10,
-            dexterity=16,
-            constitution=14,
-            intelligence=12,
-            wisdom=13,
-            charisma=8
+            strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8
         )
         rogue = Character(
             name="Test Rogue",
@@ -61,11 +51,12 @@ class TestRogueCharacterCreation:
             abilities=abilities,
             max_hp=8,
             ac=14,
-            inventory=Inventory()
+            inventory=Inventory(),
         )
 
         # Apply starting equipment
         from dnd_engine.core.character_factory import CharacterFactory
+
         rogue_data = classes_data["rogue"]
         CharacterFactory.apply_starting_equipment(rogue, rogue_data, items_data)
 
@@ -117,12 +108,7 @@ class TestRogueSkillsAndExpertise:
         skills_data = data_loader.load_skills()
 
         abilities = Abilities(
-            strength=10,
-            dexterity=16,
-            constitution=14,
-            intelligence=12,
-            wisdom=13,
-            charisma=8
+            strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8
         )
         rogue = Character(
             name="Test Rogue",
@@ -132,7 +118,7 @@ class TestRogueSkillsAndExpertise:
             max_hp=20,
             ac=14,
             skill_proficiencies=["stealth", "perception", "acrobatics"],
-            expertise_skills=["stealth"]
+            expertise_skills=["stealth"],
         )
 
         # Stealth check with expertise (5th level has +3 proficiency)
@@ -153,12 +139,7 @@ class TestRogueSkillsAndExpertise:
         skills_data = data_loader.load_skills()
 
         abilities = Abilities(
-            strength=10,
-            dexterity=16,
-            constitution=14,
-            intelligence=12,
-            wisdom=13,
-            charisma=8
+            strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8
         )
         rogue = Character(
             name="Test Rogue",
@@ -167,7 +148,7 @@ class TestRogueSkillsAndExpertise:
             abilities=abilities,
             max_hp=8,
             ac=14,
-            skill_proficiencies=["stealth"]
+            skill_proficiencies=["stealth"],
         )
 
         result = rogue.make_skill_check("stealth", dc=12, skills_data=skills_data, advantage=True)
@@ -188,12 +169,7 @@ class TestRogueInCombat:
 
         # Create a level 3 Rogue
         rogue_abilities = Abilities(
-            strength=10,
-            dexterity=16,
-            constitution=14,
-            intelligence=12,
-            wisdom=13,
-            charisma=8
+            strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8
         )
         rogue = Character(
             name="Bob the Rogue",
@@ -201,25 +177,16 @@ class TestRogueInCombat:
             level=3,
             abilities=rogue_abilities,
             max_hp=16,
-            ac=14
+            ac=14,
         )
 
         # Create a target
         from dnd_engine.core.creature import Creature
+
         target_abilities = Abilities(
-            strength=8,
-            dexterity=14,
-            constitution=10,
-            intelligence=10,
-            wisdom=8,
-            charisma=8
+            strength=8, dexterity=14, constitution=10, intelligence=10, wisdom=8, charisma=8
         )
-        target = Creature(
-            name="Goblin",
-            max_hp=7,
-            ac=15,
-            abilities=target_abilities
-        )
+        target = Creature(name="Goblin", max_hp=7, ac=15, abilities=target_abilities)
 
         # Attack with advantage multiple times to see if sneak attack procs
         sneak_attack_procs = 0
@@ -230,7 +197,7 @@ class TestRogueInCombat:
                 attack_bonus=5,  # +3 DEX, +2 proficiency
                 damage_dice="1d8+3",  # Rapier + DEX
                 advantage=True,
-                event_bus=event_bus
+                event_bus=event_bus,
             )
 
             if result.sneak_attack_damage > 0:
@@ -246,12 +213,7 @@ class TestRogueInCombat:
         items_data = data_loader.load_items()
 
         abilities = Abilities(
-            strength=10,
-            dexterity=16,
-            constitution=14,
-            intelligence=12,
-            wisdom=13,
-            charisma=8
+            strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8
         )
         rogue = Character(
             name="Test Rogue",
@@ -260,8 +222,14 @@ class TestRogueInCombat:
             abilities=abilities,
             max_hp=8,
             ac=14,
-            weapon_proficiencies=["simple", "hand_crossbows", "longswords", "rapiers", "shortswords"],
-            armor_proficiencies=["light"]
+            weapon_proficiencies=[
+                "simple",
+                "hand_crossbows",
+                "longswords",
+                "rapiers",
+                "shortswords",
+            ],
+            armor_proficiencies=["light"],
         )
 
         # Get rapier attack bonus (finesse weapon)
@@ -285,12 +253,7 @@ class TestRogueInCombat:
     def test_rogue_dex_saving_throw(self):
         """Test Rogue has proficiency in DEX saving throws"""
         abilities = Abilities(
-            strength=10,
-            dexterity=16,
-            constitution=14,
-            intelligence=12,
-            wisdom=13,
-            charisma=8
+            strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8
         )
         rogue = Character(
             name="Test Rogue",
@@ -299,7 +262,7 @@ class TestRogueInCombat:
             abilities=abilities,
             max_hp=8,
             ac=14,
-            saving_throw_proficiencies=["dex", "int"]
+            saving_throw_proficiencies=["dex", "int"],
         )
 
         # DEX save: DEX mod (3) + proficiency (2) = 5
@@ -317,12 +280,7 @@ class TestRogueInCombat:
     def test_rogue_vs_fighter_comparison(self):
         """Test Rogue and Fighter have different priorities and features"""
         rogue_abilities = Abilities(
-            strength=8,
-            dexterity=18,
-            constitution=14,
-            intelligence=12,
-            wisdom=13,
-            charisma=8
+            strength=8, dexterity=18, constitution=14, intelligence=12, wisdom=13, charisma=8
         )
         rogue = Character(
             name="Bob the Rogue",
@@ -330,16 +288,11 @@ class TestRogueInCombat:
             level=1,
             abilities=rogue_abilities,
             max_hp=8,
-            ac=14
+            ac=14,
         )
 
         fighter_abilities = Abilities(
-            strength=18,
-            dexterity=8,
-            constitution=14,
-            intelligence=10,
-            wisdom=12,
-            charisma=8
+            strength=18, dexterity=8, constitution=14, intelligence=10, wisdom=12, charisma=8
         )
         fighter = Character(
             name="Alice the Fighter",
@@ -347,7 +300,7 @@ class TestRogueInCombat:
             level=1,
             abilities=fighter_abilities,
             max_hp=10,
-            ac=18
+            ac=18,
         )
 
         # Rogue excels with DEX
@@ -378,6 +331,7 @@ class TestSneakAttackEvent:
 
         # Track sneak attack events
         sneak_attack_events = []
+
         def capture_sneak_attack(event):
             sneak_attack_events.append(event)
 
@@ -385,12 +339,7 @@ class TestSneakAttackEvent:
 
         # Create a Rogue
         rogue_abilities = Abilities(
-            strength=10,
-            dexterity=16,
-            constitution=14,
-            intelligence=12,
-            wisdom=13,
-            charisma=8
+            strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8
         )
         rogue = Character(
             name="Bob the Rogue",
@@ -398,25 +347,16 @@ class TestSneakAttackEvent:
             level=1,
             abilities=rogue_abilities,
             max_hp=8,
-            ac=14
+            ac=14,
         )
 
         # Create a target
         from dnd_engine.core.creature import Creature
+
         target_abilities = Abilities(
-            strength=8,
-            dexterity=14,
-            constitution=10,
-            intelligence=10,
-            wisdom=8,
-            charisma=8
+            strength=8, dexterity=14, constitution=10, intelligence=10, wisdom=8, charisma=8
         )
-        target = Creature(
-            name="Goblin",
-            max_hp=7,
-            ac=15,
-            abilities=target_abilities
-        )
+        target = Creature(name="Goblin", max_hp=7, ac=15, abilities=target_abilities)
 
         # Attack with advantage (should trigger sneak attack if hit)
         result = combat.resolve_attack(
@@ -425,7 +365,7 @@ class TestSneakAttackEvent:
             attack_bonus=5,
             damage_dice="1d8+3",
             advantage=True,
-            event_bus=event_bus
+            event_bus=event_bus,
         )
 
         # If sneak attack was applied, event should be emitted

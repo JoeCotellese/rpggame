@@ -181,9 +181,7 @@ class TestCombatContextBuilder:
 
         action_data = {"name": "Shortsword", "damage_type": "piercing"}
 
-        context = self.builder.build_attack_context(
-            enemy, player, result, action_data=action_data
-        )
+        context = self.builder.build_attack_context(enemy, player, result, action_data=action_data)
 
         assert context["attacker"] == "Skeleton"
         assert context["defender"] == "Fighter"
@@ -310,9 +308,7 @@ class TestCombatContextBuilder:
 
         action_data = {"name": "Shortsword", "damage_type": "piercing"}
 
-        context = self.builder.build_attack_context(
-            enemy, player, result, action_data=action_data
-        )
+        context = self.builder.build_attack_context(enemy, player, result, action_data=action_data)
 
         assert context["defender_armor"] == ""  # No armor equipped
 

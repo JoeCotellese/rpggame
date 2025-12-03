@@ -38,9 +38,7 @@ class TestInventoryItem:
 
     def test_inventory_item_quest_item_true(self):
         """Test creating a quest item"""
-        item = InventoryItem(
-            item_id="ancient_key", category="consumables", quest_item=True
-        )
+        item = InventoryItem(item_id="ancient_key", category="consumables", quest_item=True)
         assert item.quest_item is True
 
 
@@ -111,9 +109,7 @@ class TestInventory:
 
     def test_add_item_with_quest_item_flag(self):
         """Test adding an item marked as a quest item"""
-        result = self.inventory.add_item(
-            "ancient_key", "consumables", 1, quest_item=True
-        )
+        result = self.inventory.add_item("ancient_key", "consumables", 1, quest_item=True)
         assert result is True
 
         item = self.inventory.items["ancient_key"]
@@ -327,14 +323,10 @@ class TestInventory:
         items_data = {
             "weapons": {
                 "longsword": {"name": "Longsword", "value": 15},
-                "dagger": {"name": "Dagger", "value": 2}
+                "dagger": {"name": "Dagger", "value": 2},
             },
-            "armor": {
-                "leather_armor": {"name": "Leather Armor", "value": 10}
-            },
-            "consumables": {
-                "potion_of_healing": {"name": "Potion of Healing", "value": 50}
-            }
+            "armor": {"leather_armor": {"name": "Leather Armor", "value": 10}},
+            "consumables": {"potion_of_healing": {"name": "Potion of Healing", "value": 50}},
         }
 
         self.inventory.add_item("longsword", "weapons", 1)

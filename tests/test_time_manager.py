@@ -102,7 +102,7 @@ class TestActiveEffect:
             duration_value=10.0,
             remaining_value=10.0,
             target_name="Gandalf",
-            description="Gain +1d4 to attacks and saves"
+            description="Gain +1d4 to attacks and saves",
         )
 
         assert effect.effect_type == EffectType.SPELL
@@ -120,7 +120,7 @@ class TestActiveEffect:
             duration_type="minutes",
             duration_value=1.0,
             remaining_value=0.5,
-            target_name="Aragorn"
+            target_name="Aragorn",
         )
 
         # Advance time by 0.3 minutes - should not expire
@@ -143,7 +143,7 @@ class TestActiveEffect:
             remaining_value=10.0,
             target_name="Legolas",
             concentration=True,
-            caster_name="Gandalf"
+            caster_name="Gandalf",
         )
 
         assert effect.concentration
@@ -157,7 +157,7 @@ class TestActiveEffect:
             duration_type="hours",
             duration_value=1.0,
             remaining_value=1.0,
-            target_name="Frodo"
+            target_name="Frodo",
         )
 
         assert "hour" in effect.get_time_remaining_display()
@@ -220,7 +220,7 @@ class TestTimeManager:
             duration_type="hours",
             duration_value=8.0,
             remaining_value=8.0,
-            target_name="Wizard"
+            target_name="Wizard",
         )
 
         tm.add_effect(effect)
@@ -236,7 +236,7 @@ class TestTimeManager:
             duration_type="minutes",
             duration_value=10.0,
             remaining_value=10.0,
-            target_name="Paladin"
+            target_name="Paladin",
         )
 
         tm.add_effect(effect)
@@ -264,7 +264,7 @@ class TestTimeManager:
             duration_type="minutes",
             duration_value=10.0,
             remaining_value=10.0,
-            target_name="Cleric"
+            target_name="Cleric",
         )
 
         effect2 = ActiveEffect(
@@ -273,7 +273,7 @@ class TestTimeManager:
             duration_type="minutes",
             duration_value=1.0,
             remaining_value=1.0,
-            target_name="Cleric"
+            target_name="Cleric",
         )
 
         tm.add_effect(effect1)
@@ -296,7 +296,7 @@ class TestTimeManager:
             duration_type="hours",
             duration_value=1.0,
             remaining_value=0.5,  # Half expired
-            target_name="Torch"
+            target_name="Torch",
         )
 
         effect2 = ActiveEffect(
@@ -305,7 +305,7 @@ class TestTimeManager:
             duration_type="hours",
             duration_value=1.0,
             remaining_value=1.0,  # Fresh cast
-            target_name="Torch"
+            target_name="Torch",
         )
 
         tm.add_effect(effect1)
@@ -325,7 +325,7 @@ class TestTimeManager:
             duration_type="minutes",
             duration_value=10.0,
             remaining_value=10.0,
-            target_name="Wizard"
+            target_name="Wizard",
         )
 
         tm.add_effect(effect)
@@ -353,7 +353,7 @@ class TestTimeManager:
             remaining_value=10.0,
             target_name="Fighter",
             concentration=True,
-            caster_name="Wizard"
+            caster_name="Wizard",
         )
 
         effect2 = ActiveEffect(
@@ -364,7 +364,7 @@ class TestTimeManager:
             remaining_value=10.0,
             target_name="Rogue",
             concentration=True,
-            caster_name="Wizard"
+            caster_name="Wizard",
         )
 
         # Non-concentration effect from same caster
@@ -375,7 +375,7 @@ class TestTimeManager:
             duration_value=8.0,
             remaining_value=8.0,
             target_name="Wizard",
-            concentration=False
+            concentration=False,
         )
 
         tm.add_effect(effect1)
@@ -401,7 +401,7 @@ class TestTimeManager:
             duration_type="minutes",
             duration_value=10.0,
             remaining_value=10.0,
-            target_name="Fighter"
+            target_name="Fighter",
         )
 
         effect2 = ActiveEffect(
@@ -410,7 +410,7 @@ class TestTimeManager:
             duration_type="minutes",
             duration_value=10.0,
             remaining_value=10.0,
-            target_name="Fighter"
+            target_name="Fighter",
         )
 
         effect3 = ActiveEffect(
@@ -419,7 +419,7 @@ class TestTimeManager:
             duration_type="minutes",
             duration_value=10.0,
             remaining_value=10.0,
-            target_name="Cleric"
+            target_name="Cleric",
         )
 
         tm.add_effect(effect1)
@@ -446,7 +446,7 @@ class TestTimeManager:
                 duration_type="minutes",
                 duration_value=10.0,
                 remaining_value=10.0,
-                target_name="Target"
+                target_name="Target",
             )
             tm.add_effect(effect)
 
@@ -534,7 +534,7 @@ class TestTimeManagerEvents:
             duration_type="minutes",
             duration_value=1.0,
             remaining_value=1.0,
-            target_name="Wizard"
+            target_name="Wizard",
         )
 
         tm.add_effect(effect)
@@ -567,7 +567,7 @@ class TestTimeManagerEvents:
             remaining_value=10.0,
             target_name="Fighter",
             concentration=True,
-            caster_name="Wizard"
+            caster_name="Wizard",
         )
 
         tm.add_effect(effect)

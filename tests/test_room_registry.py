@@ -2,9 +2,10 @@
 # ABOUTME: Tests prefix mapping, room lookup, and cross-dungeon navigation support.
 
 import json
-import pytest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+
+import pytest
 
 from dnd_engine.core.room_registry import RoomRegistry
 
@@ -27,7 +28,7 @@ def temp_dungeons_dir():
                     "parent": "test_crypt",
                     "name": "Crypt Entrance",
                     "description": "A dark entrance",
-                    "exits": {"down": "crypt.hall"}
+                    "exits": {"down": "crypt.hall"},
                 },
                 "crypt.hall": {
                     "id": "crypt.hall",
@@ -35,9 +36,9 @@ def temp_dungeons_dir():
                     "parent": "test_crypt",
                     "name": "Crypt Hall",
                     "description": "A dusty hall",
-                    "exits": {"up": "crypt.entrance"}
-                }
-            }
+                    "exits": {"up": "crypt.entrance"},
+                },
+            },
         }
         with open(dungeons_path / "test_crypt.json", "w") as f:
             json.dump(crypt, f)
@@ -54,7 +55,7 @@ def temp_dungeons_dir():
                     "parent": "test_town",
                     "name": "Town Square",
                     "description": "A bustling square",
-                    "exits": {"gate": "town.gate"}
+                    "exits": {"gate": "town.gate"},
                 },
                 "town.gate": {
                     "id": "town.gate",
@@ -62,9 +63,9 @@ def temp_dungeons_dir():
                     "parent": "test_town",
                     "name": "Town Gate",
                     "description": "The town gate",
-                    "exits": {"square": "town.square", "road": "crypt.entrance"}
-                }
-            }
+                    "exits": {"square": "town.square", "road": "crypt.entrance"},
+                },
+            },
         }
         with open(dungeons_path / "test_town.json", "w") as f:
             json.dump(town, f)
@@ -178,9 +179,7 @@ class TestRoomRegistry:
         generated = {
             "name": "Generated",
             "start_room": "gen.room1",
-            "rooms": {
-                "gen.room1": {"name": "Generated Room"}
-            }
+            "rooms": {"gen.room1": {"name": "Generated Room"}},
         }
         with open(temp_dungeons_dir / "generated_test.json", "w") as f:
             json.dump(generated, f)
@@ -196,10 +195,7 @@ class TestRoomRegistry:
         legacy = {
             "name": "Legacy",
             "start_room": "entrance",
-            "rooms": {
-                "entrance": {"name": "Entrance"},
-                "hallway": {"name": "Hallway"}
-            }
+            "rooms": {"entrance": {"name": "Entrance"}, "hallway": {"name": "Hallway"}},
         }
         with open(temp_dungeons_dir / "legacy_dungeon.json", "w") as f:
             json.dump(legacy, f)
@@ -217,6 +213,7 @@ class TestRoomRegistryWithRealData:
     def test_crypt_dungeon_registered(self):
         """Test that the real crypt dungeon is properly registered."""
         from dnd_engine.rules.loader import DataLoader
+
         loader = DataLoader()
         content_path = loader.data_path / "content"
 
@@ -232,6 +229,7 @@ class TestRoomRegistryWithRealData:
     def test_town_dungeon_registered(self):
         """Test that the town of Arden is properly registered."""
         from dnd_engine.rules.loader import DataLoader
+
         loader = DataLoader()
         content_path = loader.data_path / "content"
 
@@ -247,6 +245,7 @@ class TestRoomRegistryWithRealData:
     def test_cross_dungeon_exit_resolution(self):
         """Test that exits between dungeons can be resolved."""
         from dnd_engine.rules.loader import DataLoader
+
         loader = DataLoader()
         content_path = loader.data_path / "content"
 

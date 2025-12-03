@@ -1,12 +1,13 @@
 # ABOUTME: Tests for the quest state system that tracks quest progression.
 # ABOUTME: Verifies quest states (locked/available/active/completed) and transitions.
 
-import pytest
-from pathlib import Path
-import tempfile
 import json
+import tempfile
+from pathlib import Path
 
-from dnd_engine.core.quest import BonusReward, Quest, QuestState, QuestManager
+import pytest
+
+from dnd_engine.core.quest import BonusReward, Quest, QuestManager, QuestState
 
 
 class TestQuestState:
@@ -25,11 +26,7 @@ class TestQuest:
 
     def test_quest_creation_with_required_fields(self):
         """Quest should be creatable with required fields."""
-        quest = Quest(
-            id="test_quest",
-            name="Test Quest",
-            description="A test quest"
-        )
+        quest = Quest(id="test_quest", name="Test Quest", description="A test quest")
         assert quest.id == "test_quest"
         assert quest.name == "Test Quest"
         assert quest.description == "A test quest"
@@ -41,14 +38,14 @@ class TestQuest:
 
     def test_quest_creation_with_all_fields(self):
         """Quest should support all optional fields."""
-        from dnd_engine.core.quest import QuestObjective, ObjectiveType
+        from dnd_engine.core.quest import ObjectiveType, QuestObjective
 
         objectives = [
             QuestObjective(
                 id="defeat_boss",
                 type=ObjectiveType.KILL,
                 target="ghoul",
-                description="Defeat the undead guardian"
+                description="Defeat the undead guardian",
             )
         ]
         quest = Quest(
@@ -59,7 +56,7 @@ class TestQuest:
             unlocked_by_default=True,
             unlock_requirements=None,
             target_dungeon="crypt",
-            unlocks_quests=["cult_conspiracy"]
+            unlocks_quests=["cult_conspiracy"],
         )
         assert quest.unlocked_by_default is True
         assert quest.target_dungeon == "crypt"
@@ -74,7 +71,7 @@ class TestQuest:
             "name": "Test Quest",
             "description": "A test quest",
             "unlocked_by_default": True,
-            "target_dungeon": "test_dungeon"
+            "target_dungeon": "test_dungeon",
         }
         quest = Quest.from_dict(data)
         assert quest.id == "test_quest"
@@ -84,10 +81,7 @@ class TestQuest:
     def test_quest_to_dict(self):
         """Quest should be serializable to dictionary."""
         quest = Quest(
-            id="test_quest",
-            name="Test Quest",
-            description="A test quest",
-            unlocked_by_default=True
+            id="test_quest", name="Test Quest", description="A test quest", unlocked_by_default=True
         )
         data = quest.to_dict()
         assert data["id"] == "test_quest"
@@ -111,12 +105,12 @@ class TestQuestManager:
                             "id": "defeat_guardian",
                             "type": "kill",
                             "target": "ghoul",
-                            "description": "Defeat the undead guardian"
+                            "description": "Defeat the undead guardian",
                         }
                     ],
                     "unlocked_by_default": True,
                     "target_dungeon": "crypt",
-                    "unlocks_quests": ["cult_conspiracy"]
+                    "unlocks_quests": ["cult_conspiracy"],
                 },
                 {
                     "id": "cult_conspiracy",
@@ -127,15 +121,13 @@ class TestQuestManager:
                             "id": "defeat_cult_leader",
                             "type": "kill",
                             "target": "acolyte",
-                            "description": "Defeat the cult leader"
+                            "description": "Defeat the cult leader",
                         }
                     ],
                     "unlocked_by_default": False,
-                    "unlock_requirements": {
-                        "quest_completed": "investigate_crypt"
-                    },
+                    "unlock_requirements": {"quest_completed": "investigate_crypt"},
                     "target_dungeon": "cult_hideout",
-                    "unlocks_quests": ["temple_assault"]
+                    "unlocks_quests": ["temple_assault"],
                 },
                 {
                     "id": "temple_assault",
@@ -146,16 +138,14 @@ class TestQuestManager:
                             "id": "defeat_devil",
                             "type": "kill",
                             "target": "bearded_devil",
-                            "description": "Defeat the devil Durgon"
+                            "description": "Defeat the devil Durgon",
                         }
                     ],
                     "unlocked_by_default": False,
-                    "unlock_requirements": {
-                        "quest_completed": "cult_conspiracy"
-                    },
+                    "unlock_requirements": {"quest_completed": "cult_conspiracy"},
                     "target_dungeon": "temple_of_durgon",
-                    "unlocks_quests": []
-                }
+                    "unlocks_quests": [],
+                },
             ]
         }
 
@@ -296,7 +286,7 @@ class TestQuestManagerSerialization:
                     "name": "Quest A",
                     "description": "First quest",
                     "unlocked_by_default": True,
-                    "unlocks_quests": ["quest_b"]
+                    "unlocks_quests": ["quest_b"],
                 },
                 {
                     "id": "quest_b",
@@ -304,8 +294,8 @@ class TestQuestManagerSerialization:
                     "description": "Second quest",
                     "unlocked_by_default": False,
                     "unlock_requirements": {"quest_completed": "quest_a"},
-                    "unlocks_quests": []
-                }
+                    "unlocks_quests": [],
+                },
             ]
         }
 
@@ -324,10 +314,7 @@ class TestQuestManagerSerialization:
         manager = QuestManager()
         manager.load_quests_from_dict(quest_data)
 
-        saved_states = {
-            "quest_a": "completed",
-            "quest_b": "active"
-        }
+        saved_states = {"quest_a": "completed", "quest_b": "active"}
         manager.deserialize_states(saved_states)
 
         assert manager.get_quest_state("quest_a") == QuestState.COMPLETED
@@ -358,14 +345,12 @@ class TestQuestManagerFileLoading:
                     "id": "file_quest",
                     "name": "File Quest",
                     "description": "Loaded from file",
-                    "unlocked_by_default": True
+                    "unlocked_by_default": True,
                 }
             ]
         }
 
-        with tempfile.NamedTemporaryFile(
-            mode='w', suffix='.json', delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(quest_data, f)
             temp_path = Path(f.name)
 
@@ -391,8 +376,7 @@ class TestQuestManagerGameStateIntegration:
         from dnd_engine.utils.events import EventBus
 
         abilities = Abilities(
-            strength=10, dexterity=14, constitution=14,
-            intelligence=10, wisdom=12, charisma=10
+            strength=10, dexterity=14, constitution=14, intelligence=10, wisdom=12, charisma=10
         )
         character = Character(
             name="Test Hero",
@@ -400,7 +384,7 @@ class TestQuestManagerGameStateIntegration:
             level=1,
             abilities=abilities,
             max_hp=12,
-            ac=16
+            ac=16,
         )
         party = Party([character])
         event_bus = EventBus()
@@ -411,7 +395,7 @@ class TestQuestManagerGameStateIntegration:
             dungeon_name="town_of_arden",
             event_bus=event_bus,
             data_loader=data_loader,
-            campaign_id="the_unquiet_dead"
+            campaign_id="the_unquiet_dead",
         )
 
         assert game_state.quest_manager is not None
@@ -428,8 +412,7 @@ class TestQuestManagerGameStateIntegration:
         from dnd_engine.utils.events import EventBus
 
         abilities = Abilities(
-            strength=10, dexterity=14, constitution=14,
-            intelligence=10, wisdom=12, charisma=10
+            strength=10, dexterity=14, constitution=14, intelligence=10, wisdom=12, charisma=10
         )
         character = Character(
             name="Test Hero",
@@ -437,7 +420,7 @@ class TestQuestManagerGameStateIntegration:
             level=1,
             abilities=abilities,
             max_hp=12,
-            ac=16
+            ac=16,
         )
         party = Party([character])
         event_bus = EventBus()
@@ -445,10 +428,7 @@ class TestQuestManagerGameStateIntegration:
 
         # Use test_dungeon which doesn't have a campaign_id in its data
         game_state = GameState(
-            party=party,
-            dungeon_name="test_dungeon",
-            event_bus=event_bus,
-            data_loader=data_loader
+            party=party, dungeon_name="test_dungeon", event_bus=event_bus, data_loader=data_loader
         )
 
         assert game_state.quest_manager is None
@@ -881,6 +861,7 @@ class TestEventDrivenObjectiveTracking:
     def event_bus(self):
         """Create an EventBus for testing."""
         from dnd_engine.utils.events import EventBus
+
         return EventBus()
 
     @pytest.fixture
@@ -909,14 +890,10 @@ class TestEventDrivenObjectiveTracking:
 
         # Check objective is completed
         quest = quest_manager_with_events.quests["investigate_crypt"]
-        defeat_objective = next(
-            obj for obj in quest.objectives if obj.id == "defeat_guardian"
-        )
+        defeat_objective = next(obj for obj in quest.objectives if obj.id == "defeat_guardian")
         assert defeat_objective.completed is True
 
-    def test_item_used_event_completes_use_objective(
-        self, quest_manager_with_events, event_bus
-    ):
+    def test_item_used_event_completes_use_objective(self, quest_manager_with_events, event_bus):
         """ITEM_USED event should complete use objectives."""
         from dnd_engine.utils.events import Event, EventType
 
@@ -932,9 +909,7 @@ class TestEventDrivenObjectiveTracking:
 
         # Check objective is completed
         quest = quest_manager_with_events.quests["investigate_crypt"]
-        read_objective = next(
-            obj for obj in quest.objectives if obj.id == "read_journal"
-        )
+        read_objective = next(obj for obj in quest.objectives if obj.id == "read_journal")
         assert read_objective.completed is True
 
     def test_all_objectives_complete_triggers_quest_completion(
@@ -946,93 +921,63 @@ class TestEventDrivenObjectiveTracking:
         quest_manager_with_events.activate_quest("investigate_crypt")
 
         # Complete both objectives via events
-        event_bus.emit(
-            Event(EventType.BOSS_DEFEATED, {"monster_id": "ghoul"})
-        )
-        event_bus.emit(
-            Event(EventType.ITEM_USED, {"item_id": "gorgus_journal"})
-        )
+        event_bus.emit(Event(EventType.BOSS_DEFEATED, {"monster_id": "ghoul"}))
+        event_bus.emit(Event(EventType.ITEM_USED, {"item_id": "gorgus_journal"}))
 
         # Quest should now be COMPLETED
         state = quest_manager_with_events.get_quest_state("investigate_crypt")
         assert state == QuestState.COMPLETED
 
-    def test_quest_completion_unlocks_dependent_quests(
-        self, quest_manager_with_events, event_bus
-    ):
+    def test_quest_completion_unlocks_dependent_quests(self, quest_manager_with_events, event_bus):
         """Completing a quest via events should unlock dependent quests."""
         from dnd_engine.utils.events import Event, EventType
 
         quest_manager_with_events.activate_quest("investigate_crypt")
 
         # Complete both objectives
-        event_bus.emit(
-            Event(EventType.BOSS_DEFEATED, {"monster_id": "ghoul"})
-        )
-        event_bus.emit(
-            Event(EventType.ITEM_USED, {"item_id": "gorgus_journal"})
-        )
+        event_bus.emit(Event(EventType.BOSS_DEFEATED, {"monster_id": "ghoul"}))
+        event_bus.emit(Event(EventType.ITEM_USED, {"item_id": "gorgus_journal"}))
 
         # Follow-up quest should now be AVAILABLE
         state = quest_manager_with_events.get_quest_state("follow_up_quest")
         assert state == QuestState.AVAILABLE
 
-    def test_events_only_affect_active_quests(
-        self, quest_manager_with_events, event_bus
-    ):
+    def test_events_only_affect_active_quests(self, quest_manager_with_events, event_bus):
         """Events should not affect quests that are locked."""
         from dnd_engine.utils.events import Event, EventType
 
         # Set quest to LOCKED (cannot be auto-activated)
         quest_manager_with_events._quest_states["investigate_crypt"] = QuestState.LOCKED
-        assert (
-            quest_manager_with_events.get_quest_state("investigate_crypt")
-            == QuestState.LOCKED
-        )
+        assert quest_manager_with_events.get_quest_state("investigate_crypt") == QuestState.LOCKED
 
         # Emit events
-        event_bus.emit(
-            Event(EventType.BOSS_DEFEATED, {"monster_id": "ghoul"})
-        )
-        event_bus.emit(
-            Event(EventType.ITEM_USED, {"item_id": "gorgus_journal"})
-        )
+        event_bus.emit(Event(EventType.BOSS_DEFEATED, {"monster_id": "ghoul"}))
+        event_bus.emit(Event(EventType.ITEM_USED, {"item_id": "gorgus_journal"}))
 
         # Quest should still be LOCKED, not ACTIVE or COMPLETED
-        assert (
-            quest_manager_with_events.get_quest_state("investigate_crypt")
-            == QuestState.LOCKED
-        )
+        assert quest_manager_with_events.get_quest_state("investigate_crypt") == QuestState.LOCKED
 
         # Objectives should not be completed
         quest = quest_manager_with_events.quests["investigate_crypt"]
         for obj in quest.objectives:
             assert obj.completed is False
 
-    def test_non_matching_events_are_ignored(
-        self, quest_manager_with_events, event_bus
-    ):
+    def test_non_matching_events_are_ignored(self, quest_manager_with_events, event_bus):
         """Events with non-matching targets should be ignored."""
         from dnd_engine.utils.events import Event, EventType
 
         quest_manager_with_events.activate_quest("investigate_crypt")
 
         # Emit events with wrong targets
-        event_bus.emit(
-            Event(EventType.BOSS_DEFEATED, {"monster_id": "wrong_monster"})
-        )
-        event_bus.emit(
-            Event(EventType.ITEM_ACQUIRED, {"item_id": "wrong_item"})
-        )
+        event_bus.emit(Event(EventType.BOSS_DEFEATED, {"monster_id": "wrong_monster"}))
+        event_bus.emit(Event(EventType.ITEM_ACQUIRED, {"item_id": "wrong_item"}))
 
         # Objectives should not be completed
         quest = quest_manager_with_events.quests["investigate_crypt"]
         for obj in quest.objectives:
             assert obj.completed is False
 
-    def test_quest_completed_event_is_emitted(
-        self, quest_manager_with_events, event_bus
-    ):
+    def test_quest_completed_event_is_emitted(self, quest_manager_with_events, event_bus):
         """QUEST_COMPLETED event should be emitted when quest completes."""
         from dnd_engine.utils.events import Event, EventType
 
@@ -1046,27 +991,19 @@ class TestEventDrivenObjectiveTracking:
         )
 
         # Complete the quest
-        event_bus.emit(
-            Event(EventType.BOSS_DEFEATED, {"monster_id": "ghoul"})
-        )
-        event_bus.emit(
-            Event(EventType.ITEM_USED, {"item_id": "gorgus_journal"})
-        )
+        event_bus.emit(Event(EventType.BOSS_DEFEATED, {"monster_id": "ghoul"}))
+        event_bus.emit(Event(EventType.ITEM_USED, {"item_id": "gorgus_journal"}))
 
         # Check QUEST_COMPLETED was emitted
         assert len(emitted_events) == 1
         assert emitted_events[0].data["quest_id"] == "investigate_crypt"
         assert emitted_events[0].data["quest_name"] == "The Crypt Problem"
 
-    def test_objective_progress_tracking(
-        self, quest_manager_with_events, event_bus
-    ):
+    def test_objective_progress_tracking(self, quest_manager_with_events, event_bus):
         """Objectives with count_required > 1 should track progress."""
-        from dnd_engine.core.quest import ObjectiveType, QuestObjective
-        from dnd_engine.utils.events import Event, EventType
-
         # Manually add a quest with count objective
-        from dnd_engine.core.quest import Quest
+        from dnd_engine.core.quest import ObjectiveType, Quest, QuestObjective
+        from dnd_engine.utils.events import Event, EventType
 
         quest_manager_with_events.quests["kill_goblins"] = Quest(
             id="kill_goblins",
@@ -1100,16 +1037,13 @@ class TestEventDrivenObjectiveTracking:
         assert obj.count_current == 3
         assert obj.completed is True
 
-    def test_quest_auto_activates_on_dungeon_enter(
-        self, quest_manager_with_events, event_bus
-    ):
+    def test_quest_auto_activates_on_dungeon_enter(self, quest_manager_with_events, event_bus):
         """Available quests should auto-activate when entering their target dungeon."""
         from dnd_engine.utils.events import Event, EventType
 
         # Quest starts as AVAILABLE
         assert (
-            quest_manager_with_events.get_quest_state("investigate_crypt")
-            == QuestState.AVAILABLE
+            quest_manager_with_events.get_quest_state("investigate_crypt") == QuestState.AVAILABLE
         )
 
         # Emit room enter event with matching dungeon_id
@@ -1125,10 +1059,7 @@ class TestEventDrivenObjectiveTracking:
         )
 
         # Quest should now be ACTIVE
-        assert (
-            quest_manager_with_events.get_quest_state("investigate_crypt")
-            == QuestState.ACTIVE
-        )
+        assert quest_manager_with_events.get_quest_state("investigate_crypt") == QuestState.ACTIVE
 
     def test_quest_does_not_auto_activate_for_wrong_dungeon(
         self, quest_manager_with_events, event_bus
@@ -1138,8 +1069,7 @@ class TestEventDrivenObjectiveTracking:
 
         # Quest starts as AVAILABLE
         assert (
-            quest_manager_with_events.get_quest_state("investigate_crypt")
-            == QuestState.AVAILABLE
+            quest_manager_with_events.get_quest_state("investigate_crypt") == QuestState.AVAILABLE
         )
 
         # Emit room enter event with non-matching dungeon_id
@@ -1156,13 +1086,10 @@ class TestEventDrivenObjectiveTracking:
 
         # Quest should still be AVAILABLE
         assert (
-            quest_manager_with_events.get_quest_state("investigate_crypt")
-            == QuestState.AVAILABLE
+            quest_manager_with_events.get_quest_state("investigate_crypt") == QuestState.AVAILABLE
         )
 
-    def test_quest_activated_event_is_emitted(
-        self, quest_manager_with_events, event_bus
-    ):
+    def test_quest_activated_event_is_emitted(self, quest_manager_with_events, event_bus):
         """QUEST_ACTIVATED event should be emitted when quest auto-activates."""
         from dnd_engine.utils.events import Event, EventType
 

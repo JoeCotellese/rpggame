@@ -20,7 +20,7 @@ class TestGetOutOfCombatSpells:
             constitution=12,
             intelligence=16,  # +3 modifier
             wisdom=10,
-            charisma=8
+            charisma=8,
         )
 
     @pytest.fixture
@@ -36,25 +36,30 @@ class TestGetOutOfCombatSpells:
             spellcasting_ability="int",
             known_spells=[
                 # Combat spells
-                "fire_bolt",        # cantrip: attack + damage
-                "ray_of_frost",     # cantrip: attack + damage
-                "magic_missile",    # level 1: damage only
-                "burning_hands",    # level 1: damage + save
-                "scorching_ray",    # level 2: attack + damage
+                "fire_bolt",  # cantrip: attack + damage
+                "ray_of_frost",  # cantrip: attack + damage
+                "magic_missile",  # level 1: damage only
+                "burning_hands",  # level 1: damage + save
+                "scorching_ray",  # level 2: attack + damage
                 # Utility/healing spells
-                "light",            # cantrip: utility (no attack/damage)
-                "mage_hand",        # cantrip: utility
-                "cure_wounds",      # level 1: healing
-                "detect_magic",     # level 1: ritual
-                "shield",           # level 1: reaction utility
-                "mage_armor",       # level 1: buff utility
-                "identify"          # level 1: ritual
+                "light",  # cantrip: utility (no attack/damage)
+                "mage_hand",  # cantrip: utility
+                "cure_wounds",  # level 1: healing
+                "detect_magic",  # level 1: ritual
+                "shield",  # level 1: reaction utility
+                "mage_armor",  # level 1: buff utility
+                "identify",  # level 1: ritual
             ],
             prepared_spells=[
-                "fire_bolt", "light", "mage_hand",  # cantrips
-                "magic_missile", "cure_wounds", "detect_magic",
-                "shield", "mage_armor"
-            ]
+                "fire_bolt",
+                "light",
+                "mage_hand",  # cantrips
+                "magic_missile",
+                "cure_wounds",
+                "detect_magic",
+                "shield",
+                "mage_armor",
+            ],
         )
 
     @pytest.fixture
@@ -138,7 +143,7 @@ class TestGetOutOfCombatSpells:
             ac=12,
             spellcasting_ability="int",
             known_spells=[],
-            prepared_spells=[]
+            prepared_spells=[],
         )
 
         spells_data = data_loader.load_spells()
@@ -153,15 +158,10 @@ class TestGetOutOfCombatSpells:
             character_class=CharacterClass.FIGHTER,
             level=5,
             abilities=Abilities(
-                strength=16,
-                dexterity=14,
-                constitution=15,
-                intelligence=10,
-                wisdom=12,
-                charisma=8
+                strength=16, dexterity=14, constitution=15, intelligence=10, wisdom=12, charisma=8
             ),
             max_hp=40,
-            ac=18
+            ac=18,
         )
 
         spells_data = data_loader.load_spells()
@@ -196,7 +196,7 @@ class TestGetOutOfCombatSpells:
             ac=12,
             spellcasting_ability="int",
             known_spells=["nonexistent_spell", "light"],
-            prepared_spells=["nonexistent_spell", "light"]
+            prepared_spells=["nonexistent_spell", "light"],
         )
 
         # Spell data that doesn't include the nonexistent spell
@@ -206,7 +206,7 @@ class TestGetOutOfCombatSpells:
                 "level": 0,
                 "school": "evocation",
                 "target_type": "any",
-                "tags": ["utility"]
+                "tags": ["utility"],
             }
         }
 

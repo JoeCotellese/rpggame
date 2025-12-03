@@ -43,7 +43,7 @@ class TestEndTurnCommand:
         cli_instance = CLI(
             game_state=mock_game_state,
             campaign_manager=mock_campaign_manager,
-            campaign_name="test_campaign"
+            campaign_name="test_campaign",
         )
         cli_instance.running = True
         return cli_instance
@@ -92,7 +92,7 @@ class TestEndTurnCommand:
         """Test that end turn fails when not in combat"""
         mock_game_state.in_combat = False
 
-        with patch('dnd_engine.ui.cli.print_error') as mock_error:
+        with patch("dnd_engine.ui.cli.print_error") as mock_error:
             cli.handle_end_turn()
             mock_error.assert_called_with("You're not in combat!")
 
@@ -103,7 +103,7 @@ class TestEndTurnCommand:
         """Test that end turn fails when no initiative tracker exists"""
         mock_game_state.initiative_tracker = None
 
-        with patch('dnd_engine.ui.cli.print_error') as mock_error:
+        with patch("dnd_engine.ui.cli.print_error") as mock_error:
             cli.handle_end_turn()
             mock_error.assert_called_with("No initiative tracker!")
 
@@ -111,7 +111,7 @@ class TestEndTurnCommand:
         """Test that end turn fails when no current combatant"""
         mock_game_state.initiative_tracker.get_current_combatant.return_value = None
 
-        with patch('dnd_engine.ui.cli.print_error') as mock_error:
+        with patch("dnd_engine.ui.cli.print_error") as mock_error:
             cli.handle_end_turn()
             mock_error.assert_called_with("No current combatant!")
 
@@ -125,7 +125,7 @@ class TestEndTurnCommand:
         mock_game_state.initiative_tracker.get_current_combatant.return_value = combatant
         mock_game_state.party.characters = [mock_character]  # Enemy not in party
 
-        with patch('dnd_engine.ui.cli.print_error') as mock_error:
+        with patch("dnd_engine.ui.cli.print_error") as mock_error:
             cli.handle_end_turn()
             mock_error.assert_called_with("It's not a party member's turn!")
 
@@ -140,7 +140,7 @@ class TestEndTurnCommand:
         mock_game_state.party.characters = [mock_character]
         cli.process_enemy_turns = Mock()
 
-        with patch('dnd_engine.ui.cli.print_status_message') as mock_status:
+        with patch("dnd_engine.ui.cli.print_status_message") as mock_status:
             cli.handle_end_turn()
             mock_status.assert_called_with(f"{mock_character.name} ends their turn.", "info")
 
@@ -174,11 +174,11 @@ class TestEndTurnIntegration:
         cli = CLI(
             game_state=mock_game_state,
             campaign_manager=mock_campaign_manager,
-            campaign_name="test_campaign"
+            campaign_name="test_campaign",
         )
 
         # Capture help output
-        with patch('dnd_engine.ui.cli.print_help_section') as mock_help:
+        with patch("dnd_engine.ui.cli.print_help_section") as mock_help:
             cli.display_help_combat()
 
             # Verify help was called
@@ -210,7 +210,7 @@ class TestEndTurnIntegration:
         cli = CLI(
             game_state=mock_game_state,
             campaign_manager=mock_campaign_manager,
-            campaign_name="test_campaign"
+            campaign_name="test_campaign",
         )
 
         # Create character
@@ -235,7 +235,7 @@ class TestEndTurnIntegration:
             effect_message="You heal 6 HP",
             effect_amount=6,
             hp_before=10,
-            hp_after=16
+            hp_after=16,
         )
         mock_game_state.use_item_combat.return_value = mock_result
 
@@ -243,11 +243,16 @@ class TestEndTurnIntegration:
         item_data = {"name": "Potion of Healing", "action_required": "action"}
 
         # Track status messages
-        with patch('dnd_engine.ui.cli.print_status_message') as mock_status:
-            cli.handle_use_item_combat_with_target("potion_of_healing", item_data, character, character)
+        with patch("dnd_engine.ui.cli.print_status_message") as mock_status:
+            cli.handle_use_item_combat_with_target(
+                "potion_of_healing", item_data, character, character
+            )
 
             # Verify the hint was shown
             calls = [str(call) for call in mock_status.call_args_list]
-            hint_shown = any("done" in str(call).lower() or "pass" in str(call).lower()
-                             for call in calls)
-            assert hint_shown, "Hint about ending turn should be shown after item use with actions remaining"
+            hint_shown = any(
+                "done" in str(call).lower() or "pass" in str(call).lower() for call in calls
+            )
+            assert hint_shown, (
+                "Hint about ending turn should be shown after item use with actions remaining"
+            )

@@ -41,7 +41,7 @@ class CampaignCreationWizard:
         campaign_manager: CampaignManager | None = None,
         character_vault: CharacterVault | None = None,
         character_factory: CharacterFactory | None = None,
-        data_loader: DataLoader | None = None
+        data_loader: DataLoader | None = None,
     ):
         """
         Initialize the campaign creation wizard.
@@ -119,7 +119,9 @@ class CampaignCreationWizard:
             if any(c.name == campaign_name for c in existing_campaigns):
                 print_error(f"Campaign '{campaign_name}' already exists")
                 console.print()
-                retry = console.input("[bold]Choose a different name? [Y/n]:[/bold] ").strip().lower()
+                retry = (
+                    console.input("[bold]Choose a different name? [Y/n]:[/bold] ").strip().lower()
+                )
                 if retry in ["n", "no"]:
                     return False
                 continue
@@ -194,9 +196,9 @@ class CampaignCreationWizard:
             elif choice == "3" and len(self.party_character_ids) >= 1:
                 return True
             elif choice == "b":
-                confirm = console.input(
-                    "[bold]Cancel campaign creation? [y/N]:[/bold] "
-                ).strip().lower()
+                confirm = (
+                    console.input("[bold]Cancel campaign creation? [y/N]:[/bold] ").strip().lower()
+                )
                 if confirm in ["y", "yes"]:
                     return False
             else:
@@ -212,7 +214,9 @@ class CampaignCreationWizard:
             for char_id in self.party_character_ids:
                 try:
                     char = self.character_vault.load_character(char_id)
-                    console.print(f"  • {char.name} ({char.character_class.value.title()} {char.level})")
+                    console.print(
+                        f"  • {char.name} ({char.character_class.value.title()} {char.level})"
+                    )
                 except Exception:
                     console.print(f"  • {char_id} [dim](error loading)[/dim]")
 
@@ -223,8 +227,7 @@ class CampaignCreationWizard:
 
         # Launch new character creation wizard
         wizard = CharacterCreationWizard(
-            character_factory=self.character_factory,
-            data_loader=self.data_loader
+            character_factory=self.character_factory, data_loader=self.data_loader
         )
         character = wizard.run()
 
@@ -243,9 +246,7 @@ class CampaignCreationWizard:
 
         # Save to vault
         char_id = self.character_vault.save_character(
-            character,
-            state=CharacterState.AVAILABLE,
-            campaign_name=None
+            character, state=CharacterState.AVAILABLE, campaign_name=None
         )
 
         # Add to party
@@ -269,17 +270,11 @@ class CampaignCreationWizard:
 
         for i, char_info in enumerate(all_characters, 1):
             state = char_info.get("state", "available")
-            state_icon = {
-                "available": "✓",
-                "active": "⚠",
-                "retired": "✗"
-            }.get(state, "?")
+            state_icon = {"available": "✓", "active": "⚠", "retired": "✗"}.get(state, "?")
 
-            state_color = {
-                "available": "green",
-                "active": "yellow",
-                "retired": "dim"
-            }.get(state, "white")
+            state_color = {"available": "green", "active": "yellow", "retired": "dim"}.get(
+                state, "white"
+            )
 
             char_name = char_info.get("name", "Unknown")
             char_class = char_info.get("class", "Unknown")
@@ -293,7 +288,9 @@ class CampaignCreationWizard:
             console.print(f"[{i}] {char_name} ({char_class} {char_level}) - {status}")
 
         console.print()
-        choice = console.input(f"[bold cyan]Select character [1-{len(all_characters)}] or [B]ack:[/bold cyan] ").strip()
+        choice = console.input(
+            f"[bold cyan]Select character [1-{len(all_characters)}] or [B]ack:[/bold cyan] "
+        ).strip()
 
         if choice.lower() == "b":
             return
@@ -314,11 +311,15 @@ class CampaignCreationWizard:
                     console.print()
                     print_status_message(
                         f"⚠ Warning: {char_info['name']} is active in '{char_info.get('campaign_name')}'",
-                        "warning"
+                        "warning",
                     )
-                    confirm = console.input(
-                        "[bold]Import anyway? (This will remove them from that campaign) [y/N]:[/bold] "
-                    ).strip().lower()
+                    confirm = (
+                        console.input(
+                            "[bold]Import anyway? (This will remove them from that campaign) [y/N]:[/bold] "
+                        )
+                        .strip()
+                        .lower()
+                    )
                     if confirm not in ["y", "yes"]:
                         return
 
@@ -329,7 +330,7 @@ class CampaignCreationWizard:
                 self.character_vault.save_character(
                     character,
                     state=CharacterState(char_info.get("state", "available")),
-                    campaign_name=char_info.get("campaign_name")
+                    campaign_name=char_info.get("campaign_name"),
                 )
 
                 # Add to party
@@ -412,13 +413,17 @@ class CampaignCreationWizard:
         for char_id in self.party_character_ids:
             try:
                 char = self.character_vault.load_character(char_id)
-                party_names.append(f"{char.name} ({char.character_class.value.title()} {char.level})")
+                party_names.append(
+                    f"{char.name} ({char.character_class.value.title()} {char.level})"
+                )
             except Exception:
                 party_names.append(f"{char_id} (error)")
 
         table.add_row("Party", "\n".join(party_names))
 
-        dungeon_display = self.dungeon_name.replace("_", " ").title() if self.dungeon_name else "None"
+        dungeon_display = (
+            self.dungeon_name.replace("_", " ").title() if self.dungeon_name else "None"
+        )
         table.add_row("Adventure", dungeon_display)
 
         console.print(table)
@@ -441,7 +446,7 @@ class CampaignCreationWizard:
             self.campaign_manager.create_campaign(
                 name=self.campaign_name,
                 dungeon_name=self.dungeon_name,
-                party_character_ids=self.party_character_ids
+                party_character_ids=self.party_character_ids,
             )
 
             # Update character states to ACTIVE
@@ -449,7 +454,7 @@ class CampaignCreationWizard:
                 self.character_vault.update_character_state(
                     character_id=char_id,
                     state=CharacterState.ACTIVE,
-                    campaign_name=self.campaign_name
+                    campaign_name=self.campaign_name,
                 )
 
         print_status_message(f"✓ Campaign '{self.campaign_name}' created successfully!", "success")
@@ -528,11 +533,17 @@ class CampaignCreationWizard:
                 level_ordinal = character._level_to_ordinal(spell_level)
                 pool = character.resource_pools.get(f"spell_slots_level_{spell_level}")
                 max_slots = pool.maximum if pool else 0
-                choices.append(questionary.Separator(f"── {level_ordinal.capitalize()} Level ({max_slots} slots) ──"))
+                choices.append(
+                    questionary.Separator(
+                        f"── {level_ordinal.capitalize()} Level ({max_slots} slots) ──"
+                    )
+                )
 
             # Build choice with spell info
             if spell_data.get("damage"):
-                effect = f"{spell_data['damage'].get('dice', '')} {spell_data['damage'].get('type', '')}"
+                effect = (
+                    f"{spell_data['damage'].get('dice', '')} {spell_data['damage'].get('type', '')}"
+                )
             elif spell_data.get("healing"):
                 effect = f"healing {spell_data['healing'].get('dice', '')}"
             else:
@@ -541,16 +552,14 @@ class CampaignCreationWizard:
 
             choice_title = f"{spell_name} ({school}) - {effect}"
             # Don't pre-check any spells for initial preparation
-            choices.append(Choice(
-                title=choice_title,
-                value=spell_id,
-                checked=False
-            ))
+            choices.append(Choice(title=choice_title, value=spell_id, checked=False))
 
         # Custom validator to enforce max selection
         def validate_selection(selected):
             if len(selected) > max_prepared:
-                return f"Too many spells! Select at most {max_prepared} (you selected {len(selected)})"
+                return (
+                    f"Too many spells! Select at most {max_prepared} (you selected {len(selected)})"
+                )
             return True
 
         try:
@@ -558,7 +567,7 @@ class CampaignCreationWizard:
                 f"Select spells to prepare (max {max_prepared}):",
                 choices=choices,
                 validate=validate_selection,
-                instruction="(Space to toggle, Enter to confirm)"
+                instruction="(Space to toggle, Enter to confirm)",
             ).ask()
 
             # Handle cancellation - prepare all if cancelled
@@ -579,6 +588,5 @@ class CampaignCreationWizard:
                 spell = spells_data.get(sid, {})
                 spell_names.append(spell.get("name", sid))
             print_status_message(
-                f"Prepared {len(selected_spell_ids)} spell(s): {', '.join(spell_names)}",
-                "success"
+                f"Prepared {len(selected_spell_ids)} spell(s): {', '.join(spell_names)}", "success"
             )
