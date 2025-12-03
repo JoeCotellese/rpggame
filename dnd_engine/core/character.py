@@ -50,6 +50,7 @@ class Character(Creature):
         expertise_skills: list[str] | None = None,
         weapon_proficiencies: list[str] | None = None,
         armor_proficiencies: list[str] | None = None,
+        tool_proficiencies: list[str] | None = None,
         spellcasting_ability: str | None = None,
         known_spells: list[str] | None = None,
         prepared_spells: list[str] | None = None,
@@ -75,6 +76,7 @@ class Character(Creature):
             expertise_skills: List of skills with expertise (doubled proficiency bonus)
             weapon_proficiencies: List of weapon types the character is proficient in (e.g., ["simple", "martial"])
             armor_proficiencies: List of armor types the character is proficient in (e.g., ["light", "medium", "heavy", "shields"])
+            tool_proficiencies: List of tools the character is proficient with (e.g., ["thieves_tools"])
             spellcasting_ability: The ability used for spellcasting (e.g., "int", "wis", "cha")
             known_spells: List of spell IDs the character knows
             prepared_spells: List of spell IDs the character has prepared
@@ -97,6 +99,7 @@ class Character(Creature):
         self.expertise_skills = expertise_skills if expertise_skills is not None else []
         self.weapon_proficiencies = weapon_proficiencies if weapon_proficiencies is not None else []
         self.armor_proficiencies = armor_proficiencies if armor_proficiencies is not None else []
+        self.tool_proficiencies = tool_proficiencies if tool_proficiencies is not None else []
         self.resource_pools: dict[str, ResourcePool] = {}
         self._dice_roller = DiceRoller()
 
