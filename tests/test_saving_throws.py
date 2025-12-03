@@ -14,12 +14,12 @@ class TestGetSavingThrowModifier:
         """Set up test fixtures"""
         # Create a Fighter with STR 16, CON 15, DEX 12, others 10
         self.fighter_abilities = Abilities(
-            strength=16,      # +3
-            dexterity=12,     # +1
+            strength=16,  # +3
+            dexterity=12,  # +1
             constitution=15,  # +2
             intelligence=10,  # +0
-            wisdom=10,        # +0
-            charisma=8        # -1
+            wisdom=10,  # +0
+            charisma=8,  # -1
         )
 
         # Fighter is proficient in STR and CON saves
@@ -30,7 +30,7 @@ class TestGetSavingThrowModifier:
             abilities=self.fighter_abilities,
             max_hp=12,
             ac=16,
-            saving_throw_proficiencies=["str", "con"]
+            saving_throw_proficiencies=["str", "con"],
         )
 
     def test_proficient_save_includes_proficiency_bonus(self):
@@ -104,7 +104,7 @@ class TestGetSavingThrowModifier:
             abilities=self.fighter_abilities,
             max_hp=20,
             ac=16,
-            saving_throw_proficiencies=["str", "con"]
+            saving_throw_proficiencies=["str", "con"],
         )
 
         # Level 3: proficiency bonus is still +2 (levels 1-4)
@@ -115,12 +115,7 @@ class TestGetSavingThrowModifier:
     def test_no_proficiencies(self):
         """Test character with no saving throw proficiencies"""
         wizard_abilities = Abilities(
-            strength=8,
-            dexterity=14,
-            constitution=10,
-            intelligence=16,
-            wisdom=12,
-            charisma=10
+            strength=8, dexterity=14, constitution=10, intelligence=16, wisdom=12, charisma=10
         )
 
         # Wizard with no proficiencies
@@ -131,7 +126,7 @@ class TestGetSavingThrowModifier:
             abilities=wizard_abilities,
             max_hp=6,
             ac=12,
-            saving_throw_proficiencies=[]
+            saving_throw_proficiencies=[],
         )
 
         # Even for low ability, no proficiency bonus
@@ -147,17 +142,17 @@ class TestGetSavingThrowModifier:
             abilities=self.fighter_abilities,
             max_hp=12,
             ac=16,
-            saving_throw_proficiencies=["str", "con", "dex", "wis"]
+            saving_throw_proficiencies=["str", "con", "dex", "wis"],
         )
 
         # All proficient saves should include bonus
-        assert fighter.get_saving_throw_modifier("str") == 5   # +3 ability, +2 prof
-        assert fighter.get_saving_throw_modifier("con") == 4   # +2 ability, +2 prof
-        assert fighter.get_saving_throw_modifier("dex") == 3   # +1 ability, +2 prof
-        assert fighter.get_saving_throw_modifier("wis") == 2   # +0 ability, +2 prof
+        assert fighter.get_saving_throw_modifier("str") == 5  # +3 ability, +2 prof
+        assert fighter.get_saving_throw_modifier("con") == 4  # +2 ability, +2 prof
+        assert fighter.get_saving_throw_modifier("dex") == 3  # +1 ability, +2 prof
+        assert fighter.get_saving_throw_modifier("wis") == 2  # +0 ability, +2 prof
 
         # Non-proficient saves don't have bonus
-        assert fighter.get_saving_throw_modifier("int") == 0   # +0 ability, no prof
+        assert fighter.get_saving_throw_modifier("int") == 0  # +0 ability, no prof
         assert fighter.get_saving_throw_modifier("cha") == -1  # -1 ability, no prof
 
 
@@ -167,12 +162,12 @@ class TestMakeSavingThrow:
     def setup_method(self):
         """Set up test fixtures"""
         self.abilities = Abilities(
-            strength=16,      # +3
-            dexterity=12,     # +1
+            strength=16,  # +3
+            dexterity=12,  # +1
             constitution=15,  # +2
             intelligence=10,  # +0
-            wisdom=10,        # +0
-            charisma=8        # -1
+            wisdom=10,  # +0
+            charisma=8,  # -1
         )
 
         self.fighter = Character(
@@ -182,7 +177,7 @@ class TestMakeSavingThrow:
             abilities=self.abilities,
             max_hp=12,
             ac=16,
-            saving_throw_proficiencies=["str", "con"]
+            saving_throw_proficiencies=["str", "con"],
         )
 
     def test_saving_throw_returns_dict(self):
@@ -207,7 +202,7 @@ class TestMakeSavingThrow:
             abilities=self.abilities,
             max_hp=12,
             ac=16,
-            saving_throw_proficiencies=["str", "con"]
+            saving_throw_proficiencies=["str", "con"],
         )
 
         # Make multiple throws to test success/failure statistics
@@ -261,7 +256,7 @@ class TestMakeSavingThrow:
             abilities=self.abilities,
             max_hp=12,
             ac=16,
-            saving_throw_proficiencies=["str", "con"]
+            saving_throw_proficiencies=["str", "con"],
         )
 
         result = fighter.make_saving_throw("str", dc=15, advantage=True)
@@ -281,7 +276,7 @@ class TestMakeSavingThrow:
             abilities=self.abilities,
             max_hp=12,
             ac=16,
-            saving_throw_proficiencies=["str", "con"]
+            saving_throw_proficiencies=["str", "con"],
         )
 
         result = fighter.make_saving_throw("str", dc=15, disadvantage=True)
@@ -313,12 +308,12 @@ class TestSavingThrowWithEventBus:
     def setup_method(self):
         """Set up test fixtures"""
         self.abilities = Abilities(
-            strength=16,      # +3
-            dexterity=12,     # +1
+            strength=16,  # +3
+            dexterity=12,  # +1
             constitution=15,  # +2
             intelligence=10,  # +0
-            wisdom=10,        # +0
-            charisma=8        # -1
+            wisdom=10,  # +0
+            charisma=8,  # -1
         )
 
         self.fighter = Character(
@@ -328,7 +323,7 @@ class TestSavingThrowWithEventBus:
             abilities=self.abilities,
             max_hp=12,
             ac=16,
-            saving_throw_proficiencies=["str", "con"]
+            saving_throw_proficiencies=["str", "con"],
         )
 
         # Track emitted events

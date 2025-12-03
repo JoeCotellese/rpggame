@@ -73,7 +73,7 @@ class TestCharacterCreationE2E:
             constitution=abilities["constitution"],
             intelligence=abilities["intelligence"],
             wisdom=abilities["wisdom"],
-            charisma=abilities["charisma"]
+            charisma=abilities["charisma"],
         )
 
         con_modifier = factory.calculate_ability_modifier(abilities["constitution"])
@@ -89,7 +89,7 @@ class TestCharacterCreationE2E:
             abilities=abilities_obj,
             max_hp=hp,
             ac=ac,
-            race="mountain_dwarf"
+            race="mountain_dwarf",
         )
 
         factory.apply_starting_equipment(character, classes_data["fighter"], items_data)
@@ -99,11 +99,7 @@ class TestCharacterCreationE2E:
 
         # Create game state
         event_bus = EventBus()
-        game_state = GameState(
-            party=party,
-            dungeon_name="test_dungeon",
-            event_bus=event_bus
-        )
+        game_state = GameState(party=party, dungeon_name="test_dungeon", event_bus=event_bus)
 
         # Verify game state is valid
         assert game_state.party is not None
@@ -133,7 +129,7 @@ class TestCharacterCreationE2E:
             constitution=abilities["constitution"],
             intelligence=abilities["intelligence"],
             wisdom=abilities["wisdom"],
-            charisma=abilities["charisma"]
+            charisma=abilities["charisma"],
         )
 
         con_modifier = factory.calculate_ability_modifier(abilities["constitution"])
@@ -149,7 +145,7 @@ class TestCharacterCreationE2E:
             abilities=abilities_obj,
             max_hp=hp,
             ac=ac,
-            race="human"
+            race="human",
         )
 
         factory.apply_starting_equipment(character, classes_data["fighter"], items_data)
@@ -157,11 +153,7 @@ class TestCharacterCreationE2E:
         # Create game state
         party = Party(characters=[character])
         event_bus = EventBus()
-        game_state = GameState(
-            party=party,
-            dungeon_name="test_dungeon",
-            event_bus=event_bus
-        )
+        game_state = GameState(party=party, dungeon_name="test_dungeon", event_bus=event_bus)
 
         # Test exploration
         room_desc = game_state.get_room_description()
@@ -186,7 +178,7 @@ class TestCharacterCreationE2E:
             constitution=16,
             intelligence=10,
             wisdom=12,
-            charisma=8
+            charisma=8,
         )
 
         character = Character(
@@ -196,7 +188,7 @@ class TestCharacterCreationE2E:
             abilities=abilities_obj,
             max_hp=13,
             ac=16,
-            race="human"
+            race="human",
         )
 
         # Apply equipment
@@ -207,11 +199,7 @@ class TestCharacterCreationE2E:
         # Create game state
         party = Party(characters=[character])
         event_bus = EventBus()
-        game_state = GameState(
-            party=party,
-            dungeon_name="test_dungeon",
-            event_bus=event_bus
-        )
+        game_state = GameState(party=party, dungeon_name="test_dungeon", event_bus=event_bus)
 
         # Verify character has combat capabilities
         assert character.melee_attack_bonus >= 2
@@ -242,7 +230,7 @@ class TestCharacterCreationE2E:
                 constitution=abilities["constitution"],
                 intelligence=abilities["intelligence"],
                 wisdom=abilities["wisdom"],
-                charisma=abilities["charisma"]
+                charisma=abilities["charisma"],
             )
 
             con_modifier = factory.calculate_ability_modifier(abilities["constitution"])
@@ -258,7 +246,7 @@ class TestCharacterCreationE2E:
                 abilities=abilities_obj,
                 max_hp=hp,
                 ac=ac,
-                race=race_id
+                race=race_id,
             )
 
             factory.apply_starting_equipment(character, classes_data["fighter"], items_data)
@@ -297,7 +285,7 @@ class TestCharacterCreationE2E:
                 constitution=abilities["constitution"],
                 intelligence=abilities["intelligence"],
                 wisdom=abilities["wisdom"],
-                charisma=abilities["charisma"]
+                charisma=abilities["charisma"],
             )
 
             con_modifier = factory.calculate_ability_modifier(abilities["constitution"])
@@ -313,7 +301,7 @@ class TestCharacterCreationE2E:
                 abilities=abilities_obj,
                 max_hp=hp,
                 ac=ac,
-                race="human"
+                race="human",
             )
 
             characters.append(character)

@@ -126,7 +126,7 @@ def build_room_description_prompt(
             f"Show their threatening stance or aggressive movement toward the party, "
             f"and the immediate tension as battle is about to erupt. Make it feel like "
             f"a seamless escalation from scene-setting to action. Do NOT use phrases "
-            f"like \"combat begins\" - show it through the enemies' actions and the "
+            f'like "combat begins" - show it through the enemies\' actions and the '
             f"rising tension.\n\n"
             f"{party_context}{creature_behavior_guide}"
         )
@@ -220,7 +220,7 @@ def build_room_description_prompt(
     # POV and style constraints
     pov_constraint = (
         "\n\nSTYLE RULES:\n"
-        "- Use third-person, never \"you\" (player controls multiple characters)\n"
+        '- Use third-person, never "you" (player controls multiple characters)\n'
         "- NEVER describe arrival, stepping into, entering, or movement\n"
         "- Just describe what IS HERE - the space, atmosphere, and contents\n"
         "- Write as if describing a snapshot, not a transition"
@@ -328,7 +328,7 @@ def build_combat_action_prompt(action_data: dict[str, Any]) -> str:
         weapon_desc = f"{weapon} ({damage_type})"
 
     # Third-person constraint - player controls multiple characters
-    pov_constraint = "Use third-person (character names), never \"you\"."
+    pov_constraint = 'Use third-person (character names), never "you".'
 
     # Build the main prompt with tiered instructions
     # Note: Always include explicit name instruction to prevent LLM hallucination
@@ -384,7 +384,7 @@ def build_death_prompt(character_data: dict[str, Any]) -> str:
     how_died = character_data.get("cause", "fell in battle")
 
     # Third-person constraint
-    pov_constraint = "Use third-person (character names), never \"you\"."
+    pov_constraint = 'Use third-person (character names), never "you".'
 
     if is_player:
         # Player deaths deserve more narrative weight

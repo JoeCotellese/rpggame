@@ -18,11 +18,7 @@ class MockLLMProvider(LLMProvider):
         self.call_count = 0
         self.last_prompt: str | None = None
 
-    async def generate(
-        self,
-        prompt: str,
-        temperature: float = 0.7
-    ) -> str | None:
+    async def generate(self, prompt: str, temperature: float = 0.7) -> str | None:
         """Mock generate method."""
         self.call_count += 1
         self.last_prompt = prompt
@@ -34,10 +30,7 @@ class MockLLMProvider(LLMProvider):
         return "Mock Provider"
 
     async def chat_with_tools(
-        self,
-        messages: list[dict],
-        tools: list[dict],
-        temperature: float = 0.7
+        self, messages: list[dict], tools: list[dict], temperature: float = 0.7
     ) -> dict | None:
         """Mock chat_with_tools method."""
         return {"content": "test", "tool_calls": [], "finish_reason": "stop"}
@@ -82,11 +75,7 @@ class TestLLMEnhancer:
         event_bus.subscribe(EventType.DESCRIPTION_ENHANCED, capture_enhancement)
 
         # Emit room enter event
-        room_data = {
-            "id": "room_1",
-            "name": "Torture Chamber",
-            "description": "A dark room"
-        }
+        room_data = {"id": "room_1", "name": "Torture Chamber", "description": "A dark room"}
         event_bus.emit(Event(EventType.ROOM_ENTER, room_data))
 
         # Wait for async processing
@@ -107,11 +96,7 @@ class TestLLMEnhancer:
         enhancer = LLMEnhancer(mock_provider, event_bus)
 
         # Use synchronous API
-        room_data = {
-            "id": "room_1",
-            "name": "Torture Chamber",
-            "description": "A dark room"
-        }
+        room_data = {"id": "room_1", "name": "Torture Chamber", "description": "A dark room"}
         description = enhancer.get_room_description_sync(room_data, timeout=3.0)
 
         # Verify enhancement
@@ -127,9 +112,7 @@ class TestLLMEnhancer:
         """Test combat action enhancement using synchronous API."""
         from dnd_engine.llm.enhancer import LLMEnhancer
 
-        mock_provider = MockLLMProvider(
-            response="The sword slashes through the air!"
-        )
+        mock_provider = MockLLMProvider(response="The sword slashes through the air!")
         event_bus = EventBus()
         enhancer = LLMEnhancer(mock_provider, event_bus)
 
@@ -139,7 +122,7 @@ class TestLLMEnhancer:
             "defender": "Goblin",
             "weapon": "longsword",
             "damage": 8,
-            "hit": True
+            "hit": True,
         }
         narrative = enhancer.get_combat_narrative_sync(action_data, timeout=3.0)
 
@@ -156,11 +139,7 @@ class TestLLMEnhancer:
         event_bus = EventBus()
         enhancer = LLMEnhancer(mock_provider, event_bus, enable_cache=True)
 
-        room_data = {
-            "id": "room_1",
-            "name": "Chamber",
-            "description": "A room"
-        }
+        room_data = {"id": "room_1", "name": "Chamber", "description": "A room"}
 
         # Emit same room twice
         event_bus.emit(Event(EventType.ROOM_ENTER, room_data))
@@ -181,11 +160,7 @@ class TestLLMEnhancer:
         event_bus = EventBus()
         enhancer = LLMEnhancer(mock_provider, event_bus, enable_cache=False)
 
-        room_data = {
-            "id": "room_1",
-            "name": "Chamber",
-            "description": "A room"
-        }
+        room_data = {"id": "room_1", "name": "Chamber", "description": "A room"}
 
         # Emit same room twice
         event_bus.emit(Event(EventType.ROOM_ENTER, room_data))
@@ -215,11 +190,7 @@ class TestLLMEnhancer:
         event_bus.subscribe(EventType.DESCRIPTION_ENHANCED, capture_enhancement)
 
         # Emit room enter event
-        room_data = {
-            "id": "room_1",
-            "name": "Chamber",
-            "description": "A dark room"
-        }
+        room_data = {"id": "room_1", "name": "Chamber", "description": "A dark room"}
         event_bus.emit(Event(EventType.ROOM_ENTER, room_data))
 
         # Wait for async processing
@@ -245,9 +216,7 @@ class TestLLMEnhancer:
         """Test combat victory enhancement."""
         from dnd_engine.llm.enhancer import LLMEnhancer
 
-        mock_provider = MockLLMProvider(
-            response="The heroes stand victorious!"
-        )
+        mock_provider = MockLLMProvider(response="The heroes stand victorious!")
         event_bus = EventBus()
         enhancer = LLMEnhancer(mock_provider, event_bus)
 
@@ -259,10 +228,7 @@ class TestLLMEnhancer:
         event_bus.subscribe(EventType.DESCRIPTION_ENHANCED, capture_enhancement)
 
         # Emit combat end event
-        combat_data = {
-            "enemies": ["Goblin", "Orc"],
-            "final_blow": "Thorin struck down the orc"
-        }
+        combat_data = {"enemies": ["Goblin", "Orc"], "final_blow": "Thorin struck down the orc"}
         event_bus.emit(Event(EventType.COMBAT_END, combat_data))
 
         # Wait for async processing
@@ -278,17 +244,12 @@ class TestLLMEnhancer:
         """Test character death enhancement using synchronous API."""
         from dnd_engine.llm.enhancer import LLMEnhancer
 
-        mock_provider = MockLLMProvider(
-            response="The hero falls, their quest unfulfilled."
-        )
+        mock_provider = MockLLMProvider(response="The hero falls, their quest unfulfilled.")
         event_bus = EventBus()
         enhancer = LLMEnhancer(mock_provider, event_bus)
 
         # Use synchronous API (no longer event-driven)
-        character_data = {
-            "name": "Thorin",
-            "cause": "fell to a goblin's blade"
-        }
+        character_data = {"name": "Thorin", "cause": "fell to a goblin's blade"}
         narrative = enhancer.get_death_narrative_sync(character_data, timeout=3.0)
 
         # Verify enhancement
@@ -300,9 +261,7 @@ class TestLLMEnhancer:
         """Test room description enhancement includes monster information."""
         from dnd_engine.llm.enhancer import LLMEnhancer
 
-        mock_provider = MockLLMProvider(
-            response="Two goblins snarl as you enter the chamber."
-        )
+        mock_provider = MockLLMProvider(response="Two goblins snarl as you enter the chamber.")
         event_bus = EventBus()
         enhancer = LLMEnhancer(mock_provider, event_bus)
 
@@ -311,7 +270,7 @@ class TestLLMEnhancer:
             "id": "guard_post",
             "name": "Guard Post",
             "description": "A narrow corridor with weapon racks.",
-            "monsters": ["Goblin", "Goblin"]
+            "monsters": ["Goblin", "Goblin"],
         }
         description = enhancer.get_room_description_sync(room_data, timeout=3.0)
 
@@ -341,7 +300,7 @@ class TestLLMEnhancer:
             "name": "Throne Room",
             "description": "A grand chamber with a bone throne.",
             "monsters": ["Goblin Boss", "Goblin", "Goblin"],
-            "combat_starting": True  # Flag indicating combat initiation
+            "combat_starting": True,  # Flag indicating combat initiation
         }
         description = enhancer.get_room_description_sync(room_data, timeout=3.0)
 
@@ -354,7 +313,10 @@ class TestLLMEnhancer:
         assert "Goblin Boss" in mock_provider.last_prompt
         assert "hostile" in mock_provider.last_prompt
         # Should have combat initiation instructions
-        assert "combat begins" in mock_provider.last_prompt.lower() or "battle" in mock_provider.last_prompt.lower()
+        assert (
+            "combat begins" in mock_provider.last_prompt.lower()
+            or "battle" in mock_provider.last_prompt.lower()
+        )
 
     @pytest.mark.asyncio
     async def test_enhancer_combat_starting_flag_false(self) -> None:
@@ -373,7 +335,7 @@ class TestLLMEnhancer:
             "name": "Barracks",
             "description": "A messy chamber with scattered bedrolls.",
             "monsters": ["Goblin", "Goblin"],
-            "combat_starting": False  # Standard monster presence (no combat start)
+            "combat_starting": False,  # Standard monster presence (no combat start)
         }
         description = enhancer.get_room_description_sync(room_data, timeout=3.0)
 
@@ -393,9 +355,7 @@ class TestLLMEnhancer:
         """Test room description with combat_starting=True but no monsters behaves normally."""
         from dnd_engine.llm.enhancer import LLMEnhancer
 
-        mock_provider = MockLLMProvider(
-            response="A quiet, empty chamber."
-        )
+        mock_provider = MockLLMProvider(response="A quiet, empty chamber.")
         event_bus = EventBus()
         enhancer = LLMEnhancer(mock_provider, event_bus)
 
@@ -405,7 +365,7 @@ class TestLLMEnhancer:
             "name": "Empty Room",
             "description": "A quiet chamber with nothing of interest.",
             "monsters": [],
-            "combat_starting": True  # Flag is True but no monsters present
+            "combat_starting": True,  # Flag is True but no monsters present
         }
         description = enhancer.get_room_description_sync(room_data, timeout=3.0)
 
@@ -437,7 +397,7 @@ class TestLLMEnhancer:
                 "size": "medium",
                 "alignment": "lawful evil",
                 "ac": 13,
-                "hp_average": 13
+                "hp_average": 13,
             },
             "goblin": {
                 "name": "Goblin",
@@ -445,7 +405,7 @@ class TestLLMEnhancer:
                 "size": "small",
                 "alignment": "neutral evil",
                 "ac": 15,
-                "hp_average": 7
+                "hp_average": 7,
             },
             "wolf": {
                 "name": "Wolf",
@@ -453,8 +413,8 @@ class TestLLMEnhancer:
                 "size": "medium",
                 "alignment": "unaligned",
                 "ac": 13,
-                "hp_average": 11
-            }
+                "hp_average": 11,
+            },
         }
 
         # Test with undead creatures
@@ -465,7 +425,7 @@ class TestLLMEnhancer:
             "monsters": ["Skeleton", "Skeleton"],
             "combat_starting": True,
             "monsters_data": monsters_data,
-            "party_size": 4
+            "party_size": 4,
         }
         description = enhancer.get_room_description_sync(room_data, timeout=3.0)
 
@@ -491,7 +451,7 @@ class TestLLMEnhancer:
             "monsters": ["Goblin", "Goblin"],
             "combat_starting": True,
             "monsters_data": monsters_data,
-            "party_size": 2
+            "party_size": 2,
         }
         description = enhancer.get_room_description_sync(room_data, timeout=3.0)
 
@@ -512,7 +472,7 @@ class TestLLMEnhancer:
             "monsters": ["Wolf"],
             "combat_starting": True,
             "monsters_data": monsters_data,
-            "party_size": 1
+            "party_size": 1,
         }
         description = enhancer.get_room_description_sync(room_data, timeout=3.0)
 
@@ -527,6 +487,7 @@ class TestLLMEnhancer:
 
     def test_enhancer_lighting_cache_invalidation(self):
         """Test that cache is invalidated when lighting changes"""
+
         # Create mock provider that returns different responses
         class TrackingProvider:
             def __init__(self):
@@ -550,7 +511,7 @@ class TestLLMEnhancer:
             "id": "test_room",
             "name": "Test Room",
             "description": "A test room.",
-            "party_lighting": [{"lighting": "dark"}]
+            "party_lighting": [{"lighting": "dark"}],
         }
 
         description1 = enhancer.get_room_description_sync(room_data_dark, timeout=3.0)
@@ -567,7 +528,7 @@ class TestLLMEnhancer:
             "id": "test_room",
             "name": "Test Room",
             "description": "A test room.",
-            "party_lighting": [{"lighting": "bright"}]
+            "party_lighting": [{"lighting": "bright"}],
         }
 
         description3 = enhancer.get_room_description_sync(room_data_bright, timeout=3.0)

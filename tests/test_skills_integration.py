@@ -31,13 +31,13 @@ class TestCharacterFactorySkillSelection:
         class_data = classes_data["fighter"]
 
         # Mock user input: select skills at indices 0 and 1
-        with patch('dnd_engine.core.character_factory.print_input_prompt') as mock_input:
+        with patch("dnd_engine.core.character_factory.print_input_prompt") as mock_input:
             mock_input.side_effect = ["1", "2"]
 
             # Mock the UI functions to prevent output
-            with patch('dnd_engine.core.character_factory.print_section'):
-                with patch('dnd_engine.core.character_factory.print_choice_menu'):
-                    with patch('dnd_engine.core.character_factory.print_status_message'):
+            with patch("dnd_engine.core.character_factory.print_section"):
+                with patch("dnd_engine.core.character_factory.print_choice_menu"):
+                    with patch("dnd_engine.core.character_factory.print_status_message"):
                         selected = factory.select_skill_proficiencies(class_data, skills_data)
 
         assert len(selected) == 2
@@ -52,13 +52,13 @@ class TestCharacterFactorySkillSelection:
         available_skills = class_data["skill_proficiencies"]["from"]
 
         # Mock user input: try to select skill 1 twice, then skills 1 and 2
-        with patch('dnd_engine.core.character_factory.print_input_prompt') as mock_input:
+        with patch("dnd_engine.core.character_factory.print_input_prompt") as mock_input:
             mock_input.side_effect = ["1", "1", "2"]
 
             # Mock the UI functions
-            with patch('dnd_engine.core.character_factory.print_section'):
-                with patch('dnd_engine.core.character_factory.print_choice_menu'):
-                    with patch('dnd_engine.core.character_factory.print_status_message'):
+            with patch("dnd_engine.core.character_factory.print_section"):
+                with patch("dnd_engine.core.character_factory.print_choice_menu"):
+                    with patch("dnd_engine.core.character_factory.print_status_message"):
                         selected = factory.select_skill_proficiencies(class_data, skills_data)
 
         # Should have 2 unique skills (rejected the duplicate)
@@ -74,13 +74,13 @@ class TestCharacterFactorySkillSelection:
         num_to_choose = class_data["skill_proficiencies"]["choose"]
 
         # Mock valid inputs
-        with patch('dnd_engine.core.character_factory.print_input_prompt') as mock_input:
+        with patch("dnd_engine.core.character_factory.print_input_prompt") as mock_input:
             mock_input.side_effect = [str(i) for i in range(1, num_to_choose + 1)]
 
             # Mock UI functions
-            with patch('dnd_engine.core.character_factory.print_section'):
-                with patch('dnd_engine.core.character_factory.print_choice_menu'):
-                    with patch('dnd_engine.core.character_factory.print_status_message'):
+            with patch("dnd_engine.core.character_factory.print_section"):
+                with patch("dnd_engine.core.character_factory.print_choice_menu"):
+                    with patch("dnd_engine.core.character_factory.print_status_message"):
                         selected = factory.select_skill_proficiencies(class_data, skills_data)
 
         assert len(selected) == num_to_choose
@@ -108,28 +108,28 @@ class TestCharacterFactorySkillSelection:
         # Mock all user inputs for character creation
         # Format: name, race, class, ability_swaps, skill_selections
         user_inputs = [
-            "Aragorn",          # name
-            "1",                # race: Human
-            "1",                # class: Fighter
-            "n",                # no ability swaps
-            "1",                # skill 1
-            "2",                # skill 2
-            "",                 # press enter at end
+            "Aragorn",  # name
+            "1",  # race: Human
+            "1",  # class: Fighter
+            "n",  # no ability swaps
+            "1",  # skill 1
+            "2",  # skill 2
+            "",  # press enter at end
         ]
 
-        with patch('dnd_engine.core.character_factory.print_input_prompt') as mock_input:
+        with patch("dnd_engine.core.character_factory.print_input_prompt") as mock_input:
             mock_input.side_effect = user_inputs
 
             # Mock all UI functions
-            with patch('dnd_engine.core.character_factory.print_section'):
-                with patch('dnd_engine.core.character_factory.print_choice_menu'):
-                    with patch('dnd_engine.core.character_factory.print_status_message'):
-                        with patch('dnd_engine.core.character_factory.print_message'):
-                            with patch('dnd_engine.core.character_factory.print_error'):
+            with patch("dnd_engine.core.character_factory.print_section"):
+                with patch("dnd_engine.core.character_factory.print_choice_menu"):
+                    with patch("dnd_engine.core.character_factory.print_status_message"):
+                        with patch("dnd_engine.core.character_factory.print_message"):
+                            with patch("dnd_engine.core.character_factory.print_error"):
                                 character = factory.create_character_interactive(None, data_loader)
 
         # Verify that character has skill proficiencies
-        assert hasattr(character, 'skill_proficiencies')
+        assert hasattr(character, "skill_proficiencies")
         assert len(character.skill_proficiencies) == 2
         assert all(skill in available_skills for skill in character.skill_proficiencies)
 
@@ -144,8 +144,7 @@ class TestSkillCheckIntegration:
         from dnd_engine.core.creature import Abilities
 
         abilities = Abilities(
-            strength=14, dexterity=16, constitution=12,
-            intelligence=10, wisdom=14, charisma=10
+            strength=14, dexterity=16, constitution=12, intelligence=10, wisdom=14, charisma=10
         )
         return Character(
             name="Rogue",
@@ -154,7 +153,7 @@ class TestSkillCheckIntegration:
             abilities=abilities,
             max_hp=10,
             ac=14,
-            skill_proficiencies=["stealth", "perception", "acrobatics"]
+            skill_proficiencies=["stealth", "perception", "acrobatics"],
         )
 
     def test_character_can_make_skill_checks(self, character_with_skills):

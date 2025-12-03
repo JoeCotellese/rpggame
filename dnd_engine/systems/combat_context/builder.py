@@ -53,8 +53,7 @@ class CombatContextBuilder:
             # Build cache on first access
             monsters = self.data_loader.load_monsters()
             self._monster_cache = {
-                monster_data["name"]: monster_data
-                for monster_data in monsters.values()
+                monster_data["name"]: monster_data for monster_data in monsters.values()
             }
         return self._monster_cache.get(name, {})
 
@@ -90,24 +89,17 @@ class CombatContextBuilder:
         if self._monster_cache is None:
             monsters = self.data_loader.load_monsters()
             self._monster_cache = {
-                monster_data["name"]: monster_data
-                for monster_data in monsters.values()
+                monster_data["name"]: monster_data for monster_data in monsters.values()
             }
 
         # Get weapon/spell context
-        weapon_name, damage_type = get_weapon_context(
-            attacker, self.data_loader, action_data
-        )
+        weapon_name, damage_type = get_weapon_context(attacker, self.data_loader, action_data)
 
         # Get attacker race/type (with monster cache for performance)
-        attacker_race = get_attacker_race(
-            attacker, self.data_loader, self._monster_cache
-        )
+        attacker_race = get_attacker_race(attacker, self.data_loader, self._monster_cache)
 
         # Get defender armor (with monster cache for performance)
-        defender_armor = get_defender_armor(
-            defender, self.data_loader, self._monster_cache
-        )
+        defender_armor = get_defender_armor(defender, self.data_loader, self._monster_cache)
 
         # Get location
         current_room = self.game_state.get_current_room()

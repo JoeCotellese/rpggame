@@ -30,12 +30,7 @@ def save_manager(temp_saves_dir):
 def sample_character():
     """Create a sample character for testing."""
     abilities = Abilities(
-        strength=16,
-        dexterity=14,
-        constitution=15,
-        intelligence=8,
-        wisdom=10,
-        charisma=12
+        strength=16, dexterity=14, constitution=15, intelligence=8, wisdom=10, charisma=12
     )
 
     return Character(
@@ -47,7 +42,7 @@ def sample_character():
         ac=16,
         current_hp=12,
         xp=0,
-        race="Human"
+        race="Human",
     )
 
 
@@ -57,18 +52,14 @@ def game_state_with_items(sample_character):
     party = Party([sample_character])
     data_loader = DataLoader()
 
-    game_state = GameState(
-        party=party,
-        dungeon_name="test_dungeon",
-        data_loader=data_loader
-    )
+    game_state = GameState(party=party, dungeon_name="test_dungeon", data_loader=data_loader)
 
     # Manually add items to the current room for testing
     room = game_state.get_current_room()
     room["items"] = [
         {"type": "currency", "gold": 100, "silver": 50, "copper": 10, "visible": True},
         {"type": "item", "id": "longsword", "visible": True},
-        {"type": "item", "id": "potion_of_healing", "visible": True}
+        {"type": "item", "id": "potion_of_healing", "visible": True},
     ]
 
     return game_state
@@ -95,24 +86,23 @@ def test_items_persist_after_save_load(save_manager, game_state_with_items, samp
     assert "longsword" not in remaining_item_ids
 
     # Save the game
-    save_manager.save_game(
-        slot_number=1,
-        game_state=game_state_with_items
-    )
+    save_manager.save_game(slot_number=1, game_state=game_state_with_items)
 
     # Load the game
     loaded_game_state, _ = save_manager.load_game(
         slot_number=1,
         event_bus=game_state_with_items.event_bus,
         data_loader=game_state_with_items.data_loader,
-        dice_roller=game_state_with_items.dice_roller
+        dice_roller=game_state_with_items.dice_roller,
     )
 
     # Verify items are still gone after loading
     loaded_room = loaded_game_state.get_current_room()
     assert len(loaded_room["items"]) == 1  # Only potion_of_healing should remain
 
-    loaded_item_ids = [item.get("id") for item in loaded_room["items"] if item.get("type") == "item"]
+    loaded_item_ids = [
+        item.get("id") for item in loaded_room["items"] if item.get("type") == "item"
+    ]
     assert "potion_of_healing" in loaded_item_ids
     assert "longsword" not in loaded_item_ids
 
@@ -121,7 +111,9 @@ def test_items_persist_after_save_load(save_manager, game_state_with_items, samp
     assert len(currency_items) == 0
 
 
-def test_items_persist_across_multiple_save_load_cycles(save_manager, game_state_with_items, sample_character):
+def test_items_persist_across_multiple_save_load_cycles(
+    save_manager, game_state_with_items, sample_character
+):
     """Test that items remain gone across multiple save/load cycles."""
 
     # Take all items one by one with saves in between
@@ -138,7 +130,7 @@ def test_items_persist_across_multiple_save_load_cycles(save_manager, game_state
         slot_number=2,
         event_bus=game_state_with_items.event_bus,
         data_loader=game_state_with_items.data_loader,
-        dice_roller=game_state_with_items.dice_roller
+        dice_roller=game_state_with_items.dice_roller,
     )
     assert len(loaded_gs.get_current_room()["items"]) == 2
 
@@ -151,7 +143,7 @@ def test_items_persist_across_multiple_save_load_cycles(save_manager, game_state
         slot_number=2,
         event_bus=game_state_with_items.event_bus,
         data_loader=game_state_with_items.data_loader,
-        dice_roller=game_state_with_items.dice_roller
+        dice_roller=game_state_with_items.dice_roller,
     )
     assert len(loaded_gs2.get_current_room()["items"]) == 1
 
@@ -164,12 +156,14 @@ def test_items_persist_across_multiple_save_load_cycles(save_manager, game_state
         slot_number=2,
         event_bus=game_state_with_items.event_bus,
         data_loader=game_state_with_items.data_loader,
-        dice_roller=game_state_with_items.dice_roller
+        dice_roller=game_state_with_items.dice_roller,
     )
     assert len(final_gs.get_current_room()["items"]) == 0
 
 
-def test_searched_flag_and_items_both_persist(save_manager, game_state_with_items, sample_character):
+def test_searched_flag_and_items_both_persist(
+    save_manager, game_state_with_items, sample_character
+):
     """Test that both searched flag and items state persist together."""
 
     room = game_state_with_items.get_current_room()
@@ -191,7 +185,7 @@ def test_searched_flag_and_items_both_persist(save_manager, game_state_with_item
         slot_number=3,
         event_bus=game_state_with_items.event_bus,
         data_loader=game_state_with_items.data_loader,
-        dice_roller=game_state_with_items.dice_roller
+        dice_roller=game_state_with_items.dice_roller,
     )
 
     loaded_room = loaded_gs.get_current_room()
@@ -200,5 +194,7 @@ def test_searched_flag_and_items_both_persist(save_manager, game_state_with_item
     assert loaded_room["searched"] is True
     assert len(loaded_room["items"]) == 2  # Currency and potion remain
 
-    loaded_item_ids = [item.get("id") for item in loaded_room["items"] if item.get("type") == "item"]
+    loaded_item_ids = [
+        item.get("id") for item in loaded_room["items"] if item.get("type") == "item"
+    ]
     assert "longsword" not in loaded_item_ids

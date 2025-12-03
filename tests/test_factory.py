@@ -14,14 +14,17 @@ class TestProviderFactory:
 
     def test_create_openai_provider_with_env(self) -> None:
         """Test creating OpenAI provider from environment variables."""
-        with patch.dict(os.environ, {
-            "LLM_PROVIDER": "openai",
-            "OPENAI_API_KEY": "sk-test123",
-            "OPENAI_MODEL": "gpt-4",
-            "LLM_TIMEOUT": "15",
-            "LLM_MAX_TOKENS": "200"
-        }):
-            with patch('dnd_engine.llm.openai_provider.AsyncOpenAI'):
+        with patch.dict(
+            os.environ,
+            {
+                "LLM_PROVIDER": "openai",
+                "OPENAI_API_KEY": "sk-test123",
+                "OPENAI_MODEL": "gpt-4",
+                "LLM_TIMEOUT": "15",
+                "LLM_MAX_TOKENS": "200",
+            },
+        ):
+            with patch("dnd_engine.llm.openai_provider.AsyncOpenAI"):
                 provider = create_llm_provider()
 
                 assert provider is not None
@@ -32,11 +35,10 @@ class TestProviderFactory:
 
     def test_create_openai_provider_with_defaults(self) -> None:
         """Test creating OpenAI provider with default settings."""
-        with patch.dict(os.environ, {
-            "LLM_PROVIDER": "openai",
-            "OPENAI_API_KEY": "sk-test123"
-        }, clear=True):
-            with patch('dnd_engine.llm.openai_provider.AsyncOpenAI'):
+        with patch.dict(
+            os.environ, {"LLM_PROVIDER": "openai", "OPENAI_API_KEY": "sk-test123"}, clear=True
+        ):
+            with patch("dnd_engine.llm.openai_provider.AsyncOpenAI"):
                 provider = create_llm_provider()
 
                 assert provider is not None
@@ -54,14 +56,17 @@ class TestProviderFactory:
 
     def test_create_anthropic_provider_with_env(self) -> None:
         """Test creating Anthropic provider from environment variables."""
-        with patch.dict(os.environ, {
-            "LLM_PROVIDER": "anthropic",
-            "ANTHROPIC_API_KEY": "sk-ant-test123",
-            "ANTHROPIC_MODEL": "claude-3-opus-20240229",
-            "LLM_TIMEOUT": "20",
-            "LLM_MAX_TOKENS": "300"
-        }):
-            with patch('dnd_engine.llm.anthropic_provider.AsyncAnthropic'):
+        with patch.dict(
+            os.environ,
+            {
+                "LLM_PROVIDER": "anthropic",
+                "ANTHROPIC_API_KEY": "sk-ant-test123",
+                "ANTHROPIC_MODEL": "claude-3-opus-20240229",
+                "LLM_TIMEOUT": "20",
+                "LLM_MAX_TOKENS": "300",
+            },
+        ):
+            with patch("dnd_engine.llm.anthropic_provider.AsyncAnthropic"):
                 provider = create_llm_provider()
 
                 assert provider is not None
@@ -72,11 +77,12 @@ class TestProviderFactory:
 
     def test_create_anthropic_provider_with_defaults(self) -> None:
         """Test creating Anthropic provider with default settings."""
-        with patch.dict(os.environ, {
-            "LLM_PROVIDER": "anthropic",
-            "ANTHROPIC_API_KEY": "sk-ant-test123"
-        }, clear=True):
-            with patch('dnd_engine.llm.anthropic_provider.AsyncAnthropic'):
+        with patch.dict(
+            os.environ,
+            {"LLM_PROVIDER": "anthropic", "ANTHROPIC_API_KEY": "sk-ant-test123"},
+            clear=True,
+        ):
+            with patch("dnd_engine.llm.anthropic_provider.AsyncAnthropic"):
                 provider = create_llm_provider()
 
                 assert provider is not None
@@ -114,7 +120,7 @@ class TestProviderFactory:
     def test_create_provider_with_explicit_name(self) -> None:
         """Test creating provider with explicit provider name argument."""
         with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test123"}, clear=True):
-            with patch('dnd_engine.llm.openai_provider.AsyncOpenAI'):
+            with patch("dnd_engine.llm.openai_provider.AsyncOpenAI"):
                 provider = create_llm_provider(provider_name="openai")
 
                 assert provider is not None
@@ -122,12 +128,15 @@ class TestProviderFactory:
 
     def test_create_provider_with_kwargs_override(self) -> None:
         """Test creating provider with kwargs overriding environment."""
-        with patch.dict(os.environ, {
-            "LLM_PROVIDER": "openai",
-            "OPENAI_API_KEY": "sk-test123",
-            "OPENAI_MODEL": "gpt-3.5-turbo"
-        }):
-            with patch('dnd_engine.llm.openai_provider.AsyncOpenAI'):
+        with patch.dict(
+            os.environ,
+            {
+                "LLM_PROVIDER": "openai",
+                "OPENAI_API_KEY": "sk-test123",
+                "OPENAI_MODEL": "gpt-3.5-turbo",
+            },
+        ):
+            with patch("dnd_engine.llm.openai_provider.AsyncOpenAI"):
                 provider = create_llm_provider(model="gpt-4-turbo")
 
                 assert provider is not None
@@ -136,11 +145,8 @@ class TestProviderFactory:
 
     def test_create_provider_case_insensitive(self) -> None:
         """Test that provider name is case-insensitive."""
-        with patch.dict(os.environ, {
-            "LLM_PROVIDER": "OpenAI",
-            "OPENAI_API_KEY": "sk-test123"
-        }):
-            with patch('dnd_engine.llm.openai_provider.AsyncOpenAI'):
+        with patch.dict(os.environ, {"LLM_PROVIDER": "OpenAI", "OPENAI_API_KEY": "sk-test123"}):
+            with patch("dnd_engine.llm.openai_provider.AsyncOpenAI"):
                 provider = create_llm_provider()
 
                 assert provider is not None

@@ -34,7 +34,10 @@ class Currency:
 
     def __post_init__(self) -> None:
         """Validate currency values are non-negative"""
-        if any(value < 0 for value in [self.copper, self.silver, self.electrum, self.gold, self.platinum]):
+        if any(
+            value < 0
+            for value in [self.copper, self.silver, self.electrum, self.gold, self.platinum]
+        ):
             raise ValueError("Currency values cannot be negative")
 
     def to_copper(self) -> int:
@@ -45,11 +48,11 @@ class Currency:
             Total wealth in copper pieces
         """
         return (
-            self.copper +
-            (self.silver * self.CP_PER_SP) +
-            (self.electrum * self.CP_PER_EP) +
-            (self.gold * self.CP_PER_GP) +
-            (self.platinum * self.CP_PER_PP)
+            self.copper
+            + (self.silver * self.CP_PER_SP)
+            + (self.electrum * self.CP_PER_EP)
+            + (self.gold * self.CP_PER_GP)
+            + (self.platinum * self.CP_PER_PP)
         )
 
     def _from_copper(self, amount_cp: int) -> None:
@@ -77,7 +80,7 @@ class Currency:
         self.silver = remaining // self.CP_PER_SP
         self.copper = remaining % self.CP_PER_SP
 
-    def add(self, other: 'Currency') -> None:
+    def add(self, other: "Currency") -> None:
         """
         Add currency from another Currency object.
 
@@ -96,7 +99,7 @@ class Currency:
         self.gold += other.gold
         self.platinum += other.platinum
 
-    def subtract(self, other: 'Currency') -> bool:
+    def subtract(self, other: "Currency") -> bool:
         """
         Subtract currency from this object with automatic change-making.
 
@@ -132,7 +135,7 @@ class Currency:
 
         return True
 
-    def can_afford(self, other: 'Currency') -> bool:
+    def can_afford(self, other: "Currency") -> bool:
         """
         Check if this currency can afford the given amount.
 
@@ -194,7 +197,10 @@ class Currency:
         Returns:
             True if all denominations are zero
         """
-        return all(value == 0 for value in [self.copper, self.silver, self.electrum, self.gold, self.platinum])
+        return all(
+            value == 0
+            for value in [self.copper, self.silver, self.electrum, self.gold, self.platinum]
+        )
 
     def __str__(self) -> str:
         """
@@ -242,7 +248,7 @@ class Currency:
 
         return self.to_copper() == other.to_copper()
 
-    def __lt__(self, other: 'Currency') -> bool:
+    def __lt__(self, other: "Currency") -> bool:
         """
         Compare currency by total value in copper pieces.
 
@@ -257,7 +263,7 @@ class Currency:
 
         return self.to_copper() < other.to_copper()
 
-    def __le__(self, other: 'Currency') -> bool:
+    def __le__(self, other: "Currency") -> bool:
         """
         Compare currency by total value in copper pieces.
 
@@ -272,7 +278,7 @@ class Currency:
 
         return self.to_copper() <= other.to_copper()
 
-    def __gt__(self, other: 'Currency') -> bool:
+    def __gt__(self, other: "Currency") -> bool:
         """
         Compare currency by total value in copper pieces.
 
@@ -287,7 +293,7 @@ class Currency:
 
         return self.to_copper() > other.to_copper()
 
-    def __ge__(self, other: 'Currency') -> bool:
+    def __ge__(self, other: "Currency") -> bool:
         """
         Compare currency by total value in copper pieces.
 

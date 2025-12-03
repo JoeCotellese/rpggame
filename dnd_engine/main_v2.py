@@ -37,31 +37,25 @@ Examples:
   dnd-game --llm-provider anthropic # Use Anthropic Claude
   dnd-game --llm-provider debug     # Debug mode
   dnd-game --debug                  # Enable debug logging
-        """
+        """,
     )
 
-    parser.add_argument(
-        "--no-llm",
-        action="store_true",
-        help="Disable LLM narrative enhancement"
-    )
+    parser.add_argument("--no-llm", action="store_true", help="Disable LLM narrative enhancement")
 
     parser.add_argument(
         "--llm-provider",
         choices=["openai", "anthropic", "debug", "none"],
-        help="Override LLM provider (default: from LLM_PROVIDER env var)"
+        help="Override LLM provider (default: from LLM_PROVIDER env var)",
     )
 
     parser.add_argument(
         "--debug",
         action="store_true",
-        help="Enable debug mode with file logging and detailed error traces"
+        help="Enable debug mode with file logging and detailed error traces",
     )
 
     parser.add_argument(
-        "--version",
-        action="version",
-        version="D&D 5E Terminal Game v0.2.0 (Save Slot System)"
+        "--version", action="version", version="D&D 5E Terminal Game v0.2.0 (Save Slot System)"
     )
 
     return parser.parse_args()
@@ -104,7 +98,7 @@ class SaveSlotCLIAdapter:
         slot_manager: SaveSlotManager,
         slot_number: int,
         session_start: datetime,
-        character_vault: CharacterVaultV2 | None = None
+        character_vault: CharacterVaultV2 | None = None,
     ):
         """
         Initialize the adapter.
@@ -125,7 +119,7 @@ class SaveSlotCLIAdapter:
         campaign_name: str,  # Ignored (kept for compatibility)
         game_state: GameState,
         slot_name: str,  # "auto", "quick", or custom name
-        save_type: str  # "auto", "quick", or "manual"
+        save_type: str,  # "auto", "quick", or "manual"
     ) -> None:
         """
         Save game state to current slot (adapter method).
@@ -144,7 +138,7 @@ class SaveSlotCLIAdapter:
             slot_number=self.slot_number,
             game_state=game_state,
             playtime_delta=playtime_delta,
-            character_vault=self.character_vault
+            character_vault=self.character_vault,
         )
 
 
@@ -176,10 +170,7 @@ def main() -> None:
         logging_config = get_logging_config()
         if logging_config and logging_config.get_log_file_path():
             log_path = logging_config.get_log_file_path()
-            print_status_message(
-                f"Debug mode enabled. Logging to: {log_path}",
-                "info"
-            )
+            print_status_message(f"Debug mode enabled. Logging to: {log_path}", "info")
 
     # Initialize LLM provider
     llm_provider = initialize_llm(args)
@@ -188,6 +179,7 @@ def main() -> None:
     llm_enhancer = None
     if llm_provider:
         from dnd_engine.utils.events import EventBus
+
         event_bus = EventBus()
         llm_enhancer = LLMEnhancer(llm_provider, event_bus)
 
@@ -219,7 +211,7 @@ def main() -> None:
             campaign_manager=save_adapter,
             campaign_name=f"slot_{slot_number}",  # Dummy name for compatibility
             auto_save_enabled=True,
-            llm_enhancer=llm_enhancer
+            llm_enhancer=llm_enhancer,
         )
 
         # Start game loop

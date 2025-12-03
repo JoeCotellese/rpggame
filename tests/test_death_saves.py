@@ -23,12 +23,7 @@ from dnd_engine.utils.events import EventBus, EventType
 def abilities():
     """Standard ability scores for testing."""
     return Abilities(
-        strength=14,
-        dexterity=12,
-        constitution=13,
-        intelligence=10,
-        wisdom=11,
-        charisma=8
+        strength=14, dexterity=12, constitution=13, intelligence=10, wisdom=11, charisma=8
     )
 
 
@@ -42,7 +37,7 @@ def character(abilities):
         abilities=abilities,
         max_hp=10,
         ac=16,
-        current_hp=10
+        current_hp=10,
     )
 
 
@@ -104,7 +99,7 @@ class TestDeathSaveRolls:
         """Rolling 10+ should be a success."""
         character.current_hp = 0
 
-        with patch.object(character._dice_roller, 'roll') as mock_roll:
+        with patch.object(character._dice_roller, "roll") as mock_roll:
             mock_roll.return_value = Mock(total=15)
             result = character.make_death_save(event_bus)
 
@@ -118,7 +113,7 @@ class TestDeathSaveRolls:
         """Rolling 9 or less should be a failure."""
         character.current_hp = 0
 
-        with patch.object(character._dice_roller, 'roll') as mock_roll:
+        with patch.object(character._dice_roller, "roll") as mock_roll:
             mock_roll.return_value = Mock(total=7)
             result = character.make_death_save(event_bus)
 
@@ -134,7 +129,7 @@ class TestDeathSaveRolls:
         character.death_save_successes = 2
         character.death_save_failures = 1
 
-        with patch.object(character._dice_roller, 'roll') as mock_roll:
+        with patch.object(character._dice_roller, "roll") as mock_roll:
             mock_roll.return_value = Mock(total=20)
             result = character.make_death_save(event_bus)
 
@@ -150,7 +145,7 @@ class TestDeathSaveRolls:
         """Natural 1 should count as 2 failures."""
         character.current_hp = 0
 
-        with patch.object(character._dice_roller, 'roll') as mock_roll:
+        with patch.object(character._dice_roller, "roll") as mock_roll:
             mock_roll.return_value = Mock(total=1)
             result = character.make_death_save(event_bus)
 
@@ -163,7 +158,7 @@ class TestDeathSaveRolls:
         character.current_hp = 0
         character.death_save_successes = 2
 
-        with patch.object(character._dice_roller, 'roll') as mock_roll:
+        with patch.object(character._dice_roller, "roll") as mock_roll:
             mock_roll.return_value = Mock(total=15)
             result = character.make_death_save(event_bus)
 
@@ -176,7 +171,7 @@ class TestDeathSaveRolls:
         character.current_hp = 0
         character.death_save_failures = 2
 
-        with patch.object(character._dice_roller, 'roll') as mock_roll:
+        with patch.object(character._dice_roller, "roll") as mock_roll:
             mock_roll.return_value = Mock(total=5)
             result = character.make_death_save(event_bus)
 
@@ -208,7 +203,7 @@ class TestDeathSaveRolls:
         events = []
         event_bus.subscribe(EventType.DEATH_SAVE, lambda e: events.append(e))
 
-        with patch.object(character._dice_roller, 'roll') as mock_roll:
+        with patch.object(character._dice_roller, "roll") as mock_roll:
             mock_roll.return_value = Mock(total=12)
             character.make_death_save(event_bus)
 
@@ -346,7 +341,7 @@ class TestDeathSaveEdgeCases:
         character.current_hp = 0
         character.death_save_failures = 2
 
-        with patch.object(character._dice_roller, 'roll') as mock_roll:
+        with patch.object(character._dice_roller, "roll") as mock_roll:
             mock_roll.return_value = Mock(total=1)
             result = character.make_death_save(event_bus)
 

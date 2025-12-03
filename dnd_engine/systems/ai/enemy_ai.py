@@ -102,9 +102,7 @@ class EnemyAI:
 
         return strategy.select_target(available_targets)
 
-    def _find_recent_attacker(
-        self, combat_history: list, enemy_name: str
-    ) -> RecentAttacker | None:
+    def _find_recent_attacker(self, combat_history: list, enemy_name: str) -> RecentAttacker | None:
         """
         Find who most recently attacked the specified enemy.
 

@@ -15,12 +15,7 @@ class TestCharacterResourcePoolIntegration:
     def sample_character(self):
         """Create a sample character for testing"""
         abilities = Abilities(
-            strength=16,
-            dexterity=14,
-            constitution=14,
-            intelligence=10,
-            wisdom=12,
-            charisma=8
+            strength=16, dexterity=14, constitution=14, intelligence=10, wisdom=12, charisma=8
         )
         return Character(
             name="Test Fighter",
@@ -28,7 +23,7 @@ class TestCharacterResourcePoolIntegration:
             level=1,
             abilities=abilities,
             max_hp=12,
-            ac=16
+            ac=16,
         )
 
     def test_character_has_empty_resource_pools_on_creation(self, sample_character):
@@ -37,12 +32,7 @@ class TestCharacterResourcePoolIntegration:
 
     def test_add_single_resource_pool(self, sample_character):
         """Test adding a single resource pool to character"""
-        pool = ResourcePool(
-            name="second_wind",
-            current=1,
-            maximum=1,
-            recovery_type="short_rest"
-        )
+        pool = ResourcePool(name="second_wind", current=1, maximum=1, recovery_type="short_rest")
         sample_character.add_resource_pool(pool)
 
         assert "second_wind" in sample_character.resource_pools
@@ -50,18 +40,8 @@ class TestCharacterResourcePoolIntegration:
 
     def test_add_multiple_resource_pools(self, sample_character):
         """Test adding multiple resource pools to character"""
-        pool1 = ResourcePool(
-            name="second_wind",
-            current=1,
-            maximum=1,
-            recovery_type="short_rest"
-        )
-        pool2 = ResourcePool(
-            name="action_surge",
-            current=1,
-            maximum=1,
-            recovery_type="short_rest"
-        )
+        pool1 = ResourcePool(name="second_wind", current=1, maximum=1, recovery_type="short_rest")
+        pool2 = ResourcePool(name="action_surge", current=1, maximum=1, recovery_type="short_rest")
 
         sample_character.add_resource_pool(pool1)
         sample_character.add_resource_pool(pool2)
@@ -72,18 +52,8 @@ class TestCharacterResourcePoolIntegration:
 
     def test_add_resource_pool_overwrites_existing(self, sample_character):
         """Test that adding a pool with same name overwrites the old one"""
-        pool1 = ResourcePool(
-            name="action_surge",
-            current=1,
-            maximum=1,
-            recovery_type="short_rest"
-        )
-        pool2 = ResourcePool(
-            name="action_surge",
-            current=2,
-            maximum=2,
-            recovery_type="short_rest"
-        )
+        pool1 = ResourcePool(name="action_surge", current=1, maximum=1, recovery_type="short_rest")
+        pool2 = ResourcePool(name="action_surge", current=2, maximum=2, recovery_type="short_rest")
 
         sample_character.add_resource_pool(pool1)
         sample_character.add_resource_pool(pool2)
@@ -93,12 +63,7 @@ class TestCharacterResourcePoolIntegration:
 
     def test_get_resource_pool_existing(self, sample_character):
         """Test getting an existing resource pool"""
-        pool = ResourcePool(
-            name="second_wind",
-            current=1,
-            maximum=1,
-            recovery_type="short_rest"
-        )
+        pool = ResourcePool(name="second_wind", current=1, maximum=1, recovery_type="short_rest")
         sample_character.add_resource_pool(pool)
 
         retrieved = sample_character.get_resource_pool("second_wind")
@@ -112,12 +77,7 @@ class TestCharacterResourcePoolIntegration:
 
     def test_use_resource_successful(self, sample_character):
         """Test using a resource that exists and has available uses"""
-        pool = ResourcePool(
-            name="second_wind",
-            current=1,
-            maximum=1,
-            recovery_type="short_rest"
-        )
+        pool = ResourcePool(name="second_wind", current=1, maximum=1, recovery_type="short_rest")
         sample_character.add_resource_pool(pool)
 
         result = sample_character.use_resource("second_wind")
@@ -126,12 +86,7 @@ class TestCharacterResourcePoolIntegration:
 
     def test_use_resource_insufficient(self, sample_character):
         """Test using a resource that doesn't have enough uses"""
-        pool = ResourcePool(
-            name="second_wind",
-            current=0,
-            maximum=1,
-            recovery_type="short_rest"
-        )
+        pool = ResourcePool(name="second_wind", current=0, maximum=1, recovery_type="short_rest")
         sample_character.add_resource_pool(pool)
 
         result = sample_character.use_resource("second_wind")
@@ -145,12 +100,7 @@ class TestCharacterResourcePoolIntegration:
 
     def test_use_resource_multiple_amounts(self, sample_character):
         """Test using multiple amounts from a resource"""
-        pool = ResourcePool(
-            name="ki_points",
-            current=5,
-            maximum=5,
-            recovery_type="short_rest"
-        )
+        pool = ResourcePool(name="ki_points", current=5, maximum=5, recovery_type="short_rest")
         sample_character.add_resource_pool(pool)
 
         result = sample_character.use_resource("ki_points", 3)
@@ -159,18 +109,8 @@ class TestCharacterResourcePoolIntegration:
 
     def test_character_with_multiple_pools_use_different_pools(self, sample_character):
         """Test using resources from different pools doesn't affect others"""
-        pool1 = ResourcePool(
-            name="second_wind",
-            current=1,
-            maximum=1,
-            recovery_type="short_rest"
-        )
-        pool2 = ResourcePool(
-            name="action_surge",
-            current=1,
-            maximum=1,
-            recovery_type="short_rest"
-        )
+        pool1 = ResourcePool(name="second_wind", current=1, maximum=1, recovery_type="short_rest")
+        pool2 = ResourcePool(name="action_surge", current=1, maximum=1, recovery_type="short_rest")
 
         sample_character.add_resource_pool(pool1)
         sample_character.add_resource_pool(pool2)
@@ -200,8 +140,8 @@ class TestCharacterFactoryResourceInitialization:
                         "resource": {
                             "pool": "second_wind",
                             "max_uses": 1,
-                            "recovery": "short_rest"
-                        }
+                            "recovery": "short_rest",
+                        },
                     }
                 ],
                 "2": [
@@ -211,23 +151,18 @@ class TestCharacterFactoryResourceInitialization:
                         "resource": {
                             "pool": "action_surge",
                             "max_uses": 1,
-                            "recovery": "short_rest"
-                        }
+                            "recovery": "short_rest",
+                        },
                     }
-                ]
-            }
+                ],
+            },
         }
 
     @pytest.fixture
     def sample_character(self):
         """Create a character for factory testing"""
         abilities = Abilities(
-            strength=16,
-            dexterity=14,
-            constitution=14,
-            intelligence=10,
-            wisdom=12,
-            charisma=8
+            strength=16, dexterity=14, constitution=14, intelligence=10, wisdom=12, charisma=8
         )
         return Character(
             name="Test Fighter",
@@ -235,7 +170,7 @@ class TestCharacterFactoryResourceInitialization:
             level=1,
             abilities=abilities,
             max_hp=12,
-            ac=16
+            ac=16,
         )
 
     def test_initialize_resources_level_1_fighter(self, sample_character, class_data):
@@ -271,17 +206,17 @@ class TestCharacterFactoryResourceInitialization:
                         "resource": {
                             "pool": "shared_pool",
                             "max_uses": 1,
-                            "recovery": "short_rest"
-                        }
+                            "recovery": "short_rest",
+                        },
                     },
                     {
                         "name": "Feature 2",
                         "resource": {
                             "pool": "shared_pool",
                             "max_uses": 1,
-                            "recovery": "short_rest"
-                        }
-                    }
+                            "recovery": "short_rest",
+                        },
+                    },
                 ]
             }
         }
@@ -298,12 +233,7 @@ class TestCharacterFactoryResourceInitialization:
         """Test initializing when class has no resources defined"""
         class_data = {
             "features_by_level": {
-                "1": [
-                    {
-                        "name": "Feature without resource",
-                        "description": "No resource pool"
-                    }
-                ]
+                "1": [{"name": "Feature without resource", "description": "No resource pool"}]
             }
         }
 
@@ -357,12 +287,7 @@ class TestCharacterSpellSlotDisplay:
     def spellcaster(self):
         """Create a character with spell slots"""
         abilities = Abilities(
-            strength=8,
-            dexterity=14,
-            constitution=12,
-            intelligence=16,
-            wisdom=10,
-            charisma=10
+            strength=8, dexterity=14, constitution=12, intelligence=16, wisdom=10, charisma=10
         )
         char = Character(
             name="Test Wizard",
@@ -370,33 +295,26 @@ class TestCharacterSpellSlotDisplay:
             level=3,
             abilities=abilities,
             max_hp=14,
-            ac=12
+            ac=12,
         )
         # Add spell slots for a level 3 wizard: 4 first-level, 2 second-level
-        char.add_resource_pool(ResourcePool(
-            name="spell_slots_level_1",
-            current=4,
-            maximum=4,
-            recovery_type="long_rest"
-        ))
-        char.add_resource_pool(ResourcePool(
-            name="spell_slots_level_2",
-            current=2,
-            maximum=2,
-            recovery_type="long_rest"
-        ))
+        char.add_resource_pool(
+            ResourcePool(
+                name="spell_slots_level_1", current=4, maximum=4, recovery_type="long_rest"
+            )
+        )
+        char.add_resource_pool(
+            ResourcePool(
+                name="spell_slots_level_2", current=2, maximum=2, recovery_type="long_rest"
+            )
+        )
         return char
 
     @pytest.fixture
     def non_spellcaster(self):
         """Create a character without spell slots"""
         abilities = Abilities(
-            strength=16,
-            dexterity=14,
-            constitution=14,
-            intelligence=10,
-            wisdom=12,
-            charisma=8
+            strength=16, dexterity=14, constitution=14, intelligence=10, wisdom=12, charisma=8
         )
         return Character(
             name="Test Fighter",
@@ -404,7 +322,7 @@ class TestCharacterSpellSlotDisplay:
             level=1,
             abilities=abilities,
             max_hp=12,
-            ac=16
+            ac=16,
         )
 
     def test_has_spell_slots_returns_true_for_spellcaster(self, spellcaster):
@@ -449,8 +367,7 @@ class TestCharacterSpellSlotDisplay:
     def test_get_spell_slots_display_higher_level_slots(self):
         """Test display string handles 3rd level and higher correctly"""
         abilities = Abilities(
-            strength=8, dexterity=14, constitution=12,
-            intelligence=16, wisdom=10, charisma=10
+            strength=8, dexterity=14, constitution=12, intelligence=16, wisdom=10, charisma=10
         )
         char = Character(
             name="High Level Wizard",
@@ -458,7 +375,7 @@ class TestCharacterSpellSlotDisplay:
             level=9,
             abilities=abilities,
             max_hp=38,
-            ac=12
+            ac=12,
         )
         char.add_resource_pool(ResourcePool("spell_slots_level_1", 4, 4, "long_rest"))
         char.add_resource_pool(ResourcePool("spell_slots_level_2", 3, 3, "long_rest"))

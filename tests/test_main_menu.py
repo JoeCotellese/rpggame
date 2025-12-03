@@ -44,10 +44,7 @@ def character_vault(temp_vault_dir):
 @pytest.fixture
 def main_menu(campaign_manager, character_vault):
     """Create MainMenu instance"""
-    return MainMenu(
-        campaign_manager=campaign_manager,
-        character_vault=character_vault
-    )
+    return MainMenu(campaign_manager=campaign_manager, character_vault=character_vault)
 
 
 @pytest.fixture
@@ -59,7 +56,7 @@ def sample_campaign():
         last_played=datetime.now() - timedelta(hours=2),
         playtime_seconds=3600 * 6 + 60 * 23,  # 6h 23m
         current_dungeon="test_dungeon",
-        party_character_ids=["char1", "char2"]
+        party_character_ids=["char1", "char2"],
     )
 
 
@@ -68,10 +65,7 @@ class TestMainMenuInit:
 
     def test_init_with_managers(self, campaign_manager, character_vault):
         """Test initialization with provided managers"""
-        menu = MainMenu(
-            campaign_manager=campaign_manager,
-            character_vault=character_vault
-        )
+        menu = MainMenu(campaign_manager=campaign_manager, character_vault=character_vault)
 
         assert menu.campaign_manager == campaign_manager
         assert menu.character_vault == character_vault
@@ -89,7 +83,7 @@ class TestMainMenuInit:
 class TestShowMainMenu:
     """Test main menu display and input handling"""
 
-    @patch('dnd_engine.ui.main_menu.console')
+    @patch("dnd_engine.ui.main_menu.console")
     def test_show_displays_menu_options(self, mock_console, main_menu):
         """Test that main menu displays all options"""
         mock_console.input.return_value = "6"  # Exit
@@ -100,7 +94,7 @@ class TestShowMainMenu:
         # Verify console.print was called (menu was displayed)
         assert mock_console.print.called
 
-    @patch('dnd_engine.ui.main_menu.console')
+    @patch("dnd_engine.ui.main_menu.console")
     def test_show_maps_choices_correctly(self, mock_console, main_menu):
         """Test that menu choices map to correct actions"""
         test_cases = [
@@ -109,7 +103,7 @@ class TestShowMainMenu:
             ("3", "new"),
             ("4", "load"),
             ("5", "vault"),
-            ("6", "exit")
+            ("6", "exit"),
         ]
 
         for input_val, expected_output in test_cases:
@@ -117,7 +111,7 @@ class TestShowMainMenu:
             choice = main_menu.show()
             assert choice == expected_output
 
-    @patch('dnd_engine.ui.main_menu.console')
+    @patch("dnd_engine.ui.main_menu.console")
     def test_show_handles_invalid_input(self, mock_console, main_menu):
         """Test that invalid input returns None"""
         mock_console.input.return_value = "99"
@@ -130,27 +124,23 @@ class TestShowMainMenu:
 class TestShowContinuePreview:
     """Test continue campaign preview"""
 
-    @patch('dnd_engine.ui.main_menu.console')
+    @patch("dnd_engine.ui.main_menu.console")
     def test_show_continue_preview_no_campaigns(self, mock_console, main_menu):
         """Test preview when no campaigns exist"""
         result = main_menu.show_continue_preview()
 
         assert result is None
 
-    @patch('dnd_engine.ui.main_menu.console')
+    @patch("dnd_engine.ui.main_menu.console")
     def test_show_continue_preview_with_campaign(
-        self,
-        mock_console,
-        main_menu,
-        campaign_manager,
-        sample_campaign
+        self, mock_console, main_menu, campaign_manager, sample_campaign
     ):
         """Test preview with existing campaign"""
         # Create a campaign
         campaign_manager.create_campaign(
             name=sample_campaign.name,
             dungeon_name=sample_campaign.current_dungeon,
-            party_character_ids=sample_campaign.party_character_ids
+            party_character_ids=sample_campaign.party_character_ids,
         )
 
         # User confirms
@@ -160,20 +150,16 @@ class TestShowContinuePreview:
 
         assert result == sample_campaign.name
 
-    @patch('dnd_engine.ui.main_menu.console')
+    @patch("dnd_engine.ui.main_menu.console")
     def test_show_continue_preview_user_cancels(
-        self,
-        mock_console,
-        main_menu,
-        campaign_manager,
-        sample_campaign
+        self, mock_console, main_menu, campaign_manager, sample_campaign
     ):
         """Test preview when user cancels"""
         # Create a campaign
         campaign_manager.create_campaign(
             name=sample_campaign.name,
             dungeon_name=sample_campaign.current_dungeon,
-            party_character_ids=sample_campaign.party_character_ids
+            party_character_ids=sample_campaign.party_character_ids,
         )
 
         # User cancels
@@ -183,20 +169,16 @@ class TestShowContinuePreview:
 
         assert result is None
 
-    @patch('dnd_engine.ui.main_menu.console')
+    @patch("dnd_engine.ui.main_menu.console")
     def test_show_continue_preview_empty_confirm(
-        self,
-        mock_console,
-        main_menu,
-        campaign_manager,
-        sample_campaign
+        self, mock_console, main_menu, campaign_manager, sample_campaign
     ):
         """Test that empty input (Enter) defaults to Yes"""
         # Create a campaign
         campaign_manager.create_campaign(
             name=sample_campaign.name,
             dungeon_name=sample_campaign.current_dungeon,
-            party_character_ids=sample_campaign.party_character_ids
+            party_character_ids=sample_campaign.party_character_ids,
         )
 
         # User presses Enter (empty string)
@@ -210,27 +192,23 @@ class TestShowContinuePreview:
 class TestShowCampaignList:
     """Test campaign list display"""
 
-    @patch('dnd_engine.ui.main_menu.console')
+    @patch("dnd_engine.ui.main_menu.console")
     def test_show_campaign_list_empty(self, mock_console, main_menu):
         """Test list when no campaigns exist"""
         result = main_menu.show_campaign_list()
 
         assert result is None
 
-    @patch('dnd_engine.ui.main_menu.console')
+    @patch("dnd_engine.ui.main_menu.console")
     def test_show_campaign_list_single_campaign(
-        self,
-        mock_console,
-        main_menu,
-        campaign_manager,
-        sample_campaign
+        self, mock_console, main_menu, campaign_manager, sample_campaign
     ):
         """Test list with one campaign"""
         # Create campaign
         campaign_manager.create_campaign(
             name=sample_campaign.name,
             dungeon_name=sample_campaign.current_dungeon,
-            party_character_ids=sample_campaign.party_character_ids
+            party_character_ids=sample_campaign.party_character_ids,
         )
 
         # User selects first campaign
@@ -240,13 +218,8 @@ class TestShowCampaignList:
 
         assert result == sample_campaign.name
 
-    @patch('dnd_engine.ui.main_menu.console')
-    def test_show_campaign_list_multiple_campaigns(
-        self,
-        mock_console,
-        main_menu,
-        campaign_manager
-    ):
+    @patch("dnd_engine.ui.main_menu.console")
+    def test_show_campaign_list_multiple_campaigns(self, mock_console, main_menu, campaign_manager):
         """Test list with multiple campaigns"""
         # Create multiple campaigns
         campaign_manager.create_campaign("Campaign 1", "dungeon1", ["char1"])
@@ -260,13 +233,8 @@ class TestShowCampaignList:
 
         assert result == "Campaign 2"
 
-    @patch('dnd_engine.ui.main_menu.console')
-    def test_show_campaign_list_user_backs_out(
-        self,
-        mock_console,
-        main_menu,
-        campaign_manager
-    ):
+    @patch("dnd_engine.ui.main_menu.console")
+    def test_show_campaign_list_user_backs_out(self, mock_console, main_menu, campaign_manager):
         """Test user pressing 'B' to go back"""
         campaign_manager.create_campaign("Test Campaign", "dungeon", [])
 
@@ -277,13 +245,8 @@ class TestShowCampaignList:
 
         assert result is None
 
-    @patch('dnd_engine.ui.main_menu.console')
-    def test_show_campaign_list_invalid_number(
-        self,
-        mock_console,
-        main_menu,
-        campaign_manager
-    ):
+    @patch("dnd_engine.ui.main_menu.console")
+    def test_show_campaign_list_invalid_number(self, mock_console, main_menu, campaign_manager):
         """Test invalid campaign number"""
         campaign_manager.create_campaign("Test Campaign", "dungeon", [])
 
@@ -294,13 +257,8 @@ class TestShowCampaignList:
 
         assert result is None
 
-    @patch('dnd_engine.ui.main_menu.console')
-    def test_show_campaign_list_invalid_input(
-        self,
-        mock_console,
-        main_menu,
-        campaign_manager
-    ):
+    @patch("dnd_engine.ui.main_menu.console")
+    def test_show_campaign_list_invalid_input(self, mock_console, main_menu, campaign_manager):
         """Test non-numeric input"""
         campaign_manager.create_campaign("Test Campaign", "dungeon", [])
 
@@ -315,20 +273,15 @@ class TestShowCampaignList:
 class TestShowCampaignSaveSlots:
     """Test save slot selection"""
 
-    @patch('dnd_engine.ui.main_menu.console')
+    @patch("dnd_engine.ui.main_menu.console")
     def test_show_save_slots_nonexistent_campaign(self, mock_console, main_menu):
         """Test with campaign that doesn't exist"""
         result = main_menu.show_campaign_save_slots("NonexistentCampaign")
 
         assert result is None
 
-    @patch('dnd_engine.ui.main_menu.console')
-    def test_show_save_slots_no_saves(
-        self,
-        mock_console,
-        main_menu,
-        campaign_manager
-    ):
+    @patch("dnd_engine.ui.main_menu.console")
+    def test_show_save_slots_no_saves(self, mock_console, main_menu, campaign_manager):
         """Test with campaign that has no saves"""
         campaign_manager.create_campaign("Empty Campaign", "dungeon", [])
 
@@ -336,13 +289,8 @@ class TestShowCampaignSaveSlots:
 
         assert result is None
 
-    @patch('dnd_engine.ui.main_menu.console')
-    def test_show_save_slots_with_saves(
-        self,
-        mock_console,
-        main_menu,
-        campaign_manager
-    ):
+    @patch("dnd_engine.ui.main_menu.console")
+    def test_show_save_slots_with_saves(self, mock_console, main_menu, campaign_manager):
         """Test with campaign that has save slots"""
         # Create campaign and save
         campaign_manager.create_campaign("Test Campaign", "dungeon", ["char1"])
@@ -361,10 +309,7 @@ class TestShowCampaignSaveSlots:
         mock_game_state.quest_manager = None
 
         campaign_manager.save_campaign_state(
-            "Test Campaign",
-            mock_game_state,
-            slot_name="auto",
-            save_type="auto"
+            "Test Campaign", mock_game_state, slot_name="auto", save_type="auto"
         )
 
         # User selects first save slot
@@ -374,13 +319,8 @@ class TestShowCampaignSaveSlots:
 
         assert result == "save_auto"
 
-    @patch('dnd_engine.ui.main_menu.console')
-    def test_show_save_slots_user_backs_out(
-        self,
-        mock_console,
-        main_menu,
-        campaign_manager
-    ):
+    @patch("dnd_engine.ui.main_menu.console")
+    def test_show_save_slots_user_backs_out(self, mock_console, main_menu, campaign_manager):
         """Test user backing out of save slot selection"""
         campaign_manager.create_campaign("Test Campaign", "dungeon", ["char1"])
 
@@ -397,10 +337,7 @@ class TestShowCampaignSaveSlots:
         mock_game_state.quest_manager = None
 
         campaign_manager.save_campaign_state(
-            "Test Campaign",
-            mock_game_state,
-            slot_name="auto",
-            save_type="auto"
+            "Test Campaign", mock_game_state, slot_name="auto", save_type="auto"
         )
 
         # User presses 'B'
@@ -414,20 +351,15 @@ class TestShowCampaignSaveSlots:
 class TestHandleContinueLastCampaign:
     """Test continue last campaign flow"""
 
-    @patch('dnd_engine.ui.main_menu.console')
+    @patch("dnd_engine.ui.main_menu.console")
     def test_handle_continue_no_campaigns(self, mock_console, main_menu):
         """Test continue when no campaigns exist"""
         result = main_menu.handle_continue_last_campaign()
 
         assert result is None
 
-    @patch('dnd_engine.ui.main_menu.console')
-    def test_handle_continue_user_cancels_preview(
-        self,
-        mock_console,
-        main_menu,
-        campaign_manager
-    ):
+    @patch("dnd_engine.ui.main_menu.console")
+    def test_handle_continue_user_cancels_preview(self, mock_console, main_menu, campaign_manager):
         """Test user cancelling at preview stage"""
         campaign_manager.create_campaign("Test Campaign", "dungeon", [])
 
@@ -442,19 +374,16 @@ class TestHandleContinueLastCampaign:
 class TestHandleLoadCampaign:
     """Test load campaign flow"""
 
-    @patch('dnd_engine.ui.main_menu.console')
+    @patch("dnd_engine.ui.main_menu.console")
     def test_handle_load_no_campaigns(self, mock_console, main_menu):
         """Test load when no campaigns exist"""
         result = main_menu.handle_load_campaign()
 
         assert result is None
 
-    @patch('dnd_engine.ui.main_menu.console')
+    @patch("dnd_engine.ui.main_menu.console")
     def test_handle_load_user_backs_from_campaign_list(
-        self,
-        mock_console,
-        main_menu,
-        campaign_manager
+        self, mock_console, main_menu, campaign_manager
     ):
         """Test user backing out from campaign list"""
         campaign_manager.create_campaign("Test Campaign", "dungeon", [])
@@ -489,8 +418,8 @@ class TestHandleCharacterVault:
 class TestRunMainMenuLoop:
     """Test main menu loop"""
 
-    @patch('dnd_engine.ui.main_menu.console')
-    @patch.object(MainMenu, 'show')
+    @patch("dnd_engine.ui.main_menu.console")
+    @patch.object(MainMenu, "show")
     def test_run_exits_on_exit_choice(self, mock_show, mock_console, main_menu):
         """Test that run exits when user selects exit"""
         mock_show.return_value = "exit"
@@ -499,8 +428,8 @@ class TestRunMainMenuLoop:
 
         assert result is None
 
-    @patch('dnd_engine.ui.main_menu.console')
-    @patch.object(MainMenu, 'show')
+    @patch("dnd_engine.ui.main_menu.console")
+    @patch.object(MainMenu, "show")
     def test_run_handles_invalid_choice(self, mock_show, mock_console, main_menu):
         """Test that run handles invalid choices gracefully"""
         # First return invalid, then exit

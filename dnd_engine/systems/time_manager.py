@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 class EffectType(str, Enum):
     """Types of timed effects that can be tracked."""
+
     SPELL = "spell"
     CONDITION = "condition"
     BUFF = "buff"
@@ -25,11 +26,12 @@ class EffectType(str, Enum):
 
 class ModifierType(str, Enum):
     """Types of stat modifiers that effects can apply."""
-    AC_SET_BASE = "ac_set_base"      # Set base AC (Mage Armor: 13 + DEX)
-    AC_BONUS = "ac_bonus"            # Add to AC (Shield: +5)
-    ATTACK_BONUS = "attack_bonus"    # Add to attack rolls (Bless: +1d4)
-    SAVE_BONUS = "save_bonus"        # Add to saves (Bless: +1d4)
-    SPEED_BONUS = "speed_bonus"      # Add to movement (Longstrider: +10)
+
+    AC_SET_BASE = "ac_set_base"  # Set base AC (Mage Armor: 13 + DEX)
+    AC_BONUS = "ac_bonus"  # Add to AC (Shield: +5)
+    ATTACK_BONUS = "attack_bonus"  # Add to attack rolls (Bless: +1d4)
+    SAVE_BONUS = "save_bonus"  # Add to saves (Bless: +1d4)
+    SPEED_BONUS = "speed_bonus"  # Add to movement (Longstrider: +10)
 
 
 @dataclass
@@ -53,6 +55,7 @@ class ActiveEffect:
         caster_name: Name of the caster (for concentration checks)
         effect_data: Additional data specific to the effect
     """
+
     effect_type: EffectType
     source: str
     duration_type: str  # "rounds", "minutes", "hours", "permanent"
@@ -176,10 +179,10 @@ def parse_duration(duration_string: str) -> tuple[str, float] | None:
     duration_string = duration_string.lower().strip()
 
     # Remove "up to", "concentration", commas
-    duration_string = re.sub(r'(up to|concentration|,)', '', duration_string).strip()
+    duration_string = re.sub(r"(up to|concentration|,)", "", duration_string).strip()
 
     # Pattern: number + unit
-    pattern = r'(\d+(?:\.\d+)?)\s*(second|seconds|minute|minutes|min|hour|hours|hr|round|rounds)'
+    pattern = r"(\d+(?:\.\d+)?)\s*(second|seconds|minute|minutes|min|hour|hours|hr|round|rounds)"
     match = re.search(pattern, duration_string)
 
     if not match:
@@ -189,14 +192,14 @@ def parse_duration(duration_string: str) -> tuple[str, float] | None:
     unit = match.group(2)
 
     # Determine duration type and convert value to appropriate unit
-    if unit in ['round', 'rounds']:
+    if unit in ["round", "rounds"]:
         return ("rounds", value)
-    elif unit in ['second', 'seconds']:
+    elif unit in ["second", "seconds"]:
         # Convert seconds to minutes for consistency
         return ("minutes", value / 60.0)
-    elif unit in ['minute', 'minutes', 'min']:
+    elif unit in ["minute", "minutes", "min"]:
         return ("minutes", value)
-    elif unit in ['hour', 'hours', 'hr']:
+    elif unit in ["hour", "hours", "hr"]:
         return ("hours", value)
 
     return None
@@ -226,11 +229,11 @@ def parse_duration_to_minutes(duration_string: str) -> float | None:
     duration_string = duration_string.lower().strip()
 
     # Remove "up to", "concentration", commas
-    duration_string = re.sub(r'(up to|concentration|,)', '', duration_string).strip()
+    duration_string = re.sub(r"(up to|concentration|,)", "", duration_string).strip()
 
     # Pattern: number + unit
     # Matches: "1 minute", "10 minutes", "1.5 hours"
-    pattern = r'(\d+(?:\.\d+)?)\s*(second|seconds|minute|minutes|min|hour|hours|hr|round|rounds)'
+    pattern = r"(\d+(?:\.\d+)?)\s*(second|seconds|minute|minutes|min|hour|hours|hr|round|rounds)"
     match = re.search(pattern, duration_string)
 
     if not match:
@@ -240,13 +243,13 @@ def parse_duration_to_minutes(duration_string: str) -> float | None:
     unit = match.group(2)
 
     # Convert to minutes
-    if unit in ['second', 'seconds']:
+    if unit in ["second", "seconds"]:
         return value / 60.0
-    elif unit in ['minute', 'minutes', 'min']:
+    elif unit in ["minute", "minutes", "min"]:
         return value
-    elif unit in ['hour', 'hours', 'hr']:
+    elif unit in ["hour", "hours", "hr"]:
         return value * 60.0
-    elif unit in ['round', 'rounds']:
+    elif unit in ["round", "rounds"]:
         # 1 round = 6 seconds = 0.1 minutes
         return value * 0.1
 
@@ -333,7 +336,9 @@ class TimeManager:
         """
         if minutes <= 0:
             if minutes < 0:
-                logger.warning(f"Attempted to advance time by negative amount: {minutes} minutes (reason: {reason})")
+                logger.warning(
+                    f"Attempted to advance time by negative amount: {minutes} minutes (reason: {reason})"
+                )
             return []
 
         old_elapsed = self.elapsed_minutes
@@ -351,41 +356,40 @@ class TimeManager:
                 # Emit effect expired event
                 if self.event_bus:
                     from dnd_engine.utils.events import Event, EventType
-                    self.event_bus.emit(Event(
-                        EventType.EFFECT_EXPIRED,
-                        {
-                            "effect": effect,
-                            "target_name": effect.target_name,
-                            "source": effect.source,
-                            "effect_type": effect.effect_type.value
-                        }
-                    ))
+
+                    self.event_bus.emit(
+                        Event(
+                            EventType.EFFECT_EXPIRED,
+                            {
+                                "effect": effect,
+                                "target_name": effect.target_name,
+                                "source": effect.source,
+                                "effect_type": effect.effect_type.value,
+                            },
+                        )
+                    )
 
         # Emit time advanced event
         if self.event_bus:
             from dnd_engine.utils.events import Event, EventType
-            self.event_bus.emit(Event(
-                EventType.TIME_ADVANCED,
-                {
-                    "minutes": minutes,
-                    "elapsed_minutes": self.elapsed_minutes,
-                    "reason": reason
-                }
-            ))
+
+            self.event_bus.emit(
+                Event(
+                    EventType.TIME_ADVANCED,
+                    {"minutes": minutes, "elapsed_minutes": self.elapsed_minutes, "reason": reason},
+                )
+            )
 
         # Check if we passed an hour boundary
         old_hours = int(old_elapsed // 60)
         new_hours = int(self.elapsed_minutes // 60)
         if new_hours > old_hours and self.event_bus:
             from dnd_engine.utils.events import Event, EventType
+
             hours_passed = new_hours - old_hours
-            self.event_bus.emit(Event(
-                EventType.HOUR_PASSED,
-                {
-                    "hours": hours_passed,
-                    "total_hours": new_hours
-                }
-            ))
+            self.event_bus.emit(
+                Event(EventType.HOUR_PASSED, {"hours": hours_passed, "total_hours": new_hours})
+            )
 
         return expired_effects
 
@@ -418,16 +422,19 @@ class TimeManager:
                 # Emit effect expired event
                 if self.event_bus:
                     from dnd_engine.utils.events import Event, EventType
-                    self.event_bus.emit(Event(
-                        EventType.EFFECT_EXPIRED,
-                        {
-                            "effect": effect,
-                            "target_name": effect.target_name,
-                            "source": effect.source,
-                            "effect_type": effect.effect_type.value,
-                            "reason": "round_ended"
-                        }
-                    ))
+
+                    self.event_bus.emit(
+                        Event(
+                            EventType.EFFECT_EXPIRED,
+                            {
+                                "effect": effect,
+                                "target_name": effect.target_name,
+                                "source": effect.source,
+                                "effect_type": effect.effect_type.value,
+                                "reason": "round_ended",
+                            },
+                        )
+                    )
 
         return expired_effects
 
@@ -450,7 +457,8 @@ class TimeManager:
         # Check if target already has this effect from same source
         # If so, replace it with the new one (recasting refreshes duration)
         self.active_effects = [
-            e for e in self.active_effects
+            e
+            for e in self.active_effects
             if not (e.target_name == effect.target_name and e.source == effect.source)
         ]
 
@@ -492,16 +500,19 @@ class TimeManager:
                 # Emit effect expired event
                 if self.event_bus:
                     from dnd_engine.utils.events import Event, EventType
-                    self.event_bus.emit(Event(
-                        EventType.EFFECT_EXPIRED,
-                        {
-                            "effect": effect,
-                            "target_name": effect.target_name,
-                            "source": effect.source,
-                            "effect_type": effect.effect_type.value,
-                            "reason": "concentration_broken"
-                        }
-                    ))
+
+                    self.event_bus.emit(
+                        Event(
+                            EventType.EFFECT_EXPIRED,
+                            {
+                                "effect": effect,
+                                "target_name": effect.target_name,
+                                "source": effect.source,
+                                "effect_type": effect.effect_type.value,
+                                "reason": "concentration_broken",
+                            },
+                        )
+                    )
 
         return removed
 

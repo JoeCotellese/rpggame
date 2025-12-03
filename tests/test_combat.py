@@ -21,39 +21,21 @@ class TestCombatEngine:
             constitution=15,
             intelligence=10,
             wisdom=12,
-            charisma=8
+            charisma=8,
         )
-        self.fighter = Creature(
-            name="Fighter",
-            max_hp=20,
-            ac=16,
-            abilities=fighter_abilities
-        )
+        self.fighter = Creature(name="Fighter", max_hp=20, ac=16, abilities=fighter_abilities)
 
         # Create a goblin enemy
         goblin_abilities = Abilities(
-            strength=8,
-            dexterity=14,
-            constitution=10,
-            intelligence=10,
-            wisdom=8,
-            charisma=8
+            strength=8, dexterity=14, constitution=10, intelligence=10, wisdom=8, charisma=8
         )
-        self.goblin = Creature(
-            name="Goblin",
-            max_hp=7,
-            ac=15,
-            abilities=goblin_abilities
-        )
+        self.goblin = Creature(name="Goblin", max_hp=7, ac=15, abilities=goblin_abilities)
 
     def test_attack_hit(self):
         """Test a successful attack"""
         # Use a seeded roller to get predictable results
         result = self.engine.resolve_attack(
-            attacker=self.fighter,
-            defender=self.goblin,
-            attack_bonus=5,
-            damage_dice="1d8+3"
+            attacker=self.fighter, defender=self.goblin, attack_bonus=5, damage_dice="1d8+3"
         )
 
         assert isinstance(result, AttackResult)
@@ -68,10 +50,7 @@ class TestCombatEngine:
         # Attack roll + bonus >= AC means hit
         # Create a deterministic test by checking the result fields
         result = self.engine.resolve_attack(
-            attacker=self.fighter,
-            defender=self.goblin,
-            attack_bonus=5,
-            damage_dice="1d8+3"
+            attacker=self.fighter, defender=self.goblin, attack_bonus=5, damage_dice="1d8+3"
         )
 
         expected_hit = (result.attack_roll + 5) >= self.goblin.ac
@@ -88,10 +67,7 @@ class TestCombatEngine:
         found_crit = False
         for _ in range(100):
             result = self.engine.resolve_attack(
-                attacker=self.fighter,
-                defender=self.goblin,
-                attack_bonus=5,
-                damage_dice="1d8+3"
+                attacker=self.fighter, defender=self.goblin, attack_bonus=5, damage_dice="1d8+3"
             )
 
             if result.attack_roll == 20:
@@ -109,10 +85,7 @@ class TestCombatEngine:
         found_miss = False
         for _ in range(100):
             result = self.engine.resolve_attack(
-                attacker=self.fighter,
-                defender=self.goblin,
-                attack_bonus=5,
-                damage_dice="1d8+3"
+                attacker=self.fighter, defender=self.goblin, attack_bonus=5, damage_dice="1d8+3"
             )
 
             if result.attack_roll == 1:
@@ -128,10 +101,7 @@ class TestCombatEngine:
         # Keep attacking until we get a normal hit (not crit, not miss)
         for _ in range(100):
             result = self.engine.resolve_attack(
-                attacker=self.fighter,
-                defender=self.goblin,
-                attack_bonus=5,
-                damage_dice="1d8+3"
+                attacker=self.fighter, defender=self.goblin, attack_bonus=5, damage_dice="1d8+3"
             )
 
             if result.hit and not result.critical_hit:
@@ -144,10 +114,7 @@ class TestCombatEngine:
         # Keep attacking until we get a crit
         for _ in range(100):
             result = self.engine.resolve_attack(
-                attacker=self.fighter,
-                defender=self.goblin,
-                attack_bonus=5,
-                damage_dice="1d8+3"
+                attacker=self.fighter, defender=self.goblin, attack_bonus=5, damage_dice="1d8+3"
             )
 
             if result.critical_hit:
@@ -160,10 +127,7 @@ class TestCombatEngine:
         # Keep attacking until we miss
         for _ in range(100):
             result = self.engine.resolve_attack(
-                attacker=self.fighter,
-                defender=self.goblin,
-                attack_bonus=5,
-                damage_dice="1d8+3"
+                attacker=self.fighter, defender=self.goblin, attack_bonus=5, damage_dice="1d8+3"
             )
 
             if not result.hit:
@@ -180,7 +144,7 @@ class TestCombatEngine:
             defender=self.goblin,
             attack_bonus=20,  # Almost guaranteed hit
             damage_dice="1d8+3",
-            apply_damage=True
+            apply_damage=True,
         )
 
         if result.hit:
@@ -197,7 +161,7 @@ class TestCombatEngine:
             defender=self.goblin,
             attack_bonus=20,
             damage_dice="1d8+3",
-            apply_damage=False  # Don't actually apply damage
+            apply_damage=False,  # Don't actually apply damage
         )
 
         # HP should be unchanged
@@ -214,7 +178,7 @@ class TestCombatEngine:
             defender=self.goblin,
             attack_bonus=20,
             damage_dice="1d8+3",
-            apply_damage=True
+            apply_damage=True,
         )
 
         if result.hit and result.damage >= 3:
@@ -228,7 +192,7 @@ class TestCombatEngine:
             defender=self.goblin,
             attack_bonus=5,
             damage_dice="1d8+3",
-            advantage=True
+            advantage=True,
         )
 
         assert result.advantage is True
@@ -242,7 +206,7 @@ class TestCombatEngine:
             defender=self.goblin,
             attack_bonus=5,
             damage_dice="1d8+3",
-            disadvantage=True
+            disadvantage=True,
         )
 
         assert result.disadvantage is True
@@ -251,10 +215,7 @@ class TestCombatEngine:
     def test_attack_result_string_representation(self):
         """Test that AttackResult has a useful string representation"""
         result = self.engine.resolve_attack(
-            attacker=self.fighter,
-            defender=self.goblin,
-            attack_bonus=5,
-            damage_dice="1d8+3"
+            attacker=self.fighter, defender=self.goblin, attack_bonus=5, damage_dice="1d8+3"
         )
 
         result_str = str(result)
@@ -277,7 +238,7 @@ class TestCombatEngine:
                     attacker=self.fighter,
                     defender=self.goblin,
                     attack_bonus=20,  # Ensure hit
-                    damage_dice=damage_dice
+                    damage_dice=damage_dice,
                 )
 
                 if result.hit and not result.critical_hit:
@@ -300,7 +261,7 @@ class TestAttackResult:
             damage=8,
             critical_hit=False,
             advantage=False,
-            disadvantage=False
+            disadvantage=False,
         )
 
         assert result.attacker_name == "Fighter"
@@ -321,7 +282,7 @@ class TestAttackResult:
             damage=8,
             critical_hit=False,
             advantage=False,
-            disadvantage=False
+            disadvantage=False,
         )
 
         assert result.total_attack == 17  # 12 + 5
@@ -342,29 +303,14 @@ class TestSavingThrowEffects:
             constitution=15,  # +2 CON modifier
             intelligence=10,
             wisdom=12,
-            charisma=8
+            charisma=8,
         )
-        self.fighter = Creature(
-            name="Fighter",
-            max_hp=20,
-            ac=16,
-            abilities=fighter_abilities
-        )
+        self.fighter = Creature(name="Fighter", max_hp=20, ac=16, abilities=fighter_abilities)
 
         ghoul_abilities = Abilities(
-            strength=13,
-            dexterity=15,
-            constitution=10,
-            intelligence=7,
-            wisdom=10,
-            charisma=6
+            strength=13, dexterity=15, constitution=10, intelligence=7, wisdom=10, charisma=6
         )
-        self.ghoul = Creature(
-            name="Ghoul",
-            max_hp=22,
-            ac=12,
-            abilities=ghoul_abilities
-        )
+        self.ghoul = Creature(name="Ghoul", max_hp=22, ac=12, abilities=ghoul_abilities)
 
     def test_saving_throw_triggers_on_hit(self):
         """Test that saving throw is processed when attack hits"""
@@ -382,9 +328,9 @@ class TestSavingThrowEffects:
                     "duration_type": "rounds",
                     "duration": 10,
                     "allow_repeat_save": True,
-                    "repeat_timing": "end_of_turn"
-                }
-            }
+                    "repeat_timing": "end_of_turn",
+                },
+            },
         }
 
         # Attack with high bonus to ensure hit
@@ -394,7 +340,7 @@ class TestSavingThrowEffects:
             attack_bonus=20,
             damage_dice=action["damage"],
             apply_damage=True,
-            action=action
+            action=action,
         )
 
         # Should hit
@@ -429,9 +375,9 @@ class TestSavingThrowEffects:
                     "condition": "paralyzed",
                     "duration_type": "rounds",
                     "duration": 10,
-                    "allow_repeat_save": True
-                }
-            }
+                    "allow_repeat_save": True,
+                },
+            },
         }
 
         # Attack with very low bonus to likely miss
@@ -441,7 +387,7 @@ class TestSavingThrowEffects:
             attack_bonus=-10,
             damage_dice=action["damage"],
             apply_damage=True,
-            action=action
+            action=action,
         )
 
         # If missed, should not have paralysis regardless
@@ -459,16 +405,13 @@ class TestSavingThrowEffects:
                 "duration_type": "rounds",
                 "duration": 10,
                 "allow_repeat_save": True,
-                "repeat_timing": "end_of_turn"
-            }
+                "repeat_timing": "end_of_turn",
+            },
         }
 
         # Process the saving throw effect
         result = self.engine._process_saving_throw_effect(
-            saving_throw_data,
-            self.ghoul,
-            self.fighter,
-            event_bus=None
+            saving_throw_data, self.ghoul, self.fighter, event_bus=None
         )
 
         # Should return a result dict with save_result and condition_applied

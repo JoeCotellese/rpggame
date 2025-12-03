@@ -28,13 +28,13 @@ class TestLoggingConfig:
     def test_init_with_debug(self, tmp_path):
         """Test initialization with debug mode."""
         # Use tmp_path for testing
-        with patch('dnd_engine.utils.logging_config.Path') as mock_path:
+        with patch("dnd_engine.utils.logging_config.Path") as mock_path:
             mock_log_dir = tmp_path / "logs"
             mock_log_dir.mkdir(exist_ok=True)
             mock_path.return_value = mock_log_dir
 
             # Mock the log file path
-            with patch.object(LoggingConfig, '_setup_logging'):
+            with patch.object(LoggingConfig, "_setup_logging"):
                 config = LoggingConfig(debug_enabled=True)
 
                 assert config.debug_enabled is True
@@ -43,6 +43,7 @@ class TestLoggingConfig:
         """Test that log file is created with correct naming pattern."""
         # Change to tmp_path
         import os
+
         original_cwd = os.getcwd()
         os.chdir(tmp_path)
 
@@ -63,6 +64,7 @@ class TestLoggingConfig:
     def test_log_rotation(self, tmp_path):
         """Test that old log files are rotated (keep last 10)."""
         import os
+
         original_cwd = os.getcwd()
         os.chdir(tmp_path)
 
@@ -98,6 +100,7 @@ class TestLoggingConfig:
     def test_create_console_with_debug(self, tmp_path):
         """Test console creation with debug mode (dual output)."""
         import os
+
         original_cwd = os.getcwd()
         os.chdir(tmp_path)
 
@@ -116,6 +119,7 @@ class TestLoggingConfig:
     def test_log_event(self, tmp_path):
         """Test event logging."""
         import os
+
         original_cwd = os.getcwd()
         os.chdir(tmp_path)
 
@@ -140,6 +144,7 @@ class TestLoggingConfig:
     def test_log_dice_roll(self, tmp_path):
         """Test dice roll logging."""
         import os
+
         original_cwd = os.getcwd()
         os.chdir(tmp_path)
 
@@ -153,7 +158,7 @@ class TestLoggingConfig:
                 modifier=5,
                 total=20,
                 advantage=False,
-                disadvantage=False
+                disadvantage=False,
             )
 
             # Read log file
@@ -172,6 +177,7 @@ class TestLoggingConfig:
     def test_log_dice_roll_with_advantage(self, tmp_path):
         """Test dice roll logging with advantage."""
         import os
+
         original_cwd = os.getcwd()
         os.chdir(tmp_path)
 
@@ -185,7 +191,7 @@ class TestLoggingConfig:
                 modifier=0,
                 total=18,
                 advantage=True,
-                disadvantage=False
+                disadvantage=False,
             )
 
             # Read log file
@@ -203,6 +209,7 @@ class TestLoggingConfig:
     def test_log_llm_call(self, tmp_path):
         """Test LLM call logging."""
         import os
+
         original_cwd = os.getcwd()
         os.chdir(tmp_path)
 
@@ -211,10 +218,7 @@ class TestLoggingConfig:
 
             # Log an LLM call
             config.log_llm_call(
-                prompt_type="room_description",
-                latency_ms=250.5,
-                response_length=150,
-                success=True
+                prompt_type="room_description", latency_ms=250.5, response_length=150, success=True
             )
 
             # Read log file
@@ -234,6 +238,7 @@ class TestLoggingConfig:
     def test_log_llm_call_failure(self, tmp_path):
         """Test LLM call logging for failed calls."""
         import os
+
         original_cwd = os.getcwd()
         os.chdir(tmp_path)
 
@@ -242,10 +247,7 @@ class TestLoggingConfig:
 
             # Log a failed LLM call
             config.log_llm_call(
-                prompt_type="combat_action",
-                latency_ms=100.0,
-                response_length=0,
-                success=False
+                prompt_type="combat_action", latency_ms=100.0, response_length=0, success=False
             )
 
             # Read log file
@@ -263,6 +265,7 @@ class TestLoggingConfig:
     def test_log_combat_event(self, tmp_path):
         """Test combat event logging."""
         import os
+
         original_cwd = os.getcwd()
         os.chdir(tmp_path)
 
@@ -287,6 +290,7 @@ class TestLoggingConfig:
     def test_log_player_action(self, tmp_path):
         """Test player action logging."""
         import os
+
         original_cwd = os.getcwd()
         os.chdir(tmp_path)
 
@@ -294,11 +298,7 @@ class TestLoggingConfig:
             config = LoggingConfig(debug_enabled=True)
 
             # Log a player action
-            config.log_player_action(
-                character="Thorin",
-                action="attack",
-                details="target=Goblin"
-            )
+            config.log_player_action(character="Thorin", action="attack", details="target=Goblin")
 
             # Read log file
             log_content = config.log_file_path.read_text()
@@ -331,6 +331,7 @@ class TestLoggingConfig:
     def test_get_log_file_path(self, tmp_path):
         """Test getting log file path."""
         import os
+
         original_cwd = os.getcwd()
         os.chdir(tmp_path)
 
@@ -356,6 +357,7 @@ class TestLoggingConfig:
     def test_close(self, tmp_path):
         """Test closing log file."""
         import os
+
         original_cwd = os.getcwd()
         os.chdir(tmp_path)
 
@@ -397,6 +399,7 @@ class TestGlobalLoggingFunctions:
         """Test get_logging_config before initialization."""
         # Reset global state
         import dnd_engine.utils.logging_config as logging_config_module
+
         logging_config_module._logging_config = None
 
         # Should return None if not initialized

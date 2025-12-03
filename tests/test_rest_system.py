@@ -15,12 +15,7 @@ class TestRecoverHP:
     def sample_character(self):
         """Create a sample character for testing"""
         abilities = Abilities(
-            strength=16,
-            dexterity=14,
-            constitution=14,
-            intelligence=10,
-            wisdom=12,
-            charisma=8
+            strength=16, dexterity=14, constitution=14, intelligence=10, wisdom=12, charisma=8
         )
         return Character(
             name="Test Fighter",
@@ -29,7 +24,7 @@ class TestRecoverHP:
             abilities=abilities,
             max_hp=12,
             ac=16,
-            current_hp=5  # Start damaged
+            current_hp=5,  # Start damaged
         )
 
     def test_recover_hp_partial(self, sample_character):
@@ -48,12 +43,7 @@ class TestRecoverHP:
     def test_recover_hp_already_full(self):
         """Test recovering HP when already at max"""
         abilities = Abilities(
-            strength=16,
-            dexterity=14,
-            constitution=14,
-            intelligence=10,
-            wisdom=12,
-            charisma=8
+            strength=16, dexterity=14, constitution=14, intelligence=10, wisdom=12, charisma=8
         )
         character = Character(
             name="Healthy Fighter",
@@ -62,7 +52,7 @@ class TestRecoverHP:
             abilities=abilities,
             max_hp=12,
             ac=16,
-            current_hp=12  # Already at max
+            current_hp=12,  # Already at max
         )
         healed = character.recover_hp()
         assert healed == 0
@@ -89,12 +79,7 @@ class TestRecoverResources:
     def character_with_resources(self):
         """Create a character with various resource pools"""
         abilities = Abilities(
-            strength=16,
-            dexterity=14,
-            constitution=14,
-            intelligence=10,
-            wisdom=12,
-            charisma=8
+            strength=16, dexterity=14, constitution=14, intelligence=10, wisdom=12, charisma=8
         )
         character = Character(
             name="Test Fighter",
@@ -102,7 +87,7 @@ class TestRecoverResources:
             level=2,
             abilities=abilities,
             max_hp=20,
-            ac=16
+            ac=16,
         )
 
         # Add short rest recovery pool
@@ -110,7 +95,7 @@ class TestRecoverResources:
             name="second_wind",
             current=0,  # Used up
             maximum=1,
-            recovery_type="short_rest"
+            recovery_type="short_rest",
         )
         character.add_resource_pool(second_wind)
 
@@ -119,7 +104,7 @@ class TestRecoverResources:
             name="action_surge",
             current=0,  # Used up
             maximum=1,
-            recovery_type="short_rest"
+            recovery_type="short_rest",
         )
         character.add_resource_pool(action_surge)
 
@@ -128,7 +113,7 @@ class TestRecoverResources:
             name="spell_slots",
             current=0,  # Used up
             maximum=2,
-            recovery_type="long_rest"
+            recovery_type="long_rest",
         )
         character.add_resource_pool(spell_slots)
 
@@ -137,7 +122,7 @@ class TestRecoverResources:
             name="permanent_ability",
             current=0,  # Used up
             maximum=1,
-            recovery_type="permanent"
+            recovery_type="permanent",
         )
         character.add_resource_pool(permanent_ability)
 
@@ -176,12 +161,7 @@ class TestRecoverResources:
     def test_recover_resources_empty_pools(self):
         """Test recovering resources when character has no pools"""
         abilities = Abilities(
-            strength=16,
-            dexterity=14,
-            constitution=14,
-            intelligence=10,
-            wisdom=12,
-            charisma=8
+            strength=16, dexterity=14, constitution=14, intelligence=10, wisdom=12, charisma=8
         )
         character = Character(
             name="No Resources",
@@ -189,7 +169,7 @@ class TestRecoverResources:
             level=1,
             abilities=abilities,
             max_hp=12,
-            ac=16
+            ac=16,
         )
 
         recovered = character.recover_resources("short_rest")
@@ -201,12 +181,7 @@ class TestRecoverResources:
     def test_recover_resources_already_full(self):
         """Test recovering resources when pools are already full"""
         abilities = Abilities(
-            strength=16,
-            dexterity=14,
-            constitution=14,
-            intelligence=10,
-            wisdom=12,
-            charisma=8
+            strength=16, dexterity=14, constitution=14, intelligence=10, wisdom=12, charisma=8
         )
         character = Character(
             name="Full Resources",
@@ -214,7 +189,7 @@ class TestRecoverResources:
             level=1,
             abilities=abilities,
             max_hp=12,
-            ac=16
+            ac=16,
         )
 
         # Add pool that's already full
@@ -222,7 +197,7 @@ class TestRecoverResources:
             name="second_wind",
             current=1,  # Already full
             maximum=1,
-            recovery_type="short_rest"
+            recovery_type="short_rest",
         )
         character.add_resource_pool(second_wind)
 
@@ -238,12 +213,7 @@ class TestShortRest:
     def character_with_short_rest_resources(self):
         """Create a character with short rest resources"""
         abilities = Abilities(
-            strength=16,
-            dexterity=14,
-            constitution=14,
-            intelligence=10,
-            wisdom=12,
-            charisma=8
+            strength=16, dexterity=14, constitution=14, intelligence=10, wisdom=12, charisma=8
         )
         character = Character(
             name="Test Fighter",
@@ -252,32 +222,23 @@ class TestShortRest:
             abilities=abilities,
             max_hp=20,
             ac=16,
-            current_hp=10  # Damaged
+            current_hp=10,  # Damaged
         )
 
         # Add short rest resources
         second_wind = ResourcePool(
-            name="second_wind",
-            current=0,
-            maximum=1,
-            recovery_type="short_rest"
+            name="second_wind", current=0, maximum=1, recovery_type="short_rest"
         )
         character.add_resource_pool(second_wind)
 
         action_surge = ResourcePool(
-            name="action_surge",
-            current=0,
-            maximum=1,
-            recovery_type="short_rest"
+            name="action_surge", current=0, maximum=1, recovery_type="short_rest"
         )
         character.add_resource_pool(action_surge)
 
         # Add long rest resource (should NOT recover)
         spell_slots = ResourcePool(
-            name="spell_slots",
-            current=0,
-            maximum=2,
-            recovery_type="long_rest"
+            name="spell_slots", current=0, maximum=2, recovery_type="long_rest"
         )
         character.add_resource_pool(spell_slots)
 
@@ -294,7 +255,9 @@ class TestShortRest:
         assert "spell_slots" not in result["resources_recovered"]
         assert result["hp_recovered"] == 0  # No Hit Dice healing in MVP
 
-    def test_short_rest_recovers_short_rest_resources_only(self, character_with_short_rest_resources):
+    def test_short_rest_recovers_short_rest_resources_only(
+        self, character_with_short_rest_resources
+    ):
         """Test that short rest only recovers short_rest type resources"""
         character_with_short_rest_resources.take_short_rest()
 
@@ -321,12 +284,7 @@ class TestLongRest:
     def character_for_long_rest(self):
         """Create a character for long rest testing"""
         abilities = Abilities(
-            strength=16,
-            dexterity=14,
-            constitution=14,
-            intelligence=10,
-            wisdom=12,
-            charisma=8
+            strength=16, dexterity=14, constitution=14, intelligence=10, wisdom=12, charisma=8
         )
         character = Character(
             name="Test Fighter",
@@ -335,33 +293,24 @@ class TestLongRest:
             abilities=abilities,
             max_hp=20,
             ac=16,
-            current_hp=5  # Heavily damaged
+            current_hp=5,  # Heavily damaged
         )
 
         # Add short rest resources
         second_wind = ResourcePool(
-            name="second_wind",
-            current=0,
-            maximum=1,
-            recovery_type="short_rest"
+            name="second_wind", current=0, maximum=1, recovery_type="short_rest"
         )
         character.add_resource_pool(second_wind)
 
         # Add long rest resource
         spell_slots = ResourcePool(
-            name="spell_slots",
-            current=0,
-            maximum=3,
-            recovery_type="long_rest"
+            name="spell_slots", current=0, maximum=3, recovery_type="long_rest"
         )
         character.add_resource_pool(spell_slots)
 
         # Add permanent resource (should never recover)
         permanent = ResourcePool(
-            name="permanent_ability",
-            current=0,
-            maximum=1,
-            recovery_type="permanent"
+            name="permanent_ability", current=0, maximum=1, recovery_type="permanent"
         )
         character.add_resource_pool(permanent)
 
@@ -400,12 +349,7 @@ class TestLongRest:
     def test_long_rest_when_already_full_health(self):
         """Test long rest when character is already at full HP"""
         abilities = Abilities(
-            strength=16,
-            dexterity=14,
-            constitution=14,
-            intelligence=10,
-            wisdom=12,
-            charisma=8
+            strength=16, dexterity=14, constitution=14, intelligence=10, wisdom=12, charisma=8
         )
         character = Character(
             name="Healthy Fighter",
@@ -414,7 +358,7 @@ class TestLongRest:
             abilities=abilities,
             max_hp=12,
             ac=16,
-            current_hp=12  # Already full
+            current_hp=12,  # Already full
         )
 
         result = character.take_long_rest()
@@ -448,12 +392,7 @@ class TestUnconsciousCharacterRest:
     def unconscious_character(self):
         """Create an unconscious character at 0 HP"""
         abilities = Abilities(
-            strength=10,
-            dexterity=14,
-            constitution=12,
-            intelligence=14,
-            wisdom=10,
-            charisma=10
+            strength=10, dexterity=14, constitution=12, intelligence=14, wisdom=10, charisma=10
         )
         character = Character(
             name="Unconscious Wizard",
@@ -462,15 +401,12 @@ class TestUnconsciousCharacterRest:
             abilities=abilities,
             max_hp=8,
             ac=12,
-            current_hp=0  # Unconscious
+            current_hp=0,  # Unconscious
         )
 
         # Add a short rest resource
         arcane_recovery = ResourcePool(
-            name="arcane_recovery",
-            current=0,
-            maximum=1,
-            recovery_type="short_rest"
+            name="arcane_recovery", current=0, maximum=1, recovery_type="short_rest"
         )
         character.add_resource_pool(arcane_recovery)
 
@@ -507,12 +443,7 @@ class TestUnconsciousCharacterRest:
     def test_character_at_zero_hp_is_distinguishable_from_full_hp(self):
         """Test that we can distinguish between 0 HP and full HP characters"""
         abilities = Abilities(
-            strength=10,
-            dexterity=14,
-            constitution=12,
-            intelligence=14,
-            wisdom=10,
-            charisma=10
+            strength=10, dexterity=14, constitution=12, intelligence=14, wisdom=10, charisma=10
         )
 
         # Character at 0 HP
@@ -523,7 +454,7 @@ class TestUnconsciousCharacterRest:
             abilities=abilities,
             max_hp=8,
             ac=12,
-            current_hp=0
+            current_hp=0,
         )
 
         # Character at full HP
@@ -534,7 +465,7 @@ class TestUnconsciousCharacterRest:
             abilities=abilities,
             max_hp=8,
             ac=12,
-            current_hp=8
+            current_hp=8,
         )
 
         # Test short rest results

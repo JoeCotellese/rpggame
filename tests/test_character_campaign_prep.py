@@ -15,12 +15,7 @@ class TestPrepareForNewCampaign:
     def sample_character(self):
         """Create a sample character for testing."""
         abilities = Abilities(
-            strength=16,
-            dexterity=14,
-            constitution=15,
-            intelligence=8,
-            wisdom=10,
-            charisma=12
+            strength=16, dexterity=14, constitution=15, intelligence=8, wisdom=10, charisma=12
         )
 
         return Character(
@@ -32,7 +27,7 @@ class TestPrepareForNewCampaign:
             ac=18,
             current_hp=45,
             xp=6500,
-            race="Dwarf"
+            race="Dwarf",
         )
 
     def test_restores_hp_to_max(self, sample_character):
@@ -51,13 +46,13 @@ class TestPrepareForNewCampaign:
             name="second_wind",
             current=0,  # Used
             maximum=1,
-            recovery_type="short_rest"
+            recovery_type="short_rest",
         )
         action_surge = ResourcePool(
             name="action_surge",
             current=0,  # Used
             maximum=2,
-            recovery_type="short_rest"
+            recovery_type="short_rest",
         )
 
         sample_character.add_resource_pool(second_wind)
@@ -97,12 +92,8 @@ class TestPrepareForNewCampaign:
         """Test that prepare_for_new_campaign removes quest items."""
         # Add regular item and quest item
         sample_character.inventory.add_item("longsword", "weapons", 1)
-        sample_character.inventory.add_item(
-            "ancient_key", "consumables", 1, quest_item=True
-        )
-        sample_character.inventory.add_item(
-            "magic_orb", "consumables", 1, quest_item=True
-        )
+        sample_character.inventory.add_item("ancient_key", "consumables", 1, quest_item=True)
+        sample_character.inventory.add_item("magic_orb", "consumables", 1, quest_item=True)
 
         removed = sample_character.prepare_for_new_campaign()
 
@@ -151,9 +142,7 @@ class TestPrepareForNewCampaign:
     def test_returns_removed_items_report(self, sample_character):
         """Test that method returns dictionary with removed items."""
         sample_character.add_condition("poisoned")
-        sample_character.inventory.add_item(
-            "quest_gem", "consumables", 1, quest_item=True
-        )
+        sample_character.inventory.add_item("quest_gem", "consumables", 1, quest_item=True)
 
         removed = sample_character.prepare_for_new_campaign()
 
@@ -175,24 +164,17 @@ class TestPrepareForNewCampaign:
         from dnd_engine.systems.inventory import EquipmentSlot
 
         # Add and equip a quest weapon
-        sample_character.inventory.add_item(
-            "cursed_blade", "weapons", 1, quest_item=True
-        )
+        sample_character.inventory.add_item("cursed_blade", "weapons", 1, quest_item=True)
         sample_character.inventory.equip_item("cursed_blade", EquipmentSlot.WEAPON)
 
         # Verify it's equipped
-        assert (
-            sample_character.inventory.get_equipped_item(EquipmentSlot.WEAPON)
-            == "cursed_blade"
-        )
+        assert sample_character.inventory.get_equipped_item(EquipmentSlot.WEAPON) == "cursed_blade"
 
         sample_character.prepare_for_new_campaign()
 
         # Quest item should be gone and slot empty
         assert not sample_character.inventory.has_item("cursed_blade")
-        assert (
-            sample_character.inventory.get_equipped_item(EquipmentSlot.WEAPON) is None
-        )
+        assert sample_character.inventory.get_equipped_item(EquipmentSlot.WEAPON) is None
 
     def test_full_scenario_damaged_exhausted_character(self, sample_character):
         """Test complete scenario with damaged, exhausted character with quest items."""
@@ -211,9 +193,7 @@ class TestPrepareForNewCampaign:
         # Add inventory
         sample_character.inventory.add_gold(1000)
         sample_character.inventory.add_item("longsword", "weapons", 1)
-        sample_character.inventory.add_item(
-            "macguffin", "consumables", 1, quest_item=True
-        )
+        sample_character.inventory.add_item("macguffin", "consumables", 1, quest_item=True)
 
         # Set death saves (from a close call)
         sample_character.death_save_successes = 3

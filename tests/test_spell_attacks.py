@@ -18,12 +18,12 @@ from dnd_engine.systems.resources import ResourcePool
 def wizard_abilities():
     """Create abilities for a wizard (high INT)."""
     return Abilities(
-        strength=8,      # -1
-        dexterity=12,    # +1
-        constitution=14, # +2
-        intelligence=16, # +3
-        wisdom=10,       # +0
-        charisma=10      # +0
+        strength=8,  # -1
+        dexterity=12,  # +1
+        constitution=14,  # +2
+        intelligence=16,  # +3
+        wisdom=10,  # +0
+        charisma=10,  # +0
     )
 
 
@@ -31,12 +31,12 @@ def wizard_abilities():
 def cleric_abilities():
     """Create abilities for a cleric (high WIS)."""
     return Abilities(
-        strength=14,     # +2
-        dexterity=10,    # +0
-        constitution=14, # +2
+        strength=14,  # +2
+        dexterity=10,  # +0
+        constitution=14,  # +2
         intelligence=8,  # -1
-        wisdom=16,       # +3
-        charisma=12      # +1
+        wisdom=16,  # +3
+        charisma=12,  # +1
     )
 
 
@@ -50,15 +50,12 @@ def level_1_wizard(wizard_abilities):
         abilities=wizard_abilities,
         max_hp=8,
         ac=12,
-        spellcasting_ability="int"
+        spellcasting_ability="int",
     )
     # Add spell slots
-    wizard.add_resource_pool(ResourcePool(
-        name="spell_slots_level_1",
-        current=2,
-        maximum=2,
-        recovery_type="long_rest"
-    ))
+    wizard.add_resource_pool(
+        ResourcePool(name="spell_slots_level_1", current=2, maximum=2, recovery_type="long_rest")
+    )
     return wizard
 
 
@@ -71,7 +68,7 @@ def level_5_wizard(wizard_abilities):
         level=5,
         abilities=wizard_abilities,
         max_hp=30,
-        ac=12
+        ac=12,
     )
     return wizard
 
@@ -86,27 +83,19 @@ def level_1_cleric(cleric_abilities):
         abilities=cleric_abilities,
         max_hp=10,
         ac=16,
-        spellcasting_ability="wis"
+        spellcasting_ability="wis",
     )
     # Add spell slots
-    cleric.add_resource_pool(ResourcePool(
-        name="spell_slots_level_1",
-        current=2,
-        maximum=2,
-        recovery_type="long_rest"
-    ))
+    cleric.add_resource_pool(
+        ResourcePool(name="spell_slots_level_1", current=2, maximum=2, recovery_type="long_rest")
+    )
     return cleric
 
 
 @pytest.fixture
 def goblin():
     """Create a goblin enemy."""
-    return Creature(
-        name="Goblin",
-        max_hp=7,
-        ac=15,
-        abilities=Abilities(10, 14, 10, 10, 8, 8)
-    )
+    return Creature(name="Goblin", max_hp=7, ac=15, abilities=Abilities(10, 14, 10, 10, 8, 8))
 
 
 @pytest.fixture
@@ -116,11 +105,8 @@ def fire_bolt_spell():
         "id": "fire_bolt",
         "name": "Fire Bolt",
         "level": 0,
-        "damage": {
-            "dice": "1d10",
-            "damage_type": "fire"
-        },
-        "attack_type": "ranged"
+        "damage": {"dice": "1d10", "damage_type": "fire"},
+        "attack_type": "ranged",
     }
 
 
@@ -131,11 +117,8 @@ def magic_missile_spell():
         "id": "magic_missile",
         "name": "Magic Missile",
         "level": 1,
-        "damage": {
-            "dice": "3d4+3",
-            "damage_type": "force"
-        },
-        "attack_type": None  # Auto-hit
+        "damage": {"dice": "3d4+3", "damage_type": "force"},
+        "attack_type": None,  # Auto-hit
     }
 
 
@@ -207,7 +190,7 @@ class TestCantripDamageScaling:
             level=11,
             abilities=wizard_abilities,
             max_hp=50,
-            ac=12
+            ac=12,
         )
         assert wizard.scale_cantrip_damage("1d10") == "3d10"
 
@@ -219,7 +202,7 @@ class TestCantripDamageScaling:
             level=17,
             abilities=wizard_abilities,
             max_hp=70,
-            ac=12
+            ac=12,
         )
         assert wizard.scale_cantrip_damage("1d10") == "4d10"
 
@@ -296,9 +279,11 @@ class TestSpellAttackResolution:
 
     def test_spell_attack_hit(self, level_1_wizard, goblin, fire_bolt_spell, monkeypatch):
         """Test successful spell attack."""
+
         # Mock dice roller to always roll 15
         def mock_roll(self, notation, advantage=False, disadvantage=False):
             from dnd_engine.core.dice import DiceRoll
+
             return DiceRoll(rolls=[15], notation=notation, modifier=0)
 
         monkeypatch.setattr(DiceRoller, "roll", mock_roll)
@@ -309,7 +294,7 @@ class TestSpellAttackResolution:
             target=goblin,
             spell=fire_bolt_spell,
             spellcasting_ability="int",
-            apply_damage=False
+            apply_damage=False,
         )
 
         # Attack roll: 15 + 5 (spell attack bonus) = 20
@@ -322,9 +307,11 @@ class TestSpellAttackResolution:
 
     def test_spell_attack_miss(self, level_1_wizard, goblin, fire_bolt_spell, monkeypatch):
         """Test missed spell attack."""
+
         # Mock dice roller to always roll 5
         def mock_roll(self, notation, advantage=False, disadvantage=False):
             from dnd_engine.core.dice import DiceRoll
+
             return DiceRoll(rolls=[5], notation=notation, modifier=0)
 
         monkeypatch.setattr(DiceRoller, "roll", mock_roll)
@@ -335,7 +322,7 @@ class TestSpellAttackResolution:
             target=goblin,
             spell=fire_bolt_spell,
             spellcasting_ability="int",
-            apply_damage=False
+            apply_damage=False,
         )
 
         # Attack roll: 5 + 5 = 10
@@ -354,7 +341,7 @@ class TestSpellAttackResolution:
             target=goblin,
             spell=fire_bolt_spell,
             spellcasting_ability="int",
-            apply_damage=False
+            apply_damage=False,
         )
 
         # Can't test exact damage due to randomness, but if it hits,
@@ -371,6 +358,7 @@ class TestSpellAttackResolution:
         def mock_roll(self, notation, advantage=False, disadvantage=False):
             nonlocal roll_count
             from dnd_engine.core.dice import DiceRoll
+
             roll_count += 1
             if roll_count == 1:
                 # Attack roll - natural 20
@@ -388,7 +376,7 @@ class TestSpellAttackResolution:
             target=goblin,
             spell=fire_bolt_spell,
             spellcasting_ability="int",
-            apply_damage=False
+            apply_damage=False,
         )
 
         assert result.critical_hit is True
@@ -405,7 +393,7 @@ class TestSpellAttackResolution:
             target=goblin,
             spell=fire_bolt_spell,
             spellcasting_ability="int",
-            apply_damage=True
+            apply_damage=True,
         )
 
         if result.hit:
@@ -417,10 +405,7 @@ class TestSpellAttackResolution:
         """Test casting spell from non-caster raises error."""
         # Creature doesn't have get_spell_attack_bonus method
         non_caster = Creature(
-            name="Fighter",
-            max_hp=20,
-            ac=16,
-            abilities=Abilities(16, 10, 14, 10, 10, 10)
+            name="Fighter", max_hp=20, ac=16, abilities=Abilities(16, 10, 14, 10, 10, 10)
         )
 
         combat_engine = CombatEngine()
@@ -431,7 +416,7 @@ class TestSpellAttackResolution:
                 target=goblin,
                 spell=fire_bolt_spell,
                 spellcasting_ability="int",
-                apply_damage=False
+                apply_damage=False,
             )
 
 
@@ -457,7 +442,7 @@ class TestSpellAttackEvents:
             spell=fire_bolt_spell,
             spellcasting_ability="int",
             apply_damage=False,
-            event_bus=event_bus
+            event_bus=event_bus,
         )
 
         # Should have emitted an attack roll event
@@ -481,7 +466,9 @@ class TestGetCastableSpells:
         In D&D 5E, wizards must prepare spells from their spellbook each day.
         Cantrips are always prepared once known.
         """
-        wizard = Character("Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12)
+        wizard = Character(
+            "Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12
+        )
 
         # Set up spellcasting
         wizard.spellcasting_ability = "intelligence"
@@ -491,10 +478,32 @@ class TestGetCastableSpells:
 
         # Mock spells data
         spells_data = {
-            "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack", "damage": {"dice": "1d10"}, "tags": ["combat", "damage"]},
-            "ray_of_frost": {"name": "Ray of Frost", "level": 0, "attack_type": "ranged_spell_attack", "damage": {"dice": "1d8"}, "tags": ["combat", "damage"]},
-            "magic_missile": {"name": "Magic Missile", "level": 1, "damage": {"dice": "1d4+1"}, "tags": ["combat", "damage"]},
-            "shield": {"name": "Shield", "level": 1, "casting_time": "1 reaction", "tags": ["combat", "defense", "reaction"]},
+            "fire_bolt": {
+                "name": "Fire Bolt",
+                "level": 0,
+                "attack_type": "ranged_spell_attack",
+                "damage": {"dice": "1d10"},
+                "tags": ["combat", "damage"],
+            },
+            "ray_of_frost": {
+                "name": "Ray of Frost",
+                "level": 0,
+                "attack_type": "ranged_spell_attack",
+                "damage": {"dice": "1d8"},
+                "tags": ["combat", "damage"],
+            },
+            "magic_missile": {
+                "name": "Magic Missile",
+                "level": 1,
+                "damage": {"dice": "1d4+1"},
+                "tags": ["combat", "damage"],
+            },
+            "shield": {
+                "name": "Shield",
+                "level": 1,
+                "casting_time": "1 reaction",
+                "tags": ["combat", "defense", "reaction"],
+            },
             "mage_armor": {"name": "Mage Armor", "level": 1, "tags": ["utility"]},  # Non-combat
         }
 
@@ -510,13 +519,25 @@ class TestGetCastableSpells:
 
     def test_includes_attack_spells(self, wizard_abilities):
         """Should include spells with attack_type."""
-        wizard = Character("Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12)
+        wizard = Character(
+            "Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12
+        )
         wizard.spellcasting_ability = "intelligence"
         wizard.prepared_spells = ["fire_bolt", "scorching_ray"]
 
         spells_data = {
-            "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack", "tags": ["combat"]},
-            "scorching_ray": {"name": "Scorching Ray", "level": 2, "attack_type": "ranged_spell_attack", "tags": ["combat"]},
+            "fire_bolt": {
+                "name": "Fire Bolt",
+                "level": 0,
+                "attack_type": "ranged_spell_attack",
+                "tags": ["combat"],
+            },
+            "scorching_ray": {
+                "name": "Scorching Ray",
+                "level": 2,
+                "attack_type": "ranged_spell_attack",
+                "tags": ["combat"],
+            },
         }
 
         castable = wizard.get_castable_spells(spells_data)
@@ -524,13 +545,27 @@ class TestGetCastableSpells:
 
     def test_includes_saving_throw_spells(self, wizard_abilities):
         """Should include spells with saving_throw_type."""
-        wizard = Character("Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12)
+        wizard = Character(
+            "Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12
+        )
         wizard.spellcasting_ability = "intelligence"
         wizard.prepared_spells = ["burning_hands", "thunderwave"]
 
         spells_data = {
-            "burning_hands": {"name": "Burning Hands", "level": 1, "saving_throw_type": "dexterity", "damage": {"dice": "3d6"}, "tags": ["combat"]},
-            "thunderwave": {"name": "Thunderwave", "level": 1, "saving_throw_type": "constitution", "damage": {"dice": "2d8"}, "tags": ["combat"]},
+            "burning_hands": {
+                "name": "Burning Hands",
+                "level": 1,
+                "saving_throw_type": "dexterity",
+                "damage": {"dice": "3d6"},
+                "tags": ["combat"],
+            },
+            "thunderwave": {
+                "name": "Thunderwave",
+                "level": 1,
+                "saving_throw_type": "constitution",
+                "damage": {"dice": "2d8"},
+                "tags": ["combat"],
+            },
         }
 
         castable = wizard.get_castable_spells(spells_data)
@@ -538,12 +573,19 @@ class TestGetCastableSpells:
 
     def test_includes_damage_spells_without_attack(self, wizard_abilities):
         """Should include spells with damage even if no attack_type (like Magic Missile)."""
-        wizard = Character("Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12)
+        wizard = Character(
+            "Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12
+        )
         wizard.spellcasting_ability = "intelligence"
         wizard.prepared_spells = ["magic_missile"]
 
         spells_data = {
-            "magic_missile": {"name": "Magic Missile", "level": 1, "damage": {"dice": "1d4+1"}, "tags": ["combat"]},
+            "magic_missile": {
+                "name": "Magic Missile",
+                "level": 1,
+                "damage": {"dice": "1d4+1"},
+                "tags": ["combat"],
+            },
         }
 
         castable = wizard.get_castable_spells(spells_data)
@@ -552,13 +594,25 @@ class TestGetCastableSpells:
 
     def test_includes_reaction_spells(self, wizard_abilities):
         """Should include reaction spells like Shield."""
-        wizard = Character("Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12)
+        wizard = Character(
+            "Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12
+        )
         wizard.spellcasting_ability = "intelligence"
         wizard.prepared_spells = ["shield", "counterspell"]
 
         spells_data = {
-            "shield": {"name": "Shield", "level": 1, "casting_time": "1 reaction", "tags": ["combat", "reaction"]},
-            "counterspell": {"name": "Counterspell", "level": 3, "casting_time": "1 reaction", "tags": ["combat", "reaction"]},
+            "shield": {
+                "name": "Shield",
+                "level": 1,
+                "casting_time": "1 reaction",
+                "tags": ["combat", "reaction"],
+            },
+            "counterspell": {
+                "name": "Counterspell",
+                "level": 3,
+                "casting_time": "1 reaction",
+                "tags": ["combat", "reaction"],
+            },
         }
 
         castable = wizard.get_castable_spells(spells_data)
@@ -566,7 +620,9 @@ class TestGetCastableSpells:
 
     def test_excludes_non_combat_spells(self, wizard_abilities):
         """Should exclude non-combat utility spells."""
-        wizard = Character("Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12)
+        wizard = Character(
+            "Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12
+        )
         wizard.spellcasting_ability = "intelligence"
         wizard.prepared_spells = ["mage_armor", "detect_magic", "identify"]
 
@@ -581,15 +637,37 @@ class TestGetCastableSpells:
 
     def test_sorted_by_spell_level(self, wizard_abilities):
         """Should sort spells by level (cantrips first)."""
-        wizard = Character("Gandalf", CharacterClass.WIZARD, level=3, abilities=wizard_abilities, max_hp=24, ac=12)
+        wizard = Character(
+            "Gandalf", CharacterClass.WIZARD, level=3, abilities=wizard_abilities, max_hp=24, ac=12
+        )
         wizard.spellcasting_ability = "intelligence"
         wizard.prepared_spells = ["fireball", "magic_missile", "fire_bolt", "scorching_ray"]
 
         spells_data = {
-            "fireball": {"name": "Fireball", "level": 3, "damage": {"dice": "8d6"}, "tags": ["combat"]},
-            "magic_missile": {"name": "Magic Missile", "level": 1, "damage": {"dice": "1d4+1"}, "tags": ["combat"]},
-            "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack", "tags": ["combat"]},
-            "scorching_ray": {"name": "Scorching Ray", "level": 2, "attack_type": "ranged_spell_attack", "tags": ["combat"]},
+            "fireball": {
+                "name": "Fireball",
+                "level": 3,
+                "damage": {"dice": "8d6"},
+                "tags": ["combat"],
+            },
+            "magic_missile": {
+                "name": "Magic Missile",
+                "level": 1,
+                "damage": {"dice": "1d4+1"},
+                "tags": ["combat"],
+            },
+            "fire_bolt": {
+                "name": "Fire Bolt",
+                "level": 0,
+                "attack_type": "ranged_spell_attack",
+                "tags": ["combat"],
+            },
+            "scorching_ray": {
+                "name": "Scorching Ray",
+                "level": 2,
+                "attack_type": "ranged_spell_attack",
+                "tags": ["combat"],
+            },
         }
 
         castable = wizard.get_castable_spells(spells_data)
@@ -603,14 +681,26 @@ class TestGetCastableSpells:
         Prepared casters (Wizard, Cleric) with no prepared spells cannot cast
         any leveled spells or cantrips until they prepare them.
         """
-        wizard = Character("Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12)
+        wizard = Character(
+            "Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12
+        )
         wizard.spellcasting_ability = "intelligence"
         wizard.known_spells = ["fire_bolt", "magic_missile"]
         wizard.prepared_spells = []  # Empty - hasn't prepared anything
 
         spells_data = {
-            "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack", "tags": ["combat"]},
-            "magic_missile": {"name": "Magic Missile", "level": 1, "damage": {"dice": "1d4+1"}, "tags": ["combat"]},
+            "fire_bolt": {
+                "name": "Fire Bolt",
+                "level": 0,
+                "attack_type": "ranged_spell_attack",
+                "tags": ["combat"],
+            },
+            "magic_missile": {
+                "name": "Magic Missile",
+                "level": 1,
+                "damage": {"dice": "1d4+1"},
+                "tags": ["combat"],
+            },
         }
 
         castable = wizard.get_castable_spells(spells_data)
@@ -618,15 +708,38 @@ class TestGetCastableSpells:
 
     def test_cantrips_always_show_in_prepared_spells(self, wizard_abilities):
         """Cantrips should show if they're in prepared_spells."""
-        wizard = Character("Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12)
+        wizard = Character(
+            "Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12
+        )
         wizard.spellcasting_ability = "intelligence"
         wizard.known_spells = ["fire_bolt", "ray_of_frost", "magic_missile"]
-        wizard.prepared_spells = ["fire_bolt", "ray_of_frost", "magic_missile"]  # Cantrips + 1st level
+        wizard.prepared_spells = [
+            "fire_bolt",
+            "ray_of_frost",
+            "magic_missile",
+        ]  # Cantrips + 1st level
 
         spells_data = {
-            "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack", "damage": {"dice": "1d10"}, "tags": ["combat"]},
-            "ray_of_frost": {"name": "Ray of Frost", "level": 0, "attack_type": "ranged_spell_attack", "damage": {"dice": "1d8"}, "tags": ["combat"]},
-            "magic_missile": {"name": "Magic Missile", "level": 1, "damage": {"dice": "1d4+1"}, "tags": ["combat"]},
+            "fire_bolt": {
+                "name": "Fire Bolt",
+                "level": 0,
+                "attack_type": "ranged_spell_attack",
+                "damage": {"dice": "1d10"},
+                "tags": ["combat"],
+            },
+            "ray_of_frost": {
+                "name": "Ray of Frost",
+                "level": 0,
+                "attack_type": "ranged_spell_attack",
+                "damage": {"dice": "1d8"},
+                "tags": ["combat"],
+            },
+            "magic_missile": {
+                "name": "Magic Missile",
+                "level": 1,
+                "damage": {"dice": "1d4+1"},
+                "tags": ["combat"],
+            },
         }
 
         castable = wizard.get_castable_spells(spells_data)
@@ -640,14 +753,26 @@ class TestGetCastableSpells:
 
     def test_wizard_with_none_prepared_spells(self, wizard_abilities):
         """Wizard with None prepared_spells should handle gracefully."""
-        wizard = Character("Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12)
+        wizard = Character(
+            "Gandalf", CharacterClass.WIZARD, level=1, abilities=wizard_abilities, max_hp=8, ac=12
+        )
         wizard.spellcasting_ability = "intelligence"
         wizard.known_spells = ["fire_bolt", "magic_missile"]
         wizard.prepared_spells = None  # Not [], but None
 
         spells_data = {
-            "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack", "tags": ["combat"]},
-            "magic_missile": {"name": "Magic Missile", "level": 1, "damage": {"dice": "1d4+1"}, "tags": ["combat"]},
+            "fire_bolt": {
+                "name": "Fire Bolt",
+                "level": 0,
+                "attack_type": "ranged_spell_attack",
+                "tags": ["combat"],
+            },
+            "magic_missile": {
+                "name": "Magic Missile",
+                "level": 1,
+                "damage": {"dice": "1d4+1"},
+                "tags": ["combat"],
+            },
         }
 
         castable = wizard.get_castable_spells(spells_data)
@@ -655,16 +780,33 @@ class TestGetCastableSpells:
 
     def test_cleric_uses_prepared_spells(self, wizard_abilities):
         """Cleric should use prepared_spells like Wizard (prepared caster)."""
-        cleric = Character("Healer", CharacterClass.CLERIC, level=1, abilities=wizard_abilities, max_hp=10, ac=16)
+        cleric = Character(
+            "Healer", CharacterClass.CLERIC, level=1, abilities=wizard_abilities, max_hp=10, ac=16
+        )
         cleric.spellcasting_ability = "wisdom"
         cleric.known_spells = ["sacred_flame", "cure_wounds", "bless", "shield_of_faith"]
         cleric.prepared_spells = ["sacred_flame", "cure_wounds"]  # Only 2 prepared
 
         spells_data = {
-            "sacred_flame": {"name": "Sacred Flame", "level": 0, "saving_throw_type": "dexterity", "damage": {"dice": "1d8"}, "tags": ["combat"]},
-            "cure_wounds": {"name": "Cure Wounds", "level": 1, "damage": {"dice": "1d8"}, "tags": ["combat", "healing"]},
+            "sacred_flame": {
+                "name": "Sacred Flame",
+                "level": 0,
+                "saving_throw_type": "dexterity",
+                "damage": {"dice": "1d8"},
+                "tags": ["combat"],
+            },
+            "cure_wounds": {
+                "name": "Cure Wounds",
+                "level": 1,
+                "damage": {"dice": "1d8"},
+                "tags": ["combat", "healing"],
+            },
             "bless": {"name": "Bless", "level": 1, "tags": ["utility"]},  # No combat tag
-            "shield_of_faith": {"name": "Shield of Faith", "level": 1, "tags": ["utility"]},  # No combat tag
+            "shield_of_faith": {
+                "name": "Shield of Faith",
+                "level": 1,
+                "tags": ["utility"],
+            },  # No combat tag
         }
 
         castable = cleric.get_castable_spells(spells_data)
@@ -681,14 +823,26 @@ class TestGetCastableSpells:
 
         This is for edge cases like Eldritch Knight or Arcane Trickster subclasses.
         """
-        fighter = Character("Warrior", CharacterClass.FIGHTER, level=3, abilities=wizard_abilities, max_hp=30, ac=18)
+        fighter = Character(
+            "Warrior", CharacterClass.FIGHTER, level=3, abilities=wizard_abilities, max_hp=30, ac=18
+        )
         fighter.spellcasting_ability = "intelligence"
         fighter.known_spells = ["fire_bolt", "shield"]  # Eldritch Knight knows these
         fighter.prepared_spells = None  # Fighters don't prepare spells
 
         spells_data = {
-            "fire_bolt": {"name": "Fire Bolt", "level": 0, "attack_type": "ranged_spell_attack", "tags": ["combat"]},
-            "shield": {"name": "Shield", "level": 1, "casting_time": "1 reaction", "tags": ["combat", "reaction"]},
+            "fire_bolt": {
+                "name": "Fire Bolt",
+                "level": 0,
+                "attack_type": "ranged_spell_attack",
+                "tags": ["combat"],
+            },
+            "shield": {
+                "name": "Shield",
+                "level": 1,
+                "casting_time": "1 reaction",
+                "tags": ["combat", "reaction"],
+            },
         }
 
         castable = fighter.get_castable_spells(spells_data)

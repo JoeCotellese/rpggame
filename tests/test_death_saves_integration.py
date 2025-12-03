@@ -24,12 +24,7 @@ from dnd_engine.utils.events import EventBus, EventType
 def abilities():
     """Standard ability scores for testing."""
     return Abilities(
-        strength=14,
-        dexterity=12,
-        constitution=13,
-        intelligence=10,
-        wisdom=11,
-        charisma=8
+        strength=14, dexterity=12, constitution=13, intelligence=10, wisdom=11, charisma=8
     )
 
 
@@ -43,7 +38,7 @@ def fighter(abilities):
         abilities=abilities,
         max_hp=12,
         ac=16,
-        current_hp=12
+        current_hp=12,
     )
 
 
@@ -57,19 +52,14 @@ def rogue(abilities):
         abilities=abilities,
         max_hp=10,
         ac=14,
-        current_hp=10
+        current_hp=10,
     )
 
 
 @pytest.fixture
 def goblin():
     """Create a test goblin enemy."""
-    return Creature(
-        name="Goblin",
-        max_hp=7,
-        ac=15,
-        abilities=Abilities(10, 14, 10, 10, 8, 8)
-    )
+    return Creature(name="Goblin", max_hp=7, ac=15, abilities=Abilities(10, 14, 10, 10, 8, 8))
 
 
 @pytest.fixture
@@ -103,7 +93,7 @@ class TestCombatDamageWithDeathSaves:
             attack_bonus=4,
             damage_dice="1d6+2",
             apply_damage=True,
-            event_bus=event_bus
+            event_bus=event_bus,
         )
 
         if result.hit and result.damage >= 3:
@@ -124,25 +114,27 @@ class TestCombatDamageWithDeathSaves:
             attack_bonus=4,
             damage_dice="1d6+2",
             apply_damage=True,
-            event_bus=event_bus
+            event_bus=event_bus,
         )
 
         if result.hit:
             assert fighter.death_save_failures == 1
             assert len(events) == 1
 
-    def test_massive_damage_kills_unconscious_character(self, fighter, goblin, combat_engine, event_bus):
+    def test_massive_damage_kills_unconscious_character(
+        self, fighter, goblin, combat_engine, event_bus
+    ):
         """Massive damage to unconscious character should cause instant death."""
         fighter.current_hp = 0
         events = []
         event_bus.subscribe(EventType.MASSIVE_DAMAGE_DEATH, lambda e: events.append(e))
 
         # Force a hit with massive damage
-        with patch.object(combat_engine.dice_roller, 'roll') as mock_roll:
+        with patch.object(combat_engine.dice_roller, "roll") as mock_roll:
             # Attack roll
             mock_roll.side_effect = [
                 Mock(total=20, rolls=[20]),  # Natural 20 attack
-                Mock(total=fighter.max_hp, rolls=[fighter.max_hp])  # Massive damage
+                Mock(total=fighter.max_hp, rolls=[fighter.max_hp]),  # Massive damage
             ]
 
             result = combat_engine.resolve_attack(
@@ -151,7 +143,7 @@ class TestCombatDamageWithDeathSaves:
                 attack_bonus=4,
                 damage_dice="2d10+10",
                 apply_damage=True,
-                event_bus=event_bus
+                event_bus=event_bus,
             )
 
         if result.damage >= fighter.max_hp:
@@ -166,7 +158,7 @@ class TestPartyWipeMechanics:
     def test_unconscious_party_not_wiped(self, party):
         """Party with unconscious members is not wiped."""
         party.characters[0].current_hp = 0  # Fighter unconscious
-        party.characters[1].current_hp = 5   # Rogue alive
+        party.characters[1].current_hp = 5  # Rogue alive
 
         assert party.is_wiped() == False
 
@@ -254,21 +246,21 @@ class TestDeathSaveProgression:
         fighter.current_hp = 0
 
         # First success
-        with patch.object(fighter._dice_roller, 'roll') as mock_roll:
+        with patch.object(fighter._dice_roller, "roll") as mock_roll:
             mock_roll.return_value = Mock(total=15)
             result1 = fighter.make_death_save(event_bus)
         assert result1["successes"] == 1
         assert not result1["stabilized"]
 
         # Second success
-        with patch.object(fighter._dice_roller, 'roll') as mock_roll:
+        with patch.object(fighter._dice_roller, "roll") as mock_roll:
             mock_roll.return_value = Mock(total=12)
             result2 = fighter.make_death_save(event_bus)
         assert result2["successes"] == 2
         assert not result2["stabilized"]
 
         # Third success - stabilizes
-        with patch.object(fighter._dice_roller, 'roll') as mock_roll:
+        with patch.object(fighter._dice_roller, "roll") as mock_roll:
             mock_roll.return_value = Mock(total=18)
             result3 = fighter.make_death_save(event_bus)
         assert result3["successes"] == 3
@@ -279,21 +271,21 @@ class TestDeathSaveProgression:
         fighter.current_hp = 0
 
         # First failure
-        with patch.object(fighter._dice_roller, 'roll') as mock_roll:
+        with patch.object(fighter._dice_roller, "roll") as mock_roll:
             mock_roll.return_value = Mock(total=5)
             result1 = fighter.make_death_save(event_bus)
         assert result1["failures"] == 1
         assert not result1["dead"]
 
         # Second failure
-        with patch.object(fighter._dice_roller, 'roll') as mock_roll:
+        with patch.object(fighter._dice_roller, "roll") as mock_roll:
             mock_roll.return_value = Mock(total=7)
             result2 = fighter.make_death_save(event_bus)
         assert result2["failures"] == 2
         assert not result2["dead"]
 
         # Third failure - death
-        with patch.object(fighter._dice_roller, 'roll') as mock_roll:
+        with patch.object(fighter._dice_roller, "roll") as mock_roll:
             mock_roll.return_value = Mock(total=4)
             result3 = fighter.make_death_save(event_bus)
         assert result3["failures"] == 3
@@ -304,17 +296,17 @@ class TestDeathSaveProgression:
         fighter.current_hp = 0
 
         # Success
-        with patch.object(fighter._dice_roller, 'roll') as mock_roll:
+        with patch.object(fighter._dice_roller, "roll") as mock_roll:
             mock_roll.return_value = Mock(total=15)
             fighter.make_death_save(event_bus)
 
         # Failure
-        with patch.object(fighter._dice_roller, 'roll') as mock_roll:
+        with patch.object(fighter._dice_roller, "roll") as mock_roll:
             mock_roll.return_value = Mock(total=5)
             fighter.make_death_save(event_bus)
 
         # Another success
-        with patch.object(fighter._dice_roller, 'roll') as mock_roll:
+        with patch.object(fighter._dice_roller, "roll") as mock_roll:
             mock_roll.return_value = Mock(total=12)
             fighter.make_death_save(event_bus)
 
@@ -333,7 +325,7 @@ class TestDeathSaveEvents:
         events = []
         event_bus.subscribe(EventType.DEATH_SAVE, lambda e: events.append(e))
 
-        with patch.object(fighter._dice_roller, 'roll') as mock_roll:
+        with patch.object(fighter._dice_roller, "roll") as mock_roll:
             mock_roll.return_value = Mock(total=14)
             fighter.make_death_save(event_bus)
 
@@ -360,7 +352,7 @@ class TestDeathSaveEvents:
         data_loader = DataLoader()
         skills_data = data_loader.load_skills()
 
-        with patch.object(rogue._dice_roller, 'roll') as mock_roll:
+        with patch.object(rogue._dice_roller, "roll") as mock_roll:
             mock_roll.return_value = Mock(total=15, modifier=0)  # High roll to ensure success
             check_result = rogue.make_skill_check("medicine", 10, skills_data)
 
@@ -369,14 +361,17 @@ class TestDeathSaveEvents:
 
             # Emit the event (would be done by CLI)
             from dnd_engine.utils.events import Event
-            event_bus.emit(Event(
-                type=EventType.CHARACTER_STABILIZED,
-                data={
-                    "helper": rogue.name,
-                    "target": fighter.name,
-                    "check_total": check_result["total"]
-                }
-            ))
+
+            event_bus.emit(
+                Event(
+                    type=EventType.CHARACTER_STABILIZED,
+                    data={
+                        "helper": rogue.name,
+                        "target": fighter.name,
+                        "check_total": check_result["total"],
+                    },
+                )
+            )
 
             assert len(events) == 1
             assert events[0].data["helper"] == "Rogue"

@@ -15,11 +15,7 @@ class LLMProvider(ABC):
     """
 
     def __init__(
-        self,
-        api_key: str,
-        model: str,
-        timeout: float = 10.0,
-        max_tokens: int = 1000
+        self, api_key: str, model: str, timeout: float = 10.0, max_tokens: int = 1000
     ) -> None:
         """
         Initialize LLM provider.
@@ -36,11 +32,7 @@ class LLMProvider(ABC):
         self.max_tokens = max_tokens
 
     @abstractmethod
-    async def generate(
-        self,
-        prompt: str,
-        temperature: float = 0.7
-    ) -> str | None:
+    async def generate(self, prompt: str, temperature: float = 0.7) -> str | None:
         """
         Generate text from prompt.
 

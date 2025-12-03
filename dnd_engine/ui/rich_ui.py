@@ -10,7 +10,7 @@ from rich.panel import Panel
 from rich.style import Style
 from rich.table import Table
 
-from dnd_engine.utils.logging_config import init_logging, MAX_CONSOLE_WIDTH
+from dnd_engine.utils.logging_config import MAX_CONSOLE_WIDTH, init_logging
 
 # Global console instance - initialized via init_console()
 console = Console(width=MAX_CONSOLE_WIDTH)
@@ -48,15 +48,14 @@ def print_title(title: str, subtitle: str | None = None) -> None:
         content = title
 
     panel = Panel(
-        Align.center(content),
-        style=Style(color="cyan", bold=True),
-        expand=False,
-        padding=(1, 2)
+        Align.center(content), style=Style(color="cyan", bold=True), expand=False, padding=(1, 2)
     )
     console.print(panel)
 
 
-def print_banner(title: str = "D&D 5E Terminal Adventure", version: str = "0.1.0", color: str = "blue") -> None:
+def print_banner(
+    title: str = "D&D 5E Terminal Adventure", version: str = "0.1.0", color: str = "blue"
+) -> None:
     """Display a styled banner with title and optional version.
 
     Args:
@@ -73,7 +72,7 @@ def print_banner(title: str = "D&D 5E Terminal Adventure", version: str = "0.1.0
         style=Style(color=color, bold=True),
         expand=False,
         box=box.DOUBLE,
-        padding=(1, 3)
+        padding=(1, 3),
     )
     console.print(panel)
 
@@ -142,7 +141,9 @@ def create_party_status_table(party_data: list[dict[str, Any]]) -> Table:
             time_remaining = effect.get_time_remaining_display()
             concentration_marker = " 🎯" if effect.concentration else ""
 
-            effects_text.append(f"[magenta]{effect_name}[/magenta] ({time_remaining}){concentration_marker}")
+            effects_text.append(
+                f"[magenta]{effect_name}[/magenta] ({time_remaining}){concentration_marker}"
+            )
 
         # Add conditions (paralyzed, stunned, etc.)
         conditions = char.get("conditions", {})
@@ -200,12 +201,7 @@ def create_inventory_table(items: dict[str, list[dict[str, Any]]]) -> Table:
             item_name = item.get("name", "Unknown")
             if item.get("quest_item"):
                 item_name = f"[bold cyan]★[/bold cyan] {item_name}"
-            table.add_row(
-                item_name,
-                category.capitalize(),
-                str(item.get("quantity", 1)),
-                status
-            )
+            table.add_row(item_name, category.capitalize(), str(item.get("quantity", 1)), status)
 
     return table
 
@@ -220,7 +216,9 @@ def create_combat_table(combatants: list[dict[str, Any]]) -> Table:
     Returns:
         Formatted Rich Table
     """
-    table = Table(title="COMBAT INITIATIVE", style="red", show_header=True, header_style="bold yellow")
+    table = Table(
+        title="COMBAT INITIATIVE", style="red", show_header=True, header_style="bold yellow"
+    )
     table.add_column("Combatant", style="bold")
     table.add_column("Initiative", justify="center")
     table.add_column("HP", justify="center")
@@ -291,7 +289,9 @@ def create_combat_table(combatants: list[dict[str, Any]]) -> Table:
                 effect_name = effect.source
                 time_remaining = effect.get_time_remaining_display()
                 concentration_marker = " 🎯" if effect.concentration else ""
-                effects_text.append(f"[magenta]{effect_name}[/magenta] ({time_remaining}){concentration_marker}")
+                effects_text.append(
+                    f"[magenta]{effect_name}[/magenta] ({time_remaining}){concentration_marker}"
+                )
             effects_display = "\n".join(effects_text)
         else:
             effects_display = "—"
@@ -303,7 +303,7 @@ def create_combat_table(combatants: list[dict[str, Any]]) -> Table:
             str(combatant.get("initiative", 0)),
             f"[{color}]{hp_text}[/{color}]",
             effects_display,
-            status
+            status,
         )
 
     return table
@@ -359,11 +359,7 @@ def print_room_description(title: str, description: str, exits: list[str]) -> No
     """
     content = f"{description}\n\n[bold cyan]Exits:[/bold cyan] {', '.join(exits)}"
     panel = Panel(
-        content,
-        title=f"[bold]{title}[/bold]",
-        style="cyan",
-        expand=False,
-        padding=(1, 2)
+        content, title=f"[bold]{title}[/bold]", style="cyan", expand=False, padding=(1, 2)
     )
     console.print(panel)
 
@@ -402,12 +398,7 @@ def print_section(title: str, content: str = "") -> None:
         return
 
     # Render full bordered panel when content exists
-    panel = Panel(
-        content,
-        title=f"[bold cyan]{title}[/bold cyan]",
-        style="cyan",
-        expand=False
-    )
+    panel = Panel(content, title=f"[bold cyan]{title}[/bold cyan]", style="cyan", expand=False)
     console.print(panel)
 
 
@@ -422,16 +413,13 @@ def print_list(items: list[str], title: str | None = None, numbered: bool = Fals
     content = ""
     for i, item in enumerate(items):
         if numbered:
-            content += f"{i+1}. {item}\n"
+            content += f"{i + 1}. {item}\n"
         else:
             content += f"• {item}\n"
 
     if title:
         panel = Panel(
-            content.rstrip(),
-            title=f"[bold cyan]{title}[/bold cyan]",
-            style="cyan",
-            expand=False
+            content.rstrip(), title=f"[bold cyan]{title}[/bold cyan]", style="cyan", expand=False
         )
         console.print(panel)
     else:
@@ -452,10 +440,7 @@ def print_choice_menu(title: str, options: list[dict[str, str]]) -> None:
         content += f"[bold cyan]{num}.[/bold cyan] {text}\n"
 
     panel = Panel(
-        content.rstrip(),
-        title=f"[bold yellow]{title}[/bold yellow]",
-        style="yellow",
-        expand=False
+        content.rstrip(), title=f"[bold yellow]{title}[/bold yellow]", style="yellow", expand=False
     )
     console.print(panel)
 
@@ -488,11 +473,7 @@ def print_mechanics_panel(content: str) -> None:
         content: Mechanics text to display (attack rolls, damage, etc.)
     """
     panel = Panel(
-        content,
-        title="⚔️  Mechanics",
-        border_style="dim blue",
-        padding=(0, 1),
-        expand=False
+        content, title="⚔️  Mechanics", border_style="dim blue", padding=(0, 1), expand=False
     )
     console.print(panel)
 
@@ -511,6 +492,7 @@ def print_combat_action(mechanics: str, narrative: str | None = None) -> None:
     # Print narrative if available
     if narrative:
         from rich.markdown import Markdown
+
         console.print(Markdown(narrative), style="gold1")
 
 
@@ -520,11 +502,7 @@ def print_narrative_loading() -> None:
 
     loading_text = Text("⏳ Enhancing narrative...", style="dim italic")
     panel = Panel(
-        loading_text,
-        title="✨ Narrative",
-        border_style="yellow",
-        padding=(1, 2),
-        expand=False
+        loading_text, title="✨ Narrative", border_style="yellow", padding=(1, 2), expand=False
     )
     console.print(panel)
 
@@ -538,11 +516,7 @@ def print_narrative_panel(content: str) -> None:
     from rich.markdown import Markdown
 
     panel = Panel(
-        Markdown(content),
-        title="✨ Narrative",
-        border_style="gold1",
-        padding=(1, 2),
-        expand=False
+        Markdown(content), title="✨ Narrative", border_style="gold1", padding=(1, 2), expand=False
     )
     console.print(panel)
 

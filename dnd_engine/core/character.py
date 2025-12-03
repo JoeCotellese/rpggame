@@ -13,6 +13,7 @@ from dnd_engine.systems.resources import ResourcePool
 
 class CharacterClass(Enum):
     """Available character classes"""
+
     FIGHTER = "fighter"
     ROGUE = "rogue"
     WIZARD = "wizard"
@@ -52,7 +53,7 @@ class Character(Creature):
         spellcasting_ability: str | None = None,
         known_spells: list[str] | None = None,
         prepared_spells: list[str] | None = None,
-        vault_id: str | None = None
+        vault_id: str | None = None,
     ):
         """
         Initialize a player character.
@@ -80,11 +81,7 @@ class Character(Creature):
             vault_id: UUID linking this character to their vault entry (for syncing progression)
         """
         super().__init__(
-            name=name,
-            max_hp=max_hp,
-            ac=ac,
-            abilities=abilities,
-            current_hp=current_hp
+            name=name, max_hp=max_hp, ac=ac, abilities=abilities, current_hp=current_hp
         )
 
         self.character_class = character_class
@@ -93,7 +90,9 @@ class Character(Creature):
         self.race = race
         self.subclass = subclass
         self.inventory = inventory if inventory is not None else Inventory()
-        self.saving_throw_proficiencies = saving_throw_proficiencies if saving_throw_proficiencies is not None else []
+        self.saving_throw_proficiencies = (
+            saving_throw_proficiencies if saving_throw_proficiencies is not None else []
+        )
         self.skill_proficiencies = skill_proficiencies if skill_proficiencies is not None else []
         self.expertise_skills = expertise_skills if expertise_skills is not None else []
         self.weapon_proficiencies = weapon_proficiencies if weapon_proficiencies is not None else []
@@ -176,12 +175,20 @@ class Character(Creature):
         """
         # Map short ability names to full names and vice versa
         short_to_full = {
-            "str": "strength", "dex": "dexterity", "con": "constitution",
-            "int": "intelligence", "wis": "wisdom", "cha": "charisma"
+            "str": "strength",
+            "dex": "dexterity",
+            "con": "constitution",
+            "int": "intelligence",
+            "wis": "wisdom",
+            "cha": "charisma",
         }
         full_to_short = {
-            "strength": "str", "dexterity": "dex", "constitution": "con",
-            "intelligence": "int", "wisdom": "wis", "charisma": "cha"
+            "strength": "str",
+            "dexterity": "dex",
+            "constitution": "con",
+            "intelligence": "int",
+            "wisdom": "wis",
+            "charisma": "cha",
         }
 
         # Normalize to short ability name
@@ -223,7 +230,7 @@ class Character(Creature):
         dc: int,
         advantage: bool = False,
         disadvantage: bool = False,
-        event_bus=None
+        event_bus=None,
     ) -> dict[str, Any]:
         """
         Roll a saving throw against a DC.
@@ -252,12 +259,20 @@ class Character(Creature):
 
         # Normalize ability to short name
         short_to_full = {
-            "str": "strength", "dex": "dexterity", "con": "constitution",
-            "int": "intelligence", "wis": "wisdom", "cha": "charisma"
+            "str": "strength",
+            "dex": "dexterity",
+            "con": "constitution",
+            "int": "intelligence",
+            "wis": "wisdom",
+            "cha": "charisma",
         }
         full_to_short = {
-            "strength": "str", "dexterity": "dex", "constitution": "con",
-            "intelligence": "int", "wisdom": "wis", "charisma": "cha"
+            "strength": "str",
+            "dexterity": "dex",
+            "constitution": "con",
+            "intelligence": "int",
+            "wisdom": "wis",
+            "charisma": "cha",
         }
 
         ability_lower = ability.lower()
@@ -284,11 +299,15 @@ class Character(Creature):
         # Create result dict
         result = {
             "success": success,
-            "roll": roll_result.rolls[0] if len(roll_result.rolls) == 1 else max(roll_result.rolls) if advantage else min(roll_result.rolls),
+            "roll": roll_result.rolls[0]
+            if len(roll_result.rolls) == 1
+            else max(roll_result.rolls)
+            if advantage
+            else min(roll_result.rolls),
             "modifier": modifier,
             "total": total,
             "dc": dc,
-            "ability": ability_short
+            "ability": ability_short,
         }
 
         # Emit event if event bus is provided
@@ -302,8 +321,8 @@ class Character(Creature):
                     "roll": result["roll"],
                     "modifier": modifier,
                     "total": total,
-                    "success": success
-                }
+                    "success": success,
+                },
             )
             event_bus.emit(event)
 
@@ -443,8 +462,11 @@ class Character(Creature):
         weapon_type = weapon_data.get("weapon_type", "")
         # Check both weapon type (e.g., "martial") and specific weapon name (e.g., "rapiers")
         # Convert weapon_id to plural form for comparison (e.g., "rapier" -> "rapiers")
-        weapon_name_plural = f"{weapon_id}s" if not weapon_id.endswith('s') else weapon_id
-        return weapon_type in self.weapon_proficiencies or weapon_name_plural in self.weapon_proficiencies
+        weapon_name_plural = f"{weapon_id}s" if not weapon_id.endswith("s") else weapon_id
+        return (
+            weapon_type in self.weapon_proficiencies
+            or weapon_name_plural in self.weapon_proficiencies
+        )
 
     def is_proficient_with_armor(self, armor_id: str, items_data: dict) -> bool:
         """
@@ -570,15 +592,18 @@ class Character(Creature):
         # Emit level-up event
         if event_bus is not None:
             from dnd_engine.utils.events import Event, EventType
-            event_bus.emit(Event(
-                type=EventType.LEVEL_UP,
-                data={
-                    "character": self.name,
-                    "old_level": old_level,
-                    "new_level": self.level,
-                    "hp_increase": self.max_hp - old_max_hp
-                }
-            ))
+
+            event_bus.emit(
+                Event(
+                    type=EventType.LEVEL_UP,
+                    data={
+                        "character": self.name,
+                        "old_level": old_level,
+                        "new_level": self.level,
+                        "hp_increase": self.max_hp - old_max_hp,
+                    },
+                )
+            )
 
     def _increase_hp(self, data_loader) -> None:
         """
@@ -632,21 +657,24 @@ class Character(Creature):
                     name=resource["pool"],
                     current=resource["max_uses"],
                     maximum=resource["max_uses"],
-                    recovery_type=resource["recovery"]
+                    recovery_type=resource["recovery"],
                 )
                 self.add_resource_pool(pool)
 
             # Emit feature granted event
             if event_bus is not None:
                 from dnd_engine.utils.events import Event, EventType
-                event_bus.emit(Event(
-                    type=EventType.FEATURE_GRANTED,
-                    data={
-                        "character": self.name,
-                        "level": self.level,
-                        "feature": feature["name"]
-                    }
-                ))
+
+                event_bus.emit(
+                    Event(
+                        type=EventType.FEATURE_GRANTED,
+                        data={
+                            "character": self.name,
+                            "level": self.level,
+                            "feature": feature["name"],
+                        },
+                    )
+                )
 
     def get_skill_modifier(self, skill: str, skills_data: dict) -> int:
         """
@@ -685,7 +713,14 @@ class Character(Creature):
 
         return modifier
 
-    def make_skill_check(self, skill: str, dc: int, skills_data: dict, advantage: bool = False, disadvantage: bool = False) -> dict:
+    def make_skill_check(
+        self,
+        skill: str,
+        dc: int,
+        skills_data: dict,
+        advantage: bool = False,
+        disadvantage: bool = False,
+    ) -> dict:
         """
         Roll a skill check against a difficulty class (DC).
 
@@ -731,7 +766,7 @@ class Character(Creature):
             "modifier": modifier,
             "total": total,
             "success": total >= dc,
-            "proficient": skill in self.skill_proficiencies
+            "proficient": skill in self.skill_proficiencies,
         }
 
     def get_sneak_attack_dice(self) -> str | None:
@@ -758,7 +793,7 @@ class Character(Creature):
             13: "7d6",
             15: "8d6",
             17: "9d6",
-            19: "10d6"
+            19: "10d6",
         }
 
         # Find the highest level threshold we've met
@@ -769,7 +804,9 @@ class Character(Creature):
 
         return dice
 
-    def can_sneak_attack(self, has_advantage: bool = False, has_disadvantage: bool = False, ally_nearby: bool = False) -> bool:
+    def can_sneak_attack(
+        self, has_advantage: bool = False, has_disadvantage: bool = False, ally_nearby: bool = False
+    ) -> bool:
         """
         Check if Rogue can use Sneak Attack.
 
@@ -874,8 +911,12 @@ class Character(Creature):
         """
         # Map short ability names to full names
         short_to_full = {
-            "str": "strength", "dex": "dexterity", "con": "constitution",
-            "int": "intelligence", "wis": "wisdom", "cha": "charisma"
+            "str": "strength",
+            "dex": "dexterity",
+            "con": "constitution",
+            "int": "intelligence",
+            "wis": "wisdom",
+            "cha": "charisma",
         }
 
         # Normalize to short ability name
@@ -925,8 +966,12 @@ class Character(Creature):
         """
         # Map short ability names to full names
         short_to_full = {
-            "str": "strength", "dex": "dexterity", "con": "constitution",
-            "int": "intelligence", "wis": "wisdom", "cha": "charisma"
+            "str": "strength",
+            "dex": "dexterity",
+            "con": "constitution",
+            "int": "intelligence",
+            "wis": "wisdom",
+            "cha": "charisma",
         }
 
         # Normalize to short ability name
@@ -1078,7 +1123,7 @@ class Character(Creature):
             multiplier = 1
 
         # Parse the base damage dice
-        pattern = re.compile(r'^(\d*)d(\d+)(([+-])(\d+))?$', re.IGNORECASE)
+        pattern = re.compile(r"^(\d*)d(\d+)(([+-])(\d+))?$", re.IGNORECASE)
         match = pattern.match(base_damage_dice.strip())
 
         if not match:
@@ -1125,27 +1170,27 @@ class Character(Creature):
                 self.death_save_failures = 3
 
                 if event_bus is not None:
-                    event_bus.emit(Event(
-                        type=EventType.MASSIVE_DAMAGE_DEATH,
-                        data={
-                            "character": self.name,
-                            "damage": amount,
-                            "max_hp": self.max_hp
-                        }
-                    ))
+                    event_bus.emit(
+                        Event(
+                            type=EventType.MASSIVE_DAMAGE_DEATH,
+                            data={"character": self.name, "damage": amount, "max_hp": self.max_hp},
+                        )
+                    )
             else:
                 # Taking damage at 0 HP = 1 automatic death save failure
                 self.add_death_save_failure(1)
 
                 if event_bus is not None:
-                    event_bus.emit(Event(
-                        type=EventType.DAMAGE_AT_ZERO_HP,
-                        data={
-                            "character": self.name,
-                            "damage": amount,
-                            "failures": self.death_save_failures
-                        }
-                    ))
+                    event_bus.emit(
+                        Event(
+                            type=EventType.DAMAGE_AT_ZERO_HP,
+                            data={
+                                "character": self.name,
+                                "damage": amount,
+                                "failures": self.death_save_failures,
+                            },
+                        )
+                    )
 
     def recover_hp(self, amount: int | None = None) -> int:
         """
@@ -1159,7 +1204,7 @@ class Character(Creature):
         Returns:
             Amount actually healed
         """
-        was_unconscious = (self.current_hp == 0)
+        was_unconscious = self.current_hp == 0
 
         if amount is None:
             amount = self.max_hp - self.current_hp
@@ -1224,7 +1269,7 @@ class Character(Creature):
             "character": self.name,
             "rest_type": "short",
             "resources_recovered": resources_recovered,
-            "hp_recovered": 0  # Hit Dice healing for future
+            "hp_recovered": 0,  # Hit Dice healing for future
         }
 
     def take_long_rest(self) -> dict:
@@ -1258,10 +1303,7 @@ class Character(Creature):
         # Check if this character can prepare spells (Wizard, Cleric)
         # Dead characters cannot prepare spells
         prepared_caster_classes = {CharacterClass.WIZARD, CharacterClass.CLERIC}
-        can_prepare = (
-            self.character_class in prepared_caster_classes
-            and not character_is_dead
-        )
+        can_prepare = self.character_class in prepared_caster_classes and not character_is_dead
 
         return {
             "character": self.name,
@@ -1269,7 +1311,7 @@ class Character(Creature):
             "hp_recovered": hp_recovered,
             "resources_recovered": resources_recovered,
             "can_prepare_spells": can_prepare,
-            "conditions_removed": []  # Future
+            "conditions_removed": [],  # Future
         }
 
     @property
@@ -1341,7 +1383,7 @@ class Character(Creature):
                 "failures": self.death_save_failures,
                 "stabilized": True,
                 "dead": False,
-                "conscious": False
+                "conscious": False,
             }
 
         # Roll d20
@@ -1349,8 +1391,8 @@ class Character(Creature):
         roll = roll_result.total
 
         # Check for natural 20 or 1
-        natural_20 = (roll == 20)
-        natural_1 = (roll == 1)
+        natural_20 = roll == 20
+        natural_1 = roll == 1
 
         # Determine success/failure
         success = roll >= 10
@@ -1385,7 +1427,7 @@ class Character(Creature):
             "failures": self.death_save_failures,
             "stabilized": self.stabilized,
             "dead": self.is_dead,
-            "conscious": conscious
+            "conscious": conscious,
         }
 
         # Emit event
@@ -1402,8 +1444,8 @@ class Character(Creature):
                     "failures": self.death_save_failures,
                     "stabilized": self.stabilized,
                     "dead": self.is_dead,
-                    "conscious": conscious
-                }
+                    "conscious": conscious,
+                },
             )
             event_bus.emit(event)
 
@@ -1650,7 +1692,9 @@ class Character(Creature):
         self.prepared_spells = spell_ids[:]
         return True
 
-    def get_preparable_spells(self, spells_data: dict[str, Any]) -> tuple[list[str], list[tuple[str, dict[str, Any]]]]:
+    def get_preparable_spells(
+        self, spells_data: dict[str, Any]
+    ) -> tuple[list[str], list[tuple[str, dict[str, Any]]]]:
         """
         Get cantrips and leveled spells available for preparation.
 
@@ -1738,7 +1782,9 @@ class Character(Creature):
 
         return castable
 
-    def get_out_of_combat_spells(self, spells_data: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+    def get_out_of_combat_spells(
+        self, spells_data: dict[str, Any]
+    ) -> list[tuple[str, dict[str, Any]]]:
         """
         Get all spells the character can cast outside of combat.
 

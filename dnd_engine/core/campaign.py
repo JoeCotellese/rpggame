@@ -57,7 +57,7 @@ class Campaign:
             "current_dungeon": self.current_dungeon,
             "current_room": self.current_room,
             "party_character_ids": self.party_character_ids,
-            "save_version": self.save_version
+            "save_version": self.save_version,
         }
 
     @classmethod
@@ -79,7 +79,7 @@ class Campaign:
             current_dungeon=data.get("current_dungeon"),
             current_room=data.get("current_room"),
             party_character_ids=data.get("party_character_ids", []),
-            save_version=data.get("save_version", "1.0.0")
+            save_version=data.get("save_version", "1.0.0"),
         )
 
     def get_playtime_display(self) -> str:
@@ -178,7 +178,7 @@ class SaveSlotMetadata:
             "created_at": self.created_at.isoformat(),
             "location": self.location,
             "party_hp_summary": self.party_hp_summary,
-            "save_type": self.save_type
+            "save_type": self.save_type,
         }
 
     @classmethod
@@ -189,7 +189,7 @@ class SaveSlotMetadata:
             created_at=datetime.fromisoformat(data["created_at"]),
             location=data.get("location"),
             party_hp_summary=data.get("party_hp_summary"),
-            save_type=data.get("save_type", "manual")
+            save_type=data.get("save_type", "manual"),
         )
 
     def get_time_display(self) -> str:

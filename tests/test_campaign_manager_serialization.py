@@ -29,12 +29,7 @@ def campaign_manager():
 def sample_character():
     """Create a sample character for testing."""
     abilities = Abilities(
-        strength=16,
-        dexterity=14,
-        constitution=15,
-        intelligence=10,
-        wisdom=12,
-        charisma=8
+        strength=16, dexterity=14, constitution=15, intelligence=10, wisdom=12, charisma=8
     )
 
     character = Character(
@@ -46,7 +41,7 @@ def sample_character():
         ac=17,
         xp=900,
         race="Human",
-        subclass="Champion"
+        subclass="Champion",
     )
 
     # Add some inventory
@@ -58,19 +53,11 @@ def sample_character():
     character.inventory.currency.silver = 25
 
     # Add resource pools
-    second_wind = ResourcePool(
-        name="Second Wind",
-        current=1,
-        maximum=1,
-        recovery_type="short_rest"
-    )
+    second_wind = ResourcePool(name="Second Wind", current=1, maximum=1, recovery_type="short_rest")
     character.add_resource_pool(second_wind)
 
     action_surge = ResourcePool(
-        name="Action Surge",
-        current=0,
-        maximum=1,
-        recovery_type="short_rest"
+        name="Action Surge", current=0, maximum=1, recovery_type="short_rest"
     )
     character.add_resource_pool(action_surge)
 
@@ -84,12 +71,7 @@ def sample_character():
 def wizard_character():
     """Create a wizard character with spells for testing."""
     abilities = Abilities(
-        strength=8,
-        dexterity=14,
-        constitution=12,
-        intelligence=16,
-        wisdom=13,
-        charisma=10
+        strength=8, dexterity=14, constitution=12, intelligence=16, wisdom=13, charisma=10
     )
 
     character = Character(
@@ -103,15 +85,12 @@ def wizard_character():
         race="Elf",
         spellcasting_ability="int",
         known_spells=["fire_bolt", "mage_hand", "magic_missile", "shield", "detect_magic"],
-        prepared_spells=["magic_missile", "shield", "detect_magic"]
+        prepared_spells=["magic_missile", "shield", "detect_magic"],
     )
 
     # Add spell slots
     spell_slots = ResourcePool(
-        name="1st level slots",
-        current=2,
-        maximum=3,
-        recovery_type="long_rest"
+        name="1st level slots", current=2, maximum=3, recovery_type="long_rest"
     )
     character.add_resource_pool(spell_slots)
 
@@ -211,15 +190,15 @@ class TestCharacterSerialization:
                 "constitution": 15,
                 "intelligence": 10,
                 "wisdom": 11,
-                "charisma": 8
+                "charisma": 8,
             },
             "inventory": {
                 "items": [],
                 "equipped": {"weapon": None, "armor": None},
-                "currency": {"copper": 0, "silver": 0, "gold": 0, "platinum": 0}
+                "currency": {"copper": 0, "silver": 0, "gold": 0, "platinum": 0},
             },
             "conditions": [],
-            "resource_pools": []
+            "resource_pools": [],
         }
 
         character = campaign_manager._deserialize_character(char_data)
@@ -251,15 +230,15 @@ class TestCharacterSerialization:
                 "constitution": 12,
                 "intelligence": 16,
                 "wisdom": 13,
-                "charisma": 10
+                "charisma": 10,
             },
             "inventory": {
                 "items": [],
                 "equipped": {"weapon": None, "armor": None},
-                "currency": {"copper": 0, "silver": 0, "gold": 0, "platinum": 0}
+                "currency": {"copper": 0, "silver": 0, "gold": 0, "platinum": 0},
             },
             "conditions": [],
-            "resource_pools": []
+            "resource_pools": [],
         }
 
         character = campaign_manager._deserialize_character(char_data)
@@ -284,22 +263,17 @@ class TestCharacterSerialization:
                 "constitution": 14,
                 "intelligence": 10,
                 "wisdom": 12,
-                "charisma": 8
+                "charisma": 8,
             },
             "inventory": {
                 "items": [],
                 "equipped": {"weapon": None, "armor": None},
-                "currency": {"copper": 0, "silver": 0, "gold": 0, "platinum": 0}
+                "currency": {"copper": 0, "silver": 0, "gold": 0, "platinum": 0},
             },
             "conditions": [],
             "resource_pools": [
-                {
-                    "name": "Second Wind",
-                    "current": 0,
-                    "maximum": 1,
-                    "recovery_type": "short_rest"
-                }
-            ]
+                {"name": "Second Wind", "current": 0, "maximum": 1, "recovery_type": "short_rest"}
+            ],
         }
 
         character = campaign_manager._deserialize_character(char_data)
@@ -384,18 +358,10 @@ class TestInventorySerialization:
         inv_data = {
             "items": [
                 {"item_id": "longsword", "category": "weapon", "quantity": 1},
-                {"item_id": "potion_of_healing", "category": "consumable", "quantity": 2}
+                {"item_id": "potion_of_healing", "category": "consumable", "quantity": 2},
             ],
-            "equipped": {
-                "weapon": "longsword",
-                "armor": None
-            },
-            "currency": {
-                "copper": 10,
-                "silver": 20,
-                "gold": 50,
-                "platinum": 1
-            }
+            "equipped": {"weapon": "longsword", "armor": None},
+            "currency": {"copper": 10, "silver": 20, "gold": 50, "platinum": 1},
         }
 
         inventory = campaign_manager._deserialize_inventory(inv_data)
@@ -419,7 +385,7 @@ class TestGameStateSerialization:
             level=1,
             abilities=abilities,
             max_hp=12,
-            ac=16
+            ac=16,
         )
         party = Party([character])
         game_state = GameState(
@@ -427,7 +393,7 @@ class TestGameStateSerialization:
             dungeon_name="test_dungeon",
             event_bus=EventBus(),
             data_loader=DataLoader(),
-            dice_roller=DiceRoller()
+            dice_roller=DiceRoller(),
         )
 
         serialized = campaign_manager._serialize_game_state(game_state, auto_save=True)
@@ -442,14 +408,8 @@ class TestGameStateSerialization:
         """Test serializing dungeon state."""
         dungeon = {
             "rooms": {
-                "room_1": {
-                    "searched": True,
-                    "enemies": ["goblin_1"]
-                },
-                "room_2": {
-                    "searched": False,
-                    "enemies": []
-                }
+                "room_1": {"searched": True, "enemies": ["goblin_1"]},
+                "room_2": {"searched": False, "enemies": []},
             }
         }
 
@@ -469,7 +429,7 @@ class TestSaveDataValidation:
             "version": "1.0.0",
             "metadata": {"created": "2024-01-01T00:00:00"},
             "party": [{"name": "Hero"}],
-            "game_state": {}
+            "game_state": {},
         }
 
         # Should not raise
@@ -477,34 +437,21 @@ class TestSaveDataValidation:
 
     def test_validate_missing_version(self, campaign_manager):
         """Test validation fails when version is missing."""
-        save_data = {
-            "metadata": {},
-            "party": [{}],
-            "game_state": {}
-        }
+        save_data = {"metadata": {}, "party": [{}], "game_state": {}}
 
         with pytest.raises(ValueError, match="missing 'version'"):
             campaign_manager._validate_save_data(save_data)
 
     def test_validate_missing_party(self, campaign_manager):
         """Test validation fails when party is missing."""
-        save_data = {
-            "version": "1.0.0",
-            "metadata": {},
-            "game_state": {}
-        }
+        save_data = {"version": "1.0.0", "metadata": {}, "game_state": {}}
 
         with pytest.raises(ValueError, match="missing 'party'"):
             campaign_manager._validate_save_data(save_data)
 
     def test_validate_empty_party(self, campaign_manager):
         """Test validation fails when party is empty."""
-        save_data = {
-            "version": "1.0.0",
-            "metadata": {},
-            "party": [],
-            "game_state": {}
-        }
+        save_data = {"version": "1.0.0", "metadata": {}, "party": [], "game_state": {}}
 
         with pytest.raises(ValueError, match="party cannot be empty"):
             campaign_manager._validate_save_data(save_data)
@@ -515,7 +462,7 @@ class TestSaveDataValidation:
             "version": "1.0.0",
             "metadata": {},
             "party": {"character": "data"},
-            "game_state": {}
+            "game_state": {},
         }
 
         with pytest.raises(ValueError, match="'party' must be a list"):

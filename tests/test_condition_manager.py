@@ -112,10 +112,7 @@ class TestProcessTurnStartEffects:
         manager = ConditionManager(dice_roller=dice_roller)
 
         creature = Creature(
-            name="Test Goblin",
-            max_hp=10,
-            ac=12,
-            abilities=Abilities(10, 10, 10, 10, 10, 10)
+            name="Test Goblin", max_hp=10, ac=12, abilities=Abilities(10, 10, 10, 10, 10, 10)
         )
         creature.add_condition("on_fire")
 
@@ -136,10 +133,7 @@ class TestProcessTurnStartEffects:
         manager = ConditionManager(dice_roller=dice_roller)
 
         creature = Creature(
-            name="Test Goblin",
-            max_hp=20,
-            ac=12,
-            abilities=Abilities(10, 10, 10, 10, 10, 10)
+            name="Test Goblin", max_hp=20, ac=12, abilities=Abilities(10, 10, 10, 10, 10, 10)
         )
         creature.add_condition("on_fire")
         # If we had other conditions, they would be processed too
@@ -154,10 +148,7 @@ class TestProcessTurnStartEffects:
         manager = ConditionManager()
 
         creature = Creature(
-            name="Test Goblin",
-            max_hp=10,
-            ac=12,
-            abilities=Abilities(10, 10, 10, 10, 10, 10)
+            name="Test Goblin", max_hp=10, ac=12, abilities=Abilities(10, 10, 10, 10, 10, 10)
         )
 
         results = manager.process_turn_start_effects(creature)
@@ -173,7 +164,7 @@ class TestProcessTurnStartEffects:
             name="Test Goblin",
             max_hp=1,  # Very low HP
             ac=12,
-            abilities=Abilities(10, 10, 10, 10, 10, 10)
+            abilities=Abilities(10, 10, 10, 10, 10, 10),
         )
         creature.add_condition("on_fire")
 
@@ -196,7 +187,7 @@ class TestAttemptConditionRemoval:
             name="Test Rogue",
             max_hp=20,
             ac=15,
-            abilities=Abilities(10, 20, 10, 10, 10, 10)  # +5 DEX
+            abilities=Abilities(10, 20, 10, 10, 10, 10),  # +5 DEX
         )
         creature.add_condition("on_fire")
 
@@ -225,7 +216,7 @@ class TestAttemptConditionRemoval:
             name="Test Barbarian",
             max_hp=30,
             ac=12,
-            abilities=Abilities(18, 6, 16, 8, 10, 10)  # -2 DEX
+            abilities=Abilities(18, 6, 16, 8, 10, 10),  # -2 DEX
         )
         creature.add_condition("on_fire")
 
@@ -246,10 +237,7 @@ class TestAttemptConditionRemoval:
         manager = ConditionManager()
 
         creature = Creature(
-            name="Test Creature",
-            max_hp=20,
-            ac=12,
-            abilities=Abilities(10, 10, 10, 10, 10, 10)
+            name="Test Creature", max_hp=20, ac=12, abilities=Abilities(10, 10, 10, 10, 10, 10)
         )
 
         result = manager.attempt_condition_removal(creature, "nonexistent")
@@ -261,10 +249,7 @@ class TestAttemptConditionRemoval:
         manager = ConditionManager()
 
         creature = Creature(
-            name="Test Creature",
-            max_hp=20,
-            ac=12,
-            abilities=Abilities(10, 10, 10, 10, 10, 10)
+            name="Test Creature", max_hp=20, ac=12, abilities=Abilities(10, 10, 10, 10, 10, 10)
         )
         # Don't add the condition
 
@@ -285,7 +270,7 @@ class TestAbilityModifiers:
             name="Test Rogue",
             max_hp=20,
             ac=15,
-            abilities=Abilities(10, 18, 10, 10, 10, 10)  # +4 DEX
+            abilities=Abilities(10, 18, 10, 10, 10, 10),  # +4 DEX
         )
 
         mod = manager._get_ability_modifier(creature, "dexterity")
@@ -299,7 +284,7 @@ class TestAbilityModifiers:
             name="Test Barbarian",
             max_hp=30,
             ac=12,
-            abilities=Abilities(20, 10, 16, 8, 10, 10)  # +5 STR
+            abilities=Abilities(20, 10, 16, 8, 10, 10),  # +5 STR
         )
 
         mod = manager._get_ability_modifier(creature, "strength")
@@ -310,10 +295,7 @@ class TestAbilityModifiers:
         manager = ConditionManager()
 
         creature = Creature(
-            name="Test Creature",
-            max_hp=20,
-            ac=12,
-            abilities=Abilities(12, 14, 16, 8, 10, 18)
+            name="Test Creature", max_hp=20, ac=12, abilities=Abilities(12, 14, 16, 8, 10, 18)
         )
 
         assert manager._get_ability_modifier(creature, "strength") == 1
@@ -328,10 +310,7 @@ class TestAbilityModifiers:
         manager = ConditionManager()
 
         creature = Creature(
-            name="Test Creature",
-            max_hp=20,
-            ac=12,
-            abilities=Abilities(10, 10, 10, 10, 10, 10)
+            name="Test Creature", max_hp=20, ac=12, abilities=Abilities(10, 10, 10, 10, 10, 10)
         )
 
         mod = manager._get_ability_modifier(creature, "invalid_ability")
@@ -374,7 +353,7 @@ class TestConditionEffectResult:
             effect_type="damage",
             success=True,
             amount=3,
-            message="Test message"
+            message="Test message",
         )
 
         assert result.condition_id == "on_fire"
@@ -397,7 +376,7 @@ class TestAbilityCheckResult:
             dc=10,
             ability="dexterity",
             message="Success!",
-            condition_removed=True
+            condition_removed=True,
         )
 
         assert result.condition_id == "on_fire"

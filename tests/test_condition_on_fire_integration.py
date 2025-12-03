@@ -19,10 +19,7 @@ class TestOnFireConditionIntegration:
         manager = ConditionManager(dice_roller=dice_roller)
 
         creature = Creature(
-            name="Test Goblin",
-            max_hp=10,
-            ac=12,
-            abilities=Abilities(10, 10, 10, 10, 10, 10)
+            name="Test Goblin", max_hp=10, ac=12, abilities=Abilities(10, 10, 10, 10, 10, 10)
         )
 
         # Set creature on fire
@@ -48,10 +45,7 @@ class TestOnFireConditionIntegration:
         manager = ConditionManager(dice_roller=dice_roller)
 
         creature = Creature(
-            name="Test Orc",
-            max_hp=20,
-            ac=13,
-            abilities=Abilities(10, 10, 10, 10, 10, 10)
+            name="Test Orc", max_hp=20, ac=13, abilities=Abilities(10, 10, 10, 10, 10, 10)
         )
 
         creature.add_condition("on_fire")
@@ -81,7 +75,7 @@ class TestOnFireConditionIntegration:
             name="Test Rogue",
             max_hp=20,
             ac=15,
-            abilities=Abilities(10, 20, 10, 10, 10, 10)  # +5 DEX
+            abilities=Abilities(10, 20, 10, 10, 10, 10),  # +5 DEX
         )
 
         creature.add_condition("on_fire")
@@ -109,7 +103,7 @@ class TestOnFireConditionIntegration:
             name="Test Barbarian",
             max_hp=30,
             ac=12,
-            abilities=Abilities(18, 6, 16, 8, 10, 10)  # -2 DEX
+            abilities=Abilities(18, 6, 16, 8, 10, 10),  # -2 DEX
         )
 
         creature.add_condition("on_fire")
@@ -133,10 +127,7 @@ class TestOnFireConditionIntegration:
         tracker = InitiativeTracker(dice_roller=dice_roller)
 
         creature = Creature(
-            name="Test Fighter",
-            max_hp=20,
-            ac=16,
-            abilities=Abilities(16, 12, 14, 10, 10, 10)
+            name="Test Fighter", max_hp=20, ac=16, abilities=Abilities(16, 12, 14, 10, 10, 10)
         )
 
         creature.add_condition("on_fire")
@@ -163,7 +154,7 @@ class TestOnFireConditionIntegration:
             name="Test Rat",
             max_hp=1,  # Very low HP
             ac=10,
-            abilities=Abilities(6, 10, 8, 4, 8, 4)
+            abilities=Abilities(6, 10, 8, 4, 8, 4),
         )
 
         creature.add_condition("on_fire")
@@ -186,7 +177,7 @@ class TestOnFireConditionIntegration:
             name="Test Paladin",
             max_hp=30,
             ac=18,
-            abilities=Abilities(16, 14, 16, 10, 12, 14)  # +2 DEX
+            abilities=Abilities(16, 14, 16, 10, 12, 14),  # +2 DEX
         )
 
         creature.add_condition("on_fire")
@@ -222,7 +213,7 @@ class TestEnemyAIConditionIntegration:
             name="Burning Goblin",
             max_hp=7,
             ac=13,
-            abilities=Abilities(8, 14, 10, 10, 8, 8)  # +2 DEX
+            abilities=Abilities(8, 14, 10, 10, 8, 8),  # +2 DEX
         )
 
         # Set HP to 4 (one 1d4 could kill)
@@ -241,10 +232,7 @@ class TestEnemyAIConditionIntegration:
     def test_high_hp_enemy_does_not_extinguish(self):
         """Test that enemy with high HP won't bother extinguishing"""
         enemy = Creature(
-            name="Healthy Orc",
-            max_hp=15,
-            ac=13,
-            abilities=Abilities(16, 12, 16, 7, 11, 10)
+            name="Healthy Orc", max_hp=15, ac=13, abilities=Abilities(16, 12, 16, 7, 11, 10)
         )
 
         # Set HP to 15 (plenty of health)
@@ -273,15 +261,10 @@ class TestConditionWithCombatFlow:
             level=2,
             abilities=Abilities(14, 12, 14, 10, 10, 10),
             max_hp=18,
-            ac=16
+            ac=16,
         )
 
-        goblin = Creature(
-            "Goblin",
-            max_hp=7,
-            ac=13,
-            abilities=Abilities(8, 14, 10, 10, 8, 8)
-        )
+        goblin = Creature("Goblin", max_hp=7, ac=13, abilities=Abilities(8, 14, 10, 10, 8, 8))
 
         # Add to initiative
         tracker.add_combatant(hero)
@@ -326,10 +309,7 @@ class TestConditionWithCombatFlow:
         tracker = InitiativeTracker(dice_roller=dice_roller)
 
         creature = Creature(
-            "Persistent Fire",
-            max_hp=30,
-            ac=13,
-            abilities=Abilities(10, 10, 10, 10, 10, 10)
+            "Persistent Fire", max_hp=30, ac=13, abilities=Abilities(10, 10, 10, 10, 10, 10)
         )
 
         tracker.add_combatant(creature)

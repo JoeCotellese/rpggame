@@ -43,9 +43,7 @@ class NPCManager:
             npc_data = self.data_loader.load_npcs(self.campaign_id)
             for npc_id, npc_dict in npc_data.get("npcs", {}).items():
                 self.npcs[npc_id] = NPC.from_dict(npc_dict)
-            logger.info(
-                f"Loaded {len(self.npcs)} NPCs for campaign '{self.campaign_id}'"
-            )
+            logger.info(f"Loaded {len(self.npcs)} NPCs for campaign '{self.campaign_id}'")
         except FileNotFoundError:
             logger.warning(f"No NPC file found for campaign '{self.campaign_id}'")
 

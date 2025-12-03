@@ -202,7 +202,7 @@ class SaveSlot:
             "party_composition": self.party_composition,
             "party_levels": self.party_levels,
             "custom_name": self.custom_name,
-            "save_version": self.save_version
+            "save_version": self.save_version,
         }
 
     @classmethod
@@ -226,7 +226,7 @@ class SaveSlot:
             party_composition=data.get("party_composition", []),
             party_levels=data.get("party_levels", []),
             custom_name=data.get("custom_name"),
-            save_version=data.get("save_version", "2.0.0")
+            save_version=data.get("save_version", "2.0.0"),
         )
 
     @classmethod
@@ -251,5 +251,5 @@ class SaveSlot:
             party_composition=[],
             party_levels=[],
             custom_name=None,
-            save_version="2.0.0"
+            save_version="2.0.0",
         )

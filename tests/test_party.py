@@ -12,12 +12,7 @@ from dnd_engine.core.party import Party
 def test_abilities():
     """Create test abilities."""
     return Abilities(
-        strength=15,
-        dexterity=14,
-        constitution=13,
-        intelligence=10,
-        wisdom=12,
-        charisma=8
+        strength=15, dexterity=14, constitution=13, intelligence=10, wisdom=12, charisma=8
     )
 
 
@@ -30,7 +25,7 @@ def fighter1(test_abilities):
         level=1,
         abilities=test_abilities,
         max_hp=12,
-        ac=16
+        ac=16,
     )
 
 
@@ -43,7 +38,7 @@ def fighter2(test_abilities):
         level=1,
         abilities=test_abilities,
         max_hp=12,
-        ac=16
+        ac=16,
     )
 
 
@@ -56,7 +51,7 @@ def fighter3(test_abilities):
         level=1,
         abilities=test_abilities,
         max_hp=12,
-        ac=16
+        ac=16,
     )
 
 
@@ -131,7 +126,7 @@ class TestRemoveCharacter:
             level=1,
             abilities=test_abilities,
             max_hp=12,
-            ac=16
+            ac=16,
         )
         initial_count = len(party_with_characters.characters)
         party_with_characters.remove_character(new_fighter)

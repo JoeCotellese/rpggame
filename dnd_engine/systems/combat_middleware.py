@@ -16,6 +16,7 @@ from dnd_engine.systems.action_economy import ActionType
 
 class ActionResult(Enum):
     """Result of a combat action execution."""
+
     SUCCESS = "success"
     CANCELLED = "cancelled"
     FAILED = "failed"
@@ -29,6 +30,7 @@ class CombatActionContext:
     Contains all state needed to validate, execute, and clean up a combat action.
     Middleware can inspect/modify this context as it passes through the chain.
     """
+
     game_state: "GameState"
     actor: "Character"  # Who is taking the action
     action_type: ActionType  # ACTION, BONUS_ACTION, etc.
@@ -90,11 +92,12 @@ class TurnValidationMiddleware(CombatMiddleware):
         if current.creature != context.actor:
             # Generate helpful error message about whose turn it is
             from dnd_engine.core.character import Character
+
             if isinstance(current.creature, Character):
                 turn_name = current.creature.name
             else:
                 # It's an enemy - get display name if possible
-                turn_name = getattr(current.creature, 'name', 'enemy')
+                turn_name = getattr(current.creature, "name", "enemy")
 
             context.result = ActionResult.FAILED
             context.error_message = f"It's {turn_name}'s turn, not {context.actor.name}'s!"
@@ -160,9 +163,7 @@ class LoggingMiddleware(CombatMiddleware):
                 # Format details dict as string for logging
                 details_str = ", ".join(f"{k}={v}" for k, v in context.details.items())
                 logging_config.log_player_action(
-                    character=context.actor.name,
-                    action=context.action_name,
-                    details=details_str
+                    character=context.actor.name, action=context.action_name, details=details_str
                 )
             except Exception:
                 # Don't let logging failures break combat
@@ -231,7 +232,7 @@ class CombatActionExecutor:
             TurnValidationMiddleware(),
             ActionEconomyMiddleware(),
             LoggingMiddleware(),
-            ResourceCleanupMiddleware()
+            ResourceCleanupMiddleware(),
         ]
 
     def execute(
@@ -241,7 +242,7 @@ class CombatActionExecutor:
         action_name: str,
         action_handler: Callable[[CombatActionContext], bool],
         resources_consumed: list[tuple[str, int]] | None = None,
-        **details
+        **details,
     ) -> CombatActionContext:
         """
         Execute a combat action through the middleware chain.
@@ -269,11 +270,13 @@ class CombatActionExecutor:
             action_type=action_type,
             action_name=action_name,
             details=details,
-            resources_consumed=resources_consumed or []
+            resources_consumed=resources_consumed or [],
         )
 
         # Build and execute middleware chain
-        def execute_chain(ctx: CombatActionContext, remaining_middleware: list[CombatMiddleware]) -> bool:
+        def execute_chain(
+            ctx: CombatActionContext, remaining_middleware: list[CombatMiddleware]
+        ) -> bool:
             if not remaining_middleware:
                 # End of middleware chain - execute actual action
                 return action_handler(ctx)

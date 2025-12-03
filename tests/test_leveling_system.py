@@ -27,7 +27,7 @@ class TestLevelingSystem:
             constitution=14,  # +2 modifier
             intelligence=10,
             wisdom=12,
-            charisma=8
+            charisma=8,
         )
 
         self.character = Character(
@@ -37,7 +37,7 @@ class TestLevelingSystem:
             abilities=abilities,
             max_hp=12,
             ac=16,
-            xp=0
+            xp=0,
         )
 
     def _capture_event(self, event: Event):
@@ -236,8 +236,12 @@ class TestLevelingSystem:
         """Test that HP increases by at least 1 even with negative CON modifier"""
         # Create character with very low CON (-5 modifier)
         abilities = Abilities(
-            strength=16, dexterity=14, constitution=1,  # CON 1 = -5 modifier
-            intelligence=10, wisdom=12, charisma=8
+            strength=16,
+            dexterity=14,
+            constitution=1,  # CON 1 = -5 modifier
+            intelligence=10,
+            wisdom=12,
+            charisma=8,
         )
         weak_char = Character(
             name="Weak Fighter",
@@ -246,7 +250,7 @@ class TestLevelingSystem:
             abilities=abilities,
             max_hp=10,
             ac=16,
-            xp=0
+            xp=0,
         )
 
         initial_hp = weak_char.max_hp

@@ -12,10 +12,7 @@ from .debug_provider import DebugProvider
 from .openai_provider import OpenAIProvider
 
 
-def create_llm_provider(
-    provider_name: str | None = None,
-    **kwargs: Any
-) -> LLMProvider | None:
+def create_llm_provider(provider_name: str | None = None, **kwargs: Any) -> LLMProvider | None:
     """
     Factory function to create LLM provider from config.
 
@@ -58,12 +55,7 @@ def create_llm_provider(
         timeout = float(os.getenv("LLM_TIMEOUT", "20"))
         max_tokens = int(os.getenv("LLM_MAX_TOKENS", "1000"))
 
-        return OpenAIProvider(
-            api_key=api_key,
-            model=model,
-            timeout=timeout,
-            max_tokens=max_tokens
-        )
+        return OpenAIProvider(api_key=api_key, model=model, timeout=timeout, max_tokens=max_tokens)
 
     # Anthropic provider
     elif provider_name == "anthropic":
@@ -72,18 +64,12 @@ def create_llm_provider(
             print_status_message("ANTHROPIC_API_KEY not set, LLM disabled", "warning")
             return None
 
-        model = kwargs.get("model") or os.getenv(
-            "ANTHROPIC_MODEL",
-            "claude-3-5-haiku-20241022"
-        )
+        model = kwargs.get("model") or os.getenv("ANTHROPIC_MODEL", "claude-3-5-haiku-20241022")
         timeout = float(os.getenv("LLM_TIMEOUT", "20"))
         max_tokens = int(os.getenv("LLM_MAX_TOKENS", "1000"))
 
         return AnthropicProvider(
-            api_key=api_key,
-            model=model,
-            timeout=timeout,
-            max_tokens=max_tokens
+            api_key=api_key, model=model, timeout=timeout, max_tokens=max_tokens
         )
 
     # Unknown provider

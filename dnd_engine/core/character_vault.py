@@ -18,6 +18,7 @@ from dnd_engine.systems.resources import ResourcePool
 
 class CharacterState(Enum):
     """Character state in the vault"""
+
     AVAILABLE = "available"  # In vault, can join campaigns
     ACTIVE = "active"  # Currently in a campaign
     RETIRED = "retired"  # Marked as retired
@@ -57,7 +58,7 @@ class CharacterVault:
         character: Character,
         character_id: str | None = None,
         state: CharacterState = CharacterState.AVAILABLE,
-        campaign_name: str | None = None
+        campaign_name: str | None = None,
     ) -> str:
         """
         Save a character to the vault.
@@ -91,16 +92,11 @@ class CharacterVault:
             raise ValueError("Only active characters can have a campaign_name")
 
         # Create character data
-        character_data = self._serialize_character(
-            character,
-            character_id,
-            state,
-            campaign_name
-        )
+        character_data = self._serialize_character(character, character_id, state, campaign_name)
 
         # Write to file
         character_path = self.vault_dir / f"{character_id}.json"
-        with open(character_path, 'w', encoding='utf-8') as f:
+        with open(character_path, "w", encoding="utf-8") as f:
             json.dump(character_data, f, indent=2, ensure_ascii=False)
 
         return character_id
@@ -126,7 +122,7 @@ class CharacterVault:
 
         # Read character file
         try:
-            with open(character_path, encoding='utf-8') as f:
+            with open(character_path, encoding="utf-8") as f:
                 character_data = json.load(f)
         except json.JSONDecodeError as e:
             raise ValueError(f"Corrupted character file: {e}")
@@ -139,10 +135,7 @@ class CharacterVault:
 
         return character
 
-    def list_characters(
-        self,
-        include_retired: bool = False
-    ) -> list[dict[str, Any]]:
+    def list_characters(self, include_retired: bool = False) -> list[dict[str, Any]]:
         """
         List all characters in the vault.
 
@@ -156,7 +149,7 @@ class CharacterVault:
 
         for character_file in self.vault_dir.glob("*.json"):
             try:
-                with open(character_file, encoding='utf-8') as f:
+                with open(character_file, encoding="utf-8") as f:
                     character_data = json.load(f)
 
                 metadata = character_data.get("metadata", {})
@@ -168,17 +161,19 @@ class CharacterVault:
 
                 char_info = character_data.get("character", {})
 
-                characters.append({
-                    "id": metadata.get("character_id"),
-                    "name": char_info.get("name", "Unknown"),
-                    "class": char_info.get("character_class", "Unknown"),
-                    "level": char_info.get("level", 1),
-                    "race": char_info.get("race", "Unknown"),
-                    "state": state.value,
-                    "campaign": metadata.get("campaign_name"),
-                    "created": metadata.get("created", "Unknown"),
-                    "last_modified": metadata.get("last_modified", "Unknown")
-                })
+                characters.append(
+                    {
+                        "id": metadata.get("character_id"),
+                        "name": char_info.get("name", "Unknown"),
+                        "class": char_info.get("character_class", "Unknown"),
+                        "level": char_info.get("level", 1),
+                        "race": char_info.get("race", "Unknown"),
+                        "state": state.value,
+                        "campaign": metadata.get("campaign_name"),
+                        "created": metadata.get("created", "Unknown"),
+                        "last_modified": metadata.get("last_modified", "Unknown"),
+                    }
+                )
             except (json.JSONDecodeError, KeyError, ValueError):
                 # Skip corrupted character files
                 continue
@@ -189,10 +184,7 @@ class CharacterVault:
         return characters
 
     def export_character(
-        self,
-        character_id: str,
-        export_path: Path,
-        strip_metadata: bool = True
+        self, character_id: str, export_path: Path, strip_metadata: bool = True
     ) -> Path:
         """
         Export a character to a file for sharing.
@@ -213,7 +205,7 @@ class CharacterVault:
         if not character_path.exists():
             raise FileNotFoundError(f"Character not found: {character_id}")
 
-        with open(character_path, encoding='utf-8') as f:
+        with open(character_path, encoding="utf-8") as f:
             character_data = json.load(f)
 
         if strip_metadata:
@@ -221,7 +213,7 @@ class CharacterVault:
             export_data = {
                 "version": character_data["version"],
                 "character": character_data["character"],
-                "exported": datetime.now().isoformat()
+                "exported": datetime.now().isoformat(),
             }
         else:
             export_data = character_data
@@ -230,16 +222,12 @@ class CharacterVault:
         export_path = Path(export_path)
         export_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(export_path, 'w', encoding='utf-8') as f:
+        with open(export_path, "w", encoding="utf-8") as f:
             json.dump(export_data, f, indent=2, ensure_ascii=False)
 
         return export_path
 
-    def import_character(
-        self,
-        import_path: Path,
-        character_id: str | None = None
-    ) -> str:
+    def import_character(self, import_path: Path, character_id: str | None = None) -> str:
         """
         Import a character from a file.
 
@@ -261,7 +249,7 @@ class CharacterVault:
 
         # Read import file
         try:
-            with open(import_path, encoding='utf-8') as f:
+            with open(import_path, encoding="utf-8") as f:
                 import_data = json.load(f)
         except json.JSONDecodeError as e:
             raise ValueError(f"Invalid import file: {e}")
@@ -278,11 +266,7 @@ class CharacterVault:
 
         return new_id
 
-    def clone_character(
-        self,
-        character_id: str,
-        new_name: str | None = None
-    ) -> str:
+    def clone_character(self, character_id: str, new_name: str | None = None) -> str:
         """
         Clone a character with a new UUID.
 
@@ -309,7 +293,7 @@ class CharacterVault:
         new_id = self.save_character(
             character,
             character_id=None,  # Generate new UUID
-            state=CharacterState.AVAILABLE
+            state=CharacterState.AVAILABLE,
         )
 
         return new_id
@@ -333,10 +317,7 @@ class CharacterVault:
         return False
 
     def update_character_state(
-        self,
-        character_id: str,
-        state: CharacterState,
-        campaign_name: str | None = None
+        self, character_id: str, state: CharacterState, campaign_name: str | None = None
     ) -> None:
         """
         Update the state of a character.
@@ -356,7 +337,7 @@ class CharacterVault:
         if not character_path.exists():
             raise FileNotFoundError(f"Character not found: {character_id}")
 
-        with open(character_path, encoding='utf-8') as f:
+        with open(character_path, encoding="utf-8") as f:
             character_data = json.load(f)
 
         # Validate state consistency
@@ -371,7 +352,7 @@ class CharacterVault:
         character_data["metadata"]["last_modified"] = datetime.now().isoformat()
 
         # Write back
-        with open(character_path, 'w', encoding='utf-8') as f:
+        with open(character_path, "w", encoding="utf-8") as f:
             json.dump(character_data, f, indent=2, ensure_ascii=False)
 
     def _serialize_character(
@@ -379,7 +360,7 @@ class CharacterVault:
         character: Character,
         character_id: str,
         state: CharacterState,
-        campaign_name: str | None
+        campaign_name: str | None,
     ) -> dict[str, Any]:
         """
         Serialize a character to a dictionary with metadata.
@@ -402,7 +383,7 @@ class CharacterVault:
                 "state": state.value,
                 "campaign_name": campaign_name,
                 "created": now,
-                "last_modified": now
+                "last_modified": now,
             },
             "character": {
                 "name": character.name,
@@ -425,8 +406,8 @@ class CharacterVault:
                 "armor_proficiencies": character.armor_proficiencies,
                 "spellcasting_ability": character.spellcasting_ability,
                 "known_spells": character.known_spells,
-                "prepared_spells": character.prepared_spells
-            }
+                "prepared_spells": character.prepared_spells,
+            },
         }
 
     def _serialize_inventory(self, inventory: Inventory) -> dict[str, Any]:
@@ -445,15 +426,15 @@ class CharacterVault:
                     "item_id": item.item_id,
                     "category": item.category,
                     "quantity": item.quantity,
-                    "quest_item": item.quest_item
+                    "quest_item": item.quest_item,
                 }
                 for item in inventory.items.values()
             ],
             "equipped": {
                 "weapon": inventory.equipped[EquipmentSlot.WEAPON],
-                "armor": inventory.equipped[EquipmentSlot.ARMOR]
+                "armor": inventory.equipped[EquipmentSlot.ARMOR],
             },
-            "currency": asdict(inventory.currency)
+            "currency": asdict(inventory.currency),
         }
 
     def _serialize_resource_pools(self, character: Character) -> list[dict[str, Any]]:
@@ -471,7 +452,7 @@ class CharacterVault:
                 "name": pool.name,
                 "current": pool.current,
                 "maximum": pool.maximum,
-                "recovery_type": pool.recovery_type
+                "recovery_type": pool.recovery_type,
             }
             for pool in character.resource_pools.values()
         ]
@@ -511,7 +492,7 @@ class CharacterVault:
             armor_proficiencies=char_data.get("armor_proficiencies"),
             spellcasting_ability=char_data.get("spellcasting_ability"),
             known_spells=char_data.get("known_spells"),
-            prepared_spells=char_data.get("prepared_spells")
+            prepared_spells=char_data.get("prepared_spells"),
         )
 
         # Restore conditions
@@ -543,7 +524,7 @@ class CharacterVault:
                 item_id=item_data["item_id"],
                 category=item_data["category"],
                 quantity=item_data["quantity"],
-                quest_item=item_data.get("quest_item", False)
+                quest_item=item_data.get("quest_item", False),
             )
 
         # Restore equipped items

@@ -49,7 +49,7 @@ class TestSaveSlot:
             adventure_name="Lost Mine of Phandelver",
             adventure_progress="Room 5",
             party_composition=["Aria", "Zephyr"],
-            party_levels=[3, 3]
+            party_levels=[3, 3],
         )
 
         name = slot.generate_auto_name()
@@ -69,7 +69,7 @@ class TestSaveSlot:
             adventure_name="Tomb of Horrors",
             adventure_progress="Level 3",
             party_composition=["Solo Ranger"],
-            party_levels=[3]
+            party_levels=[3],
         )
 
         name = slot.generate_auto_name()
@@ -89,7 +89,7 @@ class TestSaveSlot:
             adventure_name="Waterdeep",
             adventure_progress="Quest 2",
             party_composition=["Aria", "Zephyr", "Thorne", "Luna"],
-            party_levels=[2, 2, 3, 2]
+            party_levels=[2, 2, 3, 2],
         )
 
         name = slot.generate_auto_name()
@@ -108,7 +108,7 @@ class TestSaveSlot:
             adventure_name="New Adventure",
             adventure_progress=None,
             party_composition=["Hero"],
-            party_levels=[5]
+            party_levels=[5],
         )
 
         name = slot.generate_auto_name()
@@ -171,7 +171,7 @@ class TestSaveSlot:
             party_composition=["Alice", "Bob"],
             party_levels=[4, 5],
             custom_name="Custom Name",
-            save_version="2.0.0"
+            save_version="2.0.0",
         )
 
         # Serialize

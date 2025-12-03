@@ -19,7 +19,7 @@ def wizard_with_light_spell():
         constitution=10,
         intelligence=16,  # +3 spellcasting modifier
         wisdom=12,
-        charisma=10
+        charisma=10,
     )
     wizard = Character(
         name="Tim the Wizard",
@@ -32,7 +32,7 @@ def wizard_with_light_spell():
         spellcasting_ability="int",
         known_spells=["light", "mage_armor"],
         prepared_spells=["light", "mage_armor"],
-        skill_proficiencies=["arcana", "investigation"]
+        skill_proficiencies=["arcana", "investigation"],
     )
     wizard.darkvision_range = 0
     return wizard
@@ -47,7 +47,7 @@ def dwarf_cleric():
         constitution=14,
         intelligence=10,
         wisdom=16,  # +3 for Perception
-        charisma=12
+        charisma=12,
     )
     cleric = Character(
         name="Thorin Cleric",
@@ -60,7 +60,7 @@ def dwarf_cleric():
         spellcasting_ability="wis",
         known_spells=["cure_wounds", "bless"],
         prepared_spells=["cure_wounds", "bless"],
-        skill_proficiencies=["perception", "religion"]
+        skill_proficiencies=["perception", "religion"],
     )
     cleric.darkvision_range = 60
     return cleric
@@ -168,6 +168,7 @@ class TestPerceptionIntegration:
 
         # Track skill check events
         skill_checks = []
+
         def capture_skill_check(event):
             if event.type == EventType.SKILL_CHECK:
                 skill_checks.append(event.data)
@@ -206,6 +207,7 @@ class TestPerceptionIntegration:
 
         # Track skill check events
         perception_checks = []
+
         def capture_skill_check(event):
             if event.type == EventType.SKILL_CHECK and event.data["skill"] == "perception":
                 perception_checks.append(event.data)

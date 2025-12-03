@@ -30,7 +30,7 @@ class TestSpellSaveDC:
             constitution=12,
             intelligence=18,  # +4 modifier
             wisdom=10,
-            charisma=10
+            charisma=10,
         )
 
         self.wizard = Character(
@@ -40,7 +40,7 @@ class TestSpellSaveDC:
             abilities=self.wizard_abilities,
             max_hp=30,
             ac=12,
-            spellcasting_ability="int"
+            spellcasting_ability="int",
         )
 
     def test_spell_save_dc_calculation(self):
@@ -61,11 +61,11 @@ class TestSpellSaveDC:
                 constitution=14,
                 intelligence=10,
                 wisdom=16,  # +3 modifier
-                charisma=10
+                charisma=10,
             ),
             max_hp=20,
             ac=16,
-            spellcasting_ability="wis"
+            spellcasting_ability="wis",
         )
         # DC = 8 + 2 + 3 = 13
         assert cleric.get_spell_save_dc() == 13
@@ -86,11 +86,11 @@ class TestResolveSpellSave:
                 constitution=12,
                 intelligence=18,  # +4, DC = 8 + 3 + 4 = 15
                 wisdom=10,
-                charisma=10
+                charisma=10,
             ),
             max_hp=30,
             ac=12,
-            spellcasting_ability="int"
+            spellcasting_ability="int",
         )
 
         self.goblin = Creature(
@@ -103,8 +103,8 @@ class TestResolveSpellSave:
                 constitution=10,
                 intelligence=10,
                 wisdom=8,
-                charisma=8
-            )
+                charisma=8,
+            ),
         )
 
         self.combat = CombatEngine()
@@ -122,15 +122,10 @@ class TestResolveSpellSave:
             duration=DurationType.INSTANTANEOUS,
             description="A bright streak flashes to a point...",
             damage=SpellDamage(
-                dice="8d6",
-                damage_type="fire",
-                higher_levels="1d6 per slot level above 3rd"
+                dice="8d6", damage_type="fire", higher_levels="1d6 per slot level above 3rd"
             ),
-            saving_throw=SavingThrow(
-                ability="dexterity",
-                on_success="half"
-            ),
-            classes=["wizard", "sorcerer"]
+            saving_throw=SavingThrow(ability="dexterity", on_success="half"),
+            classes=["wizard", "sorcerer"],
         )
 
     def test_resolve_spell_save_basic(self):
@@ -140,7 +135,7 @@ class TestResolveSpellSave:
             targets=[self.goblin],
             spell=self.fireball,
             apply_damage=False,
-            event_bus=self.event_bus
+            event_bus=self.event_bus,
         )
 
         assert result["spell_name"] == "Fireball"
@@ -168,10 +163,7 @@ class TestResolveSpellSave:
         for i in range(10):
             self.combat.dice_roller = DiceRoller(seed=i)
             result = self.combat.resolve_spell_save(
-                caster=self.wizard,
-                targets=[self.goblin],
-                spell=self.fireball,
-                apply_damage=False
+                caster=self.wizard, targets=[self.goblin], spell=self.fireball, apply_damage=False
             )
             results.append(result["targets"][0])
 
@@ -194,20 +186,15 @@ class TestResolveSpellSave:
             max_hp=7,
             ac=15,
             abilities=Abilities(
-                strength=8,
-                dexterity=14,
-                constitution=10,
-                intelligence=10,
-                wisdom=8,
-                charisma=8
-            )
+                strength=8, dexterity=14, constitution=10, intelligence=10, wisdom=8, charisma=8
+            ),
         )
 
         result = self.combat.resolve_spell_save(
             caster=self.wizard,
             targets=[self.goblin, goblin2],
             spell=self.fireball,
-            apply_damage=False
+            apply_damage=False,
         )
 
         assert len(result["targets"]) == 2
@@ -219,10 +206,7 @@ class TestResolveSpellSave:
         initial_hp = self.goblin.current_hp
 
         self.combat.resolve_spell_save(
-            caster=self.wizard,
-            targets=[self.goblin],
-            spell=self.fireball,
-            apply_damage=True
+            caster=self.wizard, targets=[self.goblin], spell=self.fireball, apply_damage=True
         )
 
         # Goblin should have taken damage
@@ -231,16 +215,14 @@ class TestResolveSpellSave:
     def test_spell_save_event_emitted(self):
         """Test that SPELL_SAVE event is emitted"""
         events = []
+
         def capture_event(event):
             events.append(event)
 
         self.event_bus.subscribe(EventType.SPELL_SAVE, capture_event)
 
         self.combat.resolve_spell_save(
-            caster=self.wizard,
-            targets=[self.goblin],
-            spell=self.fireball,
-            event_bus=self.event_bus
+            caster=self.wizard, targets=[self.goblin], spell=self.fireball, event_bus=self.event_bus
         )
 
         assert len(events) == 1
@@ -261,16 +243,11 @@ class TestUpcasting:
             character_class=CharacterClass.WIZARD,
             level=5,
             abilities=Abilities(
-                strength=8,
-                dexterity=14,
-                constitution=12,
-                intelligence=18,
-                wisdom=10,
-                charisma=10
+                strength=8, dexterity=14, constitution=12, intelligence=18, wisdom=10, charisma=10
             ),
             max_hp=30,
             ac=12,
-            spellcasting_ability="int"
+            spellcasting_ability="int",
         )
 
         self.goblin = Creature(
@@ -278,13 +255,8 @@ class TestUpcasting:
             max_hp=50,  # High HP to survive damage
             ac=15,
             abilities=Abilities(
-                strength=8,
-                dexterity=14,
-                constitution=10,
-                intelligence=10,
-                wisdom=8,
-                charisma=8
-            )
+                strength=8, dexterity=14, constitution=10, intelligence=10, wisdom=8, charisma=8
+            ),
         )
 
         self.combat = CombatEngine(dice_roller=DiceRoller(seed=42))
@@ -300,25 +272,17 @@ class TestUpcasting:
             duration=DurationType.INSTANTANEOUS,
             description="A bright streak flashes to a point...",
             damage=SpellDamage(
-                dice="8d6",
-                damage_type="fire",
-                higher_levels="1d6 per slot level above 3rd"
+                dice="8d6", damage_type="fire", higher_levels="1d6 per slot level above 3rd"
             ),
-            saving_throw=SavingThrow(
-                ability="dexterity",
-                on_success="half"
-            ),
-            classes=["wizard"]
+            saving_throw=SavingThrow(ability="dexterity", on_success="half"),
+            classes=["wizard"],
         )
 
     def test_upcast_increases_damage(self):
         """Test that upcasting adds extra damage dice"""
         # Cast at base level (3rd)
         result_3rd = self.combat.resolve_spell_save(
-            caster=self.wizard,
-            targets=[self.goblin],
-            spell=self.fireball,
-            upcast_level=3
+            caster=self.wizard, targets=[self.goblin], spell=self.fireball, upcast_level=3
         )
 
         # Reset combat engine with same seed for consistency
@@ -326,10 +290,7 @@ class TestUpcasting:
 
         # Cast at 4th level (should add 1d6)
         result_4th = self.combat.resolve_spell_save(
-            caster=self.wizard,
-            targets=[self.goblin],
-            spell=self.fireball,
-            upcast_level=4
+            caster=self.wizard, targets=[self.goblin], spell=self.fireball, upcast_level=4
         )
 
         # 4th level should have higher damage potential (not guaranteed every roll, but averaged)
@@ -341,6 +302,7 @@ class TestUpcasting:
         """Test that spell save event includes both spell level and slot level"""
         events = []
         event_bus = EventBus()
+
         def capture_event(event):
             events.append(event)
 
@@ -351,7 +313,7 @@ class TestUpcasting:
             targets=[self.goblin],
             spell=self.fireball,
             upcast_level=5,  # Cast at 5th level (2 levels above base)
-            event_bus=event_bus
+            event_bus=event_bus,
         )
 
         assert len(events) == 1
@@ -370,16 +332,11 @@ class TestNoEffectOnSave:
             character_class=CharacterClass.WIZARD,
             level=5,
             abilities=Abilities(
-                strength=8,
-                dexterity=14,
-                constitution=12,
-                intelligence=18,
-                wisdom=10,
-                charisma=10
+                strength=8, dexterity=14, constitution=12, intelligence=18, wisdom=10, charisma=10
             ),
             max_hp=30,
             ac=12,
-            spellcasting_ability="int"
+            spellcasting_ability="int",
         )
 
         self.goblin = Creature(
@@ -392,8 +349,8 @@ class TestNoEffectOnSave:
                 constitution=10,
                 intelligence=10,
                 wisdom=12,  # +1 WIS save
-                charisma=8
-            )
+                charisma=8,
+            ),
         )
 
         self.combat = CombatEngine()
@@ -410,11 +367,8 @@ class TestNoEffectOnSave:
             duration=DurationType.TIMED,
             duration_value="1 minute",
             description="Creatures fall unconscious...",
-            saving_throw=SavingThrow(
-                ability="wisdom",
-                on_success="none"
-            ),
-            classes=["wizard", "bard"]
+            saving_throw=SavingThrow(ability="wisdom", on_success="none"),
+            classes=["wizard", "bard"],
         )
 
     def test_no_damage_on_successful_save(self):
@@ -426,7 +380,7 @@ class TestNoEffectOnSave:
                 caster=self.wizard,
                 targets=[self.goblin],
                 spell=self.sleep_spell,
-                apply_damage=False
+                apply_damage=False,
             )
 
             target_result = result["targets"][0]
@@ -446,16 +400,11 @@ class TestDictFormatSpells:
             character_class=CharacterClass.WIZARD,
             level=5,
             abilities=Abilities(
-                strength=8,
-                dexterity=14,
-                constitution=12,
-                intelligence=18,
-                wisdom=10,
-                charisma=10
+                strength=8, dexterity=14, constitution=12, intelligence=18, wisdom=10, charisma=10
             ),
             max_hp=30,
             ac=12,
-            spellcasting_ability="int"
+            spellcasting_ability="int",
         )
 
         self.goblin = Creature(
@@ -463,13 +412,8 @@ class TestDictFormatSpells:
             max_hp=7,
             ac=15,
             abilities=Abilities(
-                strength=8,
-                dexterity=14,
-                constitution=10,
-                intelligence=10,
-                wisdom=8,
-                charisma=8
-            )
+                strength=8, dexterity=14, constitution=10, intelligence=10, wisdom=8, charisma=8
+            ),
         )
 
         self.combat = CombatEngine()
@@ -483,19 +427,13 @@ class TestDictFormatSpells:
             "damage": {
                 "dice": "8d6",
                 "damage_type": "fire",
-                "higher_levels": "1d6 per slot level above 3rd"
+                "higher_levels": "1d6 per slot level above 3rd",
             },
-            "saving_throw": {
-                "ability": "dexterity",
-                "on_success": "half"
-            }
+            "saving_throw": {"ability": "dexterity", "on_success": "half"},
         }
 
         result = self.combat.resolve_spell_save(
-            caster=self.wizard,
-            targets=[self.goblin],
-            spell=fireball_dict,
-            apply_damage=False
+            caster=self.wizard, targets=[self.goblin], spell=fireball_dict, apply_damage=False
         )
 
         assert result["spell_name"] == "Fireball"
@@ -513,16 +451,11 @@ class TestErrorHandling:
             character_class=CharacterClass.WIZARD,
             level=5,
             abilities=Abilities(
-                strength=8,
-                dexterity=14,
-                constitution=12,
-                intelligence=18,
-                wisdom=10,
-                charisma=10
+                strength=8, dexterity=14, constitution=12, intelligence=18, wisdom=10, charisma=10
             ),
             max_hp=30,
             ac=12,
-            spellcasting_ability="int"
+            spellcasting_ability="int",
         )
 
         self.fighter = Character(
@@ -530,15 +463,10 @@ class TestErrorHandling:
             character_class=CharacterClass.FIGHTER,
             level=5,
             abilities=Abilities(
-                strength=16,
-                dexterity=14,
-                constitution=14,
-                intelligence=10,
-                wisdom=10,
-                charisma=8
+                strength=16, dexterity=14, constitution=14, intelligence=10, wisdom=10, charisma=8
             ),
             max_hp=40,
-            ac=18
+            ac=18,
             # No spellcasting_ability
         )
 
@@ -547,13 +475,8 @@ class TestErrorHandling:
             max_hp=7,
             ac=15,
             abilities=Abilities(
-                strength=8,
-                dexterity=14,
-                constitution=10,
-                intelligence=10,
-                wisdom=8,
-                charisma=8
-            )
+                strength=8, dexterity=14, constitution=10, intelligence=10, wisdom=8, charisma=8
+            ),
         )
 
         self.combat = CombatEngine()
@@ -564,28 +487,20 @@ class TestErrorHandling:
             "name": "Fireball",
             "level": 3,
             "damage": {"dice": "8d6", "damage_type": "fire"},
-            "saving_throw": {"ability": "dexterity", "on_success": "half"}
+            "saving_throw": {"ability": "dexterity", "on_success": "half"},
         }
 
         with pytest.raises(ValueError, match="has no spellcasting ability|cannot cast spells"):
-            self.combat.resolve_spell_save(
-                caster=self.fighter,
-                targets=[self.goblin],
-                spell=spell
-            )
+            self.combat.resolve_spell_save(caster=self.fighter, targets=[self.goblin], spell=spell)
 
     def test_error_if_no_saving_throw_info(self):
         """Test that error is raised if spell has no saving throw info"""
         spell = {
             "name": "Magic Missile",
             "level": 1,
-            "damage": {"dice": "1d4+1", "damage_type": "force"}
+            "damage": {"dice": "1d4+1", "damage_type": "force"},
             # No saving_throw
         }
 
         with pytest.raises(ValueError, match="does not have saving throw information"):
-            self.combat.resolve_spell_save(
-                caster=self.wizard,
-                targets=[self.goblin],
-                spell=spell
-            )
+            self.combat.resolve_spell_save(caster=self.wizard, targets=[self.goblin], spell=spell)

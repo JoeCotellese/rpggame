@@ -44,13 +44,19 @@ Act as the **architect** in the engineer-architect review process. Before writin
 1. `docs/ARCHITECTURE.md` - Core principles and layer descriptions
 2. `docs/ARCHITECTURE.md` sections 6-7 - Service Layer and Middleware patterns
 3. `docs/ARCHITECTURE.md` "Architecture Evolution" - Recent refactorings and rationale
-4. `.claude/CLAUDE.md` - Development standards
+4. `docs/DESIGN_PATTERNS.md` - Comprehensive catalog of all design patterns used in codebase
+5. `.claude/CLAUDE.md` - Development standards
 
-**Identify applicable patterns:**
-- Is this a combat action? → Must use middleware
-- Is this context assembly? → Must use service layer
-- Is this AI decision? → Must be in systems/ai/
+**Identify applicable patterns (see `docs/DESIGN_PATTERNS.md` for details):**
+- Is this a combat action? → Must use middleware (Chain of Responsibility pattern)
+- Is this context assembly? → Must use service layer (Builder pattern)
+- Is this AI decision? → Must be in systems/ai/ (Strategy pattern)
 - Is this game state? → Must be in game engine, not UI
+- Is this object creation? → Use Factory pattern (CharacterFactory, LLMProviderFactory)
+- Is this cross-system communication? → Use Observer pattern (EventBus)
+- Is this content/data? → Use Registry pattern (DataLoader) with JSON files
+- Is this time-based effect? → Use TimeManager
+- Is this resource tracking? → Use ResourcePool system
 
 ### Phase 3: Evaluate Proposed Approach
 
@@ -298,13 +304,15 @@ Extend service layer, don't add queries to UI.
 
 ## Key Architectural Principles to Enforce
 
-From `docs/ARCHITECTURE.md`:
+From `docs/ARCHITECTURE.md` and `docs/DESIGN_PATTERNS.md`:
 
 1. **Separation of Concerns**: Game rules, content, narrative, and UI are completely separated
-2. **Data-Driven Design**: All content in JSON, not hardcoded
-3. **Event-Driven Architecture**: Components communicate via event bus
-4. **Extensibility**: Easy to add content, features, systems
+2. **Data-Driven Design**: All content in JSON, not hardcoded (Registry pattern via DataLoader)
+3. **Event-Driven Architecture**: Components communicate via event bus (Observer pattern)
+4. **Extensibility**: Easy to add content, features, systems (Strategy, Factory patterns)
 5. **Deterministic Core + Creative Enhancement**: Game engine is deterministic; LLM only enhances narrative
+6. **Dependency Injection**: Make dependencies explicit and testable (constructor injection)
+7. **Inversion of Control**: Systems don't control each other; control flows through events
 
 ## Common Violations to Watch For
 

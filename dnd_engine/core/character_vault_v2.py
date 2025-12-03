@@ -52,10 +52,10 @@ class CharacterVaultV2:
         vault_data = {
             "version": VAULT_VERSION,
             "created_at": datetime.now().isoformat(),
-            "characters": {}
+            "characters": {},
         }
 
-        with open(self.vault_path, 'w', encoding='utf-8') as f:
+        with open(self.vault_path, "w", encoding="utf-8") as f:
             json.dump(vault_data, f, indent=2, ensure_ascii=False)
 
     def _load_vault(self) -> dict[str, Any]:
@@ -69,7 +69,7 @@ class CharacterVaultV2:
             ValueError: If vault file is corrupted
         """
         try:
-            with open(self.vault_path, encoding='utf-8') as f:
+            with open(self.vault_path, encoding="utf-8") as f:
                 return json.load(f)
         except json.JSONDecodeError as e:
             raise ValueError(f"Corrupted vault file: {e}")
@@ -81,14 +81,10 @@ class CharacterVaultV2:
         Args:
             vault_data: Vault data dictionary
         """
-        with open(self.vault_path, 'w', encoding='utf-8') as f:
+        with open(self.vault_path, "w", encoding="utf-8") as f:
             json.dump(vault_data, f, indent=2, ensure_ascii=False)
 
-    def add_character(
-        self,
-        character: Character,
-        character_id: str | None = None
-    ) -> str:
+    def add_character(self, character: Character, character_id: str | None = None) -> str:
         """
         Add a character to the vault.
 
@@ -128,7 +124,7 @@ class CharacterVaultV2:
             "last_used": None,
             "times_used": 0,
             "save_slots_used": [],
-            "character": self._serialize_character(character)
+            "character": self._serialize_character(character),
         }
 
         # Add to vault
@@ -233,18 +229,20 @@ class CharacterVaultV2:
         for character_id, entry in vault_data["characters"].items():
             char_data = entry["character"]
 
-            characters.append({
-                "id": character_id,
-                "name": char_data.get("name", "Unknown"),
-                "class": char_data.get("character_class", "Unknown"),
-                "level": char_data.get("level", 1),
-                "race": char_data.get("race", "Unknown"),
-                "created_at": entry.get("created_at"),
-                "last_modified": entry.get("last_modified"),
-                "last_used": entry.get("last_used"),
-                "times_used": entry.get("times_used", 0),
-                "save_slots_used": entry.get("save_slots_used", [])
-            })
+            characters.append(
+                {
+                    "id": character_id,
+                    "name": char_data.get("name", "Unknown"),
+                    "class": char_data.get("character_class", "Unknown"),
+                    "level": char_data.get("level", 1),
+                    "race": char_data.get("race", "Unknown"),
+                    "created_at": entry.get("created_at"),
+                    "last_modified": entry.get("last_modified"),
+                    "last_used": entry.get("last_used"),
+                    "times_used": entry.get("times_used", 0),
+                    "save_slots_used": entry.get("save_slots_used", []),
+                }
+            )
 
         # Sort by last_used (most recent first), then by last_modified
         def sort_key(char):
@@ -281,11 +279,7 @@ class CharacterVaultV2:
 
         return False
 
-    def clone_character(
-        self,
-        character_id: str,
-        new_name: str | None = None
-    ) -> str:
+    def clone_character(self, character_id: str, new_name: str | None = None) -> str:
         """
         Clone a character with a new UUID.
 
@@ -314,9 +308,7 @@ class CharacterVaultV2:
         return new_id
 
     def import_characters_bulk(
-        self,
-        characters: list[Character],
-        existing_ids: list[str] | None = None
+        self, characters: list[Character], existing_ids: list[str] | None = None
     ) -> list[str]:
         """
         Import multiple characters at once.
@@ -368,7 +360,7 @@ class CharacterVaultV2:
             "most_used_character": most_used,
             "most_used_count": most_used_count,
             "vault_created": vault_data.get("created_at"),
-            "vault_version": vault_data.get("version")
+            "vault_version": vault_data.get("version"),
         }
 
     def _serialize_character(self, character: Character) -> dict[str, Any]:
@@ -402,7 +394,7 @@ class CharacterVaultV2:
             "armor_proficiencies": character.armor_proficiencies,
             "spellcasting_ability": character.spellcasting_ability,
             "known_spells": character.known_spells,
-            "prepared_spells": character.prepared_spells
+            "prepared_spells": character.prepared_spells,
         }
 
     def _serialize_inventory(self, inventory: Inventory) -> dict[str, Any]:
@@ -413,15 +405,15 @@ class CharacterVaultV2:
                     "item_id": item.item_id,
                     "category": item.category,
                     "quantity": item.quantity,
-                    "quest_item": item.quest_item
+                    "quest_item": item.quest_item,
                 }
                 for item in inventory.items.values()
             ],
             "equipped": {
                 "weapon": inventory.equipped[EquipmentSlot.WEAPON],
-                "armor": inventory.equipped[EquipmentSlot.ARMOR]
+                "armor": inventory.equipped[EquipmentSlot.ARMOR],
             },
-            "currency": asdict(inventory.currency)
+            "currency": asdict(inventory.currency),
         }
 
     def _serialize_resource_pools(self, character: Character) -> list[dict[str, Any]]:
@@ -431,7 +423,7 @@ class CharacterVaultV2:
                 "name": pool.name,
                 "current": pool.current,
                 "maximum": pool.maximum,
-                "recovery_type": pool.recovery_type
+                "recovery_type": pool.recovery_type,
             }
             for pool in character.resource_pools.values()
         ]
@@ -468,7 +460,7 @@ class CharacterVaultV2:
             armor_proficiencies=char_data.get("armor_proficiencies"),
             spellcasting_ability=char_data.get("spellcasting_ability"),
             known_spells=char_data.get("known_spells"),
-            prepared_spells=char_data.get("prepared_spells")
+            prepared_spells=char_data.get("prepared_spells"),
         )
 
         # Restore conditions
@@ -500,7 +492,7 @@ class CharacterVaultV2:
                 item_id=item_data["item_id"],
                 category=item_data["category"],
                 quantity=item_data["quantity"],
-                quest_item=item_data.get("quest_item", False)
+                quest_item=item_data.get("quest_item", False),
             )
 
         # Restore equipped items

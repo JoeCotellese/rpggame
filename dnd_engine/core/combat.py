@@ -17,6 +17,7 @@ class AttackResult:
     Contains all information about an attack: the roll, bonuses, hit/miss status,
     damage dealt, and special conditions (critical hit, advantage, sneak attack, etc.).
     """
+
     attacker_name: str
     defender_name: str
     attack_roll: int  # The natural die roll (1-20)
@@ -51,7 +52,9 @@ class AttackResult:
             adv_status = " (disadvantage)"
 
         result = f"{self.attacker_name} attacks {self.defender_name}: "
-        result += f"{self.attack_roll}+{self.attack_bonus}={self.total_attack} vs AC {self.target_ac} "
+        result += (
+            f"{self.attack_roll}+{self.attack_bonus}={self.total_attack} vs AC {self.target_ac} "
+        )
         result += f"- {hit_status}{adv_status}"
 
         if self.hit:
@@ -94,9 +97,9 @@ class CombatEngine:
         advantage: bool = False,
         disadvantage: bool = False,
         apply_damage: bool = False,
-        event_bus = None,
+        event_bus=None,
         action: dict | None = None,
-        game_state = None
+        game_state=None,
     ) -> AttackResult:
         """
         Resolve a complete attack.
@@ -126,9 +129,7 @@ class CombatEngine:
         """
         # Roll attack (1d20 + bonus)
         attack_roll_result = self.dice_roller.roll(
-            "1d20",
-            advantage=advantage,
-            disadvantage=disadvantage
+            "1d20", advantage=advantage, disadvantage=disadvantage
         )
         attack_roll = attack_roll_result.total  # The actual d20 result (without bonus)
 
@@ -162,11 +163,15 @@ class CombatEngine:
             damage = self._calculate_damage(damage_dice, critical_hit)
 
             # Check for sneak attack (Character-specific)
-            if hasattr(attacker, 'can_sneak_attack'):
-                if attacker.can_sneak_attack(has_advantage=advantage, has_disadvantage=disadvantage):
+            if hasattr(attacker, "can_sneak_attack"):
+                if attacker.can_sneak_attack(
+                    has_advantage=advantage, has_disadvantage=disadvantage
+                ):
                     sneak_attack_dice = attacker.get_sneak_attack_dice()
                     if sneak_attack_dice:
-                        sneak_attack_damage = self._calculate_damage(sneak_attack_dice, critical_hit=False)
+                        sneak_attack_damage = self._calculate_damage(
+                            sneak_attack_dice, critical_hit=False
+                        )
 
                         # Emit sneak attack event
                         if event_bus is not None:
@@ -175,18 +180,19 @@ class CombatEngine:
                                 data={
                                     "character": attacker.name,
                                     "dice": sneak_attack_dice,
-                                    "damage": sneak_attack_damage
-                                }
+                                    "damage": sneak_attack_damage,
+                                },
                             )
                             event_bus.emit(event)
 
             if apply_damage:
                 # Pass event_bus to take_damage for Character instances (death save handling)
-                if hasattr(defender, 'take_damage') and hasattr(defender.__class__, 'take_damage'):
+                if hasattr(defender, "take_damage") and hasattr(defender.__class__, "take_damage"):
                     # Check if defender.take_damage accepts event_bus parameter
                     import inspect
+
                     sig = inspect.signature(defender.take_damage)
-                    if 'event_bus' in sig.parameters:
+                    if "event_bus" in sig.parameters:
                         defender.take_damage(damage + sneak_attack_damage, event_bus=event_bus)
                     else:
                         defender.take_damage(damage + sneak_attack_damage)
@@ -196,10 +202,7 @@ class CombatEngine:
             # Process saving throw effects (e.g., ghoul paralysis)
             if action and "saving_throw" in action:
                 self._process_saving_throw_effect(
-                    action["saving_throw"],
-                    attacker,
-                    defender,
-                    event_bus
+                    action["saving_throw"], attacker, defender, event_bus
                 )
 
         return AttackResult(
@@ -214,7 +217,7 @@ class CombatEngine:
             advantage=advantage,
             disadvantage=disadvantage,
             sneak_attack_damage=sneak_attack_damage,
-            sneak_attack_dice=sneak_attack_dice
+            sneak_attack_dice=sneak_attack_dice,
         )
 
     def _calculate_damage(self, damage_dice: str, critical_hit: bool) -> int:
@@ -252,7 +255,8 @@ class CombatEngine:
         """
         # Parse the dice notation
         import re
-        pattern = re.compile(r'^(\d*)d(\d+)(([+-])(\d+))?$', re.IGNORECASE)
+
+        pattern = re.compile(r"^(\d*)d(\d+)(([+-])(\d+))?$", re.IGNORECASE)
         match = pattern.match(damage_dice.strip())
 
         if not match:
@@ -278,7 +282,7 @@ class CombatEngine:
         dc: int,
         effect: dict[str, Any],
         apply_damage: bool = False,
-        event_bus=None
+        event_bus=None,
     ) -> dict[str, Any]:
         """
         Resolve an effect that requires a saving throw.
@@ -309,15 +313,11 @@ class CombatEngine:
             ValueError: If target doesn't have make_saving_throw method
         """
         # Check if target is a Character with make_saving_throw capability
-        if not hasattr(target, 'make_saving_throw'):
+        if not hasattr(target, "make_saving_throw"):
             raise ValueError(f"{target.name} cannot make saving throws")
 
         # Make the saving throw
-        save_result = target.make_saving_throw(
-            ability=save_ability,
-            dc=dc,
-            event_bus=event_bus
-        )
+        save_result = target.make_saving_throw(ability=save_ability, dc=dc, event_bus=event_bus)
 
         # Calculate damage
         damage_dice = effect.get("damage_dice", "1d6")
@@ -335,10 +335,14 @@ class CombatEngine:
             elif effect.get("half_on_success", False):
                 # Success halves the damage
                 damage_taken = damage // 2
-                effect_description = f"Success! Damage reduced to {damage_taken} (half of {damage})."
+                effect_description = (
+                    f"Success! Damage reduced to {damage_taken} (half of {damage})."
+                )
             else:
                 # Success but still full damage (rare but possible)
-                effect_description = f"Success on the save, but the effect still deals {damage} damage."
+                effect_description = (
+                    f"Success on the save, but the effect still deals {damage} damage."
+                )
         else:
             # Failure takes full damage
             effect_description = f"Failed save. Takes {damage} damage."
@@ -346,10 +350,11 @@ class CombatEngine:
         # Apply damage if requested
         if apply_damage:
             # Pass event_bus to take_damage for Character instances (death save handling)
-            if hasattr(target, 'take_damage'):
+            if hasattr(target, "take_damage"):
                 import inspect
+
                 sig = inspect.signature(target.take_damage)
-                if 'event_bus' in sig.parameters:
+                if "event_bus" in sig.parameters:
                     target.take_damage(damage_taken, event_bus=event_bus)
                 else:
                     target.take_damage(damage_taken)
@@ -360,15 +365,11 @@ class CombatEngine:
             "save_result": save_result,
             "damage": damage,
             "damage_taken": damage_taken,
-            "effect": effect_description
+            "effect": effect_description,
         }
 
     def _process_saving_throw_effect(
-        self,
-        saving_throw_data: dict,
-        attacker: Creature,
-        defender: Creature,
-        event_bus=None
+        self, saving_throw_data: dict, attacker: Creature, defender: Creature, event_bus=None
     ) -> dict | None:
         """
         Process saving throw effects from monster actions (e.g., ghoul paralysis).
@@ -396,23 +397,21 @@ class CombatEngine:
         if not ability or not dc:
             return None
 
-        save_result = defender.make_saving_throw(
-            ability=ability,
-            dc=dc,
-            event_bus=event_bus
-        )
+        save_result = defender.make_saving_throw(ability=ability, dc=dc, event_bus=event_bus)
 
         # Emit saving throw event
         if event_bus:
-            event_bus.emit(Event(
-                type=EventType.SAVING_THROW,
-                data={
-                    "creature": defender.name,
-                    "ability": ability,
-                    "dc": dc,
-                    "result": save_result
-                }
-            ))
+            event_bus.emit(
+                Event(
+                    type=EventType.SAVING_THROW,
+                    data={
+                        "creature": defender.name,
+                        "ability": ability,
+                        "dc": dc,
+                        "result": save_result,
+                    },
+                )
+            )
 
         # Apply effect on failure
         if not save_result["success"]:
@@ -428,31 +427,27 @@ class CombatEngine:
                     dc=dc,
                     ability=ability,
                     allow_repeat_save=on_fail.get("allow_repeat_save", False),
-                    repeat_timing=on_fail.get("repeat_timing", "end_of_turn")
+                    repeat_timing=on_fail.get("repeat_timing", "end_of_turn"),
                 )
 
                 # Emit condition applied event
                 if event_bus:
-                    event_bus.emit(Event(
-                        type=EventType.CONDITION_APPLIED,
-                        data={
-                            "creature": defender.name,
-                            "condition": condition,
-                            "source": attacker.name,
-                            "duration_type": on_fail.get("duration_type"),
-                            "duration": on_fail.get("duration")
-                        }
-                    ))
+                    event_bus.emit(
+                        Event(
+                            type=EventType.CONDITION_APPLIED,
+                            data={
+                                "creature": defender.name,
+                                "condition": condition,
+                                "source": attacker.name,
+                                "duration_type": on_fail.get("duration_type"),
+                                "duration": on_fail.get("duration"),
+                            },
+                        )
+                    )
 
-                return {
-                    "save_result": save_result,
-                    "condition_applied": condition
-                }
+                return {"save_result": save_result, "condition_applied": condition}
 
-        return {
-            "save_result": save_result,
-            "condition_applied": None
-        }
+        return {"save_result": save_result, "condition_applied": None}
 
     def resolve_spell_attack(
         self,
@@ -463,7 +458,7 @@ class CombatEngine:
         advantage: bool = False,
         disadvantage: bool = False,
         apply_damage: bool = False,
-        event_bus=None
+        event_bus=None,
     ) -> AttackResult:
         """
         Resolve a spell attack roll.
@@ -498,7 +493,7 @@ class CombatEngine:
         from dnd_engine.utils.events import Event, EventType
 
         # Get spell attack bonus from caster
-        if not hasattr(caster, 'get_spell_attack_bonus'):
+        if not hasattr(caster, "get_spell_attack_bonus"):
             raise ValueError(f"{caster.name} cannot cast spells (no spell attack bonus)")
 
         spell_attack_bonus = caster.get_spell_attack_bonus(spellcasting_ability)
@@ -509,7 +504,7 @@ class CombatEngine:
         damage_type = damage_data.get("damage_type", "force")
 
         # Scale cantrip damage if this is a cantrip (level 0)
-        if spell.get("level", 0) == 0 and hasattr(caster, 'scale_cantrip_damage'):
+        if spell.get("level", 0) == 0 and hasattr(caster, "scale_cantrip_damage"):
             damage_dice = caster.scale_cantrip_damage(base_damage_dice)
         else:
             damage_dice = base_damage_dice
@@ -523,7 +518,7 @@ class CombatEngine:
             advantage=advantage,
             disadvantage=disadvantage,
             apply_damage=apply_damage,
-            event_bus=event_bus
+            event_bus=event_bus,
         )
 
         # Emit spell-specific attack event
@@ -542,8 +537,8 @@ class CombatEngine:
                     "critical_hit": result.critical_hit,
                     "damage": result.damage,
                     "damage_type": damage_type,
-                    "attack_type": "spell"
-                }
+                    "attack_type": "spell",
+                },
             )
             event_bus.emit(event)
 
@@ -556,7 +551,7 @@ class CombatEngine:
         spell,
         upcast_level: int | None = None,
         apply_damage: bool = False,
-        event_bus=None
+        event_bus=None,
     ) -> dict[str, Any]:
         """
         Resolve a spell that requires saving throws.
@@ -607,7 +602,7 @@ class CombatEngine:
         from dnd_engine.utils.events import Event, EventType
 
         # Get spell info
-        if hasattr(spell, 'name'):
+        if hasattr(spell, "name"):
             # Spell object
             spell_name = spell.name
             spell_level = spell.level
@@ -626,7 +621,7 @@ class CombatEngine:
             raise ValueError(f"Spell {spell_name} does not have saving throw information")
 
         # Get save ability and effect
-        if hasattr(save_info, 'ability'):
+        if hasattr(save_info, "ability"):
             save_ability = save_info.ability
             on_success = save_info.on_success
         else:
@@ -634,7 +629,7 @@ class CombatEngine:
             on_success = save_info.get("on_success", "half")
 
         # Get caster's spell save DC
-        if not hasattr(caster, 'get_spell_save_dc'):
+        if not hasattr(caster, "get_spell_save_dc"):
             raise ValueError(f"{caster.name} cannot cast spells (no spell save DC)")
 
         save_dc = caster.get_spell_save_dc()
@@ -654,7 +649,7 @@ class CombatEngine:
                 dc=save_dc,
                 advantage=False,
                 disadvantage=False,
-                event_bus=event_bus
+                event_bus=event_bus,
             )
 
             # Determine damage based on save result
@@ -671,26 +666,35 @@ class CombatEngine:
             # Apply damage if requested
             if apply_damage and damage > 0:
                 # Check if target's take_damage accepts event_bus (Character) or not (Creature)
-                if hasattr(target.take_damage, '__code__') and 'event_bus' in target.take_damage.__code__.co_varnames:
+                if (
+                    hasattr(target.take_damage, "__code__")
+                    and "event_bus" in target.take_damage.__code__.co_varnames
+                ):
                     target.take_damage(damage, event_bus=event_bus)
                 else:
                     target.take_damage(damage)
 
             # Get damage type
             if damage_info:
-                damage_type = damage_info.get("damage_type") if isinstance(damage_info, dict) else damage_info.damage_type
+                damage_type = (
+                    damage_info.get("damage_type")
+                    if isinstance(damage_info, dict)
+                    else damage_info.damage_type
+                )
             else:
                 damage_type = None
 
-            target_results.append({
-                "name": target.name,
-                "roll": save_result["roll"],
-                "modifier": save_result["modifier"],
-                "total": save_result["total"],
-                "success": save_result["success"],
-                "damage": damage,
-                "damage_type": damage_type
-            })
+            target_results.append(
+                {
+                    "name": target.name,
+                    "roll": save_result["roll"],
+                    "modifier": save_result["modifier"],
+                    "total": save_result["total"],
+                    "success": save_result["success"],
+                    "damage": damage,
+                    "damage_type": damage_type,
+                }
+            )
 
         # Emit spell save event
         if event_bus is not None:
@@ -704,8 +708,8 @@ class CombatEngine:
                     "slot_level": actual_level,
                     "save_dc": save_dc,
                     "save_ability": save_ability,
-                    "targets": target_results
-                }
+                    "targets": target_results,
+                },
             )
             event_bus.emit(event)
 
@@ -714,16 +718,10 @@ class CombatEngine:
             "caster": caster.name,
             "save_dc": save_dc,
             "save_ability": save_ability,
-            "targets": target_results
+            "targets": target_results,
         }
 
-    def _roll_spell_save_damage(
-        self,
-        spell,
-        damage_info,
-        base_level: int,
-        cast_level: int
-    ) -> int:
+    def _roll_spell_save_damage(self, spell, damage_info, base_level: int, cast_level: int) -> int:
         """
         Roll damage for a save-based spell, handling upcasting.
 
@@ -740,7 +738,7 @@ class CombatEngine:
             return 0
 
         # Get base damage dice
-        if hasattr(damage_info, 'dice'):
+        if hasattr(damage_info, "dice"):
             base_dice = damage_info.dice
             higher_levels = damage_info.higher_levels
         else:
@@ -758,7 +756,8 @@ class CombatEngine:
             # Parse higher_levels string for damage scaling
             # Common patterns: "1d6 per slot level above 1st", "2d6 per level above 3rd"
             import re
-            dice_match = re.search(r'(\d+d\d+)', higher_levels)
+
+            dice_match = re.search(r"(\d+d\d+)", higher_levels)
             if dice_match:
                 extra_dice = dice_match.group(1)
                 for _ in range(extra_levels):
@@ -768,12 +767,7 @@ class CombatEngine:
         return total_damage
 
     def resolve_spell_hp_pool(
-        self,
-        caster,
-        targets: list,
-        spell,
-        upcast_level: int | None = None,
-        event_bus=None
+        self, caster, targets: list, spell, upcast_level: int | None = None, event_bus=None
     ) -> dict[str, Any]:
         """
         Resolve a spell that affects creatures based on an HP pool.
@@ -813,7 +807,7 @@ class CombatEngine:
         from dnd_engine.utils.events import Event, EventType
 
         # Get spell info
-        if hasattr(spell, 'name'):
+        if hasattr(spell, "name"):
             spell_name = spell.name
             spell_level = spell.level
             hp_pool_info = spell.hp_pool
@@ -858,13 +852,15 @@ class CombatEngine:
                 continue
 
             # Check creature type immunity
-            creature_type = getattr(target, 'creature_type', None) or getattr(target, 'type', '')
+            creature_type = getattr(target, "creature_type", None) or getattr(target, "type", "")
             if isinstance(creature_type, str) and creature_type.lower() in immune_types:
-                immune_targets.append({
-                    "name": target.name,
-                    "hp": target.current_hp,
-                    "reason": f"immune ({creature_type})"
-                })
+                immune_targets.append(
+                    {
+                        "name": target.name,
+                        "hp": target.current_hp,
+                        "reason": f"immune ({creature_type})",
+                    }
+                )
                 continue
 
             valid_targets.append(target)
@@ -882,27 +878,25 @@ class CombatEngine:
                 hp_pool -= target.current_hp
 
                 # Apply the condition with duration
-                if hasattr(target, 'apply_condition_with_metadata'):
+                if hasattr(target, "apply_condition_with_metadata"):
                     target.apply_condition_with_metadata(
-                        condition=condition,
-                        duration_type="rounds",
-                        duration=duration
+                        condition=condition, duration_type="rounds", duration=duration
                     )
-                elif hasattr(target, 'add_condition'):
+                elif hasattr(target, "add_condition"):
                     target.add_condition(condition)
 
-                affected_targets.append({
-                    "name": target.name,
-                    "hp": target.current_hp,
-                    "condition": condition
-                })
+                affected_targets.append(
+                    {"name": target.name, "hp": target.current_hp, "condition": condition}
+                )
             else:
                 # Not enough HP pool remaining
-                unaffected_targets.append({
-                    "name": target.name,
-                    "hp": target.current_hp,
-                    "reason": "not enough HP pool remaining"
-                })
+                unaffected_targets.append(
+                    {
+                        "name": target.name,
+                        "hp": target.current_hp,
+                        "reason": "not enough HP pool remaining",
+                    }
+                )
 
         # Emit event
         if event_bus:
@@ -915,8 +909,8 @@ class CombatEngine:
                     "slot_level": actual_level,
                     "hp_pool_rolled": hp_pool_rolled,
                     "affected_count": len(affected_targets),
-                    "condition": condition
-                }
+                    "condition": condition,
+                },
             )
             event_bus.emit(event)
 
@@ -926,5 +920,5 @@ class CombatEngine:
             "hp_pool_rolled": hp_pool_rolled,
             "hp_pool_remaining": hp_pool,
             "affected_targets": affected_targets,
-            "unaffected_targets": unaffected_targets
+            "unaffected_targets": unaffected_targets,
         }

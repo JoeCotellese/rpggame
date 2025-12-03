@@ -17,12 +17,7 @@ from dnd_engine.utils.events import EventBus
 def test_abilities():
     """Create test abilities."""
     return Abilities(
-        strength=15,
-        dexterity=14,
-        constitution=13,
-        intelligence=10,
-        wisdom=12,
-        charisma=8
+        strength=15, dexterity=14, constitution=13, intelligence=10, wisdom=12, charisma=8
     )
 
 
@@ -32,13 +27,13 @@ def party_of_four(test_abilities):
     fighters = []
     for i in range(4):
         fighter = Character(
-            name=f"Fighter {i+1}",
+            name=f"Fighter {i + 1}",
             character_class=CharacterClass.FIGHTER,
             level=1,
             abilities=test_abilities,
             max_hp=12,
             ac=16,
-            xp=0
+            xp=0,
         )
         fighters.append(fighter)
     return Party(characters=fighters)
@@ -56,7 +51,7 @@ def game_state_with_party(party_of_four):
         dungeon_name="test_dungeon",
         event_bus=event_bus,
         data_loader=data_loader,
-        dice_roller=dice_roller
+        dice_roller=dice_roller,
     )
 
     return game_state
@@ -125,9 +120,7 @@ class TestPartyExploration:
         for character in party_of_four.characters:
             assert character.inventory.currency.gold == expected_gold_per_character
 
-    def test_party_search_gives_item_to_first_living(
-        self, game_state_with_party, party_of_four
-    ):
+    def test_party_search_gives_item_to_first_living(self, game_state_with_party, party_of_four):
         """Test that items can be taken and given to a specific party member."""
         room = game_state_with_party.get_current_room()
 
@@ -161,21 +154,15 @@ class TestPartyGameOver:
         """Test that game is not over when party has living members."""
         assert not game_state_with_party.is_game_over()
 
-    def test_game_not_over_with_one_living(
-        self, game_state_with_party, party_of_four
-    ):
+    def test_game_not_over_with_one_living(self, game_state_with_party, party_of_four):
         """Test that game is not over with one living party member."""
         # Kill 3 out of 4 party members
         for i in range(3):
-            party_of_four.characters[i].take_damage(
-                party_of_four.characters[i].max_hp
-            )
+            party_of_four.characters[i].take_damage(party_of_four.characters[i].max_hp)
 
         assert not game_state_with_party.is_game_over()
 
-    def test_game_over_when_party_wiped(
-        self, game_state_with_party, party_of_four
-    ):
+    def test_game_over_when_party_wiped(self, game_state_with_party, party_of_four):
         """Test that game is over when entire party is dead."""
         # Kill all party members (reduce to 0 HP and set 3 death save failures)
         for character in party_of_four.characters:
@@ -201,13 +188,8 @@ class TestPartyCombatIntegration:
             max_hp=7,
             ac=15,
             abilities=Abilities(
-                strength=8,
-                dexterity=14,
-                constitution=10,
-                intelligence=10,
-                wisdom=8,
-                charisma=8
-            )
+                strength=8, dexterity=14, constitution=10, intelligence=10, wisdom=8, charisma=8
+            ),
         )
 
         game_state_with_party.active_enemies = [goblin]
@@ -220,15 +202,12 @@ class TestPartyCombatIntegration:
         # Check that all 4 party members are in initiative
         all_combatants = game_state_with_party.initiative_tracker.get_all_combatants()
         party_in_initiative = [
-            entry for entry in all_combatants
-            if entry.creature in party_of_four.characters
+            entry for entry in all_combatants if entry.creature in party_of_four.characters
         ]
 
         assert len(party_in_initiative) == 4
 
-    def test_xp_distributed_to_all_party_members(
-        self, game_state_with_party, party_of_four
-    ):
+    def test_xp_distributed_to_all_party_members(self, game_state_with_party, party_of_four):
         """Test that XP is distributed evenly among all party members."""
         # Set up combat and defeat an enemy
         from dnd_engine.core.creature import Creature
@@ -238,13 +217,8 @@ class TestPartyCombatIntegration:
             max_hp=7,
             ac=15,
             abilities=Abilities(
-                strength=8,
-                dexterity=14,
-                constitution=10,
-                intelligence=10,
-                wisdom=8,
-                charisma=8
-            )
+                strength=8, dexterity=14, constitution=10, intelligence=10, wisdom=8, charisma=8
+            ),
         )
 
         game_state_with_party.active_enemies = [goblin]
@@ -261,9 +235,7 @@ class TestPartyCombatIntegration:
         for character in party_of_four.characters:
             assert character.xp >= 0  # XP should have been awarded
 
-    def test_party_member_death_in_combat(
-        self, game_state_with_party, party_of_four
-    ):
+    def test_party_member_death_in_combat(self, game_state_with_party, party_of_four):
         """Test that party member death is handled correctly in combat."""
         # Set up combat
         from dnd_engine.core.creature import Creature
@@ -273,13 +245,8 @@ class TestPartyCombatIntegration:
             max_hp=7,
             ac=15,
             abilities=Abilities(
-                strength=8,
-                dexterity=14,
-                constitution=10,
-                intelligence=10,
-                wisdom=8,
-                charisma=8
-            )
+                strength=8, dexterity=14, constitution=10, intelligence=10, wisdom=8, charisma=8
+            ),
         )
 
         game_state_with_party.active_enemies = [goblin]
@@ -312,9 +279,7 @@ class TestPartyStatusDisplay:
         names = [s["name"] for s in status]
         assert len(set(names)) == 4
 
-    def test_status_shows_alive_status(
-        self, game_state_with_party, party_of_four
-    ):
+    def test_status_shows_alive_status(self, game_state_with_party, party_of_four):
         """Test that status shows alive/dead status."""
         # Kill one party member
         party_of_four.characters[0].take_damage(party_of_four.characters[0].max_hp)
@@ -325,9 +290,7 @@ class TestPartyStatusDisplay:
         assert status[0]["alive"] is False
         assert all(s["alive"] for s in status[1:])
 
-    def test_status_shows_current_hp(
-        self, game_state_with_party, party_of_four
-    ):
+    def test_status_shows_current_hp(self, game_state_with_party, party_of_four):
         """Test that status shows current HP."""
         # Damage one party member
         party_of_four.characters[2].take_damage(5)
@@ -350,13 +313,8 @@ class TestPartyCombatVictory:
             max_hp=7,
             ac=15,
             abilities=Abilities(
-                strength=8,
-                dexterity=14,
-                constitution=10,
-                intelligence=10,
-                wisdom=8,
-                charisma=8
-            )
+                strength=8, dexterity=14, constitution=10, intelligence=10, wisdom=8, charisma=8
+            ),
         )
 
         game_state_with_party.active_enemies = [goblin]
@@ -370,9 +328,7 @@ class TestPartyCombatVictory:
         assert not game_state_with_party.in_combat
         assert not game_state_with_party.party.is_wiped()
 
-    def test_victory_with_casualties(
-        self, game_state_with_party, party_of_four
-    ):
+    def test_victory_with_casualties(self, game_state_with_party, party_of_four):
         """Test victory when some party members died."""
         from dnd_engine.core.creature import Creature
 
@@ -381,13 +337,8 @@ class TestPartyCombatVictory:
             max_hp=7,
             ac=15,
             abilities=Abilities(
-                strength=8,
-                dexterity=14,
-                constitution=10,
-                intelligence=10,
-                wisdom=8,
-                charisma=8
-            )
+                strength=8, dexterity=14, constitution=10, intelligence=10, wisdom=8, charisma=8
+            ),
         )
 
         game_state_with_party.active_enemies = [goblin]
@@ -426,7 +377,7 @@ class TestGameStateStart:
                     "exits": {"north": "hallway"},
                     "enemies": ["goblin"],
                     "items": [],
-                    "searchable": False
+                    "searchable": False,
                 },
                 "hallway": {
                     "name": "Hallway",
@@ -434,20 +385,22 @@ class TestGameStateStart:
                     "exits": {"south": "entrance"},
                     "enemies": [],
                     "items": [],
-                    "searchable": False
-                }
-            }
+                    "searchable": False,
+                },
+            },
         }
 
         # Mock the load_dungeon method (accepts optional campaign_id parameter)
-        monkeypatch.setattr(data_loader, 'load_dungeon', lambda name, campaign_id=None: mock_dungeon)
+        monkeypatch.setattr(
+            data_loader, "load_dungeon", lambda name, campaign_id=None: mock_dungeon
+        )
 
         # Create game state
         game_state = GameState(
             party=party_of_four,
             dungeon_name="test_dungeon",
             event_bus=event_bus,
-            data_loader=data_loader
+            data_loader=data_loader,
         )
 
         # Initially should not be in combat
@@ -478,7 +431,7 @@ class TestGameStateStart:
                     "exits": {"north": "danger_room"},
                     "enemies": [],  # No enemies here
                     "items": [],
-                    "searchable": False
+                    "searchable": False,
                 },
                 "danger_room": {
                     "name": "Danger Room",
@@ -486,20 +439,22 @@ class TestGameStateStart:
                     "exits": {"south": "safe_room"},
                     "enemies": ["goblin"],  # Enemies here but not in starting room
                     "items": [],
-                    "searchable": False
-                }
-            }
+                    "searchable": False,
+                },
+            },
         }
 
         # Mock the load_dungeon method (accepts optional campaign_id parameter)
-        monkeypatch.setattr(data_loader, 'load_dungeon', lambda name, campaign_id=None: mock_dungeon)
+        monkeypatch.setattr(
+            data_loader, "load_dungeon", lambda name, campaign_id=None: mock_dungeon
+        )
 
         # Create game state
         game_state = GameState(
             party=party_of_four,
             dungeon_name="test_dungeon",
             event_bus=event_bus,
-            data_loader=data_loader
+            data_loader=data_loader,
         )
 
         # Call start()

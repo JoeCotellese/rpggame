@@ -124,9 +124,7 @@ class CampaignProgressTracker:
                           Defaults to dnd_engine/data/content/campaigns/
         """
         if campaigns_dir is None:
-            campaigns_dir = (
-                Path(__file__).parent.parent / "data" / "content" / "campaigns"
-            )
+            campaigns_dir = Path(__file__).parent.parent / "data" / "content" / "campaigns"
         self.campaigns_dir = Path(campaigns_dir)
         self._definitions: dict[str, CampaignDefinition] = {}
 
@@ -205,9 +203,7 @@ class CampaignProgressTracker:
             boss_defeats={},
         )
 
-    def is_dungeon_unlocked(
-        self, progress: CampaignProgress, dungeon_id: str
-    ) -> bool:
+    def is_dungeon_unlocked(self, progress: CampaignProgress, dungeon_id: str) -> bool:
         """
         Check if a dungeon is unlocked for play.
 
@@ -220,9 +216,7 @@ class CampaignProgressTracker:
         """
         return dungeon_id in progress.unlocked_dungeons
 
-    def is_dungeon_completed(
-        self, progress: CampaignProgress, dungeon_id: str
-    ) -> bool:
+    def is_dungeon_completed(self, progress: CampaignProgress, dungeon_id: str) -> bool:
         """
         Check if a dungeon has been completed.
 
@@ -235,9 +229,7 @@ class CampaignProgressTracker:
         """
         return dungeon_id in progress.completed_dungeons
 
-    def get_dungeon_state(
-        self, progress: CampaignProgress, dungeon_id: str
-    ) -> str:
+    def get_dungeon_state(self, progress: CampaignProgress, dungeon_id: str) -> str:
         """
         Get the state of a dungeon for UI display.
 
@@ -291,9 +283,7 @@ class CampaignProgressTracker:
 
         return True
 
-    def record_boss_defeat(
-        self, progress: CampaignProgress, dungeon_id: str
-    ) -> None:
+    def record_boss_defeat(self, progress: CampaignProgress, dungeon_id: str) -> None:
         """
         Record that a boss has been defeated in a dungeon.
 
@@ -369,13 +359,9 @@ class CampaignProgressTracker:
                 return dungeon_id in progress.completed_dungeons
 
         # No final dungeon defined - check if all dungeons completed
-        return all(
-            d_id in progress.completed_dungeons for d_id in definition.dungeons
-        )
+        return all(d_id in progress.completed_dungeons for d_id in definition.dungeons)
 
-    def get_ordered_dungeons(
-        self, campaign_id: str
-    ) -> list[tuple[str, DungeonDefinition]]:
+    def get_ordered_dungeons(self, campaign_id: str) -> list[tuple[str, DungeonDefinition]]:
         """
         Get dungeons in order for UI display.
 
@@ -389,6 +375,4 @@ class CampaignProgressTracker:
         if not definition:
             return []
 
-        return sorted(
-            definition.dungeons.items(), key=lambda x: x[1].order
-        )
+        return sorted(definition.dungeons.items(), key=lambda x: x[1].order)

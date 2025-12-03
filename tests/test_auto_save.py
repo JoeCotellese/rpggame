@@ -36,15 +36,10 @@ def sample_character():
         character_class=CharacterClass.FIGHTER,
         level=1,
         abilities=Abilities(
-            strength=15,
-            dexterity=14,
-            constitution=13,
-            intelligence=10,
-            wisdom=12,
-            charisma=8
+            strength=15, dexterity=14, constitution=13, intelligence=10, wisdom=12, charisma=8
         ),
         max_hp=12,
-        ac=16
+        ac=16,
     )
 
 
@@ -55,27 +50,17 @@ def game_state(sample_character):
     event_bus = EventBus()
 
     # Mock the data loader to avoid file dependencies
-    with patch('dnd_engine.core.game_state.DataLoader') as mock_loader_class:
+    with patch("dnd_engine.core.game_state.DataLoader") as mock_loader_class:
         mock_loader = Mock()
         mock_loader.load_dungeon.return_value = {
             "name": "Test Dungeon",
             "start_room": "room_1",
-            "rooms": {
-                "room_1": {
-                    "name": "Test Room",
-                    "description": "A test room",
-                    "exits": []
-                }
-            }
+            "rooms": {"room_1": {"name": "Test Room", "description": "A test room", "exits": []}},
         }
         mock_loader_class.return_value = mock_loader
 
         # Create game state with minimal dungeon
-        game_state = GameState(
-            party=party,
-            dungeon_name="test_dungeon",
-            event_bus=event_bus
-        )
+        game_state = GameState(party=party, dungeon_name="test_dungeon", event_bus=event_bus)
 
     game_state.current_room_id = "room_1"
 
@@ -90,7 +75,7 @@ def cli_with_campaign(game_state, campaign_manager, temp_campaign_dir):
     campaign_manager.create_campaign(
         name=campaign_name,
         dungeon_name="test_dungeon",
-        party_character_ids=[game_state.party.characters[0].name]
+        party_character_ids=[game_state.party.characters[0].name],
     )
 
     cli = CLI(
@@ -98,7 +83,7 @@ def cli_with_campaign(game_state, campaign_manager, temp_campaign_dir):
         campaign_manager=campaign_manager,
         campaign_name=campaign_name,
         auto_save_enabled=True,
-        llm_enhancer=None
+        llm_enhancer=None,
     )
 
     return cli
@@ -129,9 +114,7 @@ class TestAutoSaveIntegration:
         """Test auto-save respects disabled flag"""
         campaign_name = "Test Campaign 2"
         campaign_manager.create_campaign(
-            name=campaign_name,
-            dungeon_name="test_dungeon",
-            party_character_ids=[]
+            name=campaign_name, dungeon_name="test_dungeon", party_character_ids=[]
         )
 
         cli = CLI(
@@ -139,7 +122,7 @@ class TestAutoSaveIntegration:
             campaign_manager=campaign_manager,
             campaign_name=campaign_name,
             auto_save_enabled=False,
-            llm_enhancer=None
+            llm_enhancer=None,
         )
 
         # Trigger auto-save
@@ -155,10 +138,7 @@ class TestAutoSaveTriggers:
 
     def test_combat_end_triggers_auto_save(self, cli_with_campaign, game_state):
         """Test combat end triggers auto-save"""
-        event = Event(
-            type=EventType.COMBAT_END,
-            data={"xp_gained": 100, "xp_per_character": 50}
-        )
+        event = Event(type=EventType.COMBAT_END, data={"xp_gained": 100, "xp_per_character": 50})
 
         # Emit combat end event
         game_state.event_bus.emit(event)
@@ -170,10 +150,7 @@ class TestAutoSaveTriggers:
 
     def test_room_enter_triggers_auto_save(self, cli_with_campaign, game_state):
         """Test room enter triggers auto-save"""
-        event = Event(
-            type=EventType.ROOM_ENTER,
-            data={"room_id": "room_2"}
-        )
+        event = Event(type=EventType.ROOM_ENTER, data={"room_id": "room_2"})
 
         # Emit room enter event
         game_state.event_bus.emit(event)
@@ -187,7 +164,7 @@ class TestAutoSaveTriggers:
         """Test level up triggers auto-save"""
         event = Event(
             type=EventType.LEVEL_UP,
-            data={"character": "Test Character", "new_level": 2, "hp_increase": 7}
+            data={"character": "Test Character", "new_level": 2, "hp_increase": 7},
         )
 
         # Emit level up event
@@ -201,8 +178,7 @@ class TestAutoSaveTriggers:
     def test_long_rest_triggers_auto_save(self, cli_with_campaign, game_state):
         """Test long rest triggers auto-save"""
         event = Event(
-            type=EventType.LONG_REST,
-            data={"party": ["Test Character"], "rest_type": "long"}
+            type=EventType.LONG_REST, data={"party": ["Test Character"], "rest_type": "long"}
         )
 
         # Emit long rest event
@@ -215,10 +191,7 @@ class TestAutoSaveTriggers:
 
     def test_combat_fled_triggers_auto_save(self, cli_with_campaign, game_state):
         """Test combat fled triggers auto-save"""
-        event = Event(
-            type=EventType.COMBAT_FLED,
-            data={"opportunity_attacks": 2}
-        )
+        event = Event(type=EventType.COMBAT_FLED, data={"opportunity_attacks": 2})
 
         # Emit combat fled event
         game_state.event_bus.emit(event)
@@ -256,7 +229,7 @@ class TestQuickSave:
         quick_saves = [s for s in save_slots if s.save_type == "quick"]
         assert len(quick_saves) == 1
 
-    @patch('dnd_engine.ui.cli.console')
+    @patch("dnd_engine.ui.cli.console")
     def test_quick_save_command_in_exploration(self, mock_console, cli_with_campaign):
         """Test 'qs' command triggers quick-save"""
         # Mock to prevent actual input loop
@@ -274,7 +247,7 @@ class TestQuickSave:
 class TestManualSave:
     """Test manual named save functionality"""
 
-    @patch('builtins.input', return_value="My Save")
+    @patch("builtins.input", return_value="My Save")
     def test_manual_save_creates_slot(self, mock_input, cli_with_campaign, campaign_manager):
         """Test manual save creates named slot"""
         cli_with_campaign.handle_save()
@@ -286,7 +259,7 @@ class TestManualSave:
         assert len(manual_saves) == 1
         assert "my_save" in manual_saves[0].slot_name.lower()
 
-    @patch('builtins.input', return_value="")
+    @patch("builtins.input", return_value="")
     def test_manual_save_cancelled(self, mock_input, cli_with_campaign, campaign_manager):
         """Test manual save can be cancelled"""
         cli_with_campaign.handle_save()
@@ -300,7 +273,7 @@ class TestManualSave:
 class TestSaveSlotPriority:
     """Test that different save types coexist"""
 
-    @patch('builtins.input', return_value="Manual Save 1")
+    @patch("builtins.input", return_value="Manual Save 1")
     def test_multiple_save_types_coexist(self, mock_input, cli_with_campaign, campaign_manager):
         """Test auto, quick, and manual saves coexist"""
         # Create auto-save

@@ -71,52 +71,43 @@ class DebugConsole:
             "setlevel": self.cmd_set_level,
             "addxp": self.cmd_add_xp,
             "setstat": self.cmd_set_stat,
-
             # CRITICAL - Combat Testing
             "spawn": self.cmd_spawn,
             "despawn": self.cmd_despawn,
             "nextturn": self.cmd_next_turn,
             "endcombat": self.cmd_end_combat,
-
             # CRITICAL - Inventory & Currency
             "give": self.cmd_give,
             "remove": self.cmd_remove,
             "gold": self.cmd_gold,
             "clearinventory": self.cmd_clear_inventory,
-
             # HIGH - Condition Testing
             "addcondition": self.cmd_add_condition,
             "removecondition": self.cmd_remove_condition,
             "clearconditions": self.cmd_clear_conditions,
             "listconditions": self.cmd_list_conditions,
-
             # HIGH - Resource Management
             "setslots": self.cmd_set_slots,
             "restoreslots": self.cmd_restore_slots,
             "setresource": self.cmd_set_resource,
             "shortrest": self.cmd_short_rest,
             "longrest": self.cmd_long_rest,
-
             # HIGH - Navigation & Exploration
             "teleport": self.cmd_teleport,
             "listrooms": self.cmd_list_rooms,
             "unlock": self.cmd_unlock,
             "reveal": self.cmd_reveal,
-
             # HIGH - Spellcasting
             "learnspell": self.cmd_learn_spell,
             "forgetspell": self.cmd_forget_spell,
             "listspells": self.cmd_list_spells,
-
             # MEDIUM - Party Management
             "addcharacter": self.cmd_add_character,
             "removecharacter": self.cmd_remove_character,
-
             # System
             "help": self.cmd_help,
             "reset": self.cmd_reset,
             "disablellm": self.cmd_disable_llm,
-
             # Quest Management
             "quest": self.cmd_quest,
         }
@@ -189,6 +180,7 @@ class DebugConsole:
         except Exception as e:
             print_error(f"Debug command failed: {e}")
             import traceback
+
             traceback.print_exc()
             return False
 
@@ -265,10 +257,7 @@ class DebugConsole:
         hp_value = max(0, min(hp_value, character.max_hp))
         character.current_hp = hp_value
 
-        print_status_message(
-            f"{character.name} HP set to {hp_value}/{character.max_hp}",
-            "success"
-        )
+        print_status_message(f"{character.name} HP set to {hp_value}/{character.max_hp}", "success")
 
     def cmd_damage(self, args: list[str]) -> None:
         """Deal damage to a character for testing."""
@@ -292,7 +281,7 @@ class DebugConsole:
 
         print_status_message(
             f"{character.name} took {damage} damage. HP: {character.current_hp}/{character.max_hp}",
-            "warning"
+            "warning",
         )
 
         if character.current_hp == 0:
@@ -320,7 +309,7 @@ class DebugConsole:
 
         print_status_message(
             f"{character.name} healed {heal_amount} HP. HP: {character.current_hp}/{character.max_hp}",
-            "success"
+            "success",
         )
 
     def cmd_godmode(self, args: list[str]) -> None:
@@ -377,14 +366,13 @@ class DebugConsole:
             character.xp = progression_data["xp_by_level"][str(level)]
 
         # Reapply class features for new level
-        if hasattr(character, 'apply_class_features'):
+        if hasattr(character, "apply_class_features"):
             character.apply_class_features()
-        elif hasattr(character, '_grant_class_features'):
+        elif hasattr(character, "_grant_class_features"):
             character._grant_class_features(self.game_state.data_loader)
 
         print_status_message(
-            f"{character.name} level changed from {old_level} to {level}",
-            "success"
+            f"{character.name} level changed from {old_level} to {level}", "success"
         )
 
     def cmd_add_xp(self, args: list[str]) -> None:
@@ -408,8 +396,7 @@ class DebugConsole:
         character.gain_xp(xp_amount)
 
         print_status_message(
-            f"{character.name} gained {xp_amount} XP ({old_xp} → {character.xp})",
-            "success"
+            f"{character.name} gained {xp_amount} XP ({old_xp} → {character.xp})", "success"
         )
 
     def cmd_set_stat(self, args: list[str]) -> None:
@@ -434,7 +421,7 @@ class DebugConsole:
             "CON": "constitution",
             "INT": "intelligence",
             "WIS": "wisdom",
-            "CHA": "charisma"
+            "CHA": "charisma",
         }
 
         if ability not in ability_mapping:
@@ -451,8 +438,7 @@ class DebugConsole:
         setattr(character.abilities, ability_name, value)
 
         print_status_message(
-            f"{character.name} {ability} changed from {old_value} to {value}",
-            "success"
+            f"{character.name} {ability} changed from {old_value} to {value}", "success"
         )
 
     # =====================================================================
@@ -499,7 +485,9 @@ class DebugConsole:
             if not self.game_state.in_combat:
                 self.game_state.active_enemies = spawned
                 self.game_state._start_combat()
-                print_status_message(f"Spawned {count}x {monster_name} and started combat!", "success")
+                print_status_message(
+                    f"Spawned {count}x {monster_name} and started combat!", "success"
+                )
             else:
                 # Add to existing combat
                 self.game_state.active_enemies.extend(spawned)
@@ -557,10 +545,7 @@ class DebugConsole:
         self.game_state.initiative_tracker.next_turn()
         next_combatant = self.game_state.initiative_tracker.get_current_combatant()
 
-        print_status_message(
-            f"Skipped turn. Next: {next_combatant.creature.name}",
-            "info"
-        )
+        print_status_message(f"Skipped turn. Next: {next_combatant.creature.name}", "info")
 
     def cmd_end_combat(self, args: list[str]) -> None:
         """Force end combat encounter."""
@@ -618,10 +603,7 @@ class DebugConsole:
         # Add to inventory
         character.inventory.add_item(item_id, quantity)
 
-        print_status_message(
-            f"Gave {quantity}x {item_name} to {character.name}",
-            "success"
-        )
+        print_status_message(f"Gave {quantity}x {item_name} to {character.name}", "success")
 
     def cmd_remove(self, args: list[str]) -> None:
         """Remove an item from inventory."""
@@ -653,10 +635,7 @@ class DebugConsole:
         # Remove from inventory
         character.inventory.remove_item(item_id, quantity)
 
-        print_status_message(
-            f"Removed {quantity}x {item_name} from {character.name}",
-            "success"
-        )
+        print_status_message(f"Removed {quantity}x {item_name} from {character.name}", "success")
 
     def cmd_gold(self, args: list[str]) -> None:
         """Add or remove gold from character inventory."""
@@ -692,13 +671,10 @@ class DebugConsole:
                 if current_gold >= gold_to_remove:
                     character.inventory.currency.gold -= gold_to_remove
                     print_status_message(
-                        f"Removed {gold_to_remove} gold from {character.name}",
-                        "success"
+                        f"Removed {gold_to_remove} gold from {character.name}", "success"
                     )
                 else:
-                    print_error(
-                        f"Not enough gold. {character.name} has {current_gold} gold."
-                    )
+                    print_error(f"Not enough gold. {character.name} has {current_gold} gold.")
                     return
             new_gold = character.inventory.currency.gold
             print_message(f"{character.name}'s gold: {old_gold} → {new_gold}")
@@ -711,9 +687,7 @@ class DebugConsole:
 
             per_char = amount // party_size
             if per_char == 0 and amount != 0:
-                print_error(
-                    f"Amount {amount} too small to split among {party_size} characters"
-                )
+                print_error(f"Amount {amount} too small to split among {party_size} characters")
                 return
 
             for character in self.game_state.party.characters:
@@ -736,13 +710,11 @@ class DebugConsole:
 
             if per_char > 0:
                 print_status_message(
-                    f"Added {per_char} gold to each of {party_size} characters",
-                    "success"
+                    f"Added {per_char} gold to each of {party_size} characters", "success"
                 )
             else:
                 print_status_message(
-                    f"Removed {abs(per_char)} gold from each of {party_size} characters",
-                    "success"
+                    f"Removed {abs(per_char)} gold from each of {party_size} characters", "success"
                 )
 
     def cmd_clear_inventory(self, args: list[str]) -> None:
@@ -791,10 +763,7 @@ class DebugConsole:
         # Add condition
         character.add_condition(condition)
 
-        print_status_message(
-            f"Added condition '{condition}' to {character.name}",
-            "success"
-        )
+        print_status_message(f"Added condition '{condition}' to {character.name}", "success")
 
     def cmd_remove_condition(self, args: list[str]) -> None:
         """Remove a condition from a character."""
@@ -816,10 +785,7 @@ class DebugConsole:
         # Remove condition
         character.remove_condition(condition)
 
-        print_status_message(
-            f"Removed condition '{condition}' from {character.name}",
-            "success"
-        )
+        print_status_message(f"Removed condition '{condition}' from {character.name}", "success")
 
     def cmd_clear_conditions(self, args: list[str]) -> None:
         """Clear all conditions from a character."""
@@ -838,8 +804,7 @@ class DebugConsole:
         character.conditions.clear()
 
         print_status_message(
-            f"Cleared {condition_count} condition(s) from {character.name}",
-            "success"
+            f"Cleared {condition_count} condition(s) from {character.name}", "success"
         )
 
     def cmd_list_conditions(self, args: list[str]) -> None:
@@ -847,8 +812,7 @@ class DebugConsole:
         from dnd_engine.systems.condition_manager import ConditionManager
 
         condition_mgr = ConditionManager(
-            dice_roller=self.game_state.dice_roller,
-            event_bus=self.game_state.event_bus
+            dice_roller=self.game_state.dice_roller, event_bus=self.game_state.event_bus
         )
 
         print_section("Available Conditions")
@@ -896,8 +860,7 @@ class DebugConsole:
         character.spell_slots[slot_key]["max"] = max(count, character.spell_slots[slot_key]["max"])
 
         print_status_message(
-            f"Set {character.name}'s level {level} spell slots to {count}",
-            "success"
+            f"Set {character.name}'s level {level} spell slots to {count}", "success"
         )
 
     def cmd_restore_slots(self, args: list[str]) -> None:
@@ -916,10 +879,7 @@ class DebugConsole:
         for slot_key in character.spell_slots:
             character.spell_slots[slot_key]["current"] = character.spell_slots[slot_key]["max"]
 
-        print_status_message(
-            f"Restored all spell slots for {character.name}",
-            "success"
-        )
+        print_status_message(f"Restored all spell slots for {character.name}", "success")
 
     def cmd_set_resource(self, args: list[str]) -> None:
         """Set a resource pool value."""
@@ -957,8 +917,7 @@ class DebugConsole:
         pool.current = min(amount, pool.maximum)
 
         print_status_message(
-            f"Set {character.name}'s {resource_name} to {pool.current}/{pool.maximum}",
-            "success"
+            f"Set {character.name}'s {resource_name} to {pool.current}/{pool.maximum}", "success"
         )
 
     def cmd_short_rest(self, args: list[str]) -> None:
@@ -1006,10 +965,7 @@ class DebugConsole:
         if self.game_state.in_combat:
             self.game_state.end_combat()
 
-        print_status_message(
-            f"Teleported from {old_room} to {room_id}",
-            "success"
-        )
+        print_status_message(f"Teleported from {old_room} to {room_id}", "success")
 
     def cmd_list_rooms(self, args: list[str]) -> None:
         """List all rooms in the current dungeon."""
@@ -1124,10 +1080,7 @@ class DebugConsole:
         if spell_id not in character.prepared_spells:
             character.prepared_spells.append(spell_id)
 
-        print_status_message(
-            f"{character.name} learned {spell_id}",
-            "success"
-        )
+        print_status_message(f"{character.name} learned {spell_id}", "success")
 
     def cmd_forget_spell(self, args: list[str]) -> None:
         """Remove a spell from a character's known spells."""
@@ -1158,10 +1111,7 @@ class DebugConsole:
         if spell_id in character.prepared_spells:
             character.prepared_spells.remove(spell_id)
 
-        print_status_message(
-            f"{character.name} forgot {spell_id}",
-            "success"
-        )
+        print_status_message(f"{character.name} forgot {spell_id}", "success")
 
     def cmd_list_spells(self, args: list[str]) -> None:
         """List available spells, optionally filtered by class and level."""
@@ -1320,7 +1270,7 @@ class DebugConsole:
             constitution=abilities["constitution"],
             intelligence=abilities["intelligence"],
             wisdom=abilities["wisdom"],
-            charisma=abilities["charisma"]
+            charisma=abilities["charisma"],
         )
 
         # Calculate HP for level 1 using factory method
@@ -1371,7 +1321,7 @@ class DebugConsole:
             skill_proficiencies=skill_proficiencies,
             expertise_skills=expertise_skills,
             weapon_proficiencies=weapon_proficiencies,
-            armor_proficiencies=armor_proficiencies
+            armor_proficiencies=armor_proficiencies,
         )
 
         # Store race and saving throws
@@ -1395,7 +1345,7 @@ class DebugConsole:
 
         print_status_message(
             f"Added {name} (Level {level} {race_data['name']} {class_data['name']}) to party",
-            "success"
+            "success",
         )
         print_message(f"HP: {character.current_hp}/{character.max_hp}, AC: {character.ac}")
 
@@ -1470,62 +1420,37 @@ class DebugConsole:
         # CRITICAL - Character
         table.add_row(
             "Character",
-            "/revive, /kill, /sethp, /damage, /heal\n/godmode, /setlevel, /addxp, /setstat"
+            "/revive, /kill, /sethp, /damage, /heal\n/godmode, /setlevel, /addxp, /setstat",
         )
 
         # CRITICAL - Combat
-        table.add_row(
-            "Combat",
-            "/spawn, /despawn, /nextturn, /endcombat"
-        )
+        table.add_row("Combat", "/spawn, /despawn, /nextturn, /endcombat")
 
         # CRITICAL - Inventory
-        table.add_row(
-            "Inventory",
-            "/give, /remove, /gold, /clearinventory"
-        )
+        table.add_row("Inventory", "/give, /remove, /gold, /clearinventory")
 
         # HIGH - Conditions
         table.add_row(
-            "Conditions",
-            "/addcondition, /removecondition\n/clearconditions, /listconditions"
+            "Conditions", "/addcondition, /removecondition\n/clearconditions, /listconditions"
         )
 
         # HIGH - Resources
-        table.add_row(
-            "Resources",
-            "/setslots, /restoreslots, /setresource\n/shortrest, /longrest"
-        )
+        table.add_row("Resources", "/setslots, /restoreslots, /setresource\n/shortrest, /longrest")
 
         # HIGH - Navigation
-        table.add_row(
-            "Navigation",
-            "/teleport, /listrooms, /unlock, /reveal"
-        )
+        table.add_row("Navigation", "/teleport, /listrooms, /unlock, /reveal")
 
         # HIGH - Spells
-        table.add_row(
-            "Spells",
-            "/learnspell, /forgetspell, /listspells"
-        )
+        table.add_row("Spells", "/learnspell, /forgetspell, /listspells")
 
         # MEDIUM - Party Management
-        table.add_row(
-            "Party",
-            "/addcharacter, /removecharacter"
-        )
+        table.add_row("Party", "/addcharacter, /removecharacter")
 
         # System
-        table.add_row(
-            "System",
-            "/help, /reset, /disablellm"
-        )
+        table.add_row("System", "/help, /reset, /disablellm")
 
         # Quest Management
-        table.add_row(
-            "Quests",
-            "/quest"
-        )
+        table.add_row("Quests", "/quest")
 
         console.print(table)
         print_message("\nUse '/help <command>' for detailed help on a specific command")
@@ -1650,9 +1575,7 @@ class DebugConsole:
             quest_id = args[1]
             if quest_id in qm.quests:
                 qm._quest_states[quest_id] = QuestState.AVAILABLE
-                print_status_message(
-                    f"Quest '{quest_id}' forced to AVAILABLE state", "success"
-                )
+                print_status_message(f"Quest '{quest_id}' forced to AVAILABLE state", "success")
             else:
                 print_error(f"Unknown quest: {quest_id}")
 
@@ -1678,9 +1601,7 @@ class DebugConsole:
                 print_message("Valid states: locked, available, active, completed, rewarded")
                 return
             qm._quest_states[quest_id] = state_map[state_str]
-            print_status_message(
-                f"Quest '{quest_id}' set to {state_str.upper()}", "success"
-            )
+            print_status_message(f"Quest '{quest_id}' set to {state_str.upper()}", "success")
 
         else:
             print_error(f"Unknown subcommand: {subcommand}")

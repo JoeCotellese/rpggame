@@ -10,6 +10,7 @@ from dnd_engine.systems.item_assignment import ItemAssignmentService, ItemRecomm
 
 class MockCharacterClass(Enum):
     """Mock character class enum for testing."""
+
     FIGHTER = "fighter"
     ROGUE = "rogue"
     WIZARD = "wizard"
@@ -20,11 +21,7 @@ class MockCharacter:
     """Mock character for testing item assignment."""
 
     def __init__(
-        self,
-        name: str,
-        character_class: MockCharacterClass,
-        current_hp: int = 20,
-        max_hp: int = 20
+        self, name: str, character_class: MockCharacterClass, current_hp: int = 20, max_hp: int = 20
     ):
         self.name = name
         self.character_class = character_class

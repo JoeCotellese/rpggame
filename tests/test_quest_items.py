@@ -22,12 +22,7 @@ class TestQuestItemDisplay:
         """Quest items should display with a cyan star prefix."""
         items = {
             "consumables": [
-                {
-                    "name": "Cultist's Journal",
-                    "quantity": 1,
-                    "equipped": False,
-                    "quest_item": True
-                }
+                {"name": "Cultist's Journal", "quantity": 1, "equipped": False, "quest_item": True}
             ]
         }
         table = create_inventory_table(items)
@@ -44,12 +39,7 @@ class TestQuestItemDisplay:
         """Regular items should not have the star marker."""
         items = {
             "consumables": [
-                {
-                    "name": "Potion of Healing",
-                    "quantity": 1,
-                    "equipped": False,
-                    "quest_item": False
-                }
+                {"name": "Potion of Healing", "quantity": 1, "equipped": False, "quest_item": False}
             ]
         }
         table = create_inventory_table(items)
@@ -69,23 +59,13 @@ class TestQuestItemDisplay:
                     "name": "Potion of Healing",
                     "quantity": 2,
                     "equipped": False,
-                    "quest_item": False
+                    "quest_item": False,
                 },
-                {
-                    "name": "Cultist's Journal",
-                    "quantity": 1,
-                    "equipped": False,
-                    "quest_item": True
-                }
+                {"name": "Cultist's Journal", "quantity": 1, "equipped": False, "quest_item": True},
             ],
             "weapons": [
-                {
-                    "name": "Longsword",
-                    "quantity": 1,
-                    "equipped": True,
-                    "quest_item": False
-                }
-            ]
+                {"name": "Longsword", "quantity": 1, "equipped": True, "quest_item": False}
+            ],
         }
         table = create_inventory_table(items)
         console = Console(file=StringIO(), force_terminal=True)
@@ -105,7 +85,7 @@ class TestQuestItemDisplay:
                 {
                     "name": "Mystery Item",
                     "quantity": 1,
-                    "equipped": False
+                    "equipped": False,
                     # No quest_item field
                 }
             ]
@@ -123,12 +103,7 @@ class TestQuestItemDisplay:
 def test_party():
     """Create a simple test party."""
     abilities = Abilities(
-        strength=10,
-        dexterity=14,
-        constitution=14,
-        intelligence=10,
-        wisdom=12,
-        charisma=10
+        strength=10, dexterity=14, constitution=14, intelligence=10, wisdom=12, charisma=10
     )
     character = Character(
         name="Test Hero",
@@ -136,7 +111,7 @@ def test_party():
         level=1,
         abilities=abilities,
         max_hp=12,
-        ac=16
+        ac=16,
     )
     return Party([character])
 
@@ -154,7 +129,7 @@ class TestConditionalExits:
             dungeon_name="town_of_arden",
             campaign_id="the_unquiet_dead",
             event_bus=event_bus,
-            data_loader=data_loader
+            data_loader=data_loader,
         )
 
         # Add quest item to character's inventory
@@ -172,7 +147,7 @@ class TestConditionalExits:
             dungeon_name="town_of_arden",
             campaign_id="the_unquiet_dead",
             event_bus=event_bus,
-            data_loader=data_loader
+            data_loader=data_loader,
         )
 
         assert game_state.party_has_quest_item("gorgus_journal") is False
@@ -187,7 +162,7 @@ class TestConditionalExits:
             dungeon_name="town_of_arden",
             campaign_id="the_unquiet_dead",
             event_bus=event_bus,
-            data_loader=data_loader
+            data_loader=data_loader,
         )
 
         # Manually set up a room with conditional exit for testing
@@ -196,11 +171,8 @@ class TestConditionalExits:
             "name": "Test Room",
             "description": "A test room",
             "exits": {
-                "north": {
-                    "destination": "other_room",
-                    "requires": {"quest_item": "gorgus_journal"}
-                }
-            }
+                "north": {"destination": "other_room", "requires": {"quest_item": "gorgus_journal"}}
+            },
         }
         game_state.current_room_id = "test_room"
 
@@ -227,7 +199,7 @@ class TestConditionalExits:
             dungeon_name="town_of_arden",
             campaign_id="the_unquiet_dead",
             event_bus=event_bus,
-            data_loader=data_loader
+            data_loader=data_loader,
         )
 
         # Set up room with hidden conditional exit
@@ -240,9 +212,9 @@ class TestConditionalExits:
                 "down": {
                     "destination": "secret_room",
                     "requires": {"quest_item": "gorgus_journal"},
-                    "hidden_until_unlocked": True
-                }
-            }
+                    "hidden_until_unlocked": True,
+                },
+            },
         }
         game_state.current_room_id = "test_room"
 
@@ -269,7 +241,7 @@ class TestConditionalExits:
             dungeon_name="town_of_arden",
             campaign_id="the_unquiet_dead",
             event_bus=event_bus,
-            data_loader=data_loader
+            data_loader=data_loader,
         )
 
         # Check a normal exit (town square has multiple exits without requirements)
@@ -287,7 +259,7 @@ class TestConditionalExits:
             dungeon_name="town_of_arden",
             campaign_id="the_unquiet_dead",
             event_bus=event_bus,
-            data_loader=data_loader
+            data_loader=data_loader,
         )
 
         # Set up room with conditional exit
@@ -298,9 +270,9 @@ class TestConditionalExits:
             "exits": {
                 "north": {
                     "destination": "arden.town_square",
-                    "requires": {"quest_item": "gorgus_journal"}
+                    "requires": {"quest_item": "gorgus_journal"},
                 }
-            }
+            },
         }
         game_state.dungeon["rooms"]["arden.town_square"] = game_state.dungeon["rooms"].get(
             "arden.town_square", {"id": "arden.town_square", "name": "Town Square"}

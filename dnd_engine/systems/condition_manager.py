@@ -14,6 +14,7 @@ from dnd_engine.utils.events import Event, EventBus, EventType
 @dataclass
 class ConditionEffectResult:
     """Result of processing a condition effect"""
+
     condition_id: str
     effect_type: str
     success: bool
@@ -25,6 +26,7 @@ class ConditionEffectResult:
 @dataclass
 class AbilityCheckResult:
     """Result of an ability check attempt"""
+
     condition_id: str
     success: bool
     roll_total: int
@@ -49,7 +51,7 @@ class ConditionManager:
         self,
         conditions_file: Path | None = None,
         dice_roller: DiceRoller | None = None,
-        event_bus: EventBus | None = None
+        event_bus: EventBus | None = None,
     ):
         """
         Initialize the ConditionManager.
@@ -112,10 +114,7 @@ class ConditionManager:
             return False
         return "can_end_early" in condition_info
 
-    def process_turn_start_effects(
-        self,
-        creature: Creature
-    ) -> list[ConditionEffectResult]:
+    def process_turn_start_effects(self, creature: Creature) -> list[ConditionEffectResult]:
         """
         Process all turn-start effects for a creature's conditions.
 
@@ -138,9 +137,7 @@ class ConditionManager:
         return results
 
     def _process_single_turn_start_effect(
-        self,
-        creature: Creature,
-        condition_id: str
+        self, creature: Creature, condition_id: str
     ) -> ConditionEffectResult | None:
         """
         Process the turn-start effect for a single condition.
@@ -169,10 +166,7 @@ class ConditionManager:
         return None
 
     def _apply_damage_effect(
-        self,
-        creature: Creature,
-        condition_id: str,
-        effect_data: dict[str, Any]
+        self, creature: Creature, condition_id: str, effect_data: dict[str, Any]
     ) -> ConditionEffectResult:
         """
         Apply a damage effect to a creature.
@@ -199,35 +193,33 @@ class ConditionManager:
 
         # Format message
         message = message_template.format(
-            creature_name=creature.name,
-            damage=damage_amount,
-            damage_type=damage_type
+            creature_name=creature.name, damage=damage_amount, damage_type=damage_type
         )
 
         # Emit event if event bus is available
         if self.event_bus:
-            self.event_bus.emit(Event(
-                EventType.DAMAGE_TAKEN,
-                {
-                    "creature": creature,
-                    "damage": damage_amount,
-                    "damage_type": damage_type,
-                    "source": f"condition:{condition_id}"
-                }
-            ))
+            self.event_bus.emit(
+                Event(
+                    EventType.DAMAGE_TAKEN,
+                    {
+                        "creature": creature,
+                        "damage": damage_amount,
+                        "damage_type": damage_type,
+                        "source": f"condition:{condition_id}",
+                    },
+                )
+            )
 
         return ConditionEffectResult(
             condition_id=condition_id,
             effect_type="damage",
             success=True,
             amount=damage_amount,
-            message=message
+            message=message,
         )
 
     def attempt_condition_removal(
-        self,
-        creature: Creature,
-        condition_id: str
+        self, creature: Creature, condition_id: str
     ) -> AbilityCheckResult | None:
         """
         Attempt to remove a condition via ability check.
@@ -269,27 +261,26 @@ class ConditionManager:
             message_template = removal_info.get("success_message", "✅ {creature_name} succeeds!")
             message = message_template.format(creature_name=creature.name)
         else:
-            message_template = removal_info.get("failure_message",
-                "❌ {creature_name} fails (rolled {roll} vs DC {dc})")
-            message = message_template.format(
-                creature_name=creature.name,
-                roll=roll_total,
-                dc=dc
+            message_template = removal_info.get(
+                "failure_message", "❌ {creature_name} fails (rolled {roll} vs DC {dc})"
             )
+            message = message_template.format(creature_name=creature.name, roll=roll_total, dc=dc)
 
         # Emit event if event bus is available
         if self.event_bus:
-            self.event_bus.emit(Event(
-                EventType.ABILITY_CHECK,
-                {
-                    "creature": creature,
-                    "ability": ability,
-                    "dc": dc,
-                    "roll": roll_total,
-                    "success": success,
-                    "purpose": f"remove_condition:{condition_id}"
-                }
-            ))
+            self.event_bus.emit(
+                Event(
+                    EventType.ABILITY_CHECK,
+                    {
+                        "creature": creature,
+                        "ability": ability,
+                        "dc": dc,
+                        "roll": roll_total,
+                        "success": success,
+                        "purpose": f"remove_condition:{condition_id}",
+                    },
+                )
+            )
 
         return AbilityCheckResult(
             condition_id=condition_id,
@@ -298,7 +289,7 @@ class ConditionManager:
             dc=dc,
             ability=ability,
             message=message,
-            condition_removed=condition_removed
+            condition_removed=condition_removed,
         )
 
     def _get_ability_modifier(self, creature: Creature, ability: str) -> int:
@@ -318,7 +309,7 @@ class ConditionManager:
             "constitution": creature.abilities.con_mod,
             "intelligence": creature.abilities.int_mod,
             "wisdom": creature.abilities.wis_mod,
-            "charisma": creature.abilities.cha_mod
+            "charisma": creature.abilities.cha_mod,
         }
 
         return ability_map.get(ability.lower(), 0)
@@ -347,5 +338,5 @@ class ConditionManager:
             "ability": removal_info.get("ability"),
             "dc": removal_info.get("dc"),
             "action_cost": removal_info.get("action_cost"),
-            "description": condition_info.get("description", "")
+            "description": condition_info.get("description", ""),
         }

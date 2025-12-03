@@ -53,7 +53,7 @@ class CampaignManager:
         self,
         name: str,
         dungeon_name: str | None = None,
-        party_character_ids: list[str] | None = None
+        party_character_ids: list[str] | None = None,
     ) -> Campaign:
         """
         Create a new campaign.
@@ -96,7 +96,7 @@ class CampaignManager:
             current_dungeon=dungeon_name,
             current_room=None,
             party_character_ids=party_character_ids or [],
-            save_version="1.0.0"
+            save_version="1.0.0",
         )
 
         # Save campaign metadata
@@ -127,7 +127,7 @@ class CampaignManager:
         if not metadata_path.exists():
             raise FileNotFoundError(f"Campaign metadata not found for '{campaign_name}'")
 
-        with open(metadata_path, encoding='utf-8') as f:
+        with open(metadata_path, encoding="utf-8") as f:
             data = json.load(f)
 
         return Campaign.from_dict(data)
@@ -137,7 +137,7 @@ class CampaignManager:
         campaign_name: str,
         game_state: GameState,
         slot_name: str = "auto",
-        save_type: str = "auto"
+        save_type: str = "auto",
     ) -> Path:
         """
         Save game state to a campaign save slot.
@@ -172,14 +172,14 @@ class CampaignManager:
             save_file_name = f"save_{safe_slot_name}_{timestamp}"
 
         # Serialize game state
-        auto_save = (save_type == "auto")
+        auto_save = save_type == "auto"
         save_data = self._serialize_game_state(game_state, auto_save)
 
         # Write to file
         saves_dir = campaign_dir / "saves"
         saves_dir.mkdir(exist_ok=True)
         save_path = saves_dir / f"{save_file_name}.json"
-        with open(save_path, 'w', encoding='utf-8') as f:
+        with open(save_path, "w", encoding="utf-8") as f:
             json.dump(save_data, f, indent=2, ensure_ascii=False)
 
         # Update campaign metadata
@@ -201,7 +201,7 @@ class CampaignManager:
         slot_name: str = "auto",
         event_bus: EventBus | None = None,
         data_loader: DataLoader | None = None,
-        dice_roller: DiceRoller | None = None
+        dice_roller: DiceRoller | None = None,
     ) -> GameState:
         """
         Load game state from a campaign save slot.
@@ -244,7 +244,7 @@ class CampaignManager:
 
         # Read and deserialize save file
         try:
-            with open(save_path, encoding='utf-8') as f:
+            with open(save_path, encoding="utf-8") as f:
                 save_data = json.load(f)
         except json.JSONDecodeError as e:
             raise ValueError(f"Corrupted save file: {e}")
@@ -256,17 +256,11 @@ class CampaignManager:
         save_version = save_data.get("version", "0.0.0")
         if not self._is_compatible_version(save_version):
             raise ValueError(
-                f"Incompatible save version: {save_version} "
-                f"(current version: {SAVE_VERSION})"
+                f"Incompatible save version: {save_version} (current version: {SAVE_VERSION})"
             )
 
         # Deserialize game state
-        game_state = self._deserialize_game_state(
-            save_data,
-            event_bus,
-            data_loader,
-            dice_roller
-        )
+        game_state = self._deserialize_game_state(save_data, event_bus, data_loader, dice_roller)
 
         # Update campaign last_played timestamp
         campaign = self.load_campaign(campaign_name)
@@ -275,7 +269,7 @@ class CampaignManager:
 
         # Update last_played in save file as well
         save_data["metadata"]["last_played"] = datetime.now().isoformat()
-        with open(save_path, 'w', encoding='utf-8') as f:
+        with open(save_path, "w", encoding="utf-8") as f:
             json.dump(save_data, f, indent=2, ensure_ascii=False)
 
         return game_state
@@ -298,7 +292,7 @@ class CampaignManager:
                 continue
 
             try:
-                with open(metadata_path, encoding='utf-8') as f:
+                with open(metadata_path, encoding="utf-8") as f:
                     data = json.load(f)
                 campaign = Campaign.from_dict(data)
                 campaigns.append(campaign)
@@ -335,7 +329,7 @@ class CampaignManager:
 
         for save_file in saves_dir.glob("*.json"):
             try:
-                with open(save_file, encoding='utf-8') as f:
+                with open(save_file, encoding="utf-8") as f:
                     save_data = json.load(f)
 
                 metadata = save_data.get("metadata", {})
@@ -366,10 +360,14 @@ class CampaignManager:
 
                 save_slot = SaveSlotMetadata(
                     slot_name=save_file.stem,
-                    created_at=datetime.fromisoformat(metadata.get("created", metadata.get("last_played", datetime.now().isoformat()))),
+                    created_at=datetime.fromisoformat(
+                        metadata.get(
+                            "created", metadata.get("last_played", datetime.now().isoformat())
+                        )
+                    ),
                     location=location,
                     party_hp_summary=party_hp_summary,
-                    save_type=save_type
+                    save_type=save_type,
                 )
                 save_slots.append(save_slot)
 
@@ -410,6 +408,7 @@ class CampaignManager:
 
         # Delete the entire campaign directory
         import shutil
+
         shutil.rmtree(campaign_dir)
 
         return True
@@ -435,7 +434,7 @@ class CampaignManager:
         campaign_dir = self.campaigns_dir / safe_campaign_name
         metadata_path = campaign_dir / "campaign.json"
 
-        with open(metadata_path, 'w', encoding='utf-8') as f:
+        with open(metadata_path, "w", encoding="utf-8") as f:
             json.dump(campaign.to_dict(), f, indent=2, ensure_ascii=False)
 
     def _sanitize_campaign_name(self, name: str) -> str:
@@ -453,16 +452,16 @@ class CampaignManager:
         safe_name = safe_name.replace(" ", "_")
 
         # Remove invalid characters (replace with underscore, then dedupe)
-        invalid_chars = '<>:"/\\|?*!@#$%^&()+=[]{};\',.'
+        invalid_chars = "<>:\"/\\|?*!@#$%^&()+=[]{};',."
         for char in invalid_chars:
-            safe_name = safe_name.replace(char, '_')
+            safe_name = safe_name.replace(char, "_")
 
         # Remove consecutive underscores
-        while '__' in safe_name:
-            safe_name = safe_name.replace('__', '_')
+        while "__" in safe_name:
+            safe_name = safe_name.replace("__", "_")
 
         # Remove leading/trailing underscores
-        safe_name = safe_name.strip('_')
+        safe_name = safe_name.strip("_")
 
         # Ensure it's not empty
         if not safe_name:
@@ -483,13 +482,13 @@ class CampaignManager:
         # Remove invalid filename characters
         invalid_chars = '<>:"/\\|?*'
         for char in invalid_chars:
-            filename = filename.replace(char, '_')
+            filename = filename.replace(char, "_")
 
         # Replace spaces with underscores
         filename = filename.replace(" ", "_")
 
         # Remove leading/trailing spaces and dots
-        filename = filename.strip('. ')
+        filename = filename.strip(". ")
 
         # Ensure it's not empty after sanitization
         if not filename:
@@ -497,11 +496,7 @@ class CampaignManager:
 
         return filename
 
-    def _serialize_game_state(
-        self,
-        game_state: GameState,
-        auto_save: bool
-    ) -> dict[str, Any]:
+    def _serialize_game_state(self, game_state: GameState, auto_save: bool) -> dict[str, Any]:
         """
         Serialize game state to a dictionary.
 
@@ -516,11 +511,7 @@ class CampaignManager:
 
         save_data = {
             "version": SAVE_VERSION,
-            "metadata": {
-                "created": now,
-                "last_played": now,
-                "auto_save": auto_save
-            },
+            "metadata": {"created": now, "last_played": now, "auto_save": auto_save},
             "party": [self._serialize_character(char) for char in game_state.party.characters],
             "game_state": {
                 "dungeon_name": game_state.dungeon_name,
@@ -529,8 +520,8 @@ class CampaignManager:
                 "in_combat": game_state.in_combat,
                 "action_history": game_state.action_history,
                 "last_entry_direction": game_state.last_entry_direction,
-                "campaign_id": game_state.campaign_id
-            }
+                "campaign_id": game_state.campaign_id,
+            },
         }
 
         # Include quest states if quest manager is active
@@ -565,7 +556,7 @@ class CampaignManager:
             "resource_pools": self._serialize_resource_pools(character),
             "spellcasting_ability": character.spellcasting_ability,
             "known_spells": character.known_spells,
-            "prepared_spells": character.prepared_spells
+            "prepared_spells": character.prepared_spells,
         }
 
     def _serialize_inventory(self, inventory: Inventory) -> dict[str, Any]:
@@ -580,18 +571,14 @@ class CampaignManager:
         """
         return {
             "items": [
-                {
-                    "item_id": item.item_id,
-                    "category": item.category,
-                    "quantity": item.quantity
-                }
+                {"item_id": item.item_id, "category": item.category, "quantity": item.quantity}
                 for item in inventory.items.values()
             ],
             "equipped": {
                 "weapon": inventory.equipped[EquipmentSlot.WEAPON],
-                "armor": inventory.equipped[EquipmentSlot.ARMOR]
+                "armor": inventory.equipped[EquipmentSlot.ARMOR],
             },
-            "currency": asdict(inventory.currency)
+            "currency": asdict(inventory.currency),
         }
 
     def _serialize_resource_pools(self, character: Character) -> list[dict[str, Any]]:
@@ -609,7 +596,7 @@ class CampaignManager:
                 "name": pool.name,
                 "current": pool.current,
                 "maximum": pool.maximum,
-                "recovery_type": pool.recovery_type
+                "recovery_type": pool.recovery_type,
             }
             for pool in character.resource_pools.values()
         ]
@@ -629,7 +616,7 @@ class CampaignManager:
         for room_id, room_data in dungeon.get("rooms", {}).items():
             room_states[room_id] = {
                 "searched": room_data.get("searched", False),
-                "enemies": room_data.get("enemies", [])
+                "enemies": room_data.get("enemies", []),
             }
 
         return room_states
@@ -639,7 +626,7 @@ class CampaignManager:
         save_data: dict[str, Any],
         event_bus: EventBus | None,
         data_loader: DataLoader | None,
-        dice_roller: DiceRoller | None
+        dice_roller: DiceRoller | None,
     ) -> GameState:
         """
         Deserialize game state from save data.
@@ -654,10 +641,7 @@ class CampaignManager:
             Reconstructed GameState
         """
         # Create party from saved characters
-        characters = [
-            self._deserialize_character(char_data)
-            for char_data in save_data["party"]
-        ]
+        characters = [self._deserialize_character(char_data) for char_data in save_data["party"]]
         party = Party(characters)
 
         # Get game state data
@@ -670,7 +654,7 @@ class CampaignManager:
             event_bus=event_bus,
             data_loader=data_loader,
             dice_roller=dice_roller,
-            campaign_id=gs_data.get("campaign_id")
+            campaign_id=gs_data.get("campaign_id"),
         )
 
         # Restore room-specific state
@@ -722,7 +706,7 @@ class CampaignManager:
             subclass=char_data.get("subclass"),
             spellcasting_ability=char_data.get("spellcasting_ability"),
             known_spells=char_data.get("known_spells"),
-            prepared_spells=char_data.get("prepared_spells")
+            prepared_spells=char_data.get("prepared_spells"),
         )
 
         # Restore conditions
@@ -753,7 +737,7 @@ class CampaignManager:
             inventory.add_item(
                 item_id=item_data["item_id"],
                 category=item_data["category"],
-                quantity=item_data["quantity"]
+                quantity=item_data["quantity"],
             )
 
         # Restore equipped items

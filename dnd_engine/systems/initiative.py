@@ -20,6 +20,7 @@ class InitiativeEntry:
     Combines a creature with their initiative roll for sorting and tracking.
     Also includes display metadata like combat numbers for duplicate enemy names.
     """
+
     creature: Creature
     initiative_roll: int
     combat_number: int | None = None  # Assigned for enemies with duplicate names
@@ -53,7 +54,9 @@ class InitiativeTracker:
     - Round increments when all combatants have acted
     """
 
-    def __init__(self, dice_roller: DiceRoller | None = None, time_manager: Optional["TimeManager"] = None):
+    def __init__(
+        self, dice_roller: DiceRoller | None = None, time_manager: Optional["TimeManager"] = None
+    ):
         """
         Initialize the initiative tracker.
 
@@ -67,7 +70,9 @@ class InitiativeTracker:
         self.current_turn_index: int = 0
         self.round_number: int = 0
         self.total_turns_taken: int = 0  # Track total number of turns for narrative context
-        self.turn_states: dict[Creature, TurnState] = {}  # Maps creature instance to their turn state
+        self.turn_states: dict[
+            Creature, TurnState
+        ] = {}  # Maps creature instance to their turn state
 
     def add_combatant(self, creature: Creature) -> InitiativeEntry:
         """
@@ -223,11 +228,8 @@ class InitiativeTracker:
         Sorts by total initiative (descending), with ties broken by DEX modifier.
         """
         self.combatants.sort(
-            key=lambda entry: (
-                entry.initiative_total,
-                entry.creature.initiative_modifier
-            ),
-            reverse=True
+            key=lambda entry: (entry.initiative_total, entry.creature.initiative_modifier),
+            reverse=True,
         )
 
     def assign_combat_numbers(self, player_creatures: list[Creature]) -> None:
@@ -264,9 +266,7 @@ class InitiativeTracker:
                 entry.display_name = f"{name} {entry.combat_number}"
 
     def find_combatant_by_reference(
-        self,
-        ref: str,
-        player_creatures: list[Creature] | None = None
+        self, ref: str, player_creatures: list[Creature] | None = None
     ) -> InitiativeEntry | None:
         """
         Find a combatant by various reference formats.
@@ -302,9 +302,11 @@ class InitiativeTracker:
                 num = int(parts[-1])
                 name_part = " ".join(parts[:-1])
                 for entry in self.combatants:
-                    if (entry.combat_number == num and
-                        entry.creature.name.lower() == name_part and
-                        entry.creature.is_alive):
+                    if (
+                        entry.combat_number == num
+                        and entry.creature.name.lower() == name_part
+                        and entry.creature.is_alive
+                    ):
                         return entry
             except ValueError:
                 pass

@@ -26,10 +26,10 @@ def sample_character():
             constitution=14,  # +2 modifier
             intelligence=16,
             wisdom=12,
-            charisma=10
+            charisma=10,
         ),
         max_hp=30,
-        ac=12
+        ac=12,
     )
 
 
@@ -39,7 +39,7 @@ def game_state_with_character(sample_character):
     party = Party([sample_character])
     event_bus = EventBus()
 
-    with patch('dnd_engine.core.game_state.DataLoader') as mock_loader_class:
+    with patch("dnd_engine.core.game_state.DataLoader") as mock_loader_class:
         mock_loader = Mock()
         mock_loader.load_dungeon.return_value = {
             "name": "Test Dungeon",
@@ -49,42 +49,20 @@ def game_state_with_character(sample_character):
                     "name": "Test Room",
                     "description": "A test room",
                     "exits": {},
-                    "items": []
+                    "items": [],
                 }
-            }
+            },
         }
         mock_loader.load_skills.return_value = {}
-        mock_loader.load_items.return_value = {
-            "weapons": {},
-            "consumables": {},
-            "armor": {}
-        }
+        mock_loader.load_items.return_value = {"weapons": {}, "consumables": {}, "armor": {}}
         mock_loader.load_spells.return_value = {
-            "bless": {
-                "name": "Bless",
-                "level": 1,
-                "concentration": True,
-                "duration": 60
-            },
-            "mage_hand": {
-                "name": "Mage Hand",
-                "level": 0,
-                "concentration": True,
-                "duration": 60
-            },
-            "magic_missile": {
-                "name": "Magic Missile",
-                "level": 1,
-                "concentration": False
-            }
+            "bless": {"name": "Bless", "level": 1, "concentration": True, "duration": 60},
+            "mage_hand": {"name": "Mage Hand", "level": 0, "concentration": True, "duration": 60},
+            "magic_missile": {"name": "Magic Missile", "level": 1, "concentration": False},
         }
         mock_loader_class.return_value = mock_loader
 
-        game_state = GameState(
-            party=party,
-            dungeon_name="test_dungeon",
-            event_bus=event_bus
-        )
+        game_state = GameState(party=party, dungeon_name="test_dungeon", event_bus=event_bus)
 
     game_state.current_room_id = "test_room"
     return game_state
@@ -109,7 +87,7 @@ class TestGetConcentrationSpell:
             remaining_value=60.0,
             target_name=sample_character.name,
             caster_name=sample_character.name,
-            concentration=True
+            concentration=True,
         )
         game_state_with_character.time_manager.add_effect(effect)
 
@@ -127,7 +105,7 @@ class TestGetConcentrationSpell:
             remaining_value=60.0,
             target_name="Other Character",
             caster_name="Other Character",
-            concentration=True
+            concentration=True,
         )
         game_state_with_character.time_manager.add_effect(effect)
 
@@ -142,8 +120,7 @@ class TestConcentrationFromDamage:
     def test_no_concentration_no_check(self, game_state_with_character, sample_character):
         """Test that no check occurs when not concentrating"""
         result = game_state_with_character.check_concentration_from_damage(
-            sample_character.name,
-            10
+            sample_character.name, 10
         )
 
         assert result["was_concentrating"] is False
@@ -161,22 +138,17 @@ class TestConcentrationFromDamage:
             remaining_value=60.0,
             target_name=sample_character.name,
             caster_name=sample_character.name,
-            concentration=True
+            concentration=True,
         )
         game_state_with_character.time_manager.add_effect(effect)
 
         # Mock saving throw to succeed
-        with patch.object(sample_character, 'make_saving_throw') as mock_save:
-            mock_save.return_value = {
-                "success": True,
-                "roll": 12,
-                "modifier": 2,
-                "total": 14
-            }
+        with patch.object(sample_character, "make_saving_throw") as mock_save:
+            mock_save.return_value = {"success": True, "roll": 12, "modifier": 2, "total": 14}
 
             result = game_state_with_character.check_concentration_from_damage(
                 sample_character.name,
-                5  # Low damage
+                5,  # Low damage
             )
 
             # DC should be max(10, 5//2) = max(10, 2) = 10
@@ -196,22 +168,17 @@ class TestConcentrationFromDamage:
             remaining_value=60.0,
             target_name=sample_character.name,
             caster_name=sample_character.name,
-            concentration=True
+            concentration=True,
         )
         game_state_with_character.time_manager.add_effect(effect)
 
         # Mock saving throw
-        with patch.object(sample_character, 'make_saving_throw') as mock_save:
-            mock_save.return_value = {
-                "success": True,
-                "roll": 18,
-                "modifier": 2,
-                "total": 20
-            }
+        with patch.object(sample_character, "make_saving_throw") as mock_save:
+            mock_save.return_value = {"success": True, "roll": 18, "modifier": 2, "total": 20}
 
             result = game_state_with_character.check_concentration_from_damage(
                 sample_character.name,
-                30  # High damage
+                30,  # High damage
             )
 
             # DC should be max(10, 30//2) = max(10, 15) = 15
@@ -229,22 +196,16 @@ class TestConcentrationFromDamage:
             remaining_value=60.0,
             target_name=sample_character.name,
             caster_name=sample_character.name,
-            concentration=True
+            concentration=True,
         )
         game_state_with_character.time_manager.add_effect(effect)
 
         # Mock saving throw to fail
-        with patch.object(sample_character, 'make_saving_throw') as mock_save:
-            mock_save.return_value = {
-                "success": False,
-                "roll": 5,
-                "modifier": 2,
-                "total": 7
-            }
+        with patch.object(sample_character, "make_saving_throw") as mock_save:
+            mock_save.return_value = {"success": False, "roll": 5, "modifier": 2, "total": 7}
 
             result = game_state_with_character.check_concentration_from_damage(
-                sample_character.name,
-                10
+                sample_character.name, 10
             )
 
             assert result["was_concentrating"] is True
@@ -252,10 +213,14 @@ class TestConcentrationFromDamage:
             assert result["spell_name"] == "bless"
 
             # Verify concentration was actually removed
-            remaining_spell = game_state_with_character.get_concentration_spell(sample_character.name)
+            remaining_spell = game_state_with_character.get_concentration_spell(
+                sample_character.name
+            )
             assert remaining_spell is None
 
-    def test_successful_save_maintains_concentration(self, game_state_with_character, sample_character):
+    def test_successful_save_maintains_concentration(
+        self, game_state_with_character, sample_character
+    ):
         """Test that successful save maintains concentration"""
         # Add concentration
         effect = ActiveEffect(
@@ -266,29 +231,25 @@ class TestConcentrationFromDamage:
             remaining_value=60.0,
             target_name=sample_character.name,
             caster_name=sample_character.name,
-            concentration=True
+            concentration=True,
         )
         game_state_with_character.time_manager.add_effect(effect)
 
         # Mock saving throw to succeed
-        with patch.object(sample_character, 'make_saving_throw') as mock_save:
-            mock_save.return_value = {
-                "success": True,
-                "roll": 15,
-                "modifier": 2,
-                "total": 17
-            }
+        with patch.object(sample_character, "make_saving_throw") as mock_save:
+            mock_save.return_value = {"success": True, "roll": 15, "modifier": 2, "total": 17}
 
             result = game_state_with_character.check_concentration_from_damage(
-                sample_character.name,
-                10
+                sample_character.name, 10
             )
 
             assert result["was_concentrating"] is True
             assert result["concentration_broken"] is False
 
             # Verify concentration is still active
-            remaining_spell = game_state_with_character.get_concentration_spell(sample_character.name)
+            remaining_spell = game_state_with_character.get_concentration_spell(
+                sample_character.name
+            )
             assert remaining_spell == "bless"
 
     def test_multiple_damage_instances(self, game_state_with_character, sample_character):
@@ -302,20 +263,24 @@ class TestConcentrationFromDamage:
             remaining_value=60.0,
             target_name=sample_character.name,
             caster_name=sample_character.name,
-            concentration=True
+            concentration=True,
         )
         game_state_with_character.time_manager.add_effect(effect)
 
         # First hit - succeed
-        with patch.object(sample_character, 'make_saving_throw') as mock_save:
+        with patch.object(sample_character, "make_saving_throw") as mock_save:
             mock_save.return_value = {"success": True, "roll": 15, "modifier": 2, "total": 17}
-            result1 = game_state_with_character.check_concentration_from_damage(sample_character.name, 10)
+            result1 = game_state_with_character.check_concentration_from_damage(
+                sample_character.name, 10
+            )
             assert result1["concentration_broken"] is False
 
         # Second hit - fail
-        with patch.object(sample_character, 'make_saving_throw') as mock_save:
+        with patch.object(sample_character, "make_saving_throw") as mock_save:
             mock_save.return_value = {"success": False, "roll": 3, "modifier": 2, "total": 5}
-            result2 = game_state_with_character.check_concentration_from_damage(sample_character.name, 10)
+            result2 = game_state_with_character.check_concentration_from_damage(
+                sample_character.name, 10
+            )
             assert result2["concentration_broken"] is True
 
         # Verify concentration is gone

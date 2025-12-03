@@ -28,12 +28,7 @@ def vault(temp_vault_path):
 def sample_character():
     """Create a sample character for testing."""
     abilities = Abilities(
-        strength=16,
-        dexterity=14,
-        constitution=15,
-        intelligence=8,
-        wisdom=10,
-        charisma=12
+        strength=16, dexterity=14, constitution=15, intelligence=8, wisdom=10, charisma=12
     )
 
     return Character(
@@ -45,7 +40,7 @@ def sample_character():
         ac=18,
         current_hp=45,
         xp=6500,
-        race="Dwarf"
+        race="Dwarf",
     )
 
 
@@ -177,7 +172,7 @@ class TestCharacterVaultV2:
             ac=16,
             current_hp=12,
             xp=0,
-            race="Human"
+            race="Human",
         )
 
         char2 = Character(
@@ -189,7 +184,7 @@ class TestCharacterVaultV2:
             ac=12,
             current_hp=14,
             xp=300,
-            race="Elf"
+            race="Elf",
         )
 
         vault.add_character(char1)
@@ -204,17 +199,33 @@ class TestCharacterVaultV2:
     def test_list_characters_sorting(self, vault):
         """Test that list_characters sorts by usage."""
         # Add characters
-        id1 = vault.add_character(Character(
-            name="Old", character_class=CharacterClass.FIGHTER,
-            level=1, abilities=Abilities(10, 10, 10, 10, 10, 10),
-            max_hp=10, ac=10, current_hp=10, xp=0, race="Human"
-        ))
+        id1 = vault.add_character(
+            Character(
+                name="Old",
+                character_class=CharacterClass.FIGHTER,
+                level=1,
+                abilities=Abilities(10, 10, 10, 10, 10, 10),
+                max_hp=10,
+                ac=10,
+                current_hp=10,
+                xp=0,
+                race="Human",
+            )
+        )
 
-        id2 = vault.add_character(Character(
-            name="Recent", character_class=CharacterClass.WIZARD,
-            level=1, abilities=Abilities(10, 10, 10, 10, 10, 10),
-            max_hp=8, ac=10, current_hp=8, xp=0, race="Elf"
-        ))
+        id2 = vault.add_character(
+            Character(
+                name="Recent",
+                character_class=CharacterClass.WIZARD,
+                level=1,
+                abilities=Abilities(10, 10, 10, 10, 10, 10),
+                max_hp=8,
+                ac=10,
+                current_hp=8,
+                xp=0,
+                race="Elf",
+            )
+        )
 
         # Record usage for second character
         vault.record_usage(id2, slot_number=1)
@@ -284,7 +295,7 @@ class TestCharacterVaultV2:
                 ac=10,
                 current_hp=10 + i,
                 xp=0,
-                race="Human"
+                race="Human",
             )
             for i in range(1, 4)
         ]
@@ -317,7 +328,7 @@ class TestCharacterVaultV2:
             ac=10,
             current_hp=8,
             xp=0,
-            race="Elf"
+            race="Elf",
         )
         id2 = vault.add_character(char2)
 

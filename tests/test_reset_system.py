@@ -21,12 +21,7 @@ class TestResetSystem:
 
         # Create test characters
         abilities = Abilities(
-            strength=16,
-            dexterity=14,
-            constitution=15,
-            intelligence=10,
-            wisdom=12,
-            charisma=8
+            strength=16, dexterity=14, constitution=15, intelligence=10, wisdom=12, charisma=8
         )
         self.character1 = Character(
             name="Thorin",
@@ -34,16 +29,11 @@ class TestResetSystem:
             level=1,
             abilities=abilities,
             max_hp=12,
-            ac=16
+            ac=16,
         )
 
         abilities2 = Abilities(
-            strength=10,
-            dexterity=16,
-            constitution=12,
-            intelligence=14,
-            wisdom=13,
-            charisma=12
+            strength=10, dexterity=16, constitution=12, intelligence=14, wisdom=13, charisma=12
         )
         self.character2 = Character(
             name="Gandalf",
@@ -51,7 +41,7 @@ class TestResetSystem:
             level=1,
             abilities=abilities2,
             max_hp=10,
-            ac=12
+            ac=12,
         )
 
         # Create party
@@ -62,7 +52,7 @@ class TestResetSystem:
             dungeon_name="test_dungeon",
             event_bus=self.event_bus,
             data_loader=self.loader,
-            dice_roller=self.dice_roller
+            dice_roller=self.dice_roller,
         )
 
     def test_reset_dungeon_restores_initial_state(self):
@@ -137,6 +127,7 @@ class TestResetSystem:
         # Add items to inventory and equip them
         self.character1.inventory.add_item("longsword", "weapons")
         from dnd_engine.systems.inventory import EquipmentSlot
+
         self.character1.inventory.equip_item("longsword", EquipmentSlot.WEAPON)
 
         # Reset
@@ -219,12 +210,12 @@ class TestResetSystem:
                     "items": [],
                     "exits": {},
                     "searchable": False,
-                    "searched": False
+                    "searched": False,
                 }
-            }
+            },
         }
 
-        with patch.object(self.loader, 'load_dungeon', return_value=mock_dungeon):
+        with patch.object(self.loader, "load_dungeon", return_value=mock_dungeon):
             self.game_state.reset_dungeon("dragon_lair")
 
         # Verify dungeon changed
@@ -251,12 +242,12 @@ class TestResetSystem:
                     "items": [],
                     "exits": {},
                     "searchable": False,
-                    "searched": False
+                    "searched": False,
                 }
-            }
+            },
         }
 
-        with patch.object(self.loader, 'load_dungeon', return_value=mock_dungeon):
+        with patch.object(self.loader, "load_dungeon", return_value=mock_dungeon):
             self.game_state.reset_dungeon("dragon_lair")
 
         # Verify party data preserved
@@ -317,12 +308,12 @@ class TestResetSystem:
                     "items": [],
                     "exits": {},
                     "searchable": False,
-                    "searched": False
+                    "searched": False,
                 }
-            }
+            },
         }
 
-        with patch.object(self.loader, 'load_dungeon', return_value=mock_dungeon):
+        with patch.object(self.loader, "load_dungeon", return_value=mock_dungeon):
             self.game_state.reset_dungeon("dragon_lair")
 
         assert len(events_received) == 2

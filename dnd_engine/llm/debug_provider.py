@@ -20,7 +20,7 @@ class DebugProvider(LLMProvider):
         api_key: str = "debug",
         model: str = "debug",
         timeout: float = 10.0,
-        max_tokens: int = 1000
+        max_tokens: int = 1000,
     ) -> None:
         """
         Initialize debug provider.
@@ -33,11 +33,7 @@ class DebugProvider(LLMProvider):
         """
         super().__init__(api_key, model, timeout, max_tokens)
 
-    async def generate(
-        self,
-        prompt: str,
-        temperature: float = 0.7
-    ) -> str | None:
+    async def generate(self, prompt: str, temperature: float = 0.7) -> str | None:
         """
         Return the prompt text for inspection.
 
@@ -80,8 +76,7 @@ class DebugProvider(LLMProvider):
         """
         # Format messages for inspection
         msg_summary = "\n".join(
-            f"  [{m.get('role', '?')}]: {str(m.get('content', ''))[:100]}..."
-            for m in messages
+            f"  [{m.get('role', '?')}]: {str(m.get('content', ''))[:100]}..." for m in messages
         )
         tool_names = [t.get("function", {}).get("name", "?") for t in tools]
 

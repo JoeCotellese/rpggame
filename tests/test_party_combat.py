@@ -15,12 +15,7 @@ from dnd_engine.systems.initiative import InitiativeTracker
 def test_abilities():
     """Create test abilities."""
     return Abilities(
-        strength=15,
-        dexterity=14,
-        constitution=13,
-        intelligence=10,
-        wisdom=12,
-        charisma=8
+        strength=15, dexterity=14, constitution=13, intelligence=10, wisdom=12, charisma=8
     )
 
 
@@ -48,12 +43,12 @@ def party_of_four(test_abilities):
     fighters = []
     for i in range(4):
         fighter = Character(
-            name=f"Fighter {i+1}",
+            name=f"Fighter {i + 1}",
             character_class=CharacterClass.FIGHTER,
             level=1,
             abilities=test_abilities,
             max_hp=12,
-            ac=16
+            ac=16,
         )
         fighters.append(fighter)
     return Party(characters=fighters)
@@ -67,13 +62,8 @@ def goblin_enemy(test_abilities):
         max_hp=7,
         ac=15,
         abilities=Abilities(
-            strength=8,
-            dexterity=14,
-            constitution=10,
-            intelligence=10,
-            wisdom=8,
-            charisma=8
-        )
+            strength=8, dexterity=14, constitution=10, intelligence=10, wisdom=8, charisma=8
+        ),
     )
 
 
@@ -83,17 +73,12 @@ def multiple_goblins(test_abilities):
     goblins = []
     for i in range(3):
         goblin = Creature(
-            name=f"Goblin {i+1}",
+            name=f"Goblin {i + 1}",
             max_hp=7,
             ac=15,
             abilities=Abilities(
-                strength=8,
-                dexterity=14,
-                constitution=10,
-                intelligence=10,
-                wisdom=8,
-                charisma=8
-            )
+                strength=8, dexterity=14, constitution=10, intelligence=10, wisdom=8, charisma=8
+            ),
         )
         goblins.append(goblin)
     return goblins
@@ -139,18 +124,13 @@ class TestPartyInitiative:
 
         # Verify sorted in descending order
         for i in range(len(all_combatants) - 1):
-            assert (
-                all_combatants[i].initiative_total
-                >= all_combatants[i + 1].initiative_total
-            )
+            assert all_combatants[i].initiative_total >= all_combatants[i + 1].initiative_total
 
 
 class TestPartyCombat:
     """Test combat with party members."""
 
-    def test_party_member_attacks_enemy(
-        self, party_of_four, goblin_enemy, combat_engine
-    ):
+    def test_party_member_attacks_enemy(self, party_of_four, goblin_enemy, combat_engine):
         """Test that a party member can attack an enemy."""
         fighter = party_of_four.characters[0]
         result = combat_engine.resolve_attack(
@@ -158,7 +138,7 @@ class TestPartyCombat:
             defender=goblin_enemy,
             attack_bonus=fighter.melee_attack_bonus,
             damage_dice=f"1d8+{fighter.melee_damage_bonus}",
-            apply_damage=True
+            apply_damage=True,
         )
 
         assert result.attacker_name == fighter.name
@@ -174,14 +154,12 @@ class TestPartyCombat:
                     defender=goblin_enemy,
                     attack_bonus=fighter.melee_attack_bonus,
                     damage_dice="1d8+10",  # High damage to ensure kill
-                    apply_damage=True
+                    apply_damage=True,
                 )
 
         assert not goblin_enemy.is_alive
 
-    def test_dead_party_member_removed_from_initiative(
-        self, party_of_four, initiative_tracker
-    ):
+    def test_dead_party_member_removed_from_initiative(self, party_of_four, initiative_tracker):
         """Test that dead party members are removed from initiative."""
         # Add all party members to initiative
         for character in party_of_four.characters:
@@ -247,9 +225,7 @@ class TestPartyVictoryDefeat:
         """Test that party is not wiped if at least one member is alive."""
         # Kill 3 out of 4 party members
         for i in range(3):
-            party_of_four.characters[i].take_damage(
-                party_of_four.characters[i].max_hp
-            )
+            party_of_four.characters[i].take_damage(party_of_four.characters[i].max_hp)
 
         assert not party_of_four.is_wiped()
         assert len(party_of_four.get_living_members()) == 1
@@ -268,9 +244,7 @@ class TestPartyVictoryDefeat:
 class TestEnemyTargeting:
     """Test enemy targeting of party members."""
 
-    def test_enemy_can_target_any_party_member(
-        self, party_of_four, goblin_enemy, combat_engine
-    ):
+    def test_enemy_can_target_any_party_member(self, party_of_four, goblin_enemy, combat_engine):
         """Test that an enemy can target any party member."""
         # Test attacking each party member
         for character in party_of_four.characters:
@@ -279,7 +253,7 @@ class TestEnemyTargeting:
                 defender=character,
                 attack_bonus=4,  # Goblin attack bonus
                 damage_dice="1d6+2",
-                apply_damage=False  # Don't actually damage
+                apply_damage=False,  # Don't actually damage
             )
 
             assert result.attacker_name == goblin_enemy.name
@@ -301,9 +275,7 @@ class TestEnemyTargeting:
 class TestPartyTurnManagement:
     """Test turn management with party members."""
 
-    def test_each_party_member_gets_turn(
-        self, party_of_four, goblin_enemy, initiative_tracker
-    ):
+    def test_each_party_member_gets_turn(self, party_of_four, goblin_enemy, initiative_tracker):
         """Test that each party member gets a turn in initiative."""
         # Add party and enemy
         for character in party_of_four.characters:
@@ -323,9 +295,7 @@ class TestPartyTurnManagement:
         # All 4 party members should have had a turn
         assert len(party_members_who_acted) == 4
 
-    def test_turn_skips_dead_party_member(
-        self, party_of_four, initiative_tracker
-    ):
+    def test_turn_skips_dead_party_member(self, party_of_four, initiative_tracker):
         """Test that dead party members don't get turns."""
         # Add all party members
         for character in party_of_four.characters:
@@ -336,9 +306,7 @@ class TestPartyTurnManagement:
         initiative_tracker.remove_combatant(party_of_four.characters[1])
 
         # Collect all creatures in initiative
-        all_creatures = [
-            entry.creature for entry in initiative_tracker.get_all_combatants()
-        ]
+        all_creatures = [entry.creature for entry in initiative_tracker.get_all_combatants()]
 
         # Dead member should not be in initiative
         assert party_of_four.characters[1] not in all_creatures

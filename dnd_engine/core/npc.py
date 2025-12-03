@@ -178,9 +178,7 @@ class NPC:
         }
         # Include shop stock changes if shop exists
         if self.shop:
-            result["shop_stock"] = {
-                item.item_id: item.stock for item in self.shop.inventory
-            }
+            result["shop_stock"] = {item.item_id: item.stock for item in self.shop.inventory}
         return result
 
     def get_disposition(self) -> NPCDisposition:

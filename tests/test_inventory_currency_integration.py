@@ -194,7 +194,7 @@ class TestInventoryCurrencyIntegration:
         items_data = {
             "weapons": {
                 "longsword": {"name": "Longsword", "value": 15},
-                "dagger": {"name": "Dagger", "value": 2}
+                "dagger": {"name": "Dagger", "value": 2},
             }
         }
 

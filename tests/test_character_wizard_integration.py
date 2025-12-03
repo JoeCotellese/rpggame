@@ -18,9 +18,7 @@ class TestWizardDataIntegration:
         dice_roller = DiceRoller(seed=42)
         factory = CharacterFactory(dice_roller=dice_roller)
         return CharacterCreationWizard(
-            character_factory=factory,
-            data_loader=DataLoader(),
-            dice_roller=dice_roller
+            character_factory=factory, data_loader=DataLoader(), dice_roller=dice_roller
         )
 
     def test_wizard_loads_all_game_data(self, wizard):
@@ -70,7 +68,14 @@ class TestWizardDataIntegration:
 
                 # Verify abilities are complete
                 assert len(template["abilities"]) == 6
-                for ability in ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]:
+                for ability in [
+                    "strength",
+                    "dexterity",
+                    "constitution",
+                    "intelligence",
+                    "wisdom",
+                    "charisma",
+                ]:
                     assert ability in template["abilities"]
 
 
@@ -81,29 +86,27 @@ class TestTemplateIntegration:
     def wizard(self):
         """Create wizard instance"""
         return CharacterCreationWizard(
-            character_factory=CharacterFactory(),
-            data_loader=DataLoader()
+            character_factory=CharacterFactory(), data_loader=DataLoader()
         )
 
     def test_template_creates_valid_character(self, wizard):
         """Test that template creates a fully valid character"""
-        if not wizard.templates_data or 'classic_fighter' not in wizard.templates_data:
+        if not wizard.templates_data or "classic_fighter" not in wizard.templates_data:
             pytest.skip("Classic fighter template not available")
 
         # Set wizard state from template
-        template = wizard.templates_data['classic_fighter']
+        template = wizard.templates_data["classic_fighter"]
         wizard.name = "Test Fighter"
-        wizard.race = template['race']
-        wizard.character_class = template['class']
-        wizard.abilities = template['abilities'].copy()
+        wizard.race = template["race"]
+        wizard.character_class = template["class"]
+        wizard.abilities = template["abilities"].copy()
 
         # Apply racial bonuses (as template path does)
         wizard.abilities = wizard.factory.apply_racial_bonuses(
-            wizard.abilities,
-            wizard.races_data[wizard.race]
+            wizard.abilities, wizard.races_data[wizard.race]
         )
 
-        wizard.skill_proficiencies = template.get('skill_choices', [])
+        wizard.skill_proficiencies = template.get("skill_choices", [])
         wizard.expertise_skills = []
         wizard.selected_spells = []
 
@@ -121,30 +124,29 @@ class TestTemplateIntegration:
 
     def test_template_applies_racial_bonuses_correctly(self, wizard):
         """Test that racial bonuses are applied correctly in templates"""
-        if not wizard.templates_data or 'classic_fighter' not in wizard.templates_data:
+        if not wizard.templates_data or "classic_fighter" not in wizard.templates_data:
             pytest.skip("Classic fighter template not available")
 
-        template = wizard.templates_data['classic_fighter']
-        base_str = template['abilities']['strength']
+        template = wizard.templates_data["classic_fighter"]
+        base_str = template["abilities"]["strength"]
 
         # Apply racial bonuses as wizard does
-        abilities = template['abilities'].copy()
+        abilities = template["abilities"].copy()
         abilities_with_bonuses = wizard.factory.apply_racial_bonuses(
-            abilities,
-            wizard.races_data[template['race']]
+            abilities, wizard.races_data[template["race"]]
         )
 
         # Human gets +1 to all abilities
-        assert abilities_with_bonuses['strength'] >= base_str
+        assert abilities_with_bonuses["strength"] >= base_str
 
     def test_rogue_template_has_expertise(self, wizard):
         """Test that rogue template includes expertise"""
-        if not wizard.templates_data or 'sneaky_rogue' not in wizard.templates_data:
+        if not wizard.templates_data or "sneaky_rogue" not in wizard.templates_data:
             pytest.skip("Sneaky rogue template not available")
 
-        template = wizard.templates_data['sneaky_rogue']
-        assert 'expertise_choices' in template
-        assert len(template['expertise_choices']) == 2
+        template = wizard.templates_data["sneaky_rogue"]
+        assert "expertise_choices" in template
+        assert len(template["expertise_choices"]) == 2
 
 
 class TestRandomGenerationIntegration:
@@ -157,7 +159,7 @@ class TestRandomGenerationIntegration:
         return CharacterCreationWizard(
             character_factory=CharacterFactory(dice_roller=dice_roller),
             data_loader=DataLoader(),
-            dice_roller=dice_roller
+            dice_roller=dice_roller,
         )
 
     def test_random_generation_creates_valid_character(self, wizard):
@@ -175,7 +177,14 @@ class TestRandomGenerationIntegration:
 
         # Verify abilities
         assert len(wizard.abilities) == 6
-        for ability in ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]:
+        for ability in [
+            "strength",
+            "dexterity",
+            "constitution",
+            "intelligence",
+            "wisdom",
+            "charisma",
+        ]:
             assert ability in wizard.abilities
             assert 3 <= wizard.abilities[ability] <= 20  # Reasonable range after bonuses
 
@@ -246,7 +255,7 @@ class TestCharacterCreationFlow:
         return CharacterCreationWizard(
             character_factory=CharacterFactory(dice_roller=dice_roller),
             data_loader=DataLoader(),
-            dice_roller=dice_roller
+            dice_roller=dice_roller,
         )
 
     def test_create_fighter_from_wizard_state(self, wizard):
@@ -261,7 +270,7 @@ class TestCharacterCreationFlow:
             "constitution": 15,
             "intelligence": 10,
             "wisdom": 12,
-            "charisma": 8
+            "charisma": 8,
         }
         wizard.skill_proficiencies = ["athletics", "intimidation"]
         wizard.expertise_skills = []
@@ -296,7 +305,7 @@ class TestCharacterCreationFlow:
             "constitution": 12,
             "intelligence": 13,
             "wisdom": 10,
-            "charisma": 14
+            "charisma": 14,
         }
         wizard.skill_proficiencies = ["stealth", "sleight_of_hand", "deception", "perception"]
         wizard.expertise_skills = ["stealth", "sleight_of_hand"]
@@ -322,11 +331,18 @@ class TestCharacterCreationFlow:
             "constitution": 12,
             "intelligence": 16,
             "wisdom": 14,
-            "charisma": 10
+            "charisma": 10,
         }
         wizard.skill_proficiencies = ["arcana", "history"]
         wizard.expertise_skills = []
-        wizard.selected_spells = ["fire_bolt", "mage_hand", "light", "magic_missile", "shield", "mage_armor"]
+        wizard.selected_spells = [
+            "fire_bolt",
+            "mage_hand",
+            "light",
+            "magic_missile",
+            "shield",
+            "mage_armor",
+        ]
 
         # Create character
         character = wizard._create_character()

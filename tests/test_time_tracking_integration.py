@@ -23,12 +23,7 @@ def test_party():
     """Create a test party with characters."""
     # Create a cleric
     cleric_abilities = Abilities(
-        strength=12,
-        dexterity=10,
-        constitution=14,
-        intelligence=10,
-        wisdom=16,
-        charisma=12
+        strength=12, dexterity=10, constitution=14, intelligence=10, wisdom=16, charisma=12
     )
     cleric = Character(
         name="TestCleric",
@@ -38,17 +33,12 @@ def test_party():
         max_hp=20,
         ac=15,
         spellcasting_ability="wis",
-        prepared_spells=["cure_wounds", "bless", "shield_of_faith"]
+        prepared_spells=["cure_wounds", "bless", "shield_of_faith"],
     )
 
     # Create a wizard
     wizard_abilities = Abilities(
-        strength=8,
-        dexterity=14,
-        constitution=12,
-        intelligence=16,
-        wisdom=12,
-        charisma=10
+        strength=8, dexterity=14, constitution=12, intelligence=16, wisdom=12, charisma=10
     )
     wizard = Character(
         name="TestWizard",
@@ -58,7 +48,7 @@ def test_party():
         max_hp=15,
         ac=12,
         spellcasting_ability="int",
-        prepared_spells=["mage_armor", "shield", "detect_magic"]
+        prepared_spells=["mage_armor", "shield", "detect_magic"],
     )
 
     party = Party([cleric, wizard])
@@ -69,11 +59,7 @@ def test_party():
 def game_state(test_party):
     """Create a test game state."""
     event_bus = EventBus()
-    gs = GameState(
-        party=test_party,
-        dungeon_name="test_dungeon",
-        event_bus=event_bus
-    )
+    gs = GameState(party=test_party, dungeon_name="test_dungeon", event_bus=event_bus)
     return gs
 
 
@@ -203,9 +189,7 @@ class TestSpellDurationTracking:
         # Prepare and cast Bless (1 minute duration, concentration)
         if "bless" in cleric.prepared_spells or "bless" in cleric.known_spells:
             result = game_state.cast_spell_exploration(
-                caster_name="TestCleric",
-                spell_id="bless",
-                target_name="TestCleric"
+                caster_name="TestCleric", spell_id="bless", target_name="TestCleric"
             )
 
             if result.get("success"):
@@ -233,7 +217,7 @@ class TestSpellDurationTracking:
             duration_value=1.0,
             remaining_value=1.0,
             target_name="TestWizard",
-            concentration=False
+            concentration=False,
         )
 
         game_state.time_manager.add_effect(effect)
@@ -259,7 +243,7 @@ class TestSpellDurationTracking:
             duration_value=480.0,
             remaining_value=480.0,
             target_name="TestWizard",
-            concentration=False
+            concentration=False,
         )
 
         game_state.time_manager.add_effect(effect)
@@ -292,7 +276,7 @@ class TestConcentrationManagement:
             remaining_value=10.0,
             target_name="TestCleric",
             concentration=True,
-            caster_name=wizard
+            caster_name=wizard,
         )
 
         game_state.time_manager.add_effect(effect1)
@@ -307,7 +291,7 @@ class TestConcentrationManagement:
             remaining_value=10.0,
             target_name="TestCleric",
             concentration=True,
-            caster_name=wizard
+            caster_name=wizard,
         )
 
         # Manually break concentration (simulating casting new concentration spell)
@@ -334,7 +318,7 @@ class TestConcentrationManagement:
             remaining_value=10.0,
             target_name="TestCleric",
             concentration=True,
-            caster_name=wizard
+            caster_name=wizard,
         )
 
         game_state.time_manager.add_effect(effect1)
@@ -347,7 +331,7 @@ class TestConcentrationManagement:
             duration_value=8.0,
             remaining_value=8.0,
             target_name=wizard,
-            concentration=False
+            concentration=False,
         )
 
         game_state.time_manager.add_effect(effect2)
@@ -408,7 +392,7 @@ class TestEventEmission:
             duration_type="minutes",
             duration_value=1.0,
             remaining_value=1.0,
-            target_name="TestWizard"
+            target_name="TestWizard",
         )
 
         game_state.time_manager.add_effect(effect)

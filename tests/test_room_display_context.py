@@ -1,16 +1,16 @@
 # ABOUTME: Unit tests for RoomDisplayContext and related game state methods
 # ABOUTME: Tests room display context generation, monster info, lighting, and item visibility
 
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-from dnd_engine.core.creature import Abilities
+import pytest
+
 from dnd_engine.core.character import Character, CharacterClass
+from dnd_engine.core.creature import Abilities
 from dnd_engine.core.game_state import (
     GameState,
-    RoomDisplayContext,
     PartyMemberLighting,
-    VisibleItem,
+    RoomDisplayContext,
 )
 from dnd_engine.core.party import Party
 from dnd_engine.systems.time_manager import ActiveEffect, EffectType
@@ -26,7 +26,7 @@ def create_test_character(name: str, char_class: str = "fighter", level: int = 1
         abilities=Abilities(15, 14, 13, 10, 12, 8),
         max_hp=10,
         ac=15,
-        race="human"
+        race="human",
     )
 
 
@@ -80,9 +80,7 @@ class TestRoomDisplayContext:
         assert len(context.party_lighting) == 2
 
         # Find each character's lighting info
-        frodo_lighting = next(
-            pl for pl in context.party_lighting if pl.character_name == "Frodo"
-        )
+        frodo_lighting = next(pl for pl in context.party_lighting if pl.character_name == "Frodo")
         gandalf_lighting = next(
             pl for pl in context.party_lighting if pl.character_name == "Gandalf"
         )
@@ -133,13 +131,9 @@ class TestRoomDisplayContext:
     def test_visible_items_currency(self, basic_game_state):
         """Test visible currency items are included."""
         room = basic_game_state.get_current_room()
-        room["items"] = [{
-            "type": "currency",
-            "gold": 10,
-            "silver": 25,
-            "copper": 50,
-            "visible": True
-        }]
+        room["items"] = [
+            {"type": "currency", "gold": 10, "silver": 25, "copper": 50, "visible": True}
+        ]
 
         context = basic_game_state.get_room_display_context()
 
@@ -153,11 +147,7 @@ class TestRoomDisplayContext:
     def test_visible_items_regular_item(self, basic_game_state):
         """Test visible regular items are included."""
         room = basic_game_state.get_current_room()
-        room["items"] = [{
-            "type": "item",
-            "id": "healing_potion",
-            "visible": True
-        }]
+        room["items"] = [{"type": "item", "id": "healing_potion", "visible": True}]
 
         context = basic_game_state.get_room_display_context()
 
@@ -243,7 +233,7 @@ class TestLightCasters:
             duration_value=60,
             remaining_value=60,
             target_name="Gandalf",
-            caster_name="Gandalf"
+            caster_name="Gandalf",
         )
         game_state.time_manager.active_effects.append(light_effect)
 
@@ -273,24 +263,28 @@ class TestLightCasters:
         game_state = GameState(party, "test_dungeon")
 
         # Add Light spells from both
-        game_state.time_manager.active_effects.append(ActiveEffect(
-            effect_type=EffectType.SPELL,
-            source="Light",
-            duration_type="minutes",
-            duration_value=60,
-            remaining_value=60,
-            target_name="Gandalf",
-            caster_name="Gandalf"
-        ))
-        game_state.time_manager.active_effects.append(ActiveEffect(
-            effect_type=EffectType.SPELL,
-            source="Light",
-            duration_type="minutes",
-            duration_value=60,
-            remaining_value=60,
-            target_name="Radagast",
-            caster_name="Radagast"
-        ))
+        game_state.time_manager.active_effects.append(
+            ActiveEffect(
+                effect_type=EffectType.SPELL,
+                source="Light",
+                duration_type="minutes",
+                duration_value=60,
+                remaining_value=60,
+                target_name="Gandalf",
+                caster_name="Gandalf",
+            )
+        )
+        game_state.time_manager.active_effects.append(
+            ActiveEffect(
+                effect_type=EffectType.SPELL,
+                source="Light",
+                duration_type="minutes",
+                duration_value=60,
+                remaining_value=60,
+                target_name="Radagast",
+                caster_name="Radagast",
+            )
+        )
 
         context = game_state.get_room_display_context()
 
@@ -305,24 +299,28 @@ class TestLightCasters:
         game_state = GameState(party, "test_dungeon")
 
         # Add two Light spells from same caster
-        game_state.time_manager.active_effects.append(ActiveEffect(
-            effect_type=EffectType.SPELL,
-            source="Light",
-            duration_type="minutes",
-            duration_value=60,
-            remaining_value=60,
-            target_name="Gandalf",
-            caster_name="Gandalf"
-        ))
-        game_state.time_manager.active_effects.append(ActiveEffect(
-            effect_type=EffectType.SPELL,
-            source="Light",
-            duration_type="minutes",
-            duration_value=60,
-            remaining_value=60,
-            target_name="Gandalf",
-            caster_name="Gandalf"
-        ))
+        game_state.time_manager.active_effects.append(
+            ActiveEffect(
+                effect_type=EffectType.SPELL,
+                source="Light",
+                duration_type="minutes",
+                duration_value=60,
+                remaining_value=60,
+                target_name="Gandalf",
+                caster_name="Gandalf",
+            )
+        )
+        game_state.time_manager.active_effects.append(
+            ActiveEffect(
+                effect_type=EffectType.SPELL,
+                source="Light",
+                duration_type="minutes",
+                duration_value=60,
+                remaining_value=60,
+                target_name="Gandalf",
+                caster_name="Gandalf",
+            )
+        )
 
         context = game_state.get_room_display_context()
 

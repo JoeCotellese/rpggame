@@ -29,12 +29,7 @@ def campaign_manager(temp_campaigns_dir):
 def sample_character():
     """Create a sample character for testing."""
     abilities = Abilities(
-        strength=16,
-        dexterity=14,
-        constitution=15,
-        intelligence=10,
-        wisdom=12,
-        charisma=8
+        strength=16, dexterity=14, constitution=15, intelligence=10, wisdom=12, charisma=8
     )
 
     return Character(
@@ -44,7 +39,7 @@ def sample_character():
         abilities=abilities,
         max_hp=12,
         ac=16,
-        xp=0
+        xp=0,
     )
 
 
@@ -62,7 +57,7 @@ def sample_game_state(sample_character):
         dungeon_name="test_dungeon",  # Use existing dungeon
         event_bus=event_bus,
         data_loader=data_loader,
-        dice_roller=dice_roller
+        dice_roller=dice_roller,
     )
 
     return game_state
@@ -97,7 +92,7 @@ class TestCampaignManagerBasics:
         campaign = campaign_manager.create_campaign(
             name="Full Campaign",
             dungeon_name="tomb_of_horrors",
-            party_character_ids=["aria", "zephyr"]
+            party_character_ids=["aria", "zephyr"],
         )
 
         assert campaign.name == "Full Campaign"
@@ -132,10 +127,7 @@ class TestCampaignManagerBasics:
 
     def test_load_campaign(self, campaign_manager):
         """Test loading campaign metadata."""
-        created = campaign_manager.create_campaign(
-            name="Load Test",
-            dungeon_name="test_dungeon"
-        )
+        created = campaign_manager.create_campaign(name="Load Test", dungeon_name="test_dungeon")
 
         loaded = campaign_manager.load_campaign("Load Test")
 
@@ -236,7 +228,7 @@ class TestCampaignManagerSaveLoad:
             campaign_name="Save Test",
             game_state=sample_game_state,
             slot_name="auto",
-            save_type="auto"
+            save_type="auto",
         )
 
         assert save_path.exists()
@@ -250,7 +242,7 @@ class TestCampaignManagerSaveLoad:
             campaign_name="Quick Save Test",
             game_state=sample_game_state,
             slot_name="quick",
-            save_type="quick"
+            save_type="quick",
         )
 
         assert save_path.exists()
@@ -264,7 +256,7 @@ class TestCampaignManagerSaveLoad:
             campaign_name="Custom Save Test",
             game_state=sample_game_state,
             slot_name="before_boss_fight",
-            save_type="manual"
+            save_type="manual",
         )
 
         assert save_path.exists()
@@ -276,12 +268,11 @@ class TestCampaignManagerSaveLoad:
         original_last_played = campaign.last_played
 
         import time
+
         time.sleep(0.1)  # Ensure timestamp difference
 
         campaign_manager.save_campaign_state(
-            campaign_name="Metadata Test",
-            game_state=sample_game_state,
-            slot_name="auto"
+            campaign_name="Metadata Test", game_state=sample_game_state, slot_name="auto"
         )
 
         # Reload campaign metadata
@@ -297,15 +288,12 @@ class TestCampaignManagerSaveLoad:
 
         # Save first
         campaign_manager.save_campaign_state(
-            campaign_name="Load Test",
-            game_state=sample_game_state,
-            slot_name="auto"
+            campaign_name="Load Test", game_state=sample_game_state, slot_name="auto"
         )
 
         # Load
         loaded_state = campaign_manager.load_campaign_state(
-            campaign_name="Load Test",
-            slot_name="auto"
+            campaign_name="Load Test", slot_name="auto"
         )
 
         assert loaded_state is not None
@@ -317,21 +305,17 @@ class TestCampaignManagerSaveLoad:
         campaign = campaign_manager.create_campaign(name="Timestamp Test")
 
         campaign_manager.save_campaign_state(
-            campaign_name="Timestamp Test",
-            game_state=sample_game_state,
-            slot_name="auto"
+            campaign_name="Timestamp Test", game_state=sample_game_state, slot_name="auto"
         )
 
         original_last_played = campaign.last_played
 
         import time
+
         time.sleep(0.1)
 
         # Load the save
-        campaign_manager.load_campaign_state(
-            campaign_name="Timestamp Test",
-            slot_name="auto"
-        )
+        campaign_manager.load_campaign_state(campaign_name="Timestamp Test", slot_name="auto")
 
         # Check metadata was updated
         updated = campaign_manager.load_campaign("Timestamp Test")
@@ -353,21 +337,21 @@ class TestCampaignManagerSaveLoad:
             campaign_name="Multiple Saves",
             game_state=sample_game_state,
             slot_name="auto",
-            save_type="auto"
+            save_type="auto",
         )
 
         campaign_manager.save_campaign_state(
             campaign_name="Multiple Saves",
             game_state=sample_game_state,
             slot_name="quick",
-            save_type="quick"
+            save_type="quick",
         )
 
         campaign_manager.save_campaign_state(
             campaign_name="Multiple Saves",
             game_state=sample_game_state,
             slot_name="manual_save",
-            save_type="manual"
+            save_type="manual",
         )
 
         slots = campaign_manager.list_save_slots("Multiple Saves")
@@ -391,7 +375,7 @@ class TestCampaignManagerSaveLoad:
             campaign_name="Sort Test",
             game_state=sample_game_state,
             slot_name="manual_1",
-            save_type="manual"
+            save_type="manual",
         )
 
         time.sleep(0.1)
@@ -400,7 +384,7 @@ class TestCampaignManagerSaveLoad:
             campaign_name="Sort Test",
             game_state=sample_game_state,
             slot_name="quick",
-            save_type="quick"
+            save_type="quick",
         )
 
         time.sleep(0.1)
@@ -409,7 +393,7 @@ class TestCampaignManagerSaveLoad:
             campaign_name="Sort Test",
             game_state=sample_game_state,
             slot_name="auto",
-            save_type="auto"
+            save_type="auto",
         )
 
         slots = campaign_manager.list_save_slots("Sort Test")
@@ -427,8 +411,7 @@ class TestCampaignManagerEdgeCases:
         """Test saving to campaign that doesn't exist."""
         with pytest.raises(FileNotFoundError, match="not found"):
             campaign_manager.save_campaign_state(
-                campaign_name="Nonexistent",
-                game_state=sample_game_state
+                campaign_name="Nonexistent", game_state=sample_game_state
             )
 
     def test_load_from_nonexistent_campaign(self, campaign_manager):

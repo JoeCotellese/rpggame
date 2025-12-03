@@ -7,6 +7,7 @@ from enum import Enum
 
 class SpellSchool(str, Enum):
     """The eight schools of magic in D&D 5E."""
+
     ABJURATION = "abjuration"
     CONJURATION = "conjuration"
     DIVINATION = "divination"
@@ -19,6 +20,7 @@ class SpellSchool(str, Enum):
 
 class CastingTime(str, Enum):
     """Common casting time types."""
+
     ACTION = "1 action"
     BONUS_ACTION = "1 bonus action"
     REACTION = "1 reaction"
@@ -32,6 +34,7 @@ class CastingTime(str, Enum):
 
 class SpellComponent(str, Enum):
     """Spell component types."""
+
     VERBAL = "V"
     SOMATIC = "S"
     MATERIAL = "M"
@@ -39,6 +42,7 @@ class SpellComponent(str, Enum):
 
 class DurationType(str, Enum):
     """Spell duration types."""
+
     INSTANTANEOUS = "Instantaneous"
     CONCENTRATION = "Concentration"
     TIMED = "Timed"
@@ -49,6 +53,7 @@ class DurationType(str, Enum):
 @dataclass
 class SpellComponents:
     """Components required to cast a spell."""
+
     verbal: bool = False
     somatic: bool = False
     material: bool = False
@@ -60,6 +65,7 @@ class SpellComponents:
 @dataclass
 class SpellDamage:
     """Damage information for a spell."""
+
     dice: str  # e.g., "1d6", "2d8+5"
     damage_type: str  # e.g., "fire", "cold", "radiant"
     higher_levels: str | None = None  # e.g., "1d6 per slot level above 1st"
@@ -68,6 +74,7 @@ class SpellDamage:
 @dataclass
 class SpellHealing:
     """Healing information for a spell."""
+
     dice: str  # e.g., "1d8", "2d4+2"
     higher_levels: str | None = None
 
@@ -75,6 +82,7 @@ class SpellHealing:
 @dataclass
 class SavingThrow:
     """Saving throw information for a spell."""
+
     ability: str  # "strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"
     on_success: str  # "half", "none", "negates", etc.
 
@@ -106,6 +114,7 @@ class Spell:
         classes: List of classes that can cast this spell
         source: Source book reference
     """
+
     id: str
     name: str
     level: int

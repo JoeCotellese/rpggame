@@ -51,7 +51,7 @@ class Party:
         targetable = []
         for char in self.characters:
             # Use is_dead if available (supports death saves)
-            if hasattr(char, 'is_dead'):
+            if hasattr(char, "is_dead"):
                 if not char.is_dead:
                     targetable.append(char)
             else:
@@ -74,7 +74,7 @@ class Party:
         """
         for char in self.characters:
             # If character has is_dead property (supports death saves)
-            if hasattr(char, 'is_dead'):
+            if hasattr(char, "is_dead"):
                 if not char.is_dead:
                     return False  # At least one character is not dead
             else:
@@ -131,5 +131,7 @@ class Party:
         if not self.characters:
             return "Party: (empty)"
 
-        char_list = ", ".join(f"{char.name} ({char.current_hp}/{char.max_hp} HP)" for char in self.characters)
+        char_list = ", ".join(
+            f"{char.name} ({char.current_hp}/{char.max_hp} HP)" for char in self.characters
+        )
         return f"Party ({len(self.characters)} members): {char_list}"

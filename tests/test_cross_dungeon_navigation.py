@@ -15,12 +15,7 @@ from dnd_engine.utils.events import EventBus
 def test_party():
     """Create a simple test party."""
     abilities = Abilities(
-        strength=10,
-        dexterity=14,
-        constitution=14,
-        intelligence=10,
-        wisdom=12,
-        charisma=10
+        strength=10, dexterity=14, constitution=14, intelligence=10, wisdom=12, charisma=10
     )
     character = Character(
         name="Test Hero",
@@ -28,7 +23,7 @@ def test_party():
         level=1,
         abilities=abilities,
         max_hp=12,
-        ac=16
+        ac=16,
     )
     return Party([character])
 
@@ -47,7 +42,7 @@ class TestCrossDungeonNavigation:
             dungeon_name="town_of_arden",
             campaign_id="the_unquiet_dead",
             event_bus=event_bus,
-            data_loader=data_loader
+            data_loader=data_loader,
         )
 
         # Should start in town square
@@ -76,7 +71,7 @@ class TestCrossDungeonNavigation:
             dungeon_name="crypt",
             campaign_id="the_unquiet_dead",
             event_bus=event_bus,
-            data_loader=data_loader
+            data_loader=data_loader,
         )
 
         # Should start in graveyard entrance
@@ -100,7 +95,7 @@ class TestCrossDungeonNavigation:
             dungeon_name="town_of_arden",
             campaign_id="the_unquiet_dead",
             event_bus=event_bus,
-            data_loader=data_loader
+            data_loader=data_loader,
         )
 
         # Go to crypt (south twice)
@@ -129,7 +124,7 @@ class TestCrossDungeonNavigation:
             dungeon_name="crypt",
             campaign_id="the_unquiet_dead",
             event_bus=event_bus,
-            data_loader=data_loader
+            data_loader=data_loader,
         )
 
         # Mark current room as searched
@@ -158,7 +153,7 @@ class TestCrossDungeonNavigation:
             dungeon_name="town_of_arden",
             campaign_id="the_unquiet_dead",
             event_bus=event_bus,
-            data_loader=data_loader
+            data_loader=data_loader,
         )
 
         # Navigate to crypt (south twice)
@@ -183,7 +178,7 @@ class TestCrossDungeonNavigation:
             dungeon_name="town_of_arden",
             campaign_id="the_unquiet_dead",
             event_bus=event_bus,
-            data_loader=data_loader
+            data_loader=data_loader,
         )
 
         # Navigate to crypt (south twice)

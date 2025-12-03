@@ -6,7 +6,6 @@ from typing import Any, Optional
 from rich.panel import Panel
 
 from dnd_engine.core.character import Character, CharacterClass
-from dnd_engine.core.dice import format_dice_with_modifier
 from dnd_engine.core.game_state import (
     CombatEvent,
     CombatSpellResult,
@@ -14,7 +13,6 @@ from dnd_engine.core.game_state import (
     EnemyTurnResult,
     GameState,
     PlayerAttackResult,
-    StabilizeResult,
 )
 from dnd_engine.llm.npc_chat import NPCChatManager
 from dnd_engine.systems.action_economy import ActionType
@@ -33,9 +31,8 @@ from dnd_engine.systems.targeting import (
     get_item_targeting_requirements,
     get_spell_targeting_requirements,
 )
-from dnd_engine.ui.shop_ui import ShopUI
-from dnd_engine.ui.inventory_ui import InventoryUI
 from dnd_engine.ui.debug_console import DebugConsole
+from dnd_engine.ui.inventory_ui import InventoryUI
 from dnd_engine.ui.rich_ui import (
     console,
     create_combat_table,
@@ -50,6 +47,7 @@ from dnd_engine.ui.rich_ui import (
     print_status_message,
     print_title,
 )
+from dnd_engine.ui.shop_ui import ShopUI
 from dnd_engine.utils.events import Event, EventType
 
 
@@ -64,7 +62,14 @@ class CLI:
     - Game loop
     """
 
-    def __init__(self, game_state: GameState, campaign_manager, campaign_name: str, auto_save_enabled: bool = True, llm_enhancer=None):
+    def __init__(
+        self,
+        game_state: GameState,
+        campaign_manager,
+        campaign_name: str,
+        auto_save_enabled: bool = True,
+        llm_enhancer=None,
+    ):
         """
         Initialize the CLI.
 
@@ -86,14 +91,12 @@ class CLI:
         self.npc_chat_manager: NPCChatManager | None = None
         if llm_enhancer and llm_enhancer.provider:
             self.npc_chat_manager = NPCChatManager(
-                provider=llm_enhancer.provider,
-                game_state=game_state
+                provider=llm_enhancer.provider, game_state=game_state
             )
 
         # Condition manager for handling status effects
         self.condition_manager = ConditionManager(
-            dice_roller=game_state.dice_roller,
-            event_bus=game_state.event_bus
+            dice_roller=game_state.dice_roller, event_bus=game_state.event_bus
         )
 
         # Enemy AI for combat decisions
@@ -195,19 +198,23 @@ class CLI:
             # Get effective AC (includes modifiers from spells/effects)
             effective_ac = self.game_state.get_effective_ac(char)
 
-            party_data.append({
-                "name": char.name,
-                "class": char.character_class.value.capitalize(),
-                "level": char.level,
-                "hp": char.current_hp,
-                "max_hp": char.max_hp,
-                "ac": effective_ac,
-                "xp": char.xp,
-                "active_effects": active_effects,
-                "spell_slots": char.get_spell_slots_display() if char.has_spell_slots() else None,
-                "is_dead": char.is_dead,
-                "conditions": char.active_conditions
-            })
+            party_data.append(
+                {
+                    "name": char.name,
+                    "class": char.character_class.value.capitalize(),
+                    "level": char.level,
+                    "hp": char.current_hp,
+                    "max_hp": char.max_hp,
+                    "ac": effective_ac,
+                    "xp": char.xp,
+                    "active_effects": active_effects,
+                    "spell_slots": char.get_spell_slots_display()
+                    if char.has_spell_slots()
+                    else None,
+                    "is_dead": char.is_dead,
+                    "conditions": char.active_conditions,
+                }
+            )
 
         table = create_party_status_table(party_data)
         console.print(table)
@@ -233,19 +240,19 @@ class CLI:
                 "hp": entry.creature.current_hp,
                 "max_hp": entry.creature.max_hp,
                 "is_player": is_player,
-                "current_turn": entry == current_combatant
+                "current_turn": entry == current_combatant,
             }
 
             # Add death save data for characters
-            if hasattr(entry.creature, 'death_save_successes'):
+            if hasattr(entry.creature, "death_save_successes"):
                 combatant_data["death_saves"] = {
                     "successes": entry.creature.death_save_successes,
                     "failures": entry.creature.death_save_failures,
-                    "stabilized": entry.creature.stabilized
+                    "stabilized": entry.creature.stabilized,
                 }
 
             # Add conditions if present
-            if hasattr(entry.creature, 'active_conditions'):
+            if hasattr(entry.creature, "active_conditions"):
                 combatant_data["conditions"] = list(entry.creature.active_conditions.keys())
 
             # Add concentration information for players
@@ -255,7 +262,9 @@ class CLI:
                     combatant_data["concentration"] = concentration_spell
 
             # Add active effects for all combatants
-            active_effects = self.game_state.time_manager.get_effects_for_character(entry.creature.name)
+            active_effects = self.game_state.time_manager.get_effects_for_character(
+                entry.creature.name
+            )
             if active_effects:
                 combatant_data["active_effects"] = active_effects
 
@@ -291,14 +300,16 @@ class CLI:
                     e_color = "yellow"
                 else:
                     e_color = "white"
-                enemy_summary.append(f"[{e_color}]{enemy.name} ({enemy.current_hp}/{enemy.max_hp})[/{e_color}]")
+                enemy_summary.append(
+                    f"[{e_color}]{enemy.name} ({enemy.current_hp}/{enemy.max_hp})[/{e_color}]"
+                )
 
             enemies_str = ", ".join(enemy_summary) if enemy_summary else "None"
 
             # Build status line
             status_parts = [
                 f"[bold]{char.name}'s turn![/bold]",
-                f"HP: [{hp_color}]{char.current_hp}/{char.max_hp}[/{hp_color}]"
+                f"HP: [{hp_color}]{char.current_hp}/{char.max_hp}[/{hp_color}]",
             ]
 
             # Add spell slots for spellcasters
@@ -309,11 +320,7 @@ class CLI:
 
             status_parts.append(f"Enemies: {enemies_str}")
 
-            console.print(Panel(
-                " | ".join(status_parts),
-                border_style="yellow",
-                padding=(0, 1)
-            ))
+            console.print(Panel(" | ".join(status_parts), border_style="yellow", padding=(0, 1)))
         # No display for enemy turns - the action will print itself
 
     def _build_battlefield_state(self) -> dict[str, Any]:
@@ -337,16 +344,10 @@ class CLI:
             if combatant.is_alive
         ]
 
-        return {
-            "party_hp": party_hp,
-            "enemy_hp": enemy_hp
-        }
+        return {"party_hp": party_hp, "enemy_hp": enemy_hp}
 
     def _record_combat_action(
-        self,
-        result: Any,
-        defender_hp: int | None = None,
-        defender_max_hp: int | None = None
+        self, result: Any, defender_hp: int | None = None, defender_max_hp: int | None = None
     ) -> None:
         """
         Record a combat action in history for narrative context.
@@ -365,8 +366,7 @@ class CLI:
                 f"{result.attacker_name} CRITICALLY hit {result.defender_name} "
                 f"for {result.damage} damage"
                 if result.critical_hit
-                else f"{result.attacker_name} hit {result.defender_name} "
-                f"for {result.damage} damage"
+                else f"{result.attacker_name} hit {result.defender_name} for {result.damage} damage"
             )
 
             # Add HP context if available (helps LLM avoid "killed" for unconscious)
@@ -391,7 +391,7 @@ class CLI:
             defender=result.defender_name,
             damage=result.damage if result.hit else 0,
             critical=result.critical_hit if result.hit else False,
-            description=description
+            description=description,
         )
         self.game_state.record_combat_event(event)
 
@@ -416,12 +416,7 @@ class CLI:
         from rich.panel import Panel
 
         console.print()
-        console.print(Panel(
-            Markdown(text),
-            title="✨",
-            border_style="gold1",
-            padding=(0, 1)
-        ))
+        console.print(Panel(Markdown(text), title="✨", border_style="gold1", padding=(0, 1)))
 
     def _get_status_bar(self):
         """Build the status bar content for the bottom toolbar."""
@@ -447,7 +442,7 @@ class CLI:
         lighting_display = {
             "bright": ("☀️", "yellow", "Bright"),
             "dim": ("🌙", "orange", "Dim"),
-            "dark": ("⚫", "red", "Dark")
+            "dark": ("⚫", "red", "Dark"),
         }
         icon, color, label = lighting_display.get(best_lighting, ("?", "white", "Unknown"))
 
@@ -476,12 +471,16 @@ class CLI:
             # Store history in user's home directory
             history_file = Path.home() / ".dnd_game_history"
 
-            return prompt(
-                "\n> ",
-                history=FileHistory(str(history_file)),
-                auto_suggest=AutoSuggestFromHistory(),
-                bottom_toolbar=self._get_status_bar,
-            ).strip().lower()
+            return (
+                prompt(
+                    "\n> ",
+                    history=FileHistory(str(history_file)),
+                    auto_suggest=AutoSuggestFromHistory(),
+                    bottom_toolbar=self._get_status_bar,
+                )
+                .strip()
+                .lower()
+            )
         except (EOFError, KeyboardInterrupt):
             return "quit"
         except ImportError:
@@ -513,19 +512,34 @@ class CLI:
         # 1. "move north" or "go north"
         # 2. Bare directions: "north", "n", "south", "s", etc.
         direction_aliases = {
-            "north": "north", "n": "north",
-            "south": "south", "s": "south",
-            "east": "east", "e": "east",
-            "west": "west", "w": "west",
-            "northeast": "northeast", "ne": "northeast",
-            "northwest": "northwest", "nw": "northwest",
-            "southeast": "southeast", "se": "southeast",
-            "southwest": "southwest", "sw": "southwest",
-            "up": "up", "u": "up",
-            "down": "down", "d": "down"
+            "north": "north",
+            "n": "north",
+            "south": "south",
+            "s": "south",
+            "east": "east",
+            "e": "east",
+            "west": "west",
+            "w": "west",
+            "northeast": "northeast",
+            "ne": "northeast",
+            "northwest": "northwest",
+            "nw": "northwest",
+            "southeast": "southeast",
+            "se": "southeast",
+            "southwest": "southwest",
+            "sw": "southwest",
+            "up": "up",
+            "u": "up",
+            "down": "down",
+            "d": "down",
         }
 
-        if command.startswith("move ") or command.startswith("go ") or command.startswith("m ") or command.startswith("g "):
+        if (
+            command.startswith("move ")
+            or command.startswith("go ")
+            or command.startswith("m ")
+            or command.startswith("g ")
+        ):
             direction = command.split()[1] if len(command.split()) > 1 else ""
             self.handle_move(direction)
             return
@@ -547,7 +561,13 @@ class CLI:
             self.handle_search()
             return
 
-        if command == "examine" or command.startswith("examine ") or command in ["x", "ex"] or command.startswith("x ") or command.startswith("ex "):
+        if (
+            command == "examine"
+            or command.startswith("examine ")
+            or command in ["x", "ex"]
+            or command.startswith("x ")
+            or command.startswith("ex ")
+        ):
             parts = command.split()[1:]
             if not parts:
                 self.handle_examine_menu()
@@ -556,7 +576,11 @@ class CLI:
                 self.handle_examine(object_id)
             return
 
-        if command in ["inventory", "i", "inv"] or command.startswith("inventory ") or command.startswith("inv "):
+        if (
+            command in ["inventory", "i", "inv"]
+            or command.startswith("inventory ")
+            or command.startswith("inv ")
+        ):
             # Parse inventory subcommand
             parts = command.split()
             if len(parts) > 1:
@@ -565,8 +589,7 @@ class CLI:
             else:
                 # Launch interactive inventory management UI
                 inventory_ui = InventoryUI(
-                    party=self.game_state.party.characters,
-                    data_loader=self.game_state.data_loader
+                    party=self.game_state.party.characters, data_loader=self.game_state.data_loader
                 )
                 inventory_ui.run()
             return
@@ -574,7 +597,9 @@ class CLI:
         if command == "equip" or command.startswith("equip "):
             parts = command.split()[1:]
             if not parts:
-                print_error("Specify an item to equip. Example: 'equip longsword' or 'equip longsword on 2'")
+                print_error(
+                    "Specify an item to equip. Example: 'equip longsword' or 'equip longsword on 2'"
+                )
                 return
             # Parse with support for "on" keyword
             item_id, player_id = self._parse_command_with_target(parts)
@@ -584,7 +609,9 @@ class CLI:
         if command == "unequip" or command.startswith("unequip "):
             parts = command.split()[1:]
             if not parts:
-                print_error("Specify a slot to unequip. Example: 'unequip weapon' or 'unequip weapon on gandalf'")
+                print_error(
+                    "Specify a slot to unequip. Example: 'unequip weapon' or 'unequip weapon on gandalf'"
+                )
                 return
             # Parse with support for "on" keyword
             slot_name, player_id = self._parse_command_with_target(parts)
@@ -683,7 +710,11 @@ class CLI:
                 self.handle_take(item_name)
             return
 
-        if command.startswith("take ") or command.startswith("get ") or command.startswith("pickup "):
+        if (
+            command.startswith("take ")
+            or command.startswith("get ")
+            or command.startswith("pickup ")
+        ):
             # Extract item name from command
             parts = command.split(maxsplit=1)
             if len(parts) > 1:
@@ -814,7 +845,9 @@ class CLI:
                 character = current.creature
 
                 # Prompt for item selection (showing action costs)
-                item_selection = self._prompt_consumable_selection(character=character, show_action_cost=True)
+                item_selection = self._prompt_consumable_selection(
+                    character=character, show_action_cost=True
+                )
                 if not item_selection:
                     return  # User cancelled
 
@@ -875,7 +908,10 @@ class CLI:
 
             for inv_item in consumables:
                 item_data = items_data["consumables"].get(inv_item.item_id, {})
-                if inv_item.item_id == item_id or item_data.get("name", "").lower() == item_id.lower():
+                if (
+                    inv_item.item_id == item_id
+                    or item_data.get("name", "").lower() == item_id.lower()
+                ):
                     found_item = inv_item.item_id
                     found_item_data = item_data
                     break
@@ -890,7 +926,9 @@ class CLI:
             if player_id:
                 # Player specified a target - validate it
                 if targeting.valid_targets == ValidTargets.ENEMY:
-                    print_error(f"{found_item_data.get('name', found_item)} must target an enemy. Use the enemy name or number.")
+                    print_error(
+                        f"{found_item_data.get('name', found_item)} must target an enemy. Use the enemy name or number."
+                    )
                     return
 
                 # Parse the target (allow unconscious for healing items)
@@ -899,17 +937,25 @@ class CLI:
                     return
 
                 # Use item on specified target
-                self.handle_use_item_combat_with_target(found_item, found_item_data, character, target)
+                self.handle_use_item_combat_with_target(
+                    found_item, found_item_data, character, target
+                )
             elif targeting.valid_targets == ValidTargets.ENEMY:
                 # Item requires enemy target but none specified
-                print_error(f"{found_item_data.get('name', found_item)} requires an enemy target. Specify the target (e.g., 'use {item_id} skeleton 1')")
+                print_error(
+                    f"{found_item_data.get('name', found_item)} requires an enemy target. Specify the target (e.g., 'use {item_id} skeleton 1')"
+                )
                 return
             elif targeting.valid_targets == ValidTargets.ANY:
                 # Item can target anyone but no target specified - default to self
-                self.handle_use_item_combat_with_target(found_item, found_item_data, character, character)
+                self.handle_use_item_combat_with_target(
+                    found_item, found_item_data, character, character
+                )
             else:
                 # Self-target only
-                self.handle_use_item_combat_with_target(found_item, found_item_data, character, character)
+                self.handle_use_item_combat_with_target(
+                    found_item, found_item_data, character, character
+                )
             return
 
         if command in ["end turn", "end", "done", "pass", "skip"]:
@@ -924,7 +970,9 @@ class CLI:
                 display_name = self._get_enemy_display_name(enemy)
                 living_enemies.append(display_name)
         if living_enemies:
-            print_status_message(f"Try: 'attack {living_enemies[0].lower()}' or 'help' for more commands", "info")
+            print_status_message(
+                f"Try: 'attack {living_enemies[0].lower()}' or 'help' for more commands", "info"
+            )
 
     def handle_move(self, direction: str) -> None:
         """Handle movement command."""
@@ -933,8 +981,7 @@ class CLI:
             exits = self.game_state.get_available_exits()
             if exits:
                 print_status_message(
-                    f"Specify a direction. Available exits: {', '.join(exits)}",
-                    "warning"
+                    f"Specify a direction. Available exits: {', '.join(exits)}", "warning"
                 )
             else:
                 print_status_message("No exits available from this room.", "warning")
@@ -968,8 +1015,7 @@ class CLI:
                 exits = self.game_state.get_available_exits()
                 if exits:
                     print_error(
-                        f"You cannot go {direction} from here. "
-                        f"Available exits: {', '.join(exits)}"
+                        f"You cannot go {direction} from here. Available exits: {', '.join(exits)}"
                     )
                 else:
                     print_error("No exits available from this room.")
@@ -980,7 +1026,9 @@ class CLI:
         unlock_methods = self.game_state.get_unlock_methods(direction)
 
         if not unlock_methods:
-            print_error(f"The door to the {direction} is locked, but you cannot find a way to open it.")
+            print_error(
+                f"The door to the {direction} is locked, but you cannot find a way to open it."
+            )
             return
 
         # Check for item-based auto-unlock first
@@ -988,11 +1036,17 @@ class CLI:
             if "requires_item" in method:
                 item_id = method["requires_item"]
                 # Check if party has the item
-                has_item = any(char.inventory.has_item(item_id) for char in self.game_state.party.characters)
+                has_item = any(
+                    char.inventory.has_item(item_id) for char in self.game_state.party.characters
+                )
                 if has_item:
-                    print_status_message(f"The door to the {direction} is locked, but you have {item_id}!", "success")
+                    print_status_message(
+                        f"The door to the {direction} is locked, but you have {item_id}!", "success"
+                    )
                     # Auto-unlock with item
-                    result = self.game_state.attempt_unlock(direction, idx, self.game_state.party.characters[0])
+                    result = self.game_state.attempt_unlock(
+                        direction, idx, self.game_state.party.characters[0]
+                    )
                     if result["success"]:
                         print_status_message(f"You unlock the door with the {item_id}!", "success")
                         # Now move through the unlocked door
@@ -1029,9 +1083,7 @@ class CLI:
         # Prompt for method selection
         try:
             method_index = questionary.select(
-                "Choose an unlock method:",
-                choices=choices,
-                use_arrow_keys=True
+                "Choose an unlock method:", choices=choices, use_arrow_keys=True
             ).ask()
 
             # questionary may return "Cancel" string or None when user cancels
@@ -1121,39 +1173,40 @@ class CLI:
             has_tool_prof = False
             tool_prof_str = ""
             if tool_proficiency:
-                has_tool_prof = hasattr(char, 'tool_proficiencies') and tool_proficiency in char.tool_proficiencies
+                has_tool_prof = (
+                    hasattr(char, "tool_proficiencies")
+                    and tool_proficiency in char.tool_proficiencies
+                )
                 if has_tool_prof:
                     # Tool proficiency adds proficiency bonus
-                    tool_bonus = char.proficiency_bonus if hasattr(char, 'proficiency_bonus') else 2
+                    tool_bonus = char.proficiency_bonus if hasattr(char, "proficiency_bonus") else 2
                     tool_prof_str = f", {tool_proficiency.replace('_', ' ').title()} +{tool_bonus}"
                 else:
                     tool_prof_str = f" (no {tool_proficiency.replace('_', ' ').title()})"
 
-            char_data.append({
-                'character': char,
-                'skill_mod': skill_mod,
-                'has_tool_prof': has_tool_prof,
-                'display': f"{char.name} - {skill.upper()} +{skill_mod}{tool_prof_str}"
-            })
+            char_data.append(
+                {
+                    "character": char,
+                    "skill_mod": skill_mod,
+                    "has_tool_prof": has_tool_prof,
+                    "display": f"{char.name} - {skill.upper()} +{skill_mod}{tool_prof_str}",
+                }
+            )
 
         # Sort by tool proficiency (desc) then skill modifier (desc)
-        char_data.sort(key=lambda x: (not x['has_tool_prof'], -x['skill_mod']))
+        char_data.sort(key=lambda x: (not x["has_tool_prof"], -x["skill_mod"]))
 
         # Build choices for questionary
         choices = []
         for data in char_data:
-            choices.append(questionary.Choice(title=data['display'], value=data['character']))
+            choices.append(questionary.Choice(title=data["display"], value=data["character"]))
 
         # Add cancel option
         choices.append(questionary.Choice(title="Cancel", value=None))
 
         # Prompt for selection
         try:
-            result = questionary.select(
-                header,
-                choices=choices,
-                use_arrow_keys=True
-            ).ask()
+            result = questionary.select(header, choices=choices, use_arrow_keys=True).ask()
 
             # questionary may return "Cancel" string or None when user cancels
             if result is None or result == "Cancel":
@@ -1167,10 +1220,7 @@ class CLI:
             return None
 
     def _prompt_character_for_skill_check(
-        self,
-        action_desc: str,
-        skill: str,
-        dc: int
+        self, action_desc: str, skill: str, dc: int
     ) -> Character | None:
         """
         Prompt player to select a character for a skill check, sorted by modifier.
@@ -1204,8 +1254,8 @@ class CLI:
 
             # Check for proficiency/expertise
             prof_str = ""
-            if hasattr(char, 'skill_proficiencies') and skill.lower() in char.skill_proficiencies:
-                if hasattr(char, 'skill_expertise') and skill.lower() in char.skill_expertise:
+            if hasattr(char, "skill_proficiencies") and skill.lower() in char.skill_proficiencies:
+                if hasattr(char, "skill_expertise") and skill.lower() in char.skill_expertise:
                     prof_str = " (Expertise)"
                 else:
                     prof_str = " (Proficient)"
@@ -1214,29 +1264,21 @@ class CLI:
             mod_sign = "+" if skill_mod >= 0 else ""
             display = f"{char.name} - {skill.upper()} {mod_sign}{skill_mod}{prof_str}"
 
-            char_data.append({
-                'character': char,
-                'skill_mod': skill_mod,
-                'display': display
-            })
+            char_data.append({"character": char, "skill_mod": skill_mod, "display": display})
 
         # Sort by skill modifier (highest first)
-        char_data.sort(key=lambda x: -x['skill_mod'])
+        char_data.sort(key=lambda x: -x["skill_mod"])
 
         # Build choices for questionary
         choices = []
         for data in char_data:
-            choices.append(questionary.Choice(title=data['display'], value=data['character']))
+            choices.append(questionary.Choice(title=data["display"], value=data["character"]))
 
         # Add cancel option
         choices.append(questionary.Choice(title="← Cancel", value=None))
 
         try:
-            result = questionary.select(
-                header,
-                choices=choices,
-                use_arrow_keys=True
-            ).ask()
+            result = questionary.select(header, choices=choices, use_arrow_keys=True).ask()
 
             if result is None:
                 print_status_message("Cancelled.", "warning")
@@ -1276,7 +1318,9 @@ class CLI:
                     print_status_message("You already searched this room. Items found:", "info")
                     self._display_items_list(result["items"])
                 else:
-                    print_status_message("You already searched this room and found nothing.", "info")
+                    print_status_message(
+                        "You already searched this room and found nothing.", "info"
+                    )
                 return
 
             # Success/failure and detailed results are displayed by event handler
@@ -1289,11 +1333,15 @@ class CLI:
                     print_status_message("\nItems available:", "success")
                     self._prompt_and_take_items()
                 else:
-                    print_status_message("The search was successful but nothing new was found.", "info")
+                    print_status_message(
+                        "The search was successful but nothing new was found.", "info"
+                    )
             else:
                 # Failure message already shown by event handler
                 if visible_items:
-                    print_status_message("You didn't find anything hidden, but visible items remain.", "info")
+                    print_status_message(
+                        "You didn't find anything hidden, but visible items remain.", "info"
+                    )
         else:
             # No skill check - automatic success (backward compatibility)
             result = self.game_state.search_room()
@@ -1303,13 +1351,17 @@ class CLI:
                     print_status_message("You already searched this room. Items found:", "info")
                     self._display_items_list(result["items"])
                 else:
-                    print_status_message("You already searched this room and found nothing.", "info")
+                    print_status_message(
+                        "You already searched this room and found nothing.", "info"
+                    )
                 return
 
             hidden_items = result.get("hidden_items", [])
             if result["success"]:
                 if hidden_items:
-                    print_status_message("You search the room and discover hidden items:", "success")
+                    print_status_message(
+                        "You search the room and discover hidden items:", "success"
+                    )
                     self._prompt_and_take_items()
                 elif result["items"]:
                     print_status_message("You search the room. Items available:", "success")
@@ -1393,12 +1445,9 @@ class CLI:
                 dc = check.get("dc", 10)
                 display = f"{obj['name']} ({skill} DC {dc})"
             else:
-                display = obj['name']
+                display = obj["name"]
 
-            choices.append(questionary.Choice(
-                title=display,
-                value=("object", obj)
-            ))
+            choices.append(questionary.Choice(title=display, value=("object", obj)))
 
         # Add exits
         room = self.game_state.get_current_room()
@@ -1419,19 +1468,14 @@ class CLI:
             else:
                 display = f"{direction.capitalize()} door"
 
-            choices.append(questionary.Choice(
-                title=display,
-                value=("exit", direction)
-            ))
+            choices.append(questionary.Choice(title=display, value=("exit", direction)))
 
         # Add cancel option
         choices.append(questionary.Choice(title="← Cancel", value=None))
 
         try:
             result = questionary.select(
-                "What would you like to examine?",
-                choices=choices,
-                use_arrow_keys=True
+                "What would you like to examine?", choices=choices, use_arrow_keys=True
             ).ask()
 
             if result is None:
@@ -1490,9 +1534,7 @@ class CLI:
 
             # Use skill-sorted character selection
             character = self._prompt_character_for_skill_check(
-                action_desc=f"examine the {obj_data['name']}",
-                skill=skill,
-                dc=dc
+                action_desc=f"examine the {obj_data['name']}", skill=skill, dc=dc
             )
         else:
             # No skill check - simple selection
@@ -1537,9 +1579,7 @@ class CLI:
 
             # Use skill-sorted character selection
             character = self._prompt_character_for_skill_check(
-                action_desc=f"examine the {direction} door",
-                skill=skill,
-                dc=dc
+                action_desc=f"examine the {direction} door", skill=skill, dc=dc
             )
         else:
             # No skill check - simple selection
@@ -1567,7 +1607,9 @@ class CLI:
 
         # Results are displayed by the event handler for skill-based examinations
 
-    def _prompt_simple_character_selection(self, prompt: str = "Select character:") -> Character | None:
+    def _prompt_simple_character_selection(
+        self, prompt: str = "Select character:"
+    ) -> Character | None:
         """
         Prompt user to select a character from living party members.
 
@@ -1638,15 +1680,24 @@ class CLI:
             if item["type"] == "gold" and item_name_lower in ["gold", "gold pieces", "gp"]:
                 item_to_take = item
                 break
-            elif item["type"] == "currency" and item_name_lower in ["gold", "silver", "copper", "currency", "coins", "money"]:
+            elif item["type"] == "currency" and item_name_lower in [
+                "gold",
+                "silver",
+                "copper",
+                "currency",
+                "coins",
+                "money",
+            ]:
                 item_to_take = item
                 break
             elif item["type"] == "item":
                 item_id = item.get("id", "")
                 # Match by ID or display name (exact match or contains)
-                if (item_id.lower() == item_name_lower or
-                    item_id.lower().replace("_", " ") == item_name_lower or
-                    item_name_lower in item_id.lower().replace("_", " ")):
+                if (
+                    item_id.lower() == item_name_lower
+                    or item_id.lower().replace("_", " ") == item_name_lower
+                    or item_name_lower in item_id.lower().replace("_", " ")
+                ):
                     item_to_take = item
                     break
 
@@ -1693,7 +1744,9 @@ class CLI:
                 if item_to_take["type"] == "gold":
                     amount = item_to_take["amount"]
                     split = amount // len(self.game_state.party.characters)
-                    print_status_message(f"You pick up {amount} gold pieces ({split} each).", "success")
+                    print_status_message(
+                        f"You pick up {amount} gold pieces ({split} each).", "success"
+                    )
                 else:
                     currency_parts = []
                     if item_to_take.get("gold", 0) > 0:
@@ -1702,7 +1755,10 @@ class CLI:
                         currency_parts.append(f"{item_to_take['silver']} silver")
                     if item_to_take.get("copper", 0) > 0:
                         currency_parts.append(f"{item_to_take['copper']} copper")
-                    print_status_message(f"You pick up {', '.join(currency_parts)} and split it among the party.", "success")
+                    print_status_message(
+                        f"You pick up {', '.join(currency_parts)} and split it among the party.",
+                        "success",
+                    )
             else:
                 print_error("Failed to pick up the currency.")
             return
@@ -1738,7 +1794,7 @@ class CLI:
                 result = questionary.select(
                     f"Who should receive the {item_display_name}?",
                     choices=choices,
-                    use_arrow_keys=True
+                    use_arrow_keys=True,
                 ).ask()
 
                 if result is None or result == "Cancel":
@@ -1755,7 +1811,9 @@ class CLI:
         success = self.game_state.take_item(item_id, selected_character)
 
         if success:
-            print_status_message(f"{selected_character.name} picks up the {item_display_name}.", "success")
+            print_status_message(
+                f"{selected_character.name} picks up the {item_display_name}.", "success"
+            )
         else:
             print_error(f"Failed to pick up {item_display_name}.")
 
@@ -1801,7 +1859,9 @@ class CLI:
                 if assigned_character:
                     success = self.game_state.take_item(item_id, assigned_character)
                     if success:
-                        print_status_message(f"{assigned_character.name} picks up the {item_id}.", "success")
+                        print_status_message(
+                            f"{assigned_character.name} picks up the {item_id}.", "success"
+                        )
                     else:
                         print_error(f"Failed to pick up {item_id}.")
 
@@ -1823,9 +1883,7 @@ class CLI:
         item_display_name = self._get_item_display_name(item_id)
 
         # Get recommendations from the item assignment service
-        recommendations = self.item_assignment.get_recommended_recipients(
-            item_id, living_members
-        )
+        recommendations = self.item_assignment.get_recommended_recipients(item_id, living_members)
 
         # Check if we can auto-assign
         auto_recipient = self.item_assignment.should_auto_assign(recommendations)
@@ -1845,9 +1903,7 @@ class CLI:
 
         try:
             result = questionary.select(
-                f"Who should receive the {item_display_name}?",
-                choices=choices,
-                use_arrow_keys=True
+                f"Who should receive the {item_display_name}?", choices=choices, use_arrow_keys=True
             ).ask()
 
             return result
@@ -1880,9 +1936,7 @@ class CLI:
 
         try:
             result = questionary.select(
-                "Who do you want to talk to?",
-                choices=choices,
-                use_arrow_keys=True
+                "Who do you want to talk to?", choices=choices, use_arrow_keys=True
             ).ask()
 
             if result is None:
@@ -1957,11 +2011,13 @@ class CLI:
 
         # Display greeting
         console.print()
-        console.print(Panel(
-            greeting or "...",
-            title=f"[bold cyan]{npc.display_name}[/bold cyan]",
-            border_style="cyan"
-        ))
+        console.print(
+            Panel(
+                greeting or "...",
+                title=f"[bold cyan]{npc.display_name}[/bold cyan]",
+                border_style="cyan",
+            )
+        )
 
         # Chat loop
         while True:
@@ -1973,25 +2029,37 @@ class CLI:
                     continue
 
                 # Check for exit commands
-                if player_input.lower() in ["bye", "goodbye", "leave", "farewell", "exit", "quit", "q"]:
+                if player_input.lower() in [
+                    "bye",
+                    "goodbye",
+                    "leave",
+                    "farewell",
+                    "exit",
+                    "quit",
+                    "q",
+                ]:
                     if self.npc_chat_manager:
                         response, _ = self.npc_chat_manager.send_message_sync(player_input)
                         if response:
                             console.print()
-                            console.print(Panel(
-                                response,
-                                title=f"[bold cyan]{npc.display_name}[/bold cyan]",
-                                border_style="cyan"
-                            ))
+                            console.print(
+                                Panel(
+                                    response,
+                                    title=f"[bold cyan]{npc.display_name}[/bold cyan]",
+                                    border_style="cyan",
+                                )
+                            )
                         self.npc_chat_manager.end_conversation()
                     else:
                         farewell = npc.get_farewell()
                         console.print()
-                        console.print(Panel(
-                            farewell,
-                            title=f"[bold cyan]{npc.display_name}[/bold cyan]",
-                            border_style="cyan"
-                        ))
+                        console.print(
+                            Panel(
+                                farewell,
+                                title=f"[bold cyan]{npc.display_name}[/bold cyan]",
+                                border_style="cyan",
+                            )
+                        )
                     console.print()
                     print_status_message("You end the conversation.", "info")
                     break
@@ -2005,11 +2073,13 @@ class CLI:
                         self.npc_chat_manager.shop_requested = False  # Reset flag
                         if response:
                             console.print()
-                            console.print(Panel(
-                                response,
-                                title=f"[bold cyan]{npc.display_name}[/bold cyan]",
-                                border_style="cyan"
-                            ))
+                            console.print(
+                                Panel(
+                                    response,
+                                    title=f"[bold cyan]{npc.display_name}[/bold cyan]",
+                                    border_style="cyan",
+                                )
+                            )
                         # Open shop UI
                         self._open_shop(npc)
                         continue  # Return to conversation after shopping
@@ -2019,11 +2089,13 @@ class CLI:
 
                 if response:
                     console.print()
-                    console.print(Panel(
-                        response,
-                        title=f"[bold cyan]{npc.display_name}[/bold cyan]",
-                        border_style="cyan"
-                    ))
+                    console.print(
+                        Panel(
+                            response,
+                            title=f"[bold cyan]{npc.display_name}[/bold cyan]",
+                            border_style="cyan",
+                        )
+                    )
 
                 if ended:
                     if self.npc_chat_manager:
@@ -2101,10 +2173,7 @@ class CLI:
         npc_name_lower = npc_name.lower()
 
         for npc in npcs:
-            if (
-                npc_name_lower in npc.name.lower()
-                or npc_name_lower in npc.display_name.lower()
-            ):
+            if npc_name_lower in npc.name.lower() or npc_name_lower in npc.display_name.lower():
                 target_npc = npc
                 break
 
@@ -2163,7 +2232,7 @@ class CLI:
             action_type=ActionType.ACTION,
             action_name="attack",
             action_handler=lambda ctx: self._execute_attack(target),
-            target=target.name
+            target=target.name,
         )
 
         # Handle execution result
@@ -2205,10 +2274,7 @@ class CLI:
         return True
 
     def _display_player_attack_result(
-        self,
-        result: PlayerAttackResult,
-        attacker: Character,
-        target
+        self, result: PlayerAttackResult, attacker: Character, target
     ) -> None:
         """Display the results of a player attack."""
         attack_result = result.attack_result
@@ -2233,17 +2299,14 @@ class CLI:
 
             with console.status("", spinner="dots"):
                 narrative = self.llm_enhancer.get_combat_narrative_sync(
-                    action_data=attack_context,
-                    timeout=20.0
+                    action_data=attack_context, timeout=20.0
                 )
             if narrative:
                 self.display_narrative_panel(narrative)
 
         # Record this action in combat history with HP context
         self._record_combat_action(
-            attack_result,
-            defender_hp=target.current_hp,
-            defender_max_hp=target.max_hp
+            attack_result, defender_hp=target.current_hp, defender_max_hp=target.max_hp
         )
 
         # 2. Display mechanics after narrative
@@ -2256,9 +2319,9 @@ class CLI:
                     death_narrative = self.llm_enhancer.get_death_narrative_sync(
                         character_data={
                             "name": target.name,
-                            "is_player": isinstance(target, Character)
+                            "is_player": isinstance(target, Character),
                         },
-                        timeout=20.0
+                        timeout=20.0,
                     )
                 if death_narrative:
                     self.display_narrative_panel(death_narrative)
@@ -2343,10 +2406,8 @@ class CLI:
 
             # Use questionary for selection
             from questionary import select
-            selected = select(
-                "Choose a spell to cast:",
-                choices=spell_choices + ["Cancel"]
-            ).ask()
+
+            selected = select("Choose a spell to cast:", choices=spell_choices + ["Cancel"]).ask()
 
             if not selected or selected == "Cancel":
                 return
@@ -2378,7 +2439,9 @@ class CLI:
 
         # Warn if spell data is missing target_type
         if targeting.missing_target_type:
-            print_error(f"Warning: Spell '{spell_display_name}' missing target_type, defaulting to enemy targeting")
+            print_error(
+                f"Warning: Spell '{spell_display_name}' missing target_type, defaulting to enemy targeting"
+            )
 
         # Route targeting based on requirements from game engine
         if targeting.is_area_effect:
@@ -2388,7 +2451,9 @@ class CLI:
         elif targeting.valid_targets == ValidTargets.SELF:
             # Self-only spells
             target = caster
-            print_status_message(f"{caster.name} targets themselves with {spell_display_name}", "info")
+            print_status_message(
+                f"{caster.name} targets themselves with {spell_display_name}", "info"
+            )
         elif targeting.valid_targets == ValidTargets.ALLY:
             # Allied target (including self)
             target = self._prompt_combat_ally_selection(spell_display_name, spell_data, caster)
@@ -2417,8 +2482,8 @@ class CLI:
             action_handler=lambda ctx: self._execute_spell(
                 ctx, spell_data, spell_id, target, spellcasting_ability
             ),
-            spell=spell_data.get('name'),
-            target=target.name if target else "area"  # "area" for area effect spells
+            spell=spell_data.get("name"),
+            target=target.name if target else "area",  # "area" for area effect spells
         )
 
         # Handle execution result
@@ -2446,7 +2511,7 @@ class CLI:
         spell_data: dict[str, Any],
         spell_id: str,
         target,
-        spellcasting_ability: str
+        spellcasting_ability: str,
     ) -> bool:
         """
         Execute spell by delegating to game engine and displaying results.
@@ -2470,7 +2535,7 @@ class CLI:
             caster=caster,
             spell_data=spell_data,
             target=target,
-            spellcasting_ability=spellcasting_ability
+            spellcasting_ability=spellcasting_ability,
         )
 
         # Propagate consumed resources to middleware for auto-refund on failure
@@ -2488,10 +2553,7 @@ class CLI:
         return True
 
     def _display_spell_result(
-        self,
-        result: CombatSpellResult,
-        spell_data: dict[str, Any],
-        caster
+        self, result: CombatSpellResult, spell_data: dict[str, Any], caster
     ) -> None:
         """Display spell casting results - pure presentation logic."""
         # Display concentration break for caster if applicable
@@ -2503,7 +2565,9 @@ class CLI:
 
         # Handle area effect display (multi-target save spells)
         if result.is_area_effect and result.spell_type == "save":
-            console.print(f"[bold cyan]✨ {result.caster_name} casts {result.spell_name}![/bold cyan]")
+            console.print(
+                f"[bold cyan]✨ {result.caster_name} casts {result.spell_name}![/bold cyan]"
+            )
             for target_result in result.save_results:
                 target_name = target_result["name"]
                 save_success = target_result.get("success", False)
@@ -2535,7 +2599,9 @@ class CLI:
 
         # Handle HP pool spells (Sleep, Color Spray)
         if result.spell_type == "hp_pool":
-            console.print(f"[bold cyan]✨ {result.caster_name} casts {result.spell_name}![/bold cyan]")
+            console.print(
+                f"[bold cyan]✨ {result.caster_name} casts {result.spell_name}![/bold cyan]"
+            )
             console.print(f"[cyan]🎲 HP Pool: {result.hp_pool_rolled}[/cyan]")
 
             # Show affected targets
@@ -2579,8 +2645,7 @@ class CLI:
         # Display new concentration
         if result.now_concentrating:
             console.print(
-                f"[cyan]🎯 {result.caster_name} begins concentrating on "
-                f"{result.spell_name}[/cyan]"
+                f"[cyan]🎯 {result.caster_name} begins concentrating on {result.spell_name}[/cyan]"
             )
 
         # Display LLM narrative for attack spells that hit
@@ -2596,17 +2661,19 @@ class CLI:
             if target_creature:
                 spell_action_data = {
                     "name": spell_data.get("name", "spell"),
-                    "damage_type": spell_data.get("damage", {}).get("damage_type", "magical")
+                    "damage_type": spell_data.get("damage", {}).get("damage_type", "magical"),
                 }
                 attack_context = self.context_builder.build_attack_context(
-                    caster, target_creature, result.attack_result,
-                    action_data=spell_action_data, is_spell=True
+                    caster,
+                    target_creature,
+                    result.attack_result,
+                    action_data=spell_action_data,
+                    is_spell=True,
                 )
 
                 with console.status("", spinner="dots"):
                     narrative = self.llm_enhancer.get_combat_narrative_sync(
-                        action_data=attack_context,
-                        timeout=20.0
+                        action_data=attack_context, timeout=20.0
                     )
                 if narrative:
                     self.display_narrative_panel(narrative)
@@ -2630,7 +2697,7 @@ class CLI:
             self._record_combat_action(
                 result.attack_result,
                 defender_hp=spell_target.current_hp if spell_target else None,
-                defender_max_hp=spell_target.max_hp if spell_target else None
+                defender_max_hp=spell_target.max_hp if spell_target else None,
             )
 
         # Display mechanics
@@ -2663,9 +2730,10 @@ class CLI:
                     death_narrative = self.llm_enhancer.get_death_narrative_sync(
                         character_data={
                             "name": killed,
-                            "is_player": killed in [c.name for c in self.game_state.party.characters]
+                            "is_player": killed
+                            in [c.name for c in self.game_state.party.characters],
                         },
-                        timeout=20.0
+                        timeout=20.0,
                     )
                 if death_narrative:
                     self.display_narrative_panel(death_narrative)
@@ -2678,7 +2746,11 @@ class CLI:
         current = self.game_state.initiative_tracker.get_current_combatant()
         helper = None
         for character in self.game_state.party.characters:
-            if current.creature == character and character.is_alive and not character.is_unconscious:
+            if (
+                current.creature == character
+                and character.is_alive
+                and not character.is_unconscious
+            ):
                 helper = character
                 break
 
@@ -2703,7 +2775,7 @@ class CLI:
             action_type=ActionType.ACTION,
             action_name="stabilize",
             action_handler=lambda ctx: self._execute_stabilize(target),
-            target=target.name
+            target=target.name,
         )
 
         # Handle execution result
@@ -2745,7 +2817,7 @@ class CLI:
         modifier_str = f"+{result.modifier}" if result.modifier >= 0 else str(result.modifier)
         print_status_message(
             f"Medicine check: {result.roll}{modifier_str} = {result.total} vs DC {result.dc}",
-            "info"
+            "info",
         )
 
         if result.success:
@@ -2779,7 +2851,9 @@ class CLI:
 
         # Display casualties
         if result["casualties"]:
-            print_status_message(f"Casualties during retreat: {', '.join(result['casualties'])}", "warning")
+            print_status_message(
+                f"Casualties during retreat: {', '.join(result['casualties'])}", "warning"
+            )
 
         # Check if entire party died during flee
         if self.game_state.party.is_wiped():
@@ -2832,30 +2906,43 @@ class CLI:
             character: The unconscious character making the death save
         """
         print_section(f"{character.name}'s Turn - Death Save")
-        print_status_message(f"{character.name} is unconscious and must make a death saving throw!", "warning")
+        print_status_message(
+            f"{character.name} is unconscious and must make a death saving throw!", "warning"
+        )
 
         # Roll death save
         result = character.make_death_save(event_bus=self.game_state.event_bus)
 
         # Display results
         if result["natural_20"]:
-            print_status_message(f"Natural 20! {character.name} regains 1 HP and consciousness!", "success")
+            print_status_message(
+                f"Natural 20! {character.name} regains 1 HP and consciousness!", "success"
+            )
         elif result["natural_1"]:
             # Natural 1 counts as 2 failures
-            failures_display = min(result['failures'], 3)  # Cap display at 3
-            print_status_message(f"Natural 1! Two failures recorded. Failures: {failures_display}/3", "warning")
+            failures_display = min(result["failures"], 3)  # Cap display at 3
+            print_status_message(
+                f"Natural 1! Two failures recorded. Failures: {failures_display}/3", "warning"
+            )
         elif result["success"]:
-            print_status_message(f"Success! (rolled {result['roll']}) Successes: {result['successes']}/3", "info")
+            print_status_message(
+                f"Success! (rolled {result['roll']}) Successes: {result['successes']}/3", "info"
+            )
         else:
             # Regular failure
-            failures_display = min(result['failures'], 3)  # Cap display at 3
-            print_status_message(f"Failure (rolled {result['roll']}) Failures: {failures_display}/3", "warning")
+            failures_display = min(result["failures"], 3)  # Cap display at 3
+            print_status_message(
+                f"Failure (rolled {result['roll']}) Failures: {failures_display}/3", "warning"
+            )
 
         # Check outcomes
         if result["conscious"]:
             print_status_message(f"{character.name} is conscious again with 1 HP!", "success")
         elif result["stabilized"]:
-            print_status_message(f"{character.name} is stabilized! They no longer need to make death saves.", "success")
+            print_status_message(
+                f"{character.name} is stabilized! They no longer need to make death saves.",
+                "success",
+            )
         elif result["dead"]:
             print_error(f"{character.name} has died...")
             # Remove from initiative
@@ -2879,7 +2966,10 @@ class CLI:
 
             # Check if creature died from the effect
             if not creature.is_alive:
-                print_status_message(f"💀 {creature.name} is killed by {result.condition_id.replace('_', ' ')}!", "warning")
+                print_status_message(
+                    f"💀 {creature.name} is killed by {result.condition_id.replace('_', ' ')}!",
+                    "warning",
+                )
 
     def _prompt_condition_removal(self, creature) -> bool:
         """
@@ -2899,8 +2989,7 @@ class CLI:
         for option in options:
             # Display condition and prompt
             print_status_message(
-                f"🔥 {creature.name} has condition: {option.condition_name}!",
-                "warning"
+                f"🔥 {creature.name} has condition: {option.condition_name}!", "warning"
             )
             print_message(f"   {option.description}")
             print_message(
@@ -2910,7 +2999,7 @@ class CLI:
 
             response = input("   > ").strip().lower()
 
-            if response in ['y', 'yes']:
+            if response in ["y", "yes"]:
                 # Attempt removal via game engine
                 result = self.game_state.attempt_player_condition_removal(
                     creature, option.condition_id
@@ -2966,7 +3055,7 @@ class CLI:
             if effect.creature_died:
                 print_status_message(
                     f"💀 {enemy_name} is killed by {effect.condition_id.replace('_', ' ')}!",
-                    "warning"
+                    "warning",
                 )
 
         # Handle different action types
@@ -2977,8 +3066,7 @@ class CLI:
         if result.action_taken == EnemyTurnAction.INCAPACITATED:
             condition_text = ", ".join(result.incapacitating_conditions)
             print_status_message(
-                f"⚠️  {enemy_name} is {condition_text} and cannot act this turn!",
-                "warning"
+                f"⚠️  {enemy_name} is {condition_text} and cannot act this turn!", "warning"
             )
             self._display_turn_end_effects(result)
             return
@@ -2989,7 +3077,7 @@ class CLI:
                 if result.condition_removal.condition_id == "on_fire":
                     print_status_message(
                         f"🔥 {enemy_name} is on fire with low HP! Attempting to extinguish...",
-                        "info"
+                        "info",
                     )
                 if result.condition_removal.success:
                     print_status_message(result.condition_removal.message, "success")
@@ -3027,19 +3115,19 @@ class CLI:
                         # Get the target to check duration metadata
                         target = self._find_party_member_by_name(result.target_name)
                         duration = 0
-                        if target and hasattr(target, 'active_conditions'):
+                        if target and hasattr(target, "active_conditions"):
                             metadata = target.active_conditions.get(condition, {})
-                            duration = metadata.get('duration_remaining', 0)
+                            duration = metadata.get("duration_remaining", 0)
                         print_status_message(
                             f"💀 {result.target_name} fails {result.save_ability} save "
                             f"(DC {result.save_dc}) - {condition.upper()} for {duration} rounds!",
-                            "error"
+                            "error",
                         )
                 elif result.save_succeeded is True:
                     print_status_message(
                         f"✓ {result.target_name} succeeds on {result.save_ability} save "
                         f"(DC {result.save_dc})!",
-                        "success"
+                        "success",
                     )
 
             # Get attack narrative (if LLM enabled and hit)
@@ -3055,8 +3143,7 @@ class CLI:
 
                     with console.status("", spinner="dots"):
                         narrative = self.llm_enhancer.get_combat_narrative_sync(
-                            action_data=attack_context,
-                            timeout=20.0
+                            action_data=attack_context, timeout=20.0
                         )
                     if narrative:
                         self.display_narrative_panel(narrative)
@@ -3067,7 +3154,7 @@ class CLI:
                 self._record_combat_action(
                     result.attack_result,
                     defender_hp=target.current_hp if target else None,
-                    defender_max_hp=target.max_hp if target else None
+                    defender_max_hp=target.max_hp if target else None,
                 )
 
             # Display attack mechanics
@@ -3082,9 +3169,9 @@ class CLI:
                         death_narrative = self.llm_enhancer.get_death_narrative_sync(
                             character_data={
                                 "name": result.target_name,
-                                "is_player": isinstance(target, Character)
+                                "is_player": isinstance(target, Character),
                             },
-                            timeout=20.0
+                            timeout=20.0,
                         )
                     if death_narrative:
                         self.display_narrative_panel(death_narrative)
@@ -3102,7 +3189,7 @@ class CLI:
                 if effect.condition_id != "surprised":
                     print_status_message(
                         f"⏱ {effect.condition_id.upper()} on {result.enemy_name} has expired!",
-                        "info"
+                        "info",
                     )
 
     def _find_party_member_by_name(self, name: str | None) -> Character | None:
@@ -3156,8 +3243,7 @@ class CLI:
         if self.game_state.initiative_tracker:
             player_creatures = [char for char in self.game_state.party.characters]
             entry = self.game_state.initiative_tracker.find_combatant_by_reference(
-                target,
-                player_creatures=player_creatures
+                target, player_creatures=player_creatures
             )
             if entry and entry.creature not in player_creatures:
                 return entry.creature
@@ -3190,13 +3276,15 @@ class CLI:
             else:
                 # Everything before "on" is the item, everything after is the target
                 item_name = " ".join(parts[:on_index])
-                player_id = " ".join(parts[on_index + 1:])
+                player_id = " ".join(parts[on_index + 1 :])
                 return item_name, player_id
 
         # Fall back to old syntax (last word might be player identifier)
         return self._parse_item_and_player(parts)
 
-    def _prompt_consumable_selection(self, character: Character | None = None, show_action_cost: bool = False) -> tuple[str, dict[str, Any]] | None:
+    def _prompt_consumable_selection(
+        self, character: Character | None = None, show_action_cost: bool = False
+    ) -> tuple[str, dict[str, Any]] | None:
         """
         Prompt user to select a consumable item from inventory.
 
@@ -3218,12 +3306,14 @@ class CLI:
             consumables = inventory.get_items_by_category("consumables")
             for inv_item in consumables:
                 item_data = items_data["consumables"].get(inv_item.item_id, {})
-                consumables_list.append({
-                    "item_id": inv_item.item_id,
-                    "item_data": item_data,
-                    "quantity": inv_item.quantity,
-                    "owner": character.name
-                })
+                consumables_list.append(
+                    {
+                        "item_id": inv_item.item_id,
+                        "item_data": item_data,
+                        "quantity": inv_item.quantity,
+                        "owner": character.name,
+                    }
+                )
         else:
             # Aggregate from all party members
             for char in self.game_state.party.characters:
@@ -3233,12 +3323,14 @@ class CLI:
                 consumables = inventory.get_items_by_category("consumables")
                 for inv_item in consumables:
                     item_data = items_data["consumables"].get(inv_item.item_id, {})
-                    consumables_list.append({
-                        "item_id": inv_item.item_id,
-                        "item_data": item_data,
-                        "quantity": inv_item.quantity,
-                        "owner": char.name
-                    })
+                    consumables_list.append(
+                        {
+                            "item_id": inv_item.item_id,
+                            "item_data": item_data,
+                            "quantity": inv_item.quantity,
+                            "owner": char.name,
+                        }
+                    )
 
         if not consumables_list:
             print_error("No consumable items available!")
@@ -3271,9 +3363,7 @@ class CLI:
         # Get user selection with arrow keys
         try:
             result = questionary.select(
-                "Select Item to Use:",
-                choices=choices,
-                use_arrow_keys=True
+                "Select Item to Use:", choices=choices, use_arrow_keys=True
             ).ask()
 
             # Check if user cancelled or selected Cancel option
@@ -3319,7 +3409,9 @@ class CLI:
             else:
                 hp_indicator = "●○○"
 
-            choice_text = f"{character.name} (HP: {character.current_hp}/{character.max_hp} {hp_indicator})"
+            choice_text = (
+                f"{character.name} (HP: {character.current_hp}/{character.max_hp} {hp_indicator})"
+            )
             choices.append(questionary.Choice(title=choice_text, value=character))
 
         # Add cancel option
@@ -3328,9 +3420,7 @@ class CLI:
         # Get user selection with arrow keys
         try:
             result = questionary.select(
-                f"Use {item_name} on:",
-                choices=choices,
-                use_arrow_keys=True
+                f"Use {item_name} on:", choices=choices, use_arrow_keys=True
             ).ask()
 
             return result
@@ -3374,16 +3464,16 @@ class CLI:
         # Get user selection with arrow keys
         try:
             result = questionary.select(
-                "Select target to attack:",
-                choices=choices,
-                use_arrow_keys=True
+                "Select target to attack:", choices=choices, use_arrow_keys=True
             ).ask()
 
             return result
         except (EOFError, KeyboardInterrupt):
             return None
 
-    def _prompt_combat_ally_selection(self, item_name: str, item_data: dict[str, Any], user: Character) -> Character | None:
+    def _prompt_combat_ally_selection(
+        self, item_name: str, item_data: dict[str, Any], user: Character
+    ) -> Character | None:
         """
         Prompt user to select an ally to use an item on during combat.
         Validates range and includes unconscious allies.
@@ -3401,7 +3491,9 @@ class CLI:
         # Get all party members (including unconscious ones)
         # In D&D 5E combat, we assume all party members are within 5 feet (touch range)
         # For this implementation, we'll consider all party members as valid targets
-        valid_targets = [c for c in self.game_state.party.characters if c.is_alive or c.is_unconscious]
+        valid_targets = [
+            c for c in self.game_state.party.characters if c.is_alive or c.is_unconscious
+        ]
 
         if not valid_targets:
             print_error("No valid targets available!")
@@ -3435,9 +3527,7 @@ class CLI:
         # Get user selection with arrow keys
         try:
             result = questionary.select(
-                f"Use {item_name} on:",
-                choices=choices,
-                use_arrow_keys=True
+                f"Use {item_name} on:", choices=choices, use_arrow_keys=True
             ).ask()
 
             return result
@@ -3494,9 +3584,7 @@ class CLI:
         # Get user selection with arrow keys
         try:
             result = questionary.select(
-                "Select item to take:",
-                choices=choices,
-                use_arrow_keys=True
+                "Select item to take:", choices=choices, use_arrow_keys=True
             ).ask()
 
             return result
@@ -3554,7 +3642,7 @@ class CLI:
                 "Select items to take:",
                 choices=choices,
                 use_arrow_keys=True,
-                instruction="(space=select, enter=confirm, ctrl+c=cancel)"
+                instruction="(space=select, enter=confirm, ctrl+c=cancel)",
             ).ask()
 
             return results if results else []
@@ -3598,7 +3686,9 @@ class CLI:
         # Last part is not a player identifier, treat entire string as item name
         return " ".join(parts), None
 
-    def _get_target_player(self, player_identifier: str | None, allow_unconscious: bool = False) -> Character | None:
+    def _get_target_player(
+        self, player_identifier: str | None, allow_unconscious: bool = False
+    ) -> Character | None:
         """
         Get a target player from an identifier (number or name).
 
@@ -3641,7 +3731,9 @@ class CLI:
                         print_error(f"Player {player_identifier} is not alive!")
                         return None
             else:
-                print_error(f"Invalid player number: {player_identifier}. Valid range: 1-{len(self.game_state.party.characters)}")
+                print_error(
+                    f"Invalid player number: {player_identifier}. Valid range: 1-{len(self.game_state.party.characters)}"
+                )
                 return None
         except ValueError:
             # Not a number, try to match by name
@@ -3671,7 +3763,6 @@ class CLI:
                 - Category (e.g., "potions", "weapons", "armor"): Filter by item type
         """
         items_data = self.game_state.data_loader.load_items(self.game_state.campaign_id)
-        from dnd_engine.systems.inventory import EquipmentSlot
 
         # Handle summary view
         if filter_arg == "summary":
@@ -3696,10 +3787,14 @@ class CLI:
         # Handle category filter
         category_filter = None
         category_map = {
-            "weapon": "weapons", "weapons": "weapons",
-            "armor": "armor", "armour": "armor",
-            "consumable": "consumables", "consumables": "consumables",
-            "potion": "consumables", "potions": "consumables"
+            "weapon": "weapons",
+            "weapons": "weapons",
+            "armor": "armor",
+            "armour": "armor",
+            "consumable": "consumables",
+            "consumables": "consumables",
+            "potion": "consumables",
+            "potions": "consumables",
         }
         if filter_arg and filter_arg.lower() in category_map:
             category_filter = category_map[filter_arg.lower()]
@@ -3707,7 +3802,9 @@ class CLI:
         # Display inventory
         characters_to_show = []
         if player_filter is not None:
-            characters_to_show = [(player_filter + 1, self.game_state.party.characters[player_filter])]
+            characters_to_show = [
+                (player_filter + 1, self.game_state.party.characters[player_filter])
+            ]
         else:
             characters_to_show = list(enumerate(self.game_state.party.characters, 1))
 
@@ -3722,7 +3819,9 @@ class CLI:
             armor_id = inventory.get_equipped_item(EquipmentSlot.ARMOR)
 
             # Add items by category
-            categories_to_show = [category_filter] if category_filter else ["weapons", "armor", "consumables"]
+            categories_to_show = (
+                [category_filter] if category_filter else ["weapons", "armor", "consumables"]
+            )
             for category in categories_to_show:
                 category_items = inventory.get_items_by_category(category)
                 if category_items:
@@ -3732,15 +3831,17 @@ class CLI:
                     for inv_item in category_items:
                         item_data = items_data[category].get(inv_item.item_id, {})
                         item_name = item_data.get("name", inv_item.item_id)
-                        is_equipped = (inv_item.item_id == weapon_id or inv_item.item_id == armor_id)
+                        is_equipped = inv_item.item_id == weapon_id or inv_item.item_id == armor_id
                         is_quest_item = item_data.get("quest_item", False)
 
-                        inventory_items[category].append({
-                            "name": item_name,
-                            "quantity": inv_item.quantity,
-                            "equipped": is_equipped,
-                            "quest_item": is_quest_item
-                        })
+                        inventory_items[category].append(
+                            {
+                                "name": item_name,
+                                "quantity": inv_item.quantity,
+                                "equipped": is_equipped,
+                                "quest_item": is_quest_item,
+                            }
+                        )
 
             # Display character title with player number
             alive_marker = "✓" if character.is_alive else "💀"
@@ -3776,7 +3877,13 @@ class CLI:
             print_title("Party Consumables Summary")
 
             from rich.table import Table
-            table = Table(title="CROSS-PARTY CONSUMABLES", style="green", show_header=True, header_style="bold magenta")
+
+            table = Table(
+                title="CROSS-PARTY CONSUMABLES",
+                style="green",
+                show_header=True,
+                header_style="bold magenta",
+            )
             table.add_column("Item", style="bold")
             table.add_column("Total Qty", justify="center")
 
@@ -3814,7 +3921,10 @@ class CLI:
             category_items = inventory.get_items_by_category(category)
             for inv_item in category_items:
                 item_data = items_data[category].get(inv_item.item_id, {})
-                if inv_item.item_id == item_id or item_data.get("name", "").lower() == item_id.lower():
+                if (
+                    inv_item.item_id == item_id
+                    or item_data.get("name", "").lower() == item_id.lower()
+                ):
                     target_item = inv_item.item_id
                     target_category = category
                     break
@@ -3826,7 +3936,6 @@ class CLI:
             return
 
         # Equip the item
-        from dnd_engine.systems.inventory import EquipmentSlot
 
         if target_category == "weapons":
             slot = EquipmentSlot.WEAPON
@@ -3843,10 +3952,9 @@ class CLI:
         print_status_message(f"{character.name} equipped {item_name}", "success")
 
         # Emit event
-        self.game_state.event_bus.emit(Event(
-            type=EventType.ITEM_EQUIPPED,
-            data={"item_id": target_item, "slot": slot.value}
-        ))
+        self.game_state.event_bus.emit(
+            Event(type=EventType.ITEM_EQUIPPED, data={"item_id": target_item, "slot": slot.value})
+        )
 
     def handle_unequip(self, slot_name: str, player_identifier: str | None = None) -> None:
         """
@@ -3861,8 +3969,6 @@ class CLI:
             if not self.game_state.party.get_living_members():
                 print_error("No living party members to unequip items!")
             return
-
-        from dnd_engine.systems.inventory import EquipmentSlot
 
         slot = None
         if slot_name.lower() in ["weapon", "w"]:
@@ -3884,12 +3990,13 @@ class CLI:
             print_status_message(f"{character.name} unequipped {item_name}", "success")
 
             # Emit event
-            self.game_state.event_bus.emit(Event(
-                type=EventType.ITEM_UNEQUIPPED,
-                data={"item_id": item_id, "slot": slot.value}
-            ))
+            self.game_state.event_bus.emit(
+                Event(type=EventType.ITEM_UNEQUIPPED, data={"item_id": item_id, "slot": slot.value})
+            )
         else:
-            print_status_message(f"{character.name} has nothing equipped in {slot_name} slot.", "warning")
+            print_status_message(
+                f"{character.name} has nothing equipped in {slot_name} slot.", "warning"
+            )
 
     def handle_use_item_direct(self, item_id: str, target: Character, owner: Character) -> None:
         """
@@ -3920,7 +4027,7 @@ class CLI:
             target=target,
             dice_roller=self.game_state.dice_roller,
             event_bus=self.game_state.event_bus,
-            time_manager=self.game_state.time_manager
+            time_manager=self.game_state.time_manager,
         )
 
         # Display the result
@@ -3931,17 +4038,19 @@ class CLI:
         print_message(result.message)
 
         # Emit item used event
-        self.game_state.event_bus.emit(Event(
-            type=EventType.ITEM_USED,
-            data={
-                "character": owner.name,
-                "target": target.name,
-                "item_id": item_id,
-                "item_name": item_name,
-                "effect_type": result.effect_type,
-                "success": result.success
-            }
-        ))
+        self.game_state.event_bus.emit(
+            Event(
+                type=EventType.ITEM_USED,
+                data={
+                    "character": owner.name,
+                    "target": target.name,
+                    "item_id": item_id,
+                    "item_name": item_name,
+                    "effect_type": result.effect_type,
+                    "success": result.success,
+                },
+            )
+        )
 
     def handle_use_item(self, item_id: str, player_identifier: str | None = None) -> None:
         """
@@ -3975,16 +4084,19 @@ class CLI:
                 inv_item_id_normalized = inv_item.item_id.lower().replace("_", " ")
                 item_name_normalized = item_data.get("name", "").lower()
                 # Exact match on ID, name, or substring match
-                if (inv_item.item_id == item_id or
-                    inv_item_id_normalized == item_id_lower or
-                    item_name_normalized == item_id_lower or
-                    item_id_lower in inv_item_id_normalized or
-                    item_id_lower in item_name_normalized):
+                if (
+                    inv_item.item_id == item_id
+                    or inv_item_id_normalized == item_id_lower
+                    or item_name_normalized == item_id_lower
+                    or item_id_lower in inv_item_id_normalized
+                    or item_id_lower in item_name_normalized
+                ):
                     matches.append((char, inv_item.item_id, item_data))
 
         # If no matches, try fuzzy matching
         if not matches:
             from difflib import SequenceMatcher
+
             fuzzy_matches: list[tuple[Character, str, dict, float]] = []
 
             for char in self.game_state.party.get_living_members():
@@ -4034,17 +4146,14 @@ class CLI:
                 choices = []
                 for iid, (char, idata) in unique_items.items():
                     item_name = idata.get("name", iid)
-                    choices.append(questionary.Choice(
-                        title=f"{item_name} - {char.name}",
-                        value=(char, iid)
-                    ))
+                    choices.append(
+                        questionary.Choice(title=f"{item_name} - {char.name}", value=(char, iid))
+                    )
                 choices.append(questionary.Choice(title="Cancel", value=None))
 
                 try:
                     result = questionary.select(
-                        f"Multiple items match '{item_id}':",
-                        choices=choices,
-                        use_arrow_keys=True
+                        f"Multiple items match '{item_id}':", choices=choices, use_arrow_keys=True
                     ).ask()
 
                     if result is None:
@@ -4060,7 +4169,9 @@ class CLI:
         # Use the item via the direct handler
         self.handle_use_item_direct(target_item_id, target, owner)
 
-    def handle_use_item_combat_with_target(self, item_id: str, item_data: dict[str, Any], user: Character, target: Character) -> None:
+    def handle_use_item_combat_with_target(
+        self, item_id: str, item_data: dict[str, Any], user: Character, target: Character
+    ) -> None:
         """
         Handle using a consumable item during combat on a specified target.
 
@@ -4080,7 +4191,9 @@ class CLI:
             # Action economy issues - show available actions
             if result.error_message and "available" in result.error_message.lower():
                 turn_state = self.game_state.initiative_tracker.get_current_turn_state()
-                print_error(f"You don't have a {result.action_type.value.replace('_', ' ')} available this turn!")
+                print_error(
+                    f"You don't have a {result.action_type.value.replace('_', ' ')} available this turn!"
+                )
                 if turn_state:
                     print_status_message(f"Available: {turn_state}", "info")
             else:
@@ -4090,18 +4203,30 @@ class CLI:
         # Display the result with target information
         action_cost_msg = f"({result.action_type.value.replace('_', ' ')})"
         if result.user_name == result.target_name:
-            print_status_message(f"{result.user_name} uses {result.item_name} {action_cost_msg}", "info")
+            print_status_message(
+                f"{result.user_name} uses {result.item_name} {action_cost_msg}", "info"
+            )
         else:
-            print_status_message(f"{result.user_name} uses {result.item_name} on {result.target_name} {action_cost_msg}", "info")
+            print_status_message(
+                f"{result.user_name} uses {result.item_name} on {result.target_name} {action_cost_msg}",
+                "info",
+            )
 
         if result.effect_message:
             print_message(result.effect_message)
 
         # Show HP change if healing occurred
-        if result.effect_type == "healing" and result.hp_after is not None and result.hp_before is not None:
+        if (
+            result.effect_type == "healing"
+            and result.hp_after is not None
+            and result.hp_before is not None
+        ):
             if result.hp_after > result.hp_before:
                 hp_gained = result.hp_after - result.hp_before
-                print_status_message(f"{result.target_name}: {result.hp_before} → {result.hp_after} HP (+{hp_gained})", "success")
+                print_status_message(
+                    f"{result.target_name}: {result.hp_before} → {result.hp_after} HP (+{hp_gained})",
+                    "success",
+                )
 
         # Show remaining actions
         turn_state = self.game_state.initiative_tracker.get_current_turn_state()
@@ -4120,7 +4245,9 @@ class CLI:
             # Process enemy turns
             self.process_enemy_turns()
 
-    def handle_use_item_combat_attack(self, item_id: str, item_data: dict[str, Any], user: Character, target) -> None:
+    def handle_use_item_combat_attack(
+        self, item_id: str, item_data: dict[str, Any], user: Character, target
+    ) -> None:
         """
         Handle using an attack-type consumable item during combat on an enemy target.
 
@@ -4141,7 +4268,10 @@ class CLI:
             # Action economy issues - not errors, just game rules
             if result.error_message and "available" in result.error_message.lower():
                 turn_state = self.game_state.initiative_tracker.get_current_turn_state()
-                print_status_message(f"You don't have a {result.action_type.value.replace('_', ' ')} available right now.", "warning")
+                print_status_message(
+                    f"You don't have a {result.action_type.value.replace('_', ' ')} available right now.",
+                    "warning",
+                )
                 if turn_state:
                     print_status_message(f"What you can still do: {turn_state}", "info")
             else:
@@ -4159,8 +4289,14 @@ class CLI:
 
             # Show special effects
             if "on_fire" in result.special_effects:
-                print_status_message(f"🔥 {target.name} catches fire and will take 1d4 fire damage at the start of each turn!", "warning")
-                print_status_message(f"{target.name} can use an action to make a DC 10 DEX check to extinguish the flames", "info")
+                print_status_message(
+                    f"🔥 {target.name} catches fire and will take 1d4 fire damage at the start of each turn!",
+                    "warning",
+                )
+                print_status_message(
+                    f"{target.name} can use an action to make a DC 10 DEX check to extinguish the flames",
+                    "info",
+                )
 
         # Check if target died
         if not target.is_alive:
@@ -4197,7 +4333,7 @@ class CLI:
                     campaign_name=self.campaign_name,
                     game_state=self.game_state,
                     slot_name=save_name,
-                    save_type="manual"
+                    save_type="manual",
                 )
             print_status_message(f"✓ Game saved: {save_name}", "success")
         except Exception as e:
@@ -4215,7 +4351,7 @@ class CLI:
                     campaign_name=self.campaign_name,
                     game_state=self.game_state,
                     slot_name="quick",
-                    save_type="quick"
+                    save_type="quick",
                 )
             print_status_message("✓ Quick-saved", "success")
         except Exception as e:
@@ -4275,7 +4411,6 @@ class CLI:
         Args:
             result: PartyRestResult from GameState.party_rest()
         """
-        from dnd_engine.core.game_state import PartyRestResult
         from dnd_engine.ui.rich_ui import print_message, print_section, print_status_message
 
         rest_type_display = "Short" if result.rest_type == "short" else "Long"
@@ -4292,8 +4427,7 @@ class CLI:
             if char_result.resources_recovered:
                 # Format resource names nicely
                 formatted_resources = [
-                    r.replace("_", " ").title()
-                    for r in char_result.resources_recovered
+                    r.replace("_", " ").title() for r in char_result.resources_recovered
                 ]
                 print_message(f"  ⚡ Recovered: {', '.join(formatted_resources)}")
 
@@ -4393,12 +4527,18 @@ class CLI:
                 level_ordinal = character._level_to_ordinal(spell_level)
                 pool = character.resource_pools.get(f"spell_slots_level_{spell_level}")
                 max_slots = pool.maximum if pool else 0
-                choices.append(questionary.Separator(f"── {level_ordinal.capitalize()} Level ({max_slots} slots) ──"))
+                choices.append(
+                    questionary.Separator(
+                        f"── {level_ordinal.capitalize()} Level ({max_slots} slots) ──"
+                    )
+                )
 
             # Build choice with spell info
             # Get effect description
             if spell_data.get("damage"):
-                effect = f"{spell_data['damage'].get('dice', '')} {spell_data['damage'].get('type', '')}"
+                effect = (
+                    f"{spell_data['damage'].get('dice', '')} {spell_data['damage'].get('type', '')}"
+                )
             elif spell_data.get("healing"):
                 effect = f"healing {spell_data['healing'].get('dice', '')}"
             else:
@@ -4408,16 +4548,14 @@ class CLI:
             choice_title = f"{spell_name} ({school}) - {effect}"
             is_checked = spell_id in current_prepared
 
-            choices.append(Choice(
-                title=choice_title,
-                value=spell_id,
-                checked=is_checked
-            ))
+            choices.append(Choice(title=choice_title, value=spell_id, checked=is_checked))
 
         # Custom validator to enforce max selection
         def validate_selection(selected):
             if len(selected) > max_prepared:
-                return f"Too many spells! Select at most {max_prepared} (you selected {len(selected)})"
+                return (
+                    f"Too many spells! Select at most {max_prepared} (you selected {len(selected)})"
+                )
             return True
 
         try:
@@ -4425,7 +4563,7 @@ class CLI:
                 f"Select spells to prepare (max {max_prepared}):",
                 choices=choices,
                 validate=validate_selection,
-                instruction="(Space to toggle, Enter to confirm)"
+                instruction="(Space to toggle, Enter to confirm)",
             ).ask()
 
             # Handle cancellation
@@ -4449,7 +4587,7 @@ class CLI:
                 print_status_message(
                     f"Prepared {len(selected_spell_ids)} spell{'s' if len(selected_spell_ids) != 1 else ''}: "
                     f"{', '.join(spell_names)}",
-                    "success"
+                    "success",
                 )
             else:
                 print_status_message("No leveled spells prepared.", "warning")
@@ -4474,7 +4612,9 @@ class CLI:
                 continue
 
             found_caster = True
-            print_section(f"{character.name}'s Spells ({character.character_class.value.capitalize()})")
+            print_section(
+                f"{character.name}'s Spells ({character.character_class.value.capitalize()})"
+            )
 
             # Show spell slots
             if character.has_spell_slots():
@@ -4510,7 +4650,9 @@ class CLI:
             # Display cantrips first
             if 0 in spells_by_level:
                 print_message("[green]Cantrips:[/green]")
-                for spell_id, spell_data in sorted(spells_by_level[0], key=lambda x: x[1].get("name", "")):
+                for spell_id, spell_data in sorted(
+                    spells_by_level[0], key=lambda x: x[1].get("name", "")
+                ):
                     name = spell_data.get("name", spell_id)
                     school = spell_data.get("school", "")
                     # Get damage or effect info
@@ -4527,8 +4669,12 @@ class CLI:
             for level in sorted(k for k in spells_by_level.keys() if k > 0):
                 available_slots = character.get_available_spell_slots(level)
                 level_ordinal = character._level_to_ordinal(level)
-                print_message(f"[cyan]{level_ordinal.capitalize()} Level[/cyan] [{available_slots} slots]:")
-                for spell_id, spell_data in sorted(spells_by_level[level], key=lambda x: x[1].get("name", "")):
+                print_message(
+                    f"[cyan]{level_ordinal.capitalize()} Level[/cyan] [{available_slots} slots]:"
+                )
+                for spell_id, spell_data in sorted(
+                    spells_by_level[level], key=lambda x: x[1].get("name", "")
+                ):
                     name = spell_data.get("name", spell_id)
                     school = spell_data.get("school", "")
                     # Get damage or effect info
@@ -4537,16 +4683,28 @@ class CLI:
                     elif spell_data.get("healing"):
                         effect = f"healing {spell_data['healing'].get('dice', '')}"
                     else:
-                        effect = spell_data.get("description", "")[:40] + "..." if len(spell_data.get("description", "")) > 40 else spell_data.get("description", "utility")
+                        effect = (
+                            spell_data.get("description", "")[:40] + "..."
+                            if len(spell_data.get("description", "")) > 40
+                            else spell_data.get("description", "utility")
+                        )
                     print_message(f"  • {name} ({school}) - {effect}")
                 print_message("")
 
             # Show spellbook info for wizards
             if character.character_class == CharacterClass.WIZARD:
                 known_count = len(character.known_spells)
-                prepared_count = len([s for s in character.prepared_spells if spells_data.get(s, {}).get("level", 0) > 0])
+                prepared_count = len(
+                    [
+                        s
+                        for s in character.prepared_spells
+                        if spells_data.get(s, {}).get("level", 0) > 0
+                    ]
+                )
                 max_prepared = character.get_max_prepared_spells()
-                print_message(f"[dim]Spellbook: {known_count} spells known | Prepared: {prepared_count}/{max_prepared}[/dim]")
+                print_message(
+                    f"[dim]Spellbook: {known_count} spells known | Prepared: {prepared_count}/{max_prepared}[/dim]"
+                )
                 print_message("")
 
         if not found_caster:
@@ -4569,11 +4727,16 @@ class CLI:
 
         # Find prepared casters in the party
         prepared_caster_classes = {CharacterClass.WIZARD, CharacterClass.CLERIC}
-        casters = [c for c in self.game_state.party.characters
-                   if c.character_class in prepared_caster_classes and c.known_spells]
+        casters = [
+            c
+            for c in self.game_state.party.characters
+            if c.character_class in prepared_caster_classes and c.known_spells
+        ]
 
         if not casters:
-            print_status_message("No prepared casters in the party (Wizards or Clerics with spellbooks).", "warning")
+            print_status_message(
+                "No prepared casters in the party (Wizards or Clerics with spellbooks).", "warning"
+            )
             return
 
         # If only one caster, use them directly
@@ -4581,15 +4744,17 @@ class CLI:
             character = casters[0]
         else:
             # Prompt for caster selection
-            choices = [questionary.Choice(title=f"{c.name} ({c.character_class.value.capitalize()})", value=c)
-                       for c in casters]
+            choices = [
+                questionary.Choice(
+                    title=f"{c.name} ({c.character_class.value.capitalize()})", value=c
+                )
+                for c in casters
+            ]
             choices.append(questionary.Choice(title="Cancel", value=None))
 
             try:
                 character = questionary.select(
-                    "Which character will prepare spells?",
-                    choices=choices,
-                    use_arrow_keys=True
+                    "Which character will prepare spells?", choices=choices, use_arrow_keys=True
                 ).ask()
 
                 if not character:
@@ -4627,7 +4792,9 @@ class CLI:
         available_spells = caster.get_out_of_combat_spells(spells_data)
 
         if not available_spells:
-            print_error(f"{caster.name} doesn't have any spells available for casting outside combat.")
+            print_error(
+                f"{caster.name} doesn't have any spells available for casting outside combat."
+            )
             return
 
         # 2. Select spell
@@ -4658,7 +4825,9 @@ class CLI:
 
             type_info = ", ".join(spell_types)
             choice_text = f"{spell_name} {slot_info} - {type_info}"
-            spell_choices.append(questionary.Choice(title=choice_text, value=(spell_id, spell_data)))
+            spell_choices.append(
+                questionary.Choice(title=choice_text, value=(spell_id, spell_data))
+            )
 
         spell_choices.append(questionary.Choice(title="Cancel", value=None))
 
@@ -4666,7 +4835,7 @@ class CLI:
             selected = questionary.select(
                 f"Select spell for {caster.name} to cast:",
                 choices=spell_choices,
-                use_arrow_keys=True
+                use_arrow_keys=True,
             ).ask()
 
             if not selected or selected == "Cancel":
@@ -4701,9 +4870,7 @@ class CLI:
 
         # 4. Cast the spell
         result = self.game_state.cast_spell_exploration(
-            caster_name=caster.name,
-            spell_id=spell_id,
-            target_name=target_name
+            caster_name=caster.name, spell_id=spell_id, target_name=target_name
         )
 
         # 5. Display result
@@ -4718,7 +4885,7 @@ class CLI:
                 target = result.get("target", "target")
                 print_status_message(
                     f"✨ {caster.name} casts {spell_name} on {target}, healing {healing} HP!",
-                    "success"
+                    "success",
                 )
             else:
                 # Utility spell
@@ -4769,6 +4936,7 @@ class CLI:
 
         if not choices:
             from dnd_engine.ui.rich_ui import print_error
+
             print_error("No party members available!")
             return None
 
@@ -4777,11 +4945,7 @@ class CLI:
 
         # Get user selection
         try:
-            result = questionary.select(
-                prompt_message,
-                choices=choices,
-                use_arrow_keys=True
-            ).ask()
+            result = questionary.select(prompt_message, choices=choices, use_arrow_keys=True).ask()
 
             return result
         except (EOFError, KeyboardInterrupt):
@@ -4834,12 +4998,10 @@ class CLI:
             self.game_state.reset_party_conditions()
 
             # Save the reset game state if save_manager is available
-            if hasattr(self.game_state, 'save_manager'):
+            if hasattr(self.game_state, "save_manager"):
                 try:
                     self.game_state.save_manager.save_game(
-                        self.game_state,
-                        "reset_autosave",
-                        auto_save=True
+                        self.game_state, "reset_autosave", auto_save=True
                     )
                 except Exception as e:
                     # Log but don't fail on autosave error
@@ -4885,7 +5047,9 @@ class CLI:
                 time_remaining = effect.get_time_remaining_display()
                 concentration_marker = " (Concentration)" if effect.concentration else ""
                 caster_info = f" from {effect.caster_name}" if effect.caster_name else ""
-                print_message(f"  • {effect.source}: {time_remaining}{concentration_marker}{caster_info}")
+                print_message(
+                    f"  • {effect.source}: {time_remaining}{concentration_marker}{caster_info}"
+                )
 
     def display_help_exploration(self) -> None:
         """Display help for exploration commands."""
@@ -4898,9 +5062,15 @@ class CLI:
             ("shop [npc]", "Open shop UI (e.g., 'shop gareth' or just 'shop' for menu)"),
             ("search", "Search the room for items"),
             ("take/get/pickup <item>", "Pick up an item (e.g., 'take dagger', 'get gold')"),
-            ("inventory / i [filter]", "Manage inventory. No args: interactive UI. Filter: summary, player, item type"),
+            (
+                "inventory / i [filter]",
+                "Manage inventory. No args: interactive UI. Filter: summary, player, item type",
+            ),
             ("equip <item> [on <player>]", "Equip weapon/armor (e.g., 'equip sword on 2')"),
-            ("unequip <slot> [on <player>]", "Unequip weapon/armor (e.g., 'unequip weapon on gandalf')"),
+            (
+                "unequip <slot> [on <player>]",
+                "Unequip weapon/armor (e.g., 'unequip weapon on gandalf')",
+            ),
             ("use <item> [on <player>]", "Use consumable (e.g., 'use potion on 2')"),
             ("status", "Show your character status"),
             ("rest", "Take a short or long rest"),
@@ -4919,7 +5089,10 @@ class CLI:
         # Show debug mode hint if enabled
         if self.debug_console.enabled:
             debug_commands = [
-                ("/help", "Show debug console commands (character, combat, inventory manipulation)"),
+                (
+                    "/help",
+                    "Show debug console commands (character, combat, inventory manipulation)",
+                ),
                 ("/reset", "Reset campaign with same party"),
             ]
             print_help_section("Debug Commands", debug_commands)
@@ -4964,7 +5137,7 @@ class CLI:
                 # For Characters, check is_dead (3 death save failures)
                 # For other creatures, check is_alive
                 should_skip = False
-                if hasattr(current.creature, 'is_dead'):
+                if hasattr(current.creature, "is_dead"):
                     # Character: skip only if dead (3 failures), not if unconscious
                     should_skip = current.creature.is_dead
                 else:
@@ -4991,7 +5164,7 @@ class CLI:
                         if party_character.stabilized:
                             print_status_message(
                                 f"{party_character.name} is unconscious but stabilized (no action needed).",
-                                "info"
+                                "info",
                             )
                         else:
                             # Unstabilized unconscious character makes death save
@@ -5007,22 +5180,24 @@ class CLI:
                         condition_names = ", ".join([c.upper() for c in conditions])
                         print_status_message(
                             f"{party_character.name} is {condition_names} and cannot act!",
-                            "warning"
+                            "warning",
                         )
 
                         # Process end-of-turn effects (repeat saves, duration countdown)
-                        results = party_character.process_end_of_turn_conditions(self.game_state.event_bus)
+                        results = party_character.process_end_of_turn_conditions(
+                            self.game_state.event_bus
+                        )
                         for result in results:
                             if result["type"] == "repeat_save_success":
                                 save_result = result["save_result"]
                                 print_status_message(
                                     f"✓ {party_character.name} succeeds on {save_result['ability'].upper()} save - {result['condition'].upper()} removed!",
-                                    "success"
+                                    "success",
                                 )
                             elif result["type"] == "duration_expired":
                                 print_status_message(
                                     f"⏱ {result['condition'].upper()} on {party_character.name} has expired!",
-                                    "info"
+                                    "info",
                                 )
 
                         # Advance turn
@@ -5042,15 +5217,22 @@ class CLI:
                         if not party_character.can_take_actions():
                             conditions = [c.upper() for c in party_character.conditions]
                             condition_text = ", ".join(conditions)
-                            print_status_message(f"⚠️  {party_character.name} is {condition_text} and cannot act this turn!", "warning")
+                            print_status_message(
+                                f"⚠️  {party_character.name} is {condition_text} and cannot act this turn!",
+                                "warning",
+                            )
                             # Process end-of-turn conditions (will remove surprised, etc.)
-                            results = party_character.process_end_of_turn_conditions(self.game_state.event_bus)
+                            results = party_character.process_end_of_turn_conditions(
+                                self.game_state.event_bus
+                            )
                             for result in results:
                                 if result["type"] == "condition_expired":
-                                    if result["condition"] != "surprised":  # Don't announce surprised expiry
+                                    if (
+                                        result["condition"] != "surprised"
+                                    ):  # Don't announce surprised expiry
                                         print_status_message(
                                             f"⏱ {result['condition'].upper()} on {party_character.name} has expired!",
-                                            "info"
+                                            "info",
                                         )
                             self.game_state.initiative_tracker.next_turn()
                             continue
@@ -5101,13 +5283,13 @@ class CLI:
 
         # Log combat start with initiative order
         from dnd_engine.utils.logging_config import get_logging_config
+
         logging_config = get_logging_config()
         if logging_config and self.game_state.initiative_tracker:
             # Build initiative order string
             combatants = self.game_state.initiative_tracker.get_all_combatants()
             init_order = ", ".join(
-                f"{entry.creature.name}({entry.initiative_total})"
-                for entry in combatants
+                f"{entry.creature.name}({entry.initiative_total})" for entry in combatants
             )
             logging_config.log_combat_event(f"Combat started - Initiative order: {init_order}")
 
@@ -5119,18 +5301,18 @@ class CLI:
 
         if victory:
             print_status_message(
-                f"Victory! Party gained {total_xp} XP ({xp_per_char} XP per character)",
-                "success"
+                f"Victory! Party gained {total_xp} XP ({xp_per_char} XP per character)", "success"
             )
         else:
             print_error("Defeat! All party members have fallen unconscious.")
             print_status_message(
                 "The enemies remain in the room. Consider healing and regrouping before attempting combat again.",
-                "warning"
+                "warning",
             )
 
         # Log combat end
         from dnd_engine.utils.logging_config import get_logging_config
+
         logging_config = get_logging_config()
         if logging_config:
             result = "Victory" if victory else "Defeat"
@@ -5152,7 +5334,7 @@ class CLI:
             Panel(
                 f"[bold yellow]⚔️ BOSS DEFEATED![/bold yellow]\n\n"
                 f"You have defeated the boss of {dungeon_name}!",
-                border_style="yellow"
+                border_style="yellow",
             )
         )
 
@@ -5170,7 +5352,7 @@ class CLI:
                     "[bold green]🎉 CAMPAIGN COMPLETE! 🎉[/bold green]\n\n"
                     f"You have completed {dungeon_name} and finished the entire campaign!\n\n"
                     "[dim]Congratulations, brave adventurers![/dim]",
-                    border_style="green"
+                    border_style="green",
                 )
             )
         else:
@@ -5180,7 +5362,7 @@ class CLI:
                     f"[bold cyan]✨ DUNGEON COMPLETE![/bold cyan]\n\n"
                     f"You have completed {dungeon_name}!\n\n"
                     f"[bold]New areas unlocked:[/bold]\n{unlocked_text}",
-                    border_style="cyan"
+                    border_style="cyan",
                 )
             )
 
@@ -5188,6 +5370,7 @@ class CLI:
         """Handle combat fled event."""
         # Log flee event
         from dnd_engine.utils.logging_config import get_logging_config
+
         logging_config = get_logging_config()
         if logging_config:
             num_attacks = event.data.get("opportunity_attacks", 0)
@@ -5253,7 +5436,7 @@ class CLI:
             if data["success"]:
                 print_status_message(
                     f"🔍 {data['character']} (Passive Perception {data['total']}): {data['success_text']}",
-                    "success"
+                    "success",
                 )
         else:
             # Active check
@@ -5263,7 +5446,7 @@ class CLI:
             print_status_message(
                 f"🎲 {data['character']} {data['skill'].title()} check (DC {data['dc']}): "
                 f"rolled {data['roll']} + {data['modifier']} = {data['total']} - {result_text}",
-                color
+                color,
             )
 
             # Display result text
@@ -5316,7 +5499,7 @@ class CLI:
                     campaign_name=self.campaign_name,
                     game_state=self.game_state,
                     slot_name="auto",
-                    save_type="auto"
+                    save_type="auto",
                 )
             # Brief success message
             print_status_message("✓ Saved", "success")

@@ -18,7 +18,7 @@ class TestRoomDescriptionPrompt:
             "name": "Torture Chamber",
             "description": "A dark room with rusty chains hanging from the ceiling.",
             "exits": ["north", "south"],
-            "contents": ["chest", "skeleton"]
+            "contents": ["chest", "skeleton"],
         }
 
         prompt = build_room_description_prompt(room_data)
@@ -32,9 +32,7 @@ class TestRoomDescriptionPrompt:
 
     def test_build_room_description_minimal_data(self) -> None:
         """Test building room description with minimal data."""
-        room_data = {
-            "name": "Chamber"
-        }
+        room_data = {"name": "Chamber"}
 
         prompt = build_room_description_prompt(room_data)
 
@@ -44,9 +42,7 @@ class TestRoomDescriptionPrompt:
 
     def test_build_room_description_no_name(self) -> None:
         """Test building room description without name."""
-        room_data = {
-            "description": "A mysterious chamber"
-        }
+        room_data = {"description": "A mysterious chamber"}
 
         prompt = build_room_description_prompt(room_data)
 
@@ -57,7 +53,7 @@ class TestRoomDescriptionPrompt:
         room_data = {
             "name": "Guard Post",
             "description": "A narrow corridor with weapon racks on the walls.",
-            "monsters": ["Goblin"]
+            "monsters": ["Goblin"],
         }
 
         prompt = build_room_description_prompt(room_data)
@@ -73,7 +69,7 @@ class TestRoomDescriptionPrompt:
         room_data = {
             "name": "Barracks",
             "description": "A messy chamber with scattered bedrolls.",
-            "monsters": ["Goblin", "Wolf"]
+            "monsters": ["Goblin", "Wolf"],
         }
 
         prompt = build_room_description_prompt(room_data)
@@ -89,7 +85,7 @@ class TestRoomDescriptionPrompt:
         room_data = {
             "name": "Throne Room",
             "description": "A grand chamber with a bone throne.",
-            "monsters": ["Goblin", "Goblin", "Goblin"]
+            "monsters": ["Goblin", "Goblin", "Goblin"],
         }
 
         prompt = build_room_description_prompt(room_data)
@@ -103,7 +99,7 @@ class TestRoomDescriptionPrompt:
         room_data = {
             "name": "Kennel",
             "description": "A dirty room filled with cages.",
-            "monsters": ["Goblin", "Goblin", "Wolf", "Wolf", "Wolf"]
+            "monsters": ["Goblin", "Goblin", "Wolf", "Wolf", "Wolf"],
         }
 
         prompt = build_room_description_prompt(room_data)
@@ -119,7 +115,7 @@ class TestRoomDescriptionPrompt:
         room_data = {
             "name": "Safe Room",
             "description": "A quiet chamber with no threats.",
-            "monsters": []
+            "monsters": [],
         }
 
         prompt = build_room_description_prompt(room_data)
@@ -134,7 +130,7 @@ class TestRoomDescriptionPrompt:
         room_data = {
             "name": "Guard Post",
             "description": "A narrow corridor with weapon racks.",
-            "monsters": ["Goblin", "Wolf"]
+            "monsters": ["Goblin", "Wolf"],
         }
 
         prompt = build_room_description_prompt(room_data, combat_starting=False)
@@ -154,7 +150,7 @@ class TestRoomDescriptionPrompt:
         room_data = {
             "name": "Throne Room",
             "description": "A grand chamber with a bone throne.",
-            "monsters": ["Goblin Boss", "Goblin", "Goblin"]
+            "monsters": ["Goblin Boss", "Goblin", "Goblin"],
         }
 
         prompt = build_room_description_prompt(room_data, combat_starting=True)
@@ -165,17 +161,17 @@ class TestRoomDescriptionPrompt:
         assert "hostile" in prompt
         # Should have combat initiation instructions
         assert "combat begins" in prompt.lower() or "battle" in prompt.lower()
-        assert "enemies react" in prompt.lower() or "threatening stance" in prompt.lower() or "aggressive" in prompt.lower()
+        assert (
+            "enemies react" in prompt.lower()
+            or "threatening stance" in prompt.lower()
+            or "aggressive" in prompt.lower()
+        )
         # Should tell LLM to transition into combat
         assert "transition" in prompt.lower() or "escalation" in prompt.lower()
 
     def test_build_room_description_combat_starting_without_monsters(self) -> None:
         """Test building room description with combat_starting=True but no monsters (edge case)."""
-        room_data = {
-            "name": "Empty Room",
-            "description": "A quiet chamber.",
-            "monsters": []
-        }
+        room_data = {"name": "Empty Room", "description": "A quiet chamber.", "monsters": []}
 
         prompt = build_room_description_prompt(room_data, combat_starting=True)
 
@@ -190,7 +186,7 @@ class TestRoomDescriptionPrompt:
         room_data = {
             "name": "Barracks",
             "description": "A messy chamber with bedrolls.",
-            "monsters": ["Goblin"]
+            "monsters": ["Goblin"],
         }
 
         # Call without combat_starting parameter (should default to False)
@@ -207,7 +203,7 @@ class TestRoomDescriptionPrompt:
         """Test that room description enforces third-person POV and no arrival language."""
         room_data = {
             "name": "Town Square",
-            "description": "A bustling market square with a fountain."
+            "description": "A bustling market square with a fountain.",
         }
 
         prompt = build_room_description_prompt(room_data)
@@ -219,10 +215,7 @@ class TestRoomDescriptionPrompt:
 
     def test_build_room_description_significance_levels(self) -> None:
         """Test that room significance affects description length instruction."""
-        base_room = {
-            "name": "Test Room",
-            "description": "A test room."
-        }
+        base_room = {"name": "Test Room", "description": "A test room."}
 
         # Minor rooms get shortest descriptions
         minor_room = {**base_room, "significance": "minor"}
@@ -248,7 +241,7 @@ class TestRoomDescriptionPrompt:
             "name": "Boss Chamber",
             "description": "The dragon's lair.",
             "significance": "major",  # Would normally be long
-            "monsters": ["Dragon"]
+            "monsters": ["Dragon"],
         }
 
         prompt = build_room_description_prompt(room_data, combat_starting=True)
@@ -268,7 +261,7 @@ class TestCombatActionPrompt:
             "attacker": "Thorin",
             "defender": "Goblin",
             "weapon": "longsword",
-            "hit": True
+            "hit": True,
         }
 
         prompt = build_combat_action_prompt(action_data)
@@ -284,12 +277,7 @@ class TestCombatActionPrompt:
 
     def test_build_combat_action_miss(self) -> None:
         """Test building combat action prompt for a miss."""
-        action_data = {
-            "attacker": "Bjorn",
-            "defender": "Orc",
-            "weapon": "battleaxe",
-            "hit": False
-        }
+        action_data = {"attacker": "Bjorn", "defender": "Orc", "weapon": "battleaxe", "hit": False}
 
         prompt = build_combat_action_prompt(action_data)
 
@@ -320,7 +308,7 @@ class TestCombatActionPrompt:
             "weapon": "staff",
             "hit": True,
             "is_killing_blow": True,
-            "location": "Bridge of Khazad-dûm"
+            "location": "Bridge of Khazad-dûm",
         }
 
         prompt = build_combat_action_prompt(action_data)
@@ -345,7 +333,7 @@ class TestCombatActionPrompt:
             "is_critical": True,
             "location": "Goblin Warren",
             "damage_type": "slashing",
-            "combat_history": ["Goblin attacked Thorin", "Thorin missed Goblin"]
+            "combat_history": ["Goblin attacked Thorin", "Thorin missed Goblin"],
         }
 
         prompt = build_combat_action_prompt(action_data)
@@ -371,8 +359,8 @@ class TestCombatActionPrompt:
                 "Orc attacked Legolas",
                 "Legolas shot Orc",
                 "Orc attacked Gimli",
-                "Gimli hit Orc"
-            ]
+                "Gimli hit Orc",
+            ],
         }
 
         prompt = build_combat_action_prompt(action_data)
@@ -391,7 +379,7 @@ class TestCombatActionPrompt:
             "defender": "Uruk-hai",
             "weapon": "Battleaxe",
             "hit": True,
-            "combat_history": ["Uruk-hai attacked Gimli", "Gimli attacked Uruk-hai"]
+            "combat_history": ["Uruk-hai attacked Gimli", "Gimli attacked Uruk-hai"],
         }
 
         prompt = build_combat_action_prompt(action_data)
@@ -412,7 +400,7 @@ class TestCombatActionPrompt:
                 is_alive=True,
                 conditions=[],
                 is_player=True,
-                ac=16
+                ac=16,
             ),
             CombatantStatus(
                 name="Bjorn",
@@ -422,8 +410,8 @@ class TestCombatActionPrompt:
                 is_alive=True,
                 conditions=[],
                 is_player=True,
-                ac=14
-            )
+                ac=14,
+            ),
         ]
 
         enemy_combatants = [
@@ -435,7 +423,7 @@ class TestCombatActionPrompt:
                 is_alive=True,
                 conditions=[],
                 is_player=False,
-                ac=13
+                ac=13,
             ),
             CombatantStatus(
                 name="Skeleton",
@@ -445,8 +433,8 @@ class TestCombatActionPrompt:
                 is_alive=True,
                 conditions=[],
                 is_player=False,
-                ac=13
-            )
+                ac=13,
+            ),
         ]
 
         battlefield_state = BattlefieldState(
@@ -454,7 +442,7 @@ class TestCombatActionPrompt:
             enemy_combatants=enemy_combatants,
             round_number=2,
             current_turn="Thorin",
-            in_combat=True
+            in_combat=True,
         )
 
         action_data = {
@@ -463,7 +451,7 @@ class TestCombatActionPrompt:
             "weapon": "battleaxe",
             "hit": True,
             "is_killing_blow": True,
-            "battlefield_state": battlefield_state
+            "battlefield_state": battlefield_state,
         }
 
         prompt = build_combat_action_prompt(action_data)
@@ -489,7 +477,7 @@ class TestCombatActionPrompt:
                 is_alive=True,
                 conditions=[],
                 is_player=True,
-                ac=16
+                ac=16,
             )
         ]
 
@@ -502,7 +490,7 @@ class TestCombatActionPrompt:
                 is_alive=True,
                 conditions=[],
                 is_player=False,
-                ac=13
+                ac=13,
             )
         ]
 
@@ -511,7 +499,7 @@ class TestCombatActionPrompt:
             enemy_combatants=enemy_combatants,
             round_number=2,
             current_turn="Thorin",
-            in_combat=True
+            in_combat=True,
         )
 
         action_data = {
@@ -519,7 +507,7 @@ class TestCombatActionPrompt:
             "defender": "Skeleton 1",
             "weapon": "battleaxe",
             "hit": True,
-            "battlefield_state": battlefield_state
+            "battlefield_state": battlefield_state,
         }
 
         prompt = build_combat_action_prompt(action_data)
@@ -535,10 +523,7 @@ class TestDeathPrompt:
 
     def test_build_death_prompt_enemy(self) -> None:
         """Test building death prompt for enemy (brief, focused)."""
-        character_data = {
-            "name": "Skeleton",
-            "cause": "was shattered by a mighty blow"
-        }
+        character_data = {"name": "Skeleton", "cause": "was shattered by a mighty blow"}
 
         prompt = build_death_prompt(character_data)
 
@@ -551,9 +536,7 @@ class TestDeathPrompt:
 
     def test_build_death_prompt_minimal_data(self) -> None:
         """Test building death prompt with minimal data."""
-        character_data = {
-            "name": "Hero"
-        }
+        character_data = {"name": "Hero"}
 
         prompt = build_death_prompt(character_data)
 
@@ -562,11 +545,7 @@ class TestDeathPrompt:
 
     def test_build_death_prompt_player_death(self) -> None:
         """Test building death prompt for player character."""
-        character_data = {
-            "name": "Gandalf",
-            "is_player": True,
-            "cause": "fell defending the party"
-        }
+        character_data = {"name": "Gandalf", "is_player": True, "cause": "fell defending the party"}
 
         prompt = build_death_prompt(character_data)
 
@@ -576,11 +555,7 @@ class TestDeathPrompt:
 
     def test_build_death_prompt_enemy_death(self) -> None:
         """Test building death prompt for enemy creature."""
-        character_data = {
-            "name": "Goblin",
-            "is_player": False,
-            "cause": "was struck down"
-        }
+        character_data = {"name": "Goblin", "is_player": False, "cause": "was struck down"}
 
         prompt = build_death_prompt(character_data)
 
@@ -596,7 +571,7 @@ class TestVictoryPrompt:
         """Test building victory prompt with full combat data."""
         combat_data = {
             "enemies": ["Goblin Warrior", "Goblin Shaman"],
-            "final_blow": "Thorin cleaved through the last goblin with his axe"
+            "final_blow": "Thorin cleaved through the last goblin with his axe",
         }
 
         prompt = build_victory_prompt(combat_data)

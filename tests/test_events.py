@@ -11,12 +11,12 @@ class TestEvent:
         """Test creating an event"""
         event = Event(
             type=EventType.DAMAGE_DEALT,
-            data={'attacker': 'Fighter', 'defender': 'Goblin', 'damage': 7}
+            data={"attacker": "Fighter", "defender": "Goblin", "damage": 7},
         )
 
         assert event.type == EventType.DAMAGE_DEALT
-        assert event.data['attacker'] == 'Fighter'
-        assert event.data['damage'] == 7
+        assert event.data["attacker"] == "Fighter"
+        assert event.data["damage"] == 7
 
     def test_event_with_no_data(self):
         """Test creating an event without data"""
@@ -27,10 +27,7 @@ class TestEvent:
 
     def test_event_string_representation(self):
         """Test event string representation"""
-        event = Event(
-            type=EventType.ATTACK_ROLL,
-            data={'roll': 15}
-        )
+        event = Event(type=EventType.ATTACK_ROLL, data={"roll": 15})
 
         event_str = str(event)
         assert "ATTACK_ROLL" in event_str
@@ -50,13 +47,14 @@ class TestEventBus:
 
     def test_subscribe_to_event(self):
         """Test subscribing to an event type"""
+
         def handler(event: Event):
             self.received_events.append(event)
 
         self.bus.subscribe(EventType.DAMAGE_DEALT, handler)
 
         # Emit an event
-        event = Event(type=EventType.DAMAGE_DEALT, data={'damage': 5})
+        event = Event(type=EventType.DAMAGE_DEALT, data={"damage": 5})
         self.bus.emit(event)
 
         assert len(self.received_events) == 1
@@ -67,10 +65,10 @@ class TestEventBus:
         results = []
 
         def handler1(event: Event):
-            results.append('handler1')
+            results.append("handler1")
 
         def handler2(event: Event):
-            results.append('handler2')
+            results.append("handler2")
 
         self.bus.subscribe(EventType.COMBAT_START, handler1)
         self.bus.subscribe(EventType.COMBAT_START, handler2)
@@ -78,8 +76,8 @@ class TestEventBus:
         self.bus.emit(Event(type=EventType.COMBAT_START))
 
         assert len(results) == 2
-        assert 'handler1' in results
-        assert 'handler2' in results
+        assert "handler1" in results
+        assert "handler2" in results
 
     def test_subscribe_to_different_events(self):
         """Test subscribing to different event types"""
@@ -96,15 +94,16 @@ class TestEventBus:
         self.bus.subscribe(EventType.HEALING_DONE, heal_handler)
 
         # Emit different events
-        self.bus.emit(Event(type=EventType.DAMAGE_DEALT, data={'damage': 5}))
-        self.bus.emit(Event(type=EventType.HEALING_DONE, data={'amount': 3}))
-        self.bus.emit(Event(type=EventType.DAMAGE_DEALT, data={'damage': 2}))
+        self.bus.emit(Event(type=EventType.DAMAGE_DEALT, data={"damage": 5}))
+        self.bus.emit(Event(type=EventType.HEALING_DONE, data={"amount": 3}))
+        self.bus.emit(Event(type=EventType.DAMAGE_DEALT, data={"damage": 2}))
 
         assert len(damage_events) == 2
         assert len(heal_events) == 1
 
     def test_unsubscribe_from_event(self):
         """Test unsubscribing from an event"""
+
         def handler(event: Event):
             self.received_events.append(event)
 
@@ -137,7 +136,7 @@ class TestEventBus:
 
         self.bus.subscribe(EventType.ATTACK_ROLL, handler)
 
-        test_data = {'attacker': 'Wizard', 'roll': 18}
+        test_data = {"attacker": "Wizard", "roll": 18}
         self.bus.emit(Event(type=EventType.ATTACK_ROLL, data=test_data))
 
         assert received_data == test_data
@@ -150,7 +149,7 @@ class TestEventBus:
             raise ValueError("Handler error!")
 
         def working_handler(event: Event):
-            results.append('success')
+            results.append("success")
 
         self.bus.subscribe(EventType.DAMAGE_DEALT, failing_handler)
         self.bus.subscribe(EventType.DAMAGE_DEALT, working_handler)
@@ -158,10 +157,11 @@ class TestEventBus:
         # Should not raise, and working_handler should still run
         self.bus.emit(Event(type=EventType.DAMAGE_DEALT))
 
-        assert 'success' in results
+        assert "success" in results
 
     def test_clear_all_subscribers(self):
         """Test clearing all subscribers for an event type"""
+
         def handler1(event: Event):
             self.received_events.append(event)
 
@@ -180,6 +180,7 @@ class TestEventBus:
 
     def test_get_subscriber_count(self):
         """Test getting the number of subscribers for an event"""
+
         def handler1(event: Event):
             pass
 
@@ -204,18 +205,18 @@ class TestEventTypes:
     def test_required_event_types_exist(self):
         """Test that all MVP event types are defined"""
         required_types = [
-            'COMBAT_START',
-            'COMBAT_END',
-            'TURN_START',
-            'TURN_END',
-            'ATTACK_ROLL',
-            'DAMAGE_DEALT',
-            'HEALING_DONE',
-            'CHARACTER_DEATH',
-            'ROOM_ENTER',
-            'ITEM_ACQUIRED',
-            'LEVEL_UP',
-            'SKILL_CHECK',
+            "COMBAT_START",
+            "COMBAT_END",
+            "TURN_START",
+            "TURN_END",
+            "ATTACK_ROLL",
+            "DAMAGE_DEALT",
+            "HEALING_DONE",
+            "CHARACTER_DEATH",
+            "ROOM_ENTER",
+            "ITEM_ACQUIRED",
+            "LEVEL_UP",
+            "SKILL_CHECK",
         ]
 
         for type_name in required_types:

@@ -18,6 +18,7 @@ class ItemRecommendation:
         score: Suitability score from 0.0 to 1.0
                1.0 = perfect match, 0.5 = acceptable, 0.0 = unsuitable
     """
+
     character: "Character"
     score: float
 
@@ -61,14 +62,13 @@ class ItemAssignmentService:
         """Lazy-load items data if not provided."""
         if self._items_data is None:
             from dnd_engine.rules.loader import DataLoader
+
             data_loader = DataLoader()
             self._items_data = data_loader.load_items()
         return self._items_data
 
     def get_recommended_recipients(
-        self,
-        item_id: str,
-        party_members: list["Character"]
+        self, item_id: str, party_members: list["Character"]
     ) -> list[ItemRecommendation]:
         """
         Get recommended recipients for an item with suitability scores.
@@ -89,19 +89,14 @@ class ItemAssignmentService:
 
         recommendations = []
         for character in party_members:
-            score = self._calculate_suitability_score(
-                character, item_id, item_details, category
-            )
+            score = self._calculate_suitability_score(character, item_id, item_details, category)
             recommendations.append(ItemRecommendation(character=character, score=score))
 
         # Sort by score descending
         recommendations.sort(key=lambda r: r.score, reverse=True)
         return recommendations
 
-    def _find_item_details(
-        self,
-        item_id: str
-    ) -> tuple[dict[str, Any] | None, str | None]:
+    def _find_item_details(self, item_id: str) -> tuple[dict[str, Any] | None, str | None]:
         """
         Find item details and category from items data.
 
@@ -121,7 +116,7 @@ class ItemAssignmentService:
         character: "Character",
         item_id: str,
         item_details: dict[str, Any] | None,
-        category: str | None
+        category: str | None,
     ) -> float:
         """
         Calculate how suitable a character is for an item.
@@ -171,9 +166,7 @@ class ItemAssignmentService:
         return 0.5
 
     def should_auto_assign(
-        self,
-        recommendations: list[ItemRecommendation],
-        threshold: float = 0.8
+        self, recommendations: list[ItemRecommendation], threshold: float = 0.8
     ) -> "Character | None":
         """
         Determine if an item should be auto-assigned without user prompt.
