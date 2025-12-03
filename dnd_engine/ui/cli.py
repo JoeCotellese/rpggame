@@ -3966,17 +3966,54 @@ class CLI:
         # Search all living party members' inventories for the item
         owner = None
         target_item_id = None
+        item_id_lower = item_id.lower().replace("_", " ")
 
+        # First try exact match
         for char in self.game_state.party.get_living_members():
             consumables = char.inventory.get_items_by_category("consumables")
             for inv_item in consumables:
                 item_data = items_data["consumables"].get(inv_item.item_id, {})
-                if inv_item.item_id == item_id or item_data.get("name", "").lower() == item_id.lower():
+                inv_item_id_normalized = inv_item.item_id.lower().replace("_", " ")
+                item_name_normalized = item_data.get("name", "").lower()
+                # Exact match on ID, name, or substring match
+                if (inv_item.item_id == item_id or
+                    inv_item_id_normalized == item_id_lower or
+                    item_name_normalized == item_id_lower or
+                    item_id_lower in inv_item_id_normalized or
+                    item_id_lower in item_name_normalized):
                     owner = char
                     target_item_id = inv_item.item_id
                     break
             if owner:
                 break
+
+        # If no exact match, try fuzzy matching
+        if not owner:
+            from difflib import SequenceMatcher
+            best_match_char = None
+            best_match_item_id = None
+            best_ratio = 0.6  # Minimum similarity threshold
+
+            for char in self.game_state.party.get_living_members():
+                consumables = char.inventory.get_items_by_category("consumables")
+                for inv_item in consumables:
+                    item_data = items_data["consumables"].get(inv_item.item_id, {})
+                    inv_item_id_normalized = inv_item.item_id.lower().replace("_", " ")
+                    item_name_normalized = item_data.get("name", "").lower()
+
+                    # Check similarity against both ID and name
+                    ratio_id = SequenceMatcher(None, item_id_lower, inv_item_id_normalized).ratio()
+                    ratio_name = SequenceMatcher(None, item_id_lower, item_name_normalized).ratio()
+                    best_item_ratio = max(ratio_id, ratio_name)
+
+                    if best_item_ratio > best_ratio:
+                        best_ratio = best_item_ratio
+                        best_match_char = char
+                        best_match_item_id = inv_item.item_id
+
+            if best_match_char and best_match_item_id:
+                owner = best_match_char
+                target_item_id = best_match_item_id
 
         if not owner or not target_item_id:
             print_error(f"No party member has a consumable '{item_id}' in inventory.")
