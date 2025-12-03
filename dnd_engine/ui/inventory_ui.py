@@ -209,11 +209,23 @@ class InventoryUI:
                 lines.append(f"  {name}{qty_str}{quest_marker}")
             lines.append("")
 
+        # Tools section
+        tools = inventory.get_items_by_category("tools")
+        if tools:
+            lines.append("[bold cyan]TOOLS:[/bold cyan]")
+            for inv_item in tools:
+                item_data = self._get_item_data(inv_item.item_id, "tools")
+                name = item_data.get("name", inv_item.item_id) if item_data else inv_item.item_id
+                qty_str = f" (x{inv_item.quantity})" if inv_item.quantity > 1 else ""
+                prof_marker = self._get_proficiency_marker(char, inv_item.item_id, "tool")
+                lines.append(f"  {name}{qty_str}{prof_marker}")
+            lines.append("")
+
         # Quest items note
         if any(inv.quest_item for inv in inventory.get_all_items()):
             lines.append("[dim]⚿ = Quest item (cannot be dropped or sold)[/dim]")
 
-        if not (weapons or armor_items or consumables):
+        if not (weapons or armor_items or consumables or tools):
             lines.append("[dim]No items in inventory[/dim]")
 
         panel = Panel(
@@ -386,8 +398,8 @@ class InventoryUI:
 
         Args:
             char: Character to check proficiency for
-            item_id: Item ID (e.g., "rapier", "chain_mail")
-            item_type: "weapon" or "armor"
+            item_id: Item ID (e.g., "rapier", "chain_mail", "thieves_tools")
+            item_type: "weapon", "armor", or "tool"
 
         Returns:
             Formatted proficiency marker string with Rich markup
@@ -402,6 +414,11 @@ class InventoryUI:
                 if char.is_proficient_with_armor(item_id, self.items_data):
                     return " [green]✓[/green]"
                 return " [red]✗ not proficient[/red]"
+
+            elif item_type == "tool":
+                if item_id in char.tool_proficiencies:
+                    return " [green]✓[/green]"
+                return " [red]✗ not proficient[/red]"
         except KeyError:
             return ""
 
@@ -413,8 +430,8 @@ class InventoryUI:
 
         Args:
             char: Character to check proficiency for
-            item_id: Item ID (e.g., "rapier", "chain_mail")
-            item_type: "weapon" or "armor"
+            item_id: Item ID (e.g., "rapier", "chain_mail", "thieves_tools")
+            item_type: "weapon", "armor", or "tool"
 
         Returns:
             Plain text proficiency marker string (no Rich markup)
@@ -427,6 +444,11 @@ class InventoryUI:
 
             elif item_type == "armor":
                 if char.is_proficient_with_armor(item_id, self.items_data):
+                    return " ✓"
+                return " ✗ not proficient"
+
+            elif item_type == "tool":
+                if item_id in char.tool_proficiencies:
                     return " ✓"
                 return " ✗ not proficient"
         except KeyError:

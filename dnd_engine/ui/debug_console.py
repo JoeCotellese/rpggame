@@ -7,9 +7,9 @@ from typing import Any
 
 from rich.table import Table
 
-from dnd_engine.core.character import Character, CharacterClass
+from dnd_engine.core.character import Character
 from dnd_engine.core.character_factory import CharacterFactory
-from dnd_engine.core.creature import Abilities, Creature
+from dnd_engine.core.creature import Creature
 from dnd_engine.core.game_state import GameState
 from dnd_engine.core.quest import QuestState
 from dnd_engine.systems.currency import Currency
@@ -1182,11 +1182,9 @@ class DebugConsole:
 
     def cmd_add_character(self, args: list[str]) -> None:
         """Add a new character to the party with specified class, optional race and level."""
-        # Load data once at the start
+        # Load data for validation and display
         races_data = self.game_state.data_loader.load_races()
         classes_data = self.game_state.data_loader.load_classes()
-        items_data = self.game_state.data_loader.load_items()
-        spells_data = self.game_state.data_loader.load_spells()
 
         if len(args) < 1:
             print_error("Usage: /addcharacter <class> [race] [level]")
@@ -1241,110 +1239,28 @@ class DebugConsole:
             print_message(f"Available: {', '.join(races_data.keys())}")
             return
 
-        # Get class and race data
-        class_data = classes_data[class_name]
-        race_data = races_data[race_name]
-
-        # Generate random name
-        name_prefixes = ["Brave", "Bold", "Mighty", "Swift", "Wise", "Dark", "Noble", "Silent"]
-        name_suffixes = ["blade", "heart", "shield", "storm", "wind", "fire", "shadow", "light"]
-        name = f"{random.choice(name_prefixes)}{random.choice(name_suffixes)}"
-
-        # Create character factory
+        # Use CharacterFactory to create the character (handles all proficiencies)
         factory = CharacterFactory(self.game_state.dice_roller)
-
-        # Roll ability scores
-        all_rolls = factory.roll_all_abilities(self.game_state.dice_roller)
-        scores = [score for score, _ in all_rolls]
-
-        # Auto-assign abilities based on class priorities
-        abilities = factory.auto_assign_abilities(scores, class_data)
-
-        # Apply racial bonuses
-        abilities = factory.apply_racial_bonuses(abilities, race_data)
-
-        # Create abilities object
-        abilities_obj = Abilities(
-            strength=abilities["strength"],
-            dexterity=abilities["dexterity"],
-            constitution=abilities["constitution"],
-            intelligence=abilities["intelligence"],
-            wisdom=abilities["wisdom"],
-            charisma=abilities["charisma"],
-        )
-
-        # Calculate HP for level 1 using factory method
-        con_modifier = factory.calculate_ability_modifier(abilities["constitution"])
-        hp = factory.calculate_hp(class_data, con_modifier, level=1)
-
-        # Calculate AC
-        starting_equipment = class_data.get("starting_equipment", [])
-        armor_id = None
-        for item_id in starting_equipment:
-            if item_id in items_data.get("armor", {}):
-                armor_id = item_id
-                break
-
-        armor_data = items_data["armor"].get(armor_id) if armor_id else None
-        ac = factory.calculate_ac(armor_data, abilities_obj.dex_mod)
-
-        # Auto-select skill proficiencies (take first N available)
-        skill_profs = class_data.get("skill_proficiencies", {})
-        num_skills = skill_profs.get("choose", 0)
-        available_skills = skill_profs.get("from", [])
-        skill_proficiencies = available_skills[:num_skills]
-
-        # Get expertise for rogues (first 2 skills)
-        expertise_skills = []
-        if class_name == "rogue" and skill_proficiencies:
-            expertise_skills = skill_proficiencies[:2]
-
-        # Get weapon and armor proficiencies
-        weapon_proficiencies = class_data.get("weapon_proficiencies", [])
-        armor_proficiencies = class_data.get("armor_proficiencies", [])
-
-        # Create character
         try:
-            character_class_enum = CharacterClass[class_name.upper()]
-        except KeyError:
-            print_error(f"Class not found in CharacterClass enum: {class_name}")
+            character = factory.create_character(
+                class_name=class_name,
+                race_name=race_name,
+                data_loader=self.game_state.data_loader,
+                level=level,
+            )
+        except ValueError as e:
+            print_error(str(e))
             return
-
-        character = Character(
-            name=name,
-            character_class=character_class_enum,
-            level=1,  # Start at level 1, will level up below
-            abilities=abilities_obj,
-            max_hp=hp,
-            ac=ac,
-            xp=0,
-            skill_proficiencies=skill_proficiencies,
-            expertise_skills=expertise_skills,
-            weapon_proficiencies=weapon_proficiencies,
-            armor_proficiencies=armor_proficiencies,
-        )
-
-        # Store race and saving throws
-        character.race = race_name
-        character.saving_throw_proficiencies = class_data.get("saving_throw_proficiencies", [])
-
-        # Level up character to target level (uses actual dice roller)
-        for _ in range(1, level):
-            character.level += 1
-            character._increase_hp(self.game_state.data_loader)
-
-        # Initialize class resources and spellcasting for final level
-        factory.initialize_class_resources(character, class_data, level)
-        factory.initialize_spellcasting(character, class_data, spells_data, interactive=False)
-
-        # Apply starting equipment
-        factory.apply_starting_equipment(character, class_data, items_data)
 
         # Add to party
         self.game_state.party.add_character(character)
 
+        # Get display names
+        race_data = races_data[race_name]
+        class_data = classes_data[class_name]
+
         print_status_message(
-            f"Added {name} (Level {level} {race_data['name']} {class_data['name']}) to party",
+            f"Added {character.name} (Level {level} {race_data['name']} {class_data['name']}) to party",
             "success",
         )
         print_message(f"HP: {character.current_hp}/{character.max_hp}, AC: {character.ac}")

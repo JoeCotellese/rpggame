@@ -424,6 +424,12 @@ class MigrationManager:
             spellcasting_ability=char_data.get("spellcasting_ability"),
             known_spells=char_data.get("known_spells"),
             prepared_spells=char_data.get("prepared_spells"),
+            saving_throw_proficiencies=char_data.get("saving_throw_proficiencies", []),
+            skill_proficiencies=char_data.get("skill_proficiencies", []),
+            expertise_skills=char_data.get("expertise_skills", []),
+            weapon_proficiencies=char_data.get("weapon_proficiencies", []),
+            armor_proficiencies=char_data.get("armor_proficiencies", []),
+            tool_proficiencies=char_data.get("tool_proficiencies", []),
         )
 
         # Restore conditions

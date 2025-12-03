@@ -6,7 +6,7 @@ from typing import Any
 
 import questionary
 
-from dnd_engine.core.character import Character, CharacterClass
+from dnd_engine.core.character import Character
 from dnd_engine.core.character_factory import CharacterFactory
 from dnd_engine.core.creature import Abilities
 from dnd_engine.core.dice import DiceRoller
@@ -1063,68 +1063,19 @@ class CharacterCreationWizard:
         """
         console.print()
         with console.status("[cyan]Creating character...[/cyan]", spinner="dots"):
-            race_data = self.races_data[self.race]
-            class_data = self.classes_data[self.character_class]
-
-            # Create abilities object
-            abilities_obj = Abilities(
-                strength=self.abilities["strength"],
-                dexterity=self.abilities["dexterity"],
-                constitution=self.abilities["constitution"],
-                intelligence=self.abilities["intelligence"],
-                wisdom=self.abilities["wisdom"],
-                charisma=self.abilities["charisma"],
-            )
-
-            # Calculate stats
-            con_modifier = abilities_obj.con_mod
-            hp = self.factory.calculate_hp(class_data, con_modifier)
-
-            # Get AC
-            starting_equipment = class_data.get("starting_equipment", [])
-            armor_id = None
-            for item_id in starting_equipment:
-                if item_id in self.items_data.get("armor", {}):
-                    armor_id = item_id
-                    break
-
-            armor_data = self.items_data["armor"].get(armor_id) if armor_id else None
-            ac = self.factory.calculate_ac(armor_data, abilities_obj.dex_mod)
-
-            # Get proficiencies from class
-            weapon_proficiencies = class_data.get("weapon_proficiencies", [])
-            armor_proficiencies = class_data.get("armor_proficiencies", [])
-
-            # Create character
-            character_class_enum = CharacterClass[self.character_class.upper()]
-
-            character = Character(
-                name=self.name,
-                character_class=character_class_enum,
+            # Use CharacterFactory.create_character for consistent character creation.
+            # Note: self.abilities already has racial bonuses applied, so we pass them
+            # directly. The factory will skip re-applying racial bonuses since we're
+            # providing pre-computed abilities.
+            character = self.factory.create_character(
+                class_name=self.character_class,
+                race_name=self.race,
+                data_loader=self.data_loader,
                 level=self.level,
-                abilities=abilities_obj,
-                max_hp=hp,
-                ac=ac,
-                xp=0,
+                name=self.name,
+                abilities=self.abilities,  # Already has racial bonuses
                 skill_proficiencies=self.skill_proficiencies,
                 expertise_skills=self.expertise_skills,
-                weapon_proficiencies=weapon_proficiencies,
-                armor_proficiencies=armor_proficiencies,
-            )
-
-            # Set race and racial traits
-            character.race = self.race
-            character.darkvision_range = race_data.get("darkvision_range", 0)
-
-            # Set saving throw proficiencies
-            character.saving_throw_proficiencies = class_data.get("saving_throw_proficiencies", [])
-
-            # Initialize class resources
-            self.factory.initialize_class_resources(character, class_data, self.level)
-
-            # Initialize spellcasting (for spellcasting classes)
-            self.factory.initialize_spellcasting(
-                character, class_data, self.spells_data, interactive=False
             )
 
             # If we have pre-selected spells (from template), use those
@@ -1133,9 +1084,6 @@ class CharacterCreationWizard:
                 character.prepared_spells = [
                     s for s in self.selected_spells if not s.endswith("_0")
                 ]
-
-            # Apply starting equipment
-            self.factory.apply_starting_equipment(character, class_data, self.items_data)
 
         print_status_message(f"✓ {self.name} created successfully!", "success")
 

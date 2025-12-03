@@ -682,6 +682,175 @@ class CharacterFactory:
                         character.add_resource_pool(pool)
                         added_pools.add(pool_name)
 
+    def create_character(
+        self,
+        class_name: str,
+        race_name: str,
+        data_loader: DataLoader,
+        level: int = 1,
+        name: str | None = None,
+        abilities: dict[str, int] | None = None,
+        skill_proficiencies: list[str] | None = None,
+        expertise_skills: list[str] | None = None,
+    ) -> Character:
+        """
+        Create a character with all proficiencies and equipment - no UI dependencies.
+
+        This is the core character creation method that should be used by all callers.
+        It handles all the setup that was previously duplicated across debug_console,
+        character_wizard, and migration code.
+
+        Args:
+            class_name: Character class (e.g., "fighter", "rogue", "wizard")
+            race_name: Character race (e.g., "human", "elf", "dwarf")
+            data_loader: DataLoader for accessing game data
+            level: Starting level (default 1)
+            name: Character name (generates random name if not provided)
+            abilities: Pre-rolled abilities dict (rolls new if not provided)
+            skill_proficiencies: Skill proficiencies (auto-selects if not provided)
+            expertise_skills: Expertise skills (auto-selects for rogues if not provided)
+
+        Returns:
+            Fully initialized Character with all proficiencies, equipment, and resources
+        """
+        # Load required data
+        races_data = data_loader.load_races()
+        classes_data = data_loader.load_classes()
+        items_data = data_loader.load_items()
+        spells_data = data_loader.load_spells()
+
+        # Validate class and race
+        class_name = class_name.lower()
+        race_name = race_name.lower()
+
+        if class_name not in classes_data:
+            raise ValueError(f"Invalid class: {class_name}. Available: {list(classes_data.keys())}")
+        if race_name not in races_data:
+            raise ValueError(f"Invalid race: {race_name}. Available: {list(races_data.keys())}")
+
+        class_data = classes_data[class_name]
+        race_data = races_data[race_name]
+
+        # Generate name if not provided
+        if name is None:
+            name_prefixes = [
+                "Brave",
+                "Bold",
+                "Mighty",
+                "Swift",
+                "Wise",
+                "Dark",
+                "Noble",
+                "Silent",
+            ]
+            name_suffixes = [
+                "blade",
+                "heart",
+                "shield",
+                "storm",
+                "wind",
+                "fire",
+                "shadow",
+                "light",
+            ]
+            import random
+
+            name = f"{random.choice(name_prefixes)}{random.choice(name_suffixes)}"
+
+        # Roll abilities if not provided
+        abilities_pre_provided = abilities is not None
+        if abilities is None:
+            all_rolls = self.roll_all_abilities(self.dice_roller)
+            scores = [score for score, _ in all_rolls]
+            abilities = self.auto_assign_abilities(scores, class_data)
+
+        # Apply racial bonuses only if we rolled new abilities
+        # (pre-provided abilities are assumed to already have bonuses applied)
+        if not abilities_pre_provided:
+            abilities = self.apply_racial_bonuses(abilities, race_data)
+
+        # Create abilities object
+        abilities_obj = Abilities(
+            strength=abilities["strength"],
+            dexterity=abilities["dexterity"],
+            constitution=abilities["constitution"],
+            intelligence=abilities["intelligence"],
+            wisdom=abilities["wisdom"],
+            charisma=abilities["charisma"],
+        )
+
+        # Calculate HP
+        con_modifier = self.calculate_ability_modifier(abilities["constitution"])
+        hp = self.calculate_hp(class_data, con_modifier, level=1)
+
+        # Calculate AC based on starting armor
+        starting_equipment = class_data.get("starting_equipment", [])
+        armor_id = None
+        for item_id in starting_equipment:
+            if item_id in items_data.get("armor", {}):
+                armor_id = item_id
+                break
+
+        armor_data = items_data["armor"].get(armor_id) if armor_id else None
+        ac = self.calculate_ac(armor_data, abilities_obj.dex_mod)
+
+        # Auto-select skill proficiencies if not provided
+        if skill_proficiencies is None:
+            skill_profs = class_data.get("skill_proficiencies", {})
+            num_skills = skill_profs.get("choose", 0)
+            available_skills = skill_profs.get("from", [])
+            skill_proficiencies = available_skills[:num_skills]
+
+        # Auto-select expertise for rogues if not provided
+        if expertise_skills is None and class_name == "rogue":
+            expertise_skills = skill_proficiencies[:2] if skill_proficiencies else []
+        elif expertise_skills is None:
+            expertise_skills = []
+
+        # Get all proficiencies from class data
+        weapon_proficiencies = class_data.get("weapon_proficiencies", [])
+        armor_proficiencies = class_data.get("armor_proficiencies", [])
+        tool_proficiencies = class_data.get("tool_proficiencies", [])
+        saving_throw_proficiencies = class_data.get("saving_throw_proficiencies", [])
+
+        # Get character class enum
+        character_class_enum = CharacterClass[class_name.upper()]
+
+        # Create character
+        character = Character(
+            name=name,
+            character_class=character_class_enum,
+            level=1,  # Start at level 1, will level up below
+            abilities=abilities_obj,
+            max_hp=hp,
+            ac=ac,
+            xp=0,
+            skill_proficiencies=skill_proficiencies,
+            expertise_skills=expertise_skills,
+            weapon_proficiencies=weapon_proficiencies,
+            armor_proficiencies=armor_proficiencies,
+            tool_proficiencies=tool_proficiencies,
+            saving_throw_proficiencies=saving_throw_proficiencies,
+        )
+
+        # Store race and darkvision
+        character.race = race_name
+        character.darkvision_range = race_data.get("darkvision_range", 0)
+
+        # Level up character to target level
+        for _ in range(1, level):
+            character.level += 1
+            character._increase_hp(data_loader)
+
+        # Initialize class resources and spellcasting
+        self.initialize_class_resources(character, class_data, level)
+        self.initialize_spellcasting(character, class_data, spells_data, interactive=False)
+
+        # Apply starting equipment
+        self.apply_starting_equipment(character, class_data, items_data)
+
+        return character
+
     def create_character_interactive(self, ui, data_loader: DataLoader) -> Character:
         """
         Full interactive character creation flow.
