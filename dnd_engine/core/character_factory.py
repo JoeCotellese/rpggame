@@ -9,14 +9,6 @@ from dnd_engine.core.dice import DiceRoller
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.systems.inventory import EquipmentSlot
 from dnd_engine.systems.resources import ResourcePool
-from dnd_engine.ui.rich_ui import (
-    print_choice_menu,
-    print_error,
-    print_input_prompt,
-    print_message,
-    print_section,
-    print_status_message,
-)
 
 
 class CharacterFactory:
@@ -229,140 +221,6 @@ class CharacterFactory:
             return base_ac
 
     @staticmethod
-    def select_skill_proficiencies(
-        class_data: dict[str, Any], skills_data: dict[str, Any]
-    ) -> list[str]:
-        """
-        Let player select skill proficiencies for their class.
-
-        Args:
-            class_data: Class definition with skill_proficiencies
-            skills_data: Skills data from skills.json
-
-        Returns:
-            List of selected skill names (e.g., ["athletics", "perception"])
-
-        Raises:
-            ValueError: If class has no skill proficiencies defined
-        """
-        skill_profs = class_data.get("skill_proficiencies")
-        if not skill_profs:
-            return []
-
-        # Get the number to choose and available skills
-        num_to_choose = skill_profs.get("choose", 0)
-        available_skills = skill_profs.get("from", [])
-
-        if num_to_choose == 0 or not available_skills:
-            return []
-
-        # Display available skills with their abilities
-        print_section(f"Choose {num_to_choose} Skill Proficiencies")
-
-        options = []
-        for i, skill_id in enumerate(available_skills, 1):
-            skill_info = skills_data.get(skill_id, {})
-            ability = skill_info.get("ability", "?").upper()
-            skill_name = skill_info.get("name", skill_id.title())
-            options.append({"number": str(i), "text": f"{skill_name} ({ability})"})
-
-        print_choice_menu(f"Available Skills (Choose {num_to_choose})", options)
-
-        selected = []
-        while len(selected) < num_to_choose:
-            remaining = num_to_choose - len(selected)
-            prompt = (
-                f"Enter skill number (select {remaining} more)"
-                if remaining > 1
-                else "Enter skill number"
-            )
-            try:
-                choice = print_input_prompt(prompt).strip()
-                idx = int(choice) - 1
-                if 0 <= idx < len(available_skills):
-                    skill_id = available_skills[idx]
-                    if skill_id not in selected:
-                        selected.append(skill_id)
-                        skill_name = skills_data[skill_id].get("name", skill_id.title())
-                        print_status_message(f"Selected: {skill_name}", "success")
-                    else:
-                        print_status_message("You already selected that skill.", "warning")
-                else:
-                    print_status_message(
-                        f"Please enter a number between 1 and {len(available_skills)}.", "warning"
-                    )
-            except ValueError:
-                print_status_message("Please enter a valid number.", "warning")
-
-        return selected
-
-    @staticmethod
-    def select_expertise_skills(
-        skill_proficiencies: list[str], skills_data: dict[str, Any]
-    ) -> list[str]:
-        """
-        Let Rogue player select expertise skills from their proficiencies.
-
-        Rogues can choose 2 skills they are proficient in to have expertise in.
-        With expertise, the proficiency bonus is doubled for those skills.
-
-        Args:
-            skill_proficiencies: List of skills the character is proficient in
-            skills_data: Skills data from skills.json
-
-        Returns:
-            List of selected expertise skill names (should be 2 or fewer)
-        """
-        if not skill_proficiencies:
-            return []
-
-        num_expertise = min(2, len(skill_proficiencies))
-
-        # Display available skills for expertise
-        print_section(f"Choose {num_expertise} Skills for Expertise")
-        print_message("With expertise, your proficiency bonus is doubled for these skills.\n")
-
-        options = []
-        for i, skill_id in enumerate(skill_proficiencies, 1):
-            skill_info = skills_data.get(skill_id, {})
-            ability = skill_info.get("ability", "?").upper()
-            skill_name = skill_info.get("name", skill_id.title())
-            options.append({"number": str(i), "text": f"{skill_name} ({ability})"})
-
-        print_choice_menu(f"Available Skills for Expertise (Choose {num_expertise})", options)
-
-        selected = []
-        while len(selected) < num_expertise:
-            remaining = num_expertise - len(selected)
-            prompt = (
-                f"Enter skill number (select {remaining} more)"
-                if remaining > 1
-                else "Enter skill number"
-            )
-            try:
-                choice = print_input_prompt(prompt).strip()
-                idx = int(choice) - 1
-                if 0 <= idx < len(skill_proficiencies):
-                    skill_id = skill_proficiencies[idx]
-                    if skill_id not in selected:
-                        selected.append(skill_id)
-                        skill_name = skills_data[skill_id].get("name", skill_id.title())
-                        print_status_message(f"Selected expertise: {skill_name}", "success")
-                    else:
-                        print_status_message(
-                            "You already selected that skill for expertise.", "warning"
-                        )
-                else:
-                    print_status_message(
-                        f"Please enter a number between 1 and {len(skill_proficiencies)}.",
-                        "warning",
-                    )
-            except ValueError:
-                print_status_message("Please enter a valid number.", "warning")
-
-        return selected
-
-    @staticmethod
     def apply_starting_equipment(
         character: Character, class_data: dict[str, Any], items_data: dict[str, Any]
     ) -> None:
@@ -459,94 +317,21 @@ class CharacterFactory:
                     break  # Only need one type of compatible ammo per weapon
 
     @staticmethod
-    def select_spells(
-        spell_type: str,
-        num_to_choose: int,
-        available_spells: list[tuple[str, dict[str, Any]]],
-        spells_data: dict[str, Any],
-    ) -> list[str]:
-        """
-        Let player select spells interactively.
-
-        Args:
-            spell_type: Type of spells being selected (e.g., "Cantrips", "1st Level Spells")
-            num_to_choose: Number of spells to select
-            available_spells: List of (spell_id, spell_data) tuples
-            spells_data: All spell definitions from spells.json
-
-        Returns:
-            List of selected spell IDs
-        """
-        if num_to_choose == 0 or not available_spells:
-            return []
-
-        print_section(f"Choose {num_to_choose} {spell_type}")
-
-        # Sort spells by school then name for better organization
-        sorted_spells = sorted(
-            available_spells, key=lambda x: (x[1].get("school", ""), x[1].get("name", ""))
-        )
-
-        # Display available spells
-        options = []
-        for i, (spell_id, spell_data) in enumerate(sorted_spells, 1):
-            name = spell_data.get("name", spell_id.title())
-            school = spell_data.get("school", "").capitalize()
-            description = spell_data.get("description", "")
-            # Truncate description to fit on one line
-            desc_short = description[:60] + "..." if len(description) > 60 else description
-            options.append({"number": str(i), "text": f"{name} ({school}) - {desc_short}"})
-
-        print_choice_menu(f"Available {spell_type} (Choose {num_to_choose})", options)
-
-        selected = []
-        while len(selected) < num_to_choose:
-            remaining = num_to_choose - len(selected)
-            prompt = (
-                f"Enter spell number (select {remaining} more)"
-                if remaining > 1
-                else "Enter spell number"
-            )
-            try:
-                choice = print_input_prompt(prompt).strip()
-                idx = int(choice) - 1
-                if 0 <= idx < len(sorted_spells):
-                    spell_id, spell_data = sorted_spells[idx]
-                    if spell_id not in selected:
-                        selected.append(spell_id)
-                        spell_name = spell_data.get("name", spell_id.title())
-                        print_status_message(f"Selected: {spell_name}", "success")
-                    else:
-                        print_status_message("You already selected that spell.", "warning")
-                else:
-                    print_status_message(
-                        f"Please enter a number between 1 and {len(sorted_spells)}.", "warning"
-                    )
-            except ValueError:
-                print_status_message("Please enter a valid number.", "warning")
-            except KeyboardInterrupt:
-                raise
-
-        return selected
-
-    @staticmethod
     def initialize_spellcasting(
         character: Character,
         class_data: dict[str, Any],
         spells_data: dict[str, Any],
-        interactive: bool = True,
     ) -> None:
         """
         Initialize spellcasting properties for spellcasting classes.
 
         Sets up spellcasting_ability, known_spells, and prepared_spells based on
-        class spellcasting metadata.
+        class spellcasting metadata. Auto-selects first N available spells.
 
         Args:
             character: Character object to initialize spellcasting for
             class_data: Class definition with optional spellcasting metadata
             spells_data: All spell definitions from spells.json
-            interactive: If True, prompt user to select spells; if False, auto-select first N
 
         Side Effects:
             - Sets character.spellcasting_ability
@@ -596,40 +381,16 @@ class CharacterFactory:
             # For sorcerers/bards who know a limited number of spells
             spells_known_count = spellcasting.get("spells_known", {}).get(str(character.level), 0)
 
-        # Select spells
-        if interactive and (cantrips_known_count > 0 or spells_known_count > 0):
-            selected_cantrips = []
-            selected_leveled_spells = []
-
-            if cantrips_known_count > 0:
-                selected_cantrips = CharacterFactory.select_spells(
-                    "Cantrips", cantrips_known_count, cantrip_list, spells_data
-                )
-
-            if spells_known_count > 0:
-                selected_leveled_spells = CharacterFactory.select_spells(
-                    "1st Level Spells for Spellbook"
-                    if spellcasting.get("spells_known_type") == "spellbook"
-                    else "Known Spells",
-                    spells_known_count,
-                    leveled_spell_list,
-                    spells_data,
-                )
-
-            character.known_spells = selected_cantrips + selected_leveled_spells
-            # Cantrips are always prepared
-            character.prepared_spells = selected_cantrips + selected_leveled_spells
-        else:
-            # Non-interactive: just take first N spells
-            cantrips = [s[0] for s in cantrip_list]
-            leveled_spells = [s[0] for s in leveled_spell_list]
-            character.known_spells = (
-                cantrips[:cantrips_known_count] + leveled_spells[:spells_known_count]
-            )
-            # Cantrips are always prepared
-            character.prepared_spells = (
-                cantrips[:cantrips_known_count] + leveled_spells[:spells_known_count]
-            )
+        # Auto-select first N spells
+        cantrips = [s[0] for s in cantrip_list]
+        leveled_spells = [s[0] for s in leveled_spell_list]
+        character.known_spells = (
+            cantrips[:cantrips_known_count] + leveled_spells[:spells_known_count]
+        )
+        # Cantrips are always prepared
+        character.prepared_spells = (
+            cantrips[:cantrips_known_count] + leveled_spells[:spells_known_count]
+        )
 
     @staticmethod
     def initialize_class_resources(
@@ -682,220 +443,92 @@ class CharacterFactory:
                         character.add_resource_pool(pool)
                         added_pools.add(pool_name)
 
-    def create_character_interactive(self, ui, data_loader: DataLoader) -> Character:
+    def create_character(
+        self,
+        class_name: str,
+        race_name: str,
+        data_loader: DataLoader,
+        level: int = 1,
+        name: str | None = None,
+        abilities: dict[str, int] | None = None,
+        skill_proficiencies: list[str] | None = None,
+        expertise_skills: list[str] | None = None,
+    ) -> Character:
         """
-        Full interactive character creation flow.
+        Create a character with all proficiencies and equipment - no UI dependencies.
+
+        This is the core character creation method that should be used by all callers.
+        It handles all the setup that was previously duplicated across debug_console,
+        character_wizard, and migration code.
 
         Args:
-            ui: UI instance for input/output
-            data_loader: DataLoader for accessing races/classes/items
+            class_name: Character class (e.g., "fighter", "rogue", "wizard")
+            race_name: Character race (e.g., "human", "elf", "dwarf")
+            data_loader: DataLoader for accessing game data
+            level: Starting level (default 1)
+            name: Character name (generates random name if not provided)
+            abilities: Pre-rolled abilities dict (rolls new if not provided)
+            skill_proficiencies: Skill proficiencies (auto-selects if not provided)
+            expertise_skills: Expertise skills (auto-selects for rogues if not provided)
 
         Returns:
-            Fully created Character object ready to play
-
-        Flow:
-            1. Get name
-            2. Choose race
-            3. Choose class
-            4. Roll abilities (show results)
-            5. Auto-assign (show assignments)
-            6. Allow swaps
-            7. Apply racial bonuses (show result)
-            8. Calculate derived stats
-            9. Select skill proficiencies
-            10. Create character and apply starting equipment
-            11. Display character sheet
-            12. Return Character
+            Fully initialized Character with all proficiencies, equipment, and resources
         """
-        # Load data
+        # Load required data
         races_data = data_loader.load_races()
         classes_data = data_loader.load_classes()
         items_data = data_loader.load_items()
-        skills_data = data_loader.load_skills()
+        spells_data = data_loader.load_spells()
 
-        # Step 1: Get character name
-        print_section("CHARACTER CREATION", "Begin your adventure!")
-        name = print_input_prompt("What is your character's name?").strip()
-        while not name:
-            print_status_message("Name cannot be empty.", "warning")
-            name = print_input_prompt("What is your character's name?").strip()
+        # Validate class and race
+        class_name = class_name.lower()
+        race_name = race_name.lower()
 
-        # Step 2: Choose race
-        race_list = list(races_data.keys())
-        options = []
-        for i, race_id in enumerate(race_list, 1):
-            race = races_data[race_id]
-            bonuses = ", ".join(
-                [f"+{v} {k.upper()[:3]}" for k, v in race["ability_bonuses"].items()]
-            )
-            options.append({"number": str(i), "text": f"{race['name']} ({bonuses})"})
+        if class_name not in classes_data:
+            raise ValueError(f"Invalid class: {class_name}. Available: {list(classes_data.keys())}")
+        if race_name not in races_data:
+            raise ValueError(f"Invalid race: {race_name}. Available: {list(races_data.keys())}")
 
-        print_choice_menu("Choose Your Race", options)
+        class_data = classes_data[class_name]
+        race_data = races_data[race_name]
 
-        race_choice = None
-        while race_choice is None:
-            try:
-                choice = print_input_prompt(f"Enter number (1-{len(race_list)})").strip()
-                idx = int(choice) - 1
-                if 0 <= idx < len(race_list):
-                    race_choice = race_list[idx]
-                else:
-                    print_status_message(
-                        f"Please enter a number between 1 and {len(race_list)}.", "warning"
-                    )
-            except ValueError:
-                print_status_message("Please enter a valid number.", "warning")
+        # Generate name if not provided
+        if name is None:
+            name_prefixes = [
+                "Brave",
+                "Bold",
+                "Mighty",
+                "Swift",
+                "Wise",
+                "Dark",
+                "Noble",
+                "Silent",
+            ]
+            name_suffixes = [
+                "blade",
+                "heart",
+                "shield",
+                "storm",
+                "wind",
+                "fire",
+                "shadow",
+                "light",
+            ]
+            import random
 
-        race_data = races_data[race_choice]
-        print_status_message(f"You chose: {race_data['name']}", "success")
+            name = f"{random.choice(name_prefixes)}{random.choice(name_suffixes)}"
 
-        # Step 3: Choose class (MVP: Fighter only)
-        class_list = list(classes_data.keys())
-        options = []
-        for i, class_id in enumerate(class_list, 1):
-            cls = classes_data[class_id]
-            options.append({"number": str(i), "text": f"{cls['name']} ({cls['description']})"})
+        # Roll abilities if not provided
+        abilities_pre_provided = abilities is not None
+        if abilities is None:
+            all_rolls = self.roll_all_abilities(self.dice_roller)
+            scores = [score for score, _ in all_rolls]
+            abilities = self.auto_assign_abilities(scores, class_data)
 
-        print_choice_menu("Choose Your Class", options)
-
-        class_choice = class_list[0]  # For MVP, auto-select Fighter
-        if len(class_list) == 1:
-            print_status_message(
-                f"Class: {classes_data[class_choice]['name']} (MVP: Fighter only)", "info"
-            )
-        else:
-            # Future: Allow class selection
-            class_choice_idx = None
-            while class_choice_idx is None:
-                try:
-                    choice = print_input_prompt(f"Enter number (1-{len(class_list)})").strip()
-                    idx = int(choice) - 1
-                    if 0 <= idx < len(class_list):
-                        class_choice_idx = idx
-                        class_choice = class_list[idx]
-                    else:
-                        print_status_message(
-                            f"Please enter a number between 1 and {len(class_list)}.", "warning"
-                        )
-                except ValueError:
-                    print_status_message("Please enter a valid number.", "warning")
-
-        class_data = classes_data[class_choice]
-
-        # Step 4: Roll ability scores
-        print_section("Rolling Ability Scores")
-
-        all_rolls = self.roll_all_abilities(self.dice_roller)
-        scores = []
-        roll_display = []
-
-        for i, (score, dice) in enumerate(all_rolls, 1):
-            dropped = min(dice)
-            roll_display.append(
-                f"Roll {i}: {sorted(dice, reverse=True)} = {score} (dropped {dropped})"
-            )
-            scores.append(score)
-
-        print_message("\n".join(roll_display))
-        print_status_message(f"Your rolled scores: {sorted(scores, reverse=True)}", "info")
-
-        # Step 5: Auto-assign abilities
-        print_section(f"Assigning {class_data['name']} Class Priorities")
-
-        abilities = self.auto_assign_abilities(scores, class_data)
-        ability_display = []
-
-        for ability, score in abilities.items():
-            modifier = self.calculate_ability_modifier(score)
-            sign = "+" if modifier >= 0 else ""
-            ability_display.append(f"{ability.upper()[:3]}: {score} ({sign}{modifier})")
-
-        print_message("\n".join(ability_display))
-
-        # Step 6: Allow ability swaps
-        print_section("Ability Swap (Optional)")
-
-        while True:
-            swap = (
-                print_input_prompt("Would you like to swap any two abilities? (y/n)")
-                .strip()
-                .lower()
-            )
-            if swap not in ["y", "yes", "n", "no"]:
-                print_status_message("Please enter 'y' or 'n'.", "warning")
-                continue
-
-            if swap in ["n", "no"]:
-                break
-
-            # Get abilities to swap
-            ability1 = (
-                print_input_prompt("Enter first ability to swap (STR/DEX/CON/INT/WIS/CHA)")
-                .strip()
-                .lower()
-            )
-            ability2 = (
-                print_input_prompt("Enter second ability to swap (STR/DEX/CON/INT/WIS/CHA)")
-                .strip()
-                .lower()
-            )
-
-            # Map short forms to full names
-            ability_map = {
-                "str": "strength",
-                "dex": "dexterity",
-                "con": "constitution",
-                "int": "intelligence",
-                "wis": "wisdom",
-                "cha": "charisma",
-            }
-
-            ability1_full = ability_map.get(ability1, ability1)
-            ability2_full = ability_map.get(ability2, ability2)
-
-            try:
-                abilities = self.swap_abilities(abilities, ability1_full, ability2_full)
-                print_status_message(
-                    f"Swapping {ability1_full.upper()} ({abilities[ability1_full]}) with {ability2_full.upper()} ({abilities[ability2_full]})",
-                    "success",
-                )
-                ability_display = []
-                for ability, score in abilities.items():
-                    modifier = self.calculate_ability_modifier(score)
-                    sign = "+" if modifier >= 0 else ""
-                    ability_display.append(f"{ability.upper()[:3]}: {score} ({sign}{modifier})")
-                print_message("\n".join(ability_display))
-            except ValueError as e:
-                print_error(str(e))
-
-        # Step 7: Apply racial bonuses
-        print_section(f"Applying {race_data['name']} Racial Bonuses")
-
-        abilities_before = abilities.copy()
-        abilities = self.apply_racial_bonuses(abilities, race_data)
-        ability_display = []
-
-        for ability, final_score in abilities.items():
-            original = abilities_before[ability]
-            bonus = final_score - original
-            if bonus > 0:
-                modifier = self.calculate_ability_modifier(final_score)
-                sign = "+" if modifier >= 0 else ""
-                ability_display.append(
-                    f"{ability.upper()[:3]}: {original} + {bonus} = {final_score} ({sign}{modifier})"
-                )
-            else:
-                modifier = self.calculate_ability_modifier(final_score)
-                sign = "+" if modifier >= 0 else ""
-                ability_display.append(f"{ability.upper()[:3]}: {final_score} ({sign}{modifier})")
-
-        print_message("\n".join(ability_display))
-
-        # Step 8: Calculate derived stats
-        print_section("Calculating Character Stats")
-
-        con_modifier = self.calculate_ability_modifier(abilities["constitution"])
-        hp = self.calculate_hp(class_data, con_modifier)
+        # Apply racial bonuses only if we rolled new abilities
+        # (pre-provided abilities are assumed to already have bonuses applied)
+        if not abilities_pre_provided:
+            abilities = self.apply_racial_bonuses(abilities, race_data)
 
         # Create abilities object
         abilities_obj = Abilities(
@@ -907,7 +540,11 @@ class CharacterFactory:
             charisma=abilities["charisma"],
         )
 
-        # Get starting equipment to calculate AC
+        # Calculate HP
+        con_modifier = self.calculate_ability_modifier(abilities["constitution"])
+        hp = self.calculate_hp(class_data, con_modifier, level=1)
+
+        # Calculate AC based on starting armor
         starting_equipment = class_data.get("starting_equipment", [])
         armor_id = None
         for item_id in starting_equipment:
@@ -918,50 +555,33 @@ class CharacterFactory:
         armor_data = items_data["armor"].get(armor_id) if armor_id else None
         ac = self.calculate_ac(armor_data, abilities_obj.dex_mod)
 
-        str_modifier = abilities_obj.str_mod
-        proficiency_bonus = 2  # Level 1
-        attack_bonus = proficiency_bonus + str_modifier
+        # Auto-select skill proficiencies if not provided
+        if skill_proficiencies is None:
+            skill_profs = class_data.get("skill_proficiencies", {})
+            num_skills = skill_profs.get("choose", 0)
+            available_skills = skill_profs.get("from", [])
+            skill_proficiencies = available_skills[:num_skills]
 
-        # Get weapon damage
-        weapon_id = None
-        for item_id in starting_equipment:
-            if item_id in items_data.get("weapons", {}):
-                weapon_id = item_id
-                break
+        # Auto-select expertise for rogues if not provided
+        if expertise_skills is None and class_name == "rogue":
+            expertise_skills = skill_proficiencies[:2] if skill_proficiencies else []
+        elif expertise_skills is None:
+            expertise_skills = []
 
-        weapon_data = items_data["weapons"].get(weapon_id) if weapon_id else None
-        damage_dice = weapon_data.get("damage", "1d4") if weapon_data else "1d4"
-
-        stats_display = [
-            f"Hit Points: {hp} ({class_data['hit_die']} max + {con_modifier} CON)",
-            f"Armor Class: {ac}" + (f" ({armor_data['name']})" if armor_data else " (no armor)"),
-            f"Attack Bonus: +{attack_bonus} (proficiency +{proficiency_bonus}, STR +{str_modifier})",
-            f"Damage: {damage_dice}+{str_modifier}"
-            + (f" {weapon_data['damage_type']} ({weapon_data['name']})" if weapon_data else ""),
-        ]
-        print_message("\n".join(stats_display))
-
-        # Step 9: Select skill proficiencies
-        print_section("Skill Proficiencies")
-        skill_proficiencies = self.select_skill_proficiencies(class_data, skills_data)
-
-        # Step 9b: Select expertise skills for Rogue
-        expertise_skills = []
-        if class_choice == "rogue":
-            expertise_skills = self.select_expertise_skills(skill_proficiencies, skills_data)
-
-        # Step 10: Create character and apply starting equipment
-        # Get the CharacterClass enum value from the selected class_choice
-        character_class_enum = CharacterClass[class_choice.upper()]
-
-        # Get weapon and armor proficiencies from class data
+        # Get all proficiencies from class data
         weapon_proficiencies = class_data.get("weapon_proficiencies", [])
         armor_proficiencies = class_data.get("armor_proficiencies", [])
+        tool_proficiencies = class_data.get("tool_proficiencies", [])
+        saving_throw_proficiencies = class_data.get("saving_throw_proficiencies", [])
 
+        # Get character class enum
+        character_class_enum = CharacterClass[class_name.upper()]
+
+        # Create character
         character = Character(
             name=name,
             character_class=character_class_enum,
-            level=1,
+            level=1,  # Start at level 1, will level up below
             abilities=abilities_obj,
             max_hp=hp,
             ac=ac,
@@ -970,132 +590,25 @@ class CharacterFactory:
             expertise_skills=expertise_skills,
             weapon_proficiencies=weapon_proficiencies,
             armor_proficiencies=armor_proficiencies,
+            tool_proficiencies=tool_proficiencies,
+            saving_throw_proficiencies=saving_throw_proficiencies,
         )
 
-        # Store race (will add field to Character class)
-        character.race = race_choice
-
-        # Set darkvision range from race data
+        # Store race and darkvision
+        character.race = race_name
         character.darkvision_range = race_data.get("darkvision_range", 0)
 
-        # Store saving throw proficiencies from class data
-        character.saving_throw_proficiencies = class_data.get("saving_throw_proficiencies", [])
+        # Level up character to target level
+        for _ in range(1, level):
+            character.level += 1
+            character._increase_hp(data_loader)
 
-        # Initialize class resources (spell slots, ki points, etc.)
-        self.initialize_class_resources(character, class_data, 1)
-
-        # Initialize spellcasting (for spellcasting classes)
-        spells_data = data_loader.load_spells()
+        # Initialize class resources and spellcasting
+        self.initialize_class_resources(character, class_data, level)
         self.initialize_spellcasting(character, class_data, spells_data)
 
-        print_section("Adding Starting Equipment")
-
+        # Apply starting equipment
         self.apply_starting_equipment(character, class_data, items_data)
 
-        # Display equipped items and inventory
-        weapon_equipped = character.inventory.get_equipped_item(EquipmentSlot.WEAPON)
-        armor_equipped = character.inventory.get_equipped_item(EquipmentSlot.ARMOR)
-        consumables = character.inventory.get_items_by_category("consumables")
-
-        equipment_display = ["EQUIPPED:"]
-        if weapon_equipped:
-            weapon_info = items_data["weapons"][weapon_equipped]
-            equipment_display.append(
-                f"  Weapon: {weapon_info['name']} ({weapon_info['damage']} {weapon_info['damage_type']})"
-            )
-        else:
-            equipment_display.append("  Weapon: (none)")
-
-        if armor_equipped:
-            armor_info = items_data["armor"][armor_equipped]
-            equipment_display.append(f"  Armor: {armor_info['name']} (AC {armor_info['ac']})")
-        else:
-            equipment_display.append("  Armor: (none)")
-
-        equipment_display.append("\nINVENTORY:")
-        if consumables:
-            for inv_item in consumables:
-                item_info = items_data["consumables"][inv_item.item_id]
-                qty_str = f" x{inv_item.quantity}" if inv_item.quantity > 1 else ""
-                equipment_display.append(f"  {item_info['name']}{qty_str}")
-        else:
-            equipment_display.append("  (no items)")
-
-        equipment_display.append(f"\nGold: {character.inventory.gold} gp")
-        print_message("\n".join(equipment_display))
-
-        # Step 11: Display character sheet
-        sheet_display = [
-            f"Name: {character.name}",
-            f"Race: {race_data['name']}",
-            f"Class: {class_data['name']} (Level 1)",
-            "",
-            "ABILITIES:",
-        ]
-
-        for ability in [
-            "strength",
-            "dexterity",
-            "constitution",
-            "intelligence",
-            "wisdom",
-            "charisma",
-        ]:
-            score = getattr(abilities_obj, ability)
-            modifier = self.calculate_ability_modifier(score)
-            sign = "+" if modifier >= 0 else ""
-            sheet_display.append(f"  {ability.upper()[:3]}: {score} ({sign}{modifier})")
-
-        # Add weapon and armor proficiencies to sheet
-        if weapon_proficiencies or armor_proficiencies:
-            sheet_display.append("")
-            sheet_display.append("PROFICIENCIES:")
-            if weapon_proficiencies:
-                weapon_types = ", ".join([t.title() for t in weapon_proficiencies])
-                sheet_display.append(f"  Weapons: {weapon_types}")
-            if armor_proficiencies:
-                armor_types = ", ".join([t.title() for t in armor_proficiencies])
-                sheet_display.append(f"  Armor: {armor_types}")
-
-        # Add skill proficiencies to sheet
-        if skill_proficiencies:
-            sheet_display.append("")
-            sheet_display.append("SKILL PROFICIENCIES:")
-            for skill_id in skill_proficiencies:
-                skill_info = skills_data.get(skill_id, {})
-                skill_name = skill_info.get("name", skill_id.title())
-                sheet_display.append(f"  {skill_name}")
-
-        sheet_display.extend(
-            [
-                "",
-                "COMBAT STATS:",
-                f"  HP: {character.current_hp}/{character.max_hp}",
-                f"  AC: {character.ac}",
-                f"  Attack: +{attack_bonus} to hit, {damage_dice}+{str_modifier} damage",
-                f"  Initiative: +{abilities_obj.dex_mod}",
-                "",
-                "EQUIPMENT:",
-            ]
-        )
-
-        if weapon_equipped:
-            sheet_display.append(f"  Weapon: {items_data['weapons'][weapon_equipped]['name']}")
-        if armor_equipped:
-            sheet_display.append(f"  Armor: {items_data['armor'][armor_equipped]['name']}")
-        if consumables:
-            items_str = ", ".join(
-                [
-                    f"{items_data['consumables'][item.item_id]['name']} x{item.quantity}"
-                    if item.quantity > 1
-                    else items_data["consumables"][item.item_id]["name"]
-                    for item in consumables
-                ]
-            )
-            sheet_display.append(f"  Items: {items_str}")
-
-        print_section("CHARACTER SHEET", "\n".join(sheet_display))
-
-        print_input_prompt("Press Enter to begin your adventure")
-
         return character
+

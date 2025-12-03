@@ -77,6 +77,45 @@ class TestRogueCharacterCreation:
         assert total_consumables >= 2  # 2 potions of healing
         assert len(tools) >= 1  # thieves_tools
 
+    def test_rogue_has_thieves_tools_proficiency(self):
+        """Test Rogue class grants thieves' tools proficiency per D&D 5E rules."""
+        data_loader = DataLoader()
+        classes_data = data_loader.load_classes()
+
+        rogue_data = classes_data["rogue"]
+
+        # Verify tool_proficiencies is in class data
+        assert "tool_proficiencies" in rogue_data
+        assert "thieves_tools" in rogue_data["tool_proficiencies"]
+
+    def test_rogue_character_has_tool_proficiencies_attribute(self):
+        """Test Rogue character created via factory has tool_proficiencies."""
+        data_loader = DataLoader()
+        classes_data = data_loader.load_classes()
+        items_data = data_loader.load_items()
+
+        abilities = Abilities(
+            strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8
+        )
+
+        # Create a Rogue with tool proficiencies from class data
+        rogue_data = classes_data["rogue"]
+        tool_proficiencies = rogue_data.get("tool_proficiencies", [])
+
+        rogue = Character(
+            name="Test Rogue",
+            character_class=CharacterClass.ROGUE,
+            level=1,
+            abilities=abilities,
+            max_hp=8,
+            ac=14,
+            tool_proficiencies=tool_proficiencies,
+        )
+
+        # Verify tool_proficiencies attribute exists and contains thieves_tools
+        assert hasattr(rogue, "tool_proficiencies")
+        assert "thieves_tools" in rogue.tool_proficiencies
+
     def test_rogue_ability_score_distribution(self):
         """Test Rogue prioritizes DEX > CON > INT"""
         from dnd_engine.core.character_factory import CharacterFactory

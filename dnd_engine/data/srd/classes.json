@@ -58,6 +58,7 @@
     "saving_throw_proficiencies": ["dex", "int"],
     "armor_proficiencies": ["light"],
     "weapon_proficiencies": ["simple", "hand_crossbows", "longswords", "rapiers", "shortswords"],
+    "tool_proficiencies": ["thieves_tools"],
     "skill_proficiencies": {
       "choose": 4,
       "from": ["acrobatics", "athletics", "deception", "insight", "intimidation", "investigation", "perception", "performance", "persuasion", "sleight_of_hand", "stealth"]
