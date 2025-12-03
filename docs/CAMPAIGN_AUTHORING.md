@@ -462,6 +462,76 @@ Quest items:
 - Display with a special marker (★) in inventory
 - Cannot be sold
 - Are tracked by the quest system
+- **Cannot be given away** (see below)
+
+### Quest Item Transfer Protection
+
+The `quest_item: true` flag protects items from being accidentally given to NPCs during conversation. This prevents players from losing critical items needed for quest progression.
+
+| `quest_item` flag | Quest objective | Can give to NPC? |
+|-------------------|-----------------|------------------|
+| `false` | (any) | ✅ Yes - regular item |
+| `true` | DELIVER to *this* NPC | ✅ Yes - intended recipient |
+| `true` | Bonus reward for *this* NPC | ✅ Yes - intended recipient |
+| `true` | No matching objective | ❌ No - protected |
+
+**The `quest_item` flag is the lock. DELIVER objectives and bonus rewards are the keys that only work for the intended NPC.**
+
+#### Example: Deliverable Quest Item
+
+```json
+// Item definition
+{
+  "id": "skull_of_dragon",
+  "name": "Skull of the Dragon",
+  "quest_item": true
+}
+
+// Quest objective
+{
+  "id": "return_skull",
+  "type": "deliver",
+  "target": "father_aldric",
+  "deliver_item": "skull_of_dragon",
+  "description": "Return the skull to Father Aldric"
+}
+```
+
+Result:
+- Give to Father Aldric → ✅ allowed (DELIVER objective matches)
+- Give to random innkeeper → ❌ blocked (no matching objective)
+
+#### Example: Non-Deliverable Quest Item
+
+```json
+// Item definition
+{
+  "id": "ancient_journal",
+  "name": "Ancient Journal",
+  "quest_item": true
+}
+
+// Quest objective - USE, not DELIVER
+{
+  "id": "read_journal",
+  "type": "use",
+  "target": "ancient_journal",
+  "description": "Read the ancient journal"
+}
+```
+
+Result:
+- Give to any NPC → ❌ blocked (USE objective, not DELIVER)
+- Player must read/use the item themselves
+
+#### When to Use Each Pattern
+
+| Scenario | Pattern |
+|----------|---------|
+| Player must read/examine an item | `type: use` + `quest_item: true` |
+| Player must bring item to specific NPC | `type: deliver` + `quest_item: true` |
+| Optional bonus for returning item | `bonus_rewards` + `quest_item: true` |
+| Player can give item to anyone | `quest_item: false` (or omit flag) |
 
 ### Item Placement
 

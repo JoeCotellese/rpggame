@@ -714,6 +714,18 @@ class NPCChatManager:
                 "npc_dialogue_hint": bonus.description,
             }
 
+        # Block transfer of quest items that don't have a matching objective
+        inv_item = item_holder.inventory.items.get(item_id)
+        if inv_item and inv_item.quest_item:
+            return {
+                "success": False,
+                "error": (
+                    f"Cannot give away {item_id} - it is a quest item needed "
+                    "for progression. Quest items can only be given to NPCs "
+                    "when a quest objective specifically requires it."
+                ),
+            }
+
         # NPC accepts the item but no special reward
         item_holder.inventory.remove_item(item_id)
         print_status_message(

@@ -414,11 +414,41 @@ class TestNPCChatManagerToolHandlers:
         # Not a bonus reward either
         manager.game_state.quest_manager.check_bonus_reward.return_value = (None, None)
 
+        # Mock inventory items dict - item is NOT a quest item
+        mock_inv_item = Mock()
+        mock_inv_item.quest_item = False
+        mock_character.inventory.items = {"random_item": mock_inv_item}
+
         result = manager._handle_receive_item_from_player("random_item")
 
         assert result["success"] is True
         assert result["bonus_reward"] is False
         mock_character.inventory.remove_item.assert_called_with("random_item")
+
+    def test_handle_receive_item_blocks_quest_items(self, manager, sample_npc, mock_character):
+        """Test that quest items cannot be given away without a matching objective."""
+        manager._current_conversation = ConversationState(npc=sample_npc)
+
+        mock_character.inventory.has_item.return_value = True
+
+        # Not a deliver objective
+        manager.game_state.quest_manager.complete_deliver_objective.return_value = {
+            "success": False,
+        }
+        # Not a bonus reward either
+        manager.game_state.quest_manager.check_bonus_reward.return_value = (None, None)
+
+        # Mock inventory items dict - item IS a quest item
+        mock_inv_item = Mock()
+        mock_inv_item.quest_item = True
+        mock_character.inventory.items = {"gorgus_journal": mock_inv_item}
+
+        result = manager._handle_receive_item_from_player("gorgus_journal")
+
+        assert result["success"] is False
+        assert "quest item" in result["error"]
+        # Item should NOT be removed
+        mock_character.inventory.remove_item.assert_not_called()
 
     def test_handle_receive_item_not_in_inventory(self, manager, sample_npc, mock_character):
         """Test receiving item fails if party doesn't have it."""
