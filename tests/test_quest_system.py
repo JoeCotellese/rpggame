@@ -400,7 +400,8 @@ class TestQuestManagerGameStateIntegration:
 
         assert game_state.quest_manager is not None
         assert len(game_state.quest_manager.quests) == 3
-        assert game_state.quest_manager.get_quest_state("investigate_crypt") == QuestState.AVAILABLE
+        # First quest starts locked until player talks to quest_giver (Father Aldric)
+        assert game_state.quest_manager.get_quest_state("investigate_crypt") == QuestState.LOCKED
 
     def test_game_state_without_campaign_has_no_quest_manager(self):
         """GameState should have no quest manager without campaign_id."""
@@ -453,8 +454,8 @@ class TestTheUnquietDeadCampaign:
         assert "cult_conspiracy" in manager.quests
         assert "temple_assault" in manager.quests
 
-        # First quest available, others locked
-        assert manager.get_quest_state("investigate_crypt") == QuestState.AVAILABLE
+        # All quests start locked - first quest unlocks by talking to quest_giver
+        assert manager.get_quest_state("investigate_crypt") == QuestState.LOCKED
         assert manager.get_quest_state("cult_conspiracy") == QuestState.LOCKED
         assert manager.get_quest_state("temple_assault") == QuestState.LOCKED
 
@@ -467,6 +468,9 @@ class TestTheUnquietDeadCampaign:
 
         manager = QuestManager()
         manager.load_quests_from_dict(quest_data)
+
+        # Simulate talking to Father Aldric (quest_giver) to unlock first quest
+        manager._quest_states["investigate_crypt"] = QuestState.AVAILABLE
 
         # Complete first quest
         manager.activate_quest("investigate_crypt")
