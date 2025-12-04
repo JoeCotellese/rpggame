@@ -2473,6 +2473,16 @@ class CLI:
         if target == "Cancel" or (target is None and not targeting.is_area_effect):
             return
 
+        # Validate spell slot availability BEFORE consuming action
+        # This prevents the action from being wasted on an uncastable spell
+        spell_level = spell_data.get("level", 0)
+        if spell_level > 0:
+            available_slots = caster.get_available_spell_slots(spell_level)
+            if available_slots <= 0:
+                ordinal = caster._level_to_ordinal(spell_level)
+                print_error(f"No {ordinal}-level spell slots available!")
+                return
+
         # Execute spell through middleware chain
         # Spell slot validation/consumption handled by game engine, resources tracked for auto-refund
         context = self.action_executor.execute(
@@ -2544,7 +2554,7 @@ class CLI:
         if not result.success:
             context.result = ActionResult.FAILED
             context.error_message = result.error or "Spell failed"
-            print_error(context.error_message)
+            # Error is displayed by caller (handle_cast_spell) to avoid duplicates
             return False
 
         # Display results (UI responsibility only)
