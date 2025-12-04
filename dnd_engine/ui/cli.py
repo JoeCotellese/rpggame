@@ -446,12 +446,20 @@ class CLI:
         }
         icon, color, label = lighting_display.get(best_lighting, ("?", "white", "Unknown"))
 
+        # Get available exits (compact format: N, S, E, W)
+        direction_abbrev = {"north": "N", "south": "S", "east": "E", "west": "W", "up": "U", "down": "D"}
+        exits = self.game_state.get_available_exits()
+        exit_dirs = [direction_abbrev.get(d, d.upper()[:1]) for d in exits.keys()]
+        exits_str = ", ".join(exit_dirs) if exit_dirs else "None"
+
         return HTML(
             f'<style fg="cyan">{location_name}</style>'
             f' <style fg="white">│</style> '
             f'<style fg="white">{room_name}</style>'
             f' <style fg="white">│</style> '
             f'<style fg="{color}">{icon} {label}</style>'
+            f' <style fg="white">│</style> '
+            f'<style fg="green">Exits: {exits_str}</style>'
         )
 
     def get_player_command(self) -> str:
