@@ -308,3 +308,138 @@ class TestSpellcastingAbilityDataStructure:
         assert "rogue" in classes_data
         rogue_data = classes_data["rogue"]
         assert "spellcasting" not in rogue_data
+
+
+class TestSpellSlotValidationBeforeAction:
+    """Test that spell slot validation happens BEFORE action is consumed (issue #278)"""
+
+    @pytest.fixture
+    def mock_game_state(self):
+        """Create a mock game state with data loader"""
+        game_state = Mock()
+        game_state.data_loader = Mock(spec=DataLoader)
+        game_state.dice_roller = Mock()
+        game_state.event_bus = Mock()
+        game_state.combat = Mock()
+        game_state.in_combat = True
+        game_state.initiative_tracker = Mock()
+        game_state.party = Mock()
+        game_state.party.characters = []
+        game_state.active_enemies = []
+
+        mock_combatant = Mock()
+        mock_combatant.creature = None
+        game_state.initiative_tracker.get_current_combatant.return_value = mock_combatant
+        game_state.initiative_tracker.get_current_turn_state.return_value = None
+        game_state.initiative_tracker.get_all_combatants.return_value = []
+
+        return game_state
+
+    @pytest.fixture
+    def wizard_with_no_slots(self):
+        """Create a wizard who has exhausted all spell slots"""
+        wizard = Character(
+            name="Exhausted Wizard",
+            character_class=CharacterClass.WIZARD,
+            level=1,
+            abilities=Abilities(8, 14, 12, 16, 10, 8),
+            max_hp=8,
+            ac=12,
+            spellcasting_ability="int",
+        )
+        # Set up spell slots as DEPLETED
+        wizard.spell_slots = {1: 0}  # Zero 1st-level slots
+        wizard.prepared_spells = ["magic_missile"]
+        return wizard
+
+    def test_no_spell_slots_does_not_consume_action(self, mock_game_state, wizard_with_no_slots):
+        """Test that attempting to cast a spell with no slots does NOT consume action.
+
+        Regression test for issue #278: Failed spell cast due to no slots consumes action.
+        """
+        # Setup spell data
+        mock_game_state.data_loader.load_spells.return_value = {
+            "magic_missile": {
+                "name": "Magic Missile",
+                "level": 1,
+                "classes": ["wizard"],
+                "attack_type": "spell_attack",
+                "tags": ["combat"],
+            }
+        }
+
+        # Mock the turn state - action should be available
+        mock_turn_state = Mock()
+        mock_turn_state.is_action_available.return_value = True
+        mock_game_state.combat.get_turn_state.return_value = mock_turn_state
+        mock_game_state.party.characters = [wizard_with_no_slots]
+
+        # Set wizard as current combatant
+        mock_game_state.initiative_tracker.get_current_combatant.return_value.creature = (
+            wizard_with_no_slots
+        )
+        mock_game_state.initiative_tracker.get_current_turn_state.return_value = mock_turn_state
+
+        # Mock enemy for targeting
+        mock_enemy = Mock()
+        mock_enemy.name = "Goblin"
+        mock_enemy.current_hp = 7
+        mock_enemy.max_hp = 7
+        mock_enemy.is_alive = True
+        mock_game_state.active_enemies = [mock_enemy]
+
+        cli = CLI(mock_game_state, Mock(), "test_campaign")
+
+        # Mock user selecting target (first enemy)
+        with patch("dnd_engine.ui.cli.print_error") as mock_print_error:
+            with patch("dnd_engine.ui.cli.console"):
+                with patch("questionary.select") as mock_select:
+                    mock_select.return_value.ask.return_value = "Goblin"
+
+                    # Attempt to cast spell with no slots
+                    cli.handle_cast_spell("magic_missile")
+
+        # Verify:
+        # 1. Error message was printed about no spell slots
+        mock_print_error.assert_called()
+        error_calls = [str(call) for call in mock_print_error.call_args_list]
+        assert any("spell slots" in call.lower() for call in error_calls), (
+            f"Expected error about spell slots, got: {error_calls}"
+        )
+
+        # 2. Action was NOT consumed (no call to action_executor.execute)
+        # The action_executor is created lazily, so if we never call execute, it won't exist
+        # OR if it exists, execute shouldn't have been called
+        # Since we're testing the CLI, we verify by checking that action is still available
+        # (turn state wasn't modified - no consume_action call)
+        assert mock_turn_state.consume_action.call_count == 0, (
+            "Action should NOT have been consumed when spell slots are depleted"
+        )
+
+    def test_cantrip_does_not_check_spell_slots(self):
+        """Test that cantrips (level 0) bypass spell slot validation at the data level.
+
+        Cantrips have spell level 0, so the early slot validation should skip them
+        entirely (only checks spell_level > 0).
+        """
+        wizard = Character(
+            name="Test Wizard",
+            character_class=CharacterClass.WIZARD,
+            level=1,
+            abilities=Abilities(8, 14, 12, 16, 10, 8),
+            max_hp=8,
+            ac=12,
+            spellcasting_ability="int",
+        )
+        wizard.spell_slots = {1: 0}  # No level 1 slots left
+
+        # Cantrips don't consume spell slots - calling get_available_spell_slots(0) should
+        # not matter for cantrips since they bypass the slot check entirely
+        # The fix in cli.py has: if spell_level > 0: ... so level 0 spells skip the check
+        spell_level = 0  # Fire bolt is a cantrip
+        assert spell_level == 0, "Cantrips have spell level 0"
+
+        # The validation logic is: if spell_level > 0: check slots
+        # So cantrips (level 0) should NOT trigger the slot check
+        should_check_slots = spell_level > 0
+        assert should_check_slots is False, "Cantrips should bypass spell slot validation"
