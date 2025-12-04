@@ -442,6 +442,82 @@ class TestDungeonCompletionDetection:
             assert progress.boss_defeats.get("dungeon1") is True
             assert EventType.BOSS_DEFEATED in events_emitted
 
+    def test_boss_defeated_event_emits_without_campaign_tracker(self):
+        """Test that BOSS_DEFEATED event fires even when campaign_tracker is None.
+
+        This is critical for quest kill objectives to work independently of
+        campaign progression tracking.
+        """
+        from unittest.mock import MagicMock
+
+        from dnd_engine.core.character import Character, CharacterClass
+        from dnd_engine.core.creature import Abilities
+        from dnd_engine.core.game_state import GameState
+        from dnd_engine.core.party import Party
+        from dnd_engine.utils.events import EventType
+
+        # Create a character
+        abilities = Abilities(10, 10, 10, 10, 10, 10)
+        char = Character(
+            name="Test Hero",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=abilities,
+            max_hp=10,
+            ac=10,
+            current_hp=10,
+        )
+        party = Party([char])
+
+        # Mock data loader and dungeon
+        mock_loader = MagicMock()
+        mock_loader.load_dungeon.return_value = {
+            "id": "test_dungeon",
+            "name": "Test Dungeon",
+            "start_room": "entrance",
+            "rooms": {
+                "entrance": {
+                    "id": "entrance",
+                    "name": "Entrance",
+                    "enemies": [],
+                    "exits": {},
+                },
+            },
+        }
+        mock_loader.load_monsters.return_value = {}
+        mock_loader.data_path = MagicMock()
+        mock_loader.data_path.exists.return_value = False
+
+        # Create game state WITHOUT campaign_progress
+        # This means campaign_tracker will be None
+        game_state = GameState(
+            party=party,
+            dungeon_name="test_dungeon",
+            data_loader=mock_loader,
+            # Note: no campaign_progress parameter
+        )
+
+        # Verify campaign_tracker is None
+        assert game_state.campaign_tracker is None
+
+        # Track events
+        events_emitted = []
+
+        def capture_event(event):
+            events_emitted.append((event.type, event.data))
+
+        game_state.event_bus.subscribe(EventType.BOSS_DEFEATED, capture_event)
+
+        # Call boss defeat handler
+        game_state._handle_boss_defeat(["ghoul_boss", "skeleton_minion"])
+
+        # Verify BOSS_DEFEATED events were emitted for each enemy
+        assert len(events_emitted) == 2
+        assert events_emitted[0][0] == EventType.BOSS_DEFEATED
+        assert events_emitted[0][1]["monster_id"] == "ghoul_boss"
+        assert events_emitted[1][0] == EventType.BOSS_DEFEATED
+        assert events_emitted[1][1]["monster_id"] == "skeleton_minion"
+
     def test_dungeon_completion_unlocks_next(self, campaigns_dir, sample_campaign_data):
         """Test that completing a dungeon unlocks the next one."""
         tracker = CampaignProgressTracker(campaigns_dir)
