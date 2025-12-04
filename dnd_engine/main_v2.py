@@ -151,7 +151,7 @@ def main() -> None:
         2. Parse command-line arguments
         3. Initialize debug logging (if enabled)
         4. Initialize LLM provider (if enabled)
-        5. Show new main menu (handles migration automatically)
+        5. Show main menu
         6. Load or create game
         7. Initialize UI with save slot adapter
         8. Start game loop
@@ -184,7 +184,7 @@ def main() -> None:
         llm_enhancer = LLMEnhancer(llm_provider, event_bus)
 
     try:
-        # Show new main menu (handles migration automatically)
+        # Show main menu
         menu = MainMenuV2()
 
         result = menu.run()

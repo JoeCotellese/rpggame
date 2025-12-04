@@ -1,5 +1,5 @@
-# ABOUTME: Main menu system with new save slot system and migration support
-# ABOUTME: Handles menu display, save slot selection, character vault integration, and migration
+# ABOUTME: Main menu system with save slot system
+# ABOUTME: Handles menu display, save slot selection, and character vault integration
 
 import questionary
 from rich.panel import Panel
@@ -8,7 +8,6 @@ from dnd_engine.core.campaign_progress import CampaignProgressTracker
 from dnd_engine.core.character import Character
 from dnd_engine.core.character_vault_v2 import CharacterVaultV2
 from dnd_engine.core.game_state import GameState
-from dnd_engine.core.migration import MigrationManager
 from dnd_engine.core.party import Party
 from dnd_engine.core.room_registry import RoomRegistry
 from dnd_engine.core.save_slot_manager import SaveSlotManager
@@ -26,22 +25,16 @@ from dnd_engine.ui.rich_ui import (
 
 class MainMenuV2:
     """
-    Main menu system for D&D Terminal Game with new save slot system.
+    Main menu system for D&D Terminal Game with save slot system.
 
     Features:
     - 10-slot save system
     - Character vault integration
-    - Automatic migration from old campaign system
     - Streamlined UI flows
     """
 
     def __init__(self):
-        """Initialize the main menu with new save system."""
-        # Check for and handle migration first
-        self.migration_manager = MigrationManager()
-        self._handle_migration_if_needed()
-
-        # Initialize new systems
+        """Initialize the main menu with save system."""
         self.slot_manager = SaveSlotManager()
         self.vault = CharacterVaultV2()
         self.data_loader = DataLoader()
@@ -49,74 +42,6 @@ class MainMenuV2:
 
         # Track current slot for save operations
         self.current_slot_number: int | None = None
-
-    def _handle_migration_if_needed(self) -> None:
-        """Check for old campaigns and handle migration."""
-        if not self.migration_manager.should_migrate():
-            return
-
-        # Show migration UI
-        console.print()
-        print_section("MIGRATION DETECTED")
-
-        info = self.migration_manager.get_migration_info()
-
-        console.print(f"\n[yellow]Found {info['total_campaigns']} old campaign(s)[/yellow]")
-        console.print(f"[cyan]Will migrate:[/cyan] {info['migratable_campaigns']} most recent")
-        console.print(f"[cyan]Will extract:[/cyan] {info['total_characters']} unique character(s)")
-
-        if info["campaigns_to_migrate"]:
-            console.print("\n[bold]Campaigns to migrate:[/bold]")
-            for i, camp in enumerate(info["campaigns_to_migrate"][:5], 1):
-                console.print(f"  {i}. {camp['name']} ({camp['playtime']})")
-            if len(info["campaigns_to_migrate"]) > 5:
-                console.print(f"  ... and {len(info['campaigns_to_migrate']) - 5} more")
-
-        console.print(
-            "\n[dim]Backup will be created at: ~/.dnd_terminal/backup_pre_migration/[/dim]"
-        )
-        console.print()
-
-        confirm = (
-            console.input("[bold cyan]Proceed with migration? (yes/no):[/bold cyan] ")
-            .strip()
-            .lower()
-        )
-
-        if confirm == "yes":
-            console.print("\n[yellow]Migrating...[/yellow]")
-
-            success, message, stats = self.migration_manager.migrate()
-
-            if success:
-                print_status_message(message, "success")
-
-                if stats.get("errors"):
-                    console.print("\n[yellow]Warnings:[/yellow]")
-                    for error in stats["errors"][:5]:
-                        console.print(f"  [dim]• {error}[/dim]")
-
-                console.print(
-                    f"\n[green]✓ Migrated {stats['campaigns_migrated']} campaign(s)[/green]"
-                )
-                console.print(
-                    f"[green]✓ Extracted {stats['characters_migrated']} character(s)[/green]"
-                )
-
-                console.print("\n[dim]Press Enter to continue...[/dim]")
-                console.input()
-            else:
-                print_error(f"Migration failed: {message}")
-                console.print("\n[yellow]You can try again later or start fresh.[/yellow]")
-                console.print("[dim]Press Enter to continue...[/dim]")
-                console.input()
-        else:
-            console.print("\n[yellow]Migration cancelled.[/yellow]")
-            console.print("[dim]Note: Delete ~/.dnd_game/ to migrate later[/dim]")
-            console.print("\n[dim]Press Enter to continue...[/dim]")
-            console.input()
-
-        console.clear()
 
     def show(self) -> str | None:
         """
