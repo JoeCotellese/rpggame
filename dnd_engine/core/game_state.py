@@ -1807,13 +1807,31 @@ class GameState:
             if not target_name:
                 target_name = caster_name
 
+            target = self.party.get_character_by_name(target_name)
+
             # Consume spell slot for non-cantrips
             if spell_level > 0:
                 caster.use_spell_slot(spell_level)
 
+            # Check for spell effect handler
+            effect_handler_result = None
+            effect_type = spell_data.get("effect", {}).get("effect_type")
+            if effect_type:
+                from dnd_engine.spells.effects import get_effect_handler
+
+                handler = get_effect_handler(effect_type)
+                if handler:
+                    effect_handler_result = handler.apply(
+                        spell_data, caster, target, self
+                    )
+
             # Create active effect if spell has duration
             effect = self._create_spell_effect(spell_data, caster_name, target_name)
             if effect:
+                # If handler provided effect_data, merge it into the effect
+                if effect_handler_result and effect_handler_result.effect_data:
+                    effect.effect_data.update(effect_handler_result.effect_data)
+
                 # If this is a concentration spell, break concentration on any previous spell
                 if effect.concentration:
                     self.time_manager.remove_concentration_effects(caster_name)
@@ -1832,8 +1850,11 @@ class GameState:
                 )
             )
 
-            # Return spell description as flavor text
-            description = spell_data.get("description", f"{spell_name} takes effect.")
+            # Use handler message if available, otherwise fall back to description
+            if effect_handler_result and effect_handler_result.success:
+                description = effect_handler_result.message
+            else:
+                description = spell_data.get("description", f"{spell_name} takes effect.")
 
             return {
                 "success": True,
