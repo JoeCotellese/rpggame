@@ -1549,6 +1549,191 @@ class GameState:
         # Otherwise, only return visible items
         return [item for item in items if item.get("visible", False)]
 
+    def get_available_interactions(self) -> list[dict[str, Any]]:
+        """
+        Get list of interactions available in the current room based on party capabilities.
+
+        Returns interactions that:
+        - Have not been completed (if one_time=true)
+        - Have their capability requirements met by the party
+
+        Returns:
+            List of available interactions with 'available' and 'reason' fields added
+        """
+        from dnd_engine.systems.capabilities import CapabilityResolver
+
+        room = self.get_current_room()
+        interactions = room.get("interactions", [])
+
+        if not interactions:
+            return []
+
+        resolver = CapabilityResolver(self)
+        available_interactions: list[dict[str, Any]] = []
+
+        for interaction in interactions:
+            # Check if already completed (one-time interactions)
+            completed_interactions = room.get("completed_interactions", [])
+            if interaction.get("one_time") and interaction["id"] in completed_interactions:
+                continue
+
+            # Check capability requirements
+            requires_any = interaction.get("requires_any", [])
+            requires_all = interaction.get("requires_all", [])
+
+            met, missing = resolver.check_requirements(
+                requires_any=requires_any if requires_any else None,
+                requires_all=requires_all if requires_all else None,
+            )
+
+            # Build the interaction entry with availability info
+            interaction_entry = interaction.copy()
+            interaction_entry["available"] = met
+
+            if not met:
+                # Provide a hint about what's needed
+                if requires_any:
+                    interaction_entry["reason"] = (
+                        f"Requires one of: {', '.join(requires_any)}"
+                    )
+                else:
+                    interaction_entry["reason"] = (
+                        f"Requires: {', '.join(missing)}"
+                    )
+            else:
+                # Show what capability is being used
+                source = None
+                for cap in requires_any or requires_all or []:
+                    source = resolver.get_capability_source(cap)
+                    if source:
+                        break
+                if source:
+                    interaction_entry["reason"] = f"Using {source.source_name}"
+
+            available_interactions.append(interaction_entry)
+
+        return available_interactions
+
+    def execute_interaction(self, interaction_id: str) -> dict[str, Any]:
+        """
+        Execute a room interaction by ID.
+
+        Args:
+            interaction_id: The ID of the interaction to execute
+
+        Returns:
+            Dict with result:
+            - success: bool
+            - message: str - Description of what happened
+            - rewards: List[Dict] - Any items/currency granted
+        """
+        from dnd_engine.systems.capabilities import CapabilityResolver
+
+        room = self.get_current_room()
+        interactions = room.get("interactions", [])
+
+        # Find the interaction
+        interaction = None
+        for i in interactions:
+            if i["id"] == interaction_id:
+                interaction = i
+                break
+
+        if not interaction:
+            return {
+                "success": False,
+                "message": f"No interaction found with id: {interaction_id}",
+                "rewards": [],
+            }
+
+        # Check if already completed
+        completed_interactions = room.get("completed_interactions", [])
+        if interaction.get("one_time") and interaction_id in completed_interactions:
+            return {
+                "success": False,
+                "message": "This has already been done.",
+                "rewards": [],
+            }
+
+        # Check capability requirements
+        resolver = CapabilityResolver(self)
+        requires_any = interaction.get("requires_any", [])
+        requires_all = interaction.get("requires_all", [])
+
+        met, missing = resolver.check_requirements(
+            requires_any=requires_any if requires_any else None,
+            requires_all=requires_all if requires_all else None,
+        )
+
+        if not met:
+            if requires_any:
+                return {
+                    "success": False,
+                    "message": (
+                        f"You don't have the ability to do this. "
+                        f"Requires one of: {', '.join(requires_any)}"
+                    ),
+                    "rewards": [],
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": (
+                        f"You don't have the ability to do this. "
+                        f"Requires: {', '.join(missing)}"
+                    ),
+                    "rewards": [],
+                }
+
+        # Execute the action
+        action = interaction.get("action", {})
+        message = action.get("text", "You interact with the object.")
+
+        # Mark as completed if one-time
+        if interaction.get("one_time"):
+            if "completed_interactions" not in room:
+                room["completed_interactions"] = []
+            room["completed_interactions"].append(interaction_id)
+
+        # Process rewards
+        rewards = interaction.get("rewards", [])
+        granted_rewards: list[dict[str, Any]] = []
+
+        for reward in rewards:
+            if reward.get("type") == "item":
+                # Add item to first character's inventory
+                item_id = reward.get("id")
+                if item_id and self.party.characters:
+                    character = self.party.characters[0]
+                    item_data = self.data_loader.get_item_by_id(item_id)
+                    if item_data:
+                        character.add_item(item_id, item_data.get("category", "misc"))
+                        granted_rewards.append({
+                            "type": "item",
+                            "id": item_id,
+                            "name": item_data.get("name", item_id),
+                        })
+
+            elif reward.get("type") == "currency":
+                # Add currency to party
+                if self.party.characters:
+                    character = self.party.characters[0]
+                    for currency_type in ["gold", "silver", "copper", "platinum", "electrum"]:
+                        amount = reward.get(currency_type, 0)
+                        if amount > 0:
+                            character.add_currency(currency_type, amount)
+                            granted_rewards.append({
+                                "type": "currency",
+                                "currency": currency_type,
+                                "amount": amount,
+                            })
+
+        return {
+            "success": True,
+            "message": message,
+            "rewards": granted_rewards,
+        }
+
     def take_item(self, item_id: str, character: Character) -> bool:
         """
         Pick up an item from the current room and add it to a character's inventory.

@@ -569,6 +569,15 @@ class CLI:
             self.handle_search()
             return
 
+        if command in ["interact", "int"] or command.startswith("interact "):
+            parts = command.split()[1:]
+            if not parts:
+                self.handle_interact_menu()
+            else:
+                interaction_id = "_".join(parts)
+                self.handle_interact(interaction_id)
+            return
+
         if (
             command == "examine"
             or command.startswith("examine ")
@@ -1378,6 +1387,75 @@ class CLI:
                     print_status_message("You find nothing of interest.", "info")
             else:
                 print_status_message("You find nothing of interest.", "info")
+
+    def handle_interact_menu(self) -> None:
+        """Show available interactions in the current room."""
+        interactions = self.game_state.get_available_interactions()
+
+        if not interactions:
+            print_status_message("There's nothing special to interact with here.", "info")
+            return
+
+        console.print("\n[bold]Available Interactions[/bold]")
+        console.print("─" * 23)
+
+        # Build choices for the prompt
+        choices = []
+        for interaction in interactions:
+            name = interaction.get("name", interaction["id"])
+            available = interaction.get("available", False)
+            reason = interaction.get("reason", "")
+
+            if available:
+                label = f"{name} ({reason})" if reason else name
+                choices.append(
+                    questionary.Choice(
+                        title=f"✓ {label}",
+                        value=interaction["id"],
+                    )
+                )
+            else:
+                label = f"{name} - {reason}"
+                choices.append(
+                    questionary.Choice(
+                        title=f"✗ {label}",
+                        value=None,
+                        disabled="Not available",
+                    )
+                )
+
+        choices.append(questionary.Choice(title="Cancel", value=None))
+
+        try:
+            selected = questionary.select(
+                "Select an interaction:",
+                choices=choices,
+                use_shortcuts=False,
+            ).ask()
+
+            if selected:
+                self.handle_interact(selected)
+        except KeyboardInterrupt:
+            return
+
+    def handle_interact(self, interaction_id: str) -> None:
+        """Execute a specific interaction."""
+        result = self.game_state.execute_interaction(interaction_id)
+
+        if result["success"]:
+            console.print(f"\n[bold green]✓[/bold green] {result['message']}")
+
+            # Show rewards
+            rewards = result.get("rewards", [])
+            if rewards:
+                console.print("\n[bold]Rewards received:[/bold]")
+                for reward in rewards:
+                    if reward["type"] == "item":
+                        console.print(f"  • {reward.get('name', reward['id'])}")
+                    elif reward["type"] == "currency":
+                        console.print(f"  • {reward['amount']} {reward['currency']}")
+        else:
+            print_error(result["message"])
 
     def _display_items_list(self, items: list, show_take_hint: bool = True) -> None:
         """Helper to display a list of items.
@@ -5079,6 +5157,7 @@ class CLI:
             ("talk [npc]", "Talk to an NPC (e.g., 'talk marta' or just 'talk' for menu)"),
             ("shop [npc]", "Open shop UI (e.g., 'shop gareth' or just 'shop' for menu)"),
             ("search", "Search the room for items"),
+            ("interact / int", "Interact with special objects (levers, inscriptions, etc.)"),
             ("take/get/pickup <item>", "Pick up an item (e.g., 'take dagger', 'get gold')"),
             (
                 "inventory / i [filter]",
