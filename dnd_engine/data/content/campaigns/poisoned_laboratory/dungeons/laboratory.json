@@ -99,7 +99,7 @@
     },
     "laboratory.laboratory": {
       "name": "Main Laboratory",
-      "description": "The heart of the alchemist's workshop. Bubbling cauldrons, distillation equipment, and mysterious glowing liquids cover every surface. A sickly green gas seeps from cracked flasks on the northern workbench. Two goblin scavengers lurk among the bubbling equipment, drawn by the smell of alchemical reagents.",
+      "description": "The heart of the alchemist's workshop. Bubbling cauldrons, distillation equipment, and mysterious glowing liquids cover every surface. A sickly green gas seeps from cracked flasks on the northern workbench. Across a bubbling vat of acid, a brass lever gleams on the far wall. Two goblin scavengers lurk among the bubbling equipment, drawn by the smell of alchemical reagents.",
       "exits": {
         "west": "laboratory.storage",
         "north": "laboratory.sanctum"
@@ -132,6 +132,29 @@
         "effect": "All creatures in the room at the start of their turn must succeed on a DC 12 Constitution saving throw or become poisoned until the end of their next turn.",
         "condition": "poisoned"
       },
+      "interactions": [
+        {
+          "id": "pull_lever",
+          "name": "Pull the brass lever",
+          "description": "A brass lever on the far wall, across the bubbling acid vat. Too dangerous to reach by hand.",
+          "requires_any": ["reach_30ft", "reach_60ft"],
+          "action": {
+            "type": "message",
+            "text": "The spectral hand reaches across the acid vat and pulls the lever. A hidden panel slides open in the wall, revealing a small cache!"
+          },
+          "rewards": [
+            {
+              "type": "item",
+              "id": "potion_of_greater_healing"
+            },
+            {
+              "type": "currency",
+              "gold": 15
+            }
+          ],
+          "one_time": true
+        }
+      ],
       "id": "laboratory.laboratory"
     },
     "laboratory.furnace_room": {
@@ -240,7 +263,7 @@
     },
     "laboratory.specimen_chamber": {
       "name": "Specimen Preservation Chamber",
-      "description": "A cold room lined with glass tanks containing preserved creatures floating in murky alchemical solutions. Ice crystals cover the walls from some failed refrigeration experiment. A skeleton warrior, animated by residual alchemical energies, stands guard among the specimen jars, its bones clicking softly as it patrols.",
+      "description": "A cold room lined with glass tanks containing preserved creatures floating in murky alchemical solutions. Ice crystals cover the walls from some failed refrigeration experiment. Faded writing covers one of the frost-covered walls. A skeleton warrior, animated by residual alchemical energies, stands guard among the specimen jars, its bones clicking softly as it patrols.",
       "lighting": "dark",
       "exits": {
         "south": "laboratory.storage"
@@ -273,6 +296,26 @@
       ],
       "searched": false,
       "searchable": true,
+      "interactions": [
+        {
+          "id": "read_inscription",
+          "name": "Read the wall inscription",
+          "description": "Faded writing covers the frost-covered wall. It's too dark to make out the words.",
+          "requires_any": ["light_source", "darkvision"],
+          "action": {
+            "type": "message",
+            "text": "With proper illumination, you can read the inscription: 'Specimen 47 - DO NOT THAW. Regenerative properties unstable. Weakness: fire.' This knowledge could prove useful against the preserved creatures."
+          },
+          "grants_knowledge": {
+            "monster_weakness": {
+              "target": "preserved_specimen",
+              "weakness": "fire",
+              "bonus": "advantage_on_attacks"
+            }
+          },
+          "one_time": true
+        }
+      ],
       "id": "laboratory.specimen_chamber"
     }
   }

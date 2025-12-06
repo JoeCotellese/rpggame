@@ -9,12 +9,13 @@ This guide explains how to create campaigns for the D&D 5E Terminal Game. A camp
 1. [Campaign Structure](#campaign-structure)
 2. [Locations (Dungeons)](#locations-dungeons)
 3. [Rooms](#rooms)
-4. [NPCs](#npcs)
-5. [Quests](#quests)
-6. [Objectives](#objectives)
-7. [Items](#items)
-8. [Progression System](#progression-system)
-9. [Testing Your Campaign](#testing-your-campaign)
+4. [Room Interactions](#room-interactions)
+5. [NPCs](#npcs)
+6. [Quests](#quests)
+7. [Objectives](#objectives)
+8. [Items](#items)
+9. [Progression System](#progression-system)
+10. [Testing Your Campaign](#testing-your-campaign)
 
 ---
 
@@ -229,6 +230,187 @@ Rooms can be hidden until revealed:
 ```
 
 The room won't appear in exits until the trigger fires (see [Progression System](#progression-system)).
+
+---
+
+## Room Interactions
+
+Room interactions allow players to interact with objects in the environment using their abilities, spells, or items. Interactions can require specific **capabilities** that the party must have active.
+
+### Basic Interaction
+
+```json
+"interactions": [
+  {
+    "id": "open_chest",
+    "name": "Open the chest",
+    "description": "An unlocked wooden chest sits in the corner.",
+    "action": {
+      "type": "message",
+      "text": "You open the chest and find treasure inside!"
+    },
+    "rewards": [
+      {"type": "item", "id": "potion_of_healing"},
+      {"type": "currency", "gold": 25}
+    ],
+    "one_time": true
+  }
+]
+```
+
+| Field | Description |
+|-------|-------------|
+| `id` | Unique identifier for this interaction |
+| `name` | Display name shown in the interact menu |
+| `description` | Flavor text describing what the player sees |
+| `action` | What happens when the interaction executes |
+| `rewards` | Items or currency granted on success |
+| `one_time` | If true, interaction disappears after use |
+
+### Capability-Gated Interactions
+
+Interactions can require the party to have specific capabilities. Capabilities come from:
+- **Active spells**: Light grants `light_source`, Mage Hand grants `reach_30ft`
+- **Items**: Torches and lanterns grant `light_source`
+- **Racial traits**: Elves, dwarves, and other races with darkvision grant `darkvision`
+
+```json
+"interactions": [
+  {
+    "id": "pull_lever",
+    "name": "Pull the brass lever",
+    "description": "A brass lever on the far wall, across a bubbling acid vat. Too dangerous to reach by hand.",
+    "requires_any": ["reach_30ft", "reach_60ft"],
+    "action": {
+      "type": "message",
+      "text": "The spectral hand reaches across the acid vat and pulls the lever. A hidden panel slides open!"
+    },
+    "rewards": [
+      {"type": "item", "id": "potion_of_greater_healing"},
+      {"type": "currency", "gold": 15}
+    ],
+    "one_time": true
+  }
+]
+```
+
+| Field | Description |
+|-------|-------------|
+| `requires_any` | Party needs at least ONE of these capabilities |
+| `requires_all` | Party needs ALL of these capabilities |
+
+### Available Capabilities
+
+| Capability | Granted By | Use Case |
+|------------|------------|----------|
+| `light_source` | Light spell, torches, lanterns | Reading in dark rooms |
+| `darkvision` | Elf, dwarf, half-orc, tiefling, gnome racial traits | Reading in dark rooms |
+| `reach_30ft` | Mage Hand spell | Interacting with distant objects |
+| `reach_60ft` | Telekinesis spell | Interacting with very distant objects |
+| `sense_magic` | Detect Magic spell | Revealing magical items/auras |
+| `see_invisible` | See Invisibility spell | Detecting invisible creatures |
+
+### Example: Dark Room with Inscription
+
+This interaction requires either a light source OR darkvision to read text in a dark room:
+
+```json
+{
+  "id": "read_inscription",
+  "name": "Read the wall inscription",
+  "description": "Faded writing covers the frost-covered wall. It's too dark to make out the words.",
+  "requires_any": ["light_source", "darkvision"],
+  "action": {
+    "type": "message",
+    "text": "With proper illumination, you can read the inscription: 'Specimen 47 - DO NOT THAW. Weakness: fire.'"
+  },
+  "grants_knowledge": {
+    "monster_weakness": {
+      "target": "preserved_specimen",
+      "weakness": "fire",
+      "bonus": "advantage_on_attacks"
+    }
+  },
+  "one_time": true
+}
+```
+
+Players can:
+1. Cast Light spell to gain `light_source` capability
+2. Carry a torch (which grants `light_source`)
+3. Be an elf or other race with darkvision
+
+### Example: Lever Across a Pit
+
+This interaction requires ranged manipulation to pull a lever that's too far to reach:
+
+```json
+{
+  "id": "pull_lever",
+  "name": "Pull the brass lever",
+  "description": "A brass lever on the far wall, across the bubbling acid vat.",
+  "requires_any": ["reach_30ft", "reach_60ft"],
+  "action": {
+    "type": "message",
+    "text": "The spectral hand reaches across the acid vat and pulls the lever!"
+  },
+  "rewards": [
+    {"type": "item", "id": "potion_of_greater_healing"}
+  ],
+  "one_time": true
+}
+```
+
+Players must:
+1. Cast Mage Hand (grants `reach_30ft` for 1 minute)
+2. Cast Telekinesis (grants `reach_60ft`)
+
+### How Players Use Interactions
+
+Players use the `interact` command (or `int` for short):
+
+```
+> interact
+Available interactions:
+  1. Pull the brass lever (requires: reach_30ft or reach_60ft)
+     A brass lever on the far wall, across the bubbling acid vat.
+     [NOT AVAILABLE - need Mage Hand or similar]
+
+  2. Open the chest
+     An unlocked wooden chest.
+     [AVAILABLE]
+
+> cast mage hand
+
+> interact
+Available interactions:
+  1. Pull the brass lever
+     [AVAILABLE]
+
+> interact 1
+The spectral hand reaches across the acid vat and pulls the lever!
+You received: Potion of Greater Healing
+```
+
+### Interaction Rewards
+
+Rewards can include items, currency, or special knowledge:
+
+```json
+"rewards": [
+  {"type": "item", "id": "potion_of_healing"},
+  {"type": "item", "id": "longsword"},
+  {"type": "currency", "gold": 50, "silver": 25}
+]
+```
+
+### Design Tips
+
+1. **Make requirements thematic**: A lever across a pit should require `reach_30ft`, not just any capability
+2. **Provide alternatives**: Use `requires_any` to allow multiple solutions (light OR darkvision)
+3. **Consider party composition**: Elves have darkvision naturally, so don't make every dark room require spells
+4. **Use one_time wisely**: Most treasure-granting interactions should be one-time
+5. **Write descriptive text**: The description should hint at what capability is needed
 
 ---
 
