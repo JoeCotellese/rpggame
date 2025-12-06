@@ -13,8 +13,6 @@ D&D 5E Rules:
 - When combat ends, round-based durations should convert to real time
 """
 
-import pytest
-
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities, Creature
 
@@ -205,7 +203,7 @@ class TestConditionExpirationDuringRest:
             duration=10,  # 10 minutes
         )
 
-        result = character.take_short_rest()
+        character.take_short_rest()
 
         # Both should be cleared (durations < 1 hour)
         assert not character.has_condition("paralyzed"), (
@@ -230,7 +228,7 @@ class TestConditionExpirationDuringRest:
             duration=8,  # 8 hours - longer than short rest
         )
 
-        result = character.take_short_rest()
+        character.take_short_rest()
 
         # Should still be poisoned
         assert character.has_condition("poisoned"), (
@@ -250,7 +248,7 @@ class TestConditionExpirationDuringRest:
             duration=10,
         )
 
-        result = character.take_long_rest()
+        character.take_long_rest()
 
         # Dead character can't benefit from rest - conditions remain
         # (This matches existing behavior where dead characters don't heal)
