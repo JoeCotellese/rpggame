@@ -2449,6 +2449,7 @@ class CLI:
         # If no spell specified, show list and prompt for selection
         spell_data = None
         spell_id = None
+        spell_name_clean = spell_name  # May be modified if target syntax detected
 
         if not spell_name:
             # Display available spells with slot information
@@ -2507,8 +2508,16 @@ class CLI:
                     spell_data = sdata
                     break
         else:
+            # Strip target syntax if user typed "cast fireball at goblin 1"
+            # We use questionary for target selection, so ignore the target part
+            spell_name_clean = spell_name
+            for separator in [" at ", " on "]:
+                if separator in spell_name.lower():
+                    spell_name_clean = spell_name[: spell_name.lower().index(separator)]
+                    break
+
             # Find spell by name
-            spell_name_lower = spell_name.lower()
+            spell_name_lower = spell_name_clean.lower()
             for sid, sdata in available_spells:
                 if sdata.get("name", "").lower() == spell_name_lower or sid == spell_name_lower:
                     spell_id = sid
@@ -2516,7 +2525,7 @@ class CLI:
                     break
 
         if not spell_data:
-            print_error(f"Unknown spell: {spell_name}")
+            print_error(f"Unknown spell: {spell_name_clean}")
             return
 
         # Get targeting requirements from game engine (not interpreting data directly)
@@ -4799,7 +4808,8 @@ class CLI:
                 )
                 max_prepared = character.get_max_prepared_spells()
                 print_message(
-                    f"[dim]Spellbook: {known_count} spells known | Prepared: {prepared_count}/{max_prepared}[/dim]"
+                    f"[dim]Spellbook: {known_count} spells known | "
+                    f"{prepared_count} of {max_prepared} spells prepared[/dim]"
                 )
                 print_message("")
 
