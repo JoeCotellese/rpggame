@@ -260,3 +260,123 @@ class TestACFormulaEvaluation:
         """Test formula with multiple ability modifiers"""
         result = game_state_with_wizard._evaluate_ac_formula("10 + dex_mod + con_mod", wizard)
         assert result == 13  # 10 + 2 (DEX) + 1 (CON)
+
+
+class TestSpellCastingACModifierIntegration:
+    """Integration tests: verify casting spells through cast_spell_exploration applies AC modifiers"""
+
+    @pytest.fixture
+    def wizard_with_shield(self):
+        """Create a wizard who knows Shield"""
+        from dnd_engine.systems.resources import ResourcePool
+
+        abilities = Abilities(
+            strength=8,
+            dexterity=14,  # +2 modifier
+            constitution=12,
+            intelligence=16,
+            wisdom=10,
+            charisma=10,
+        )
+        wizard = Character(
+            name="Thalia",
+            character_class=CharacterClass.WIZARD,
+            level=3,
+            abilities=abilities,
+            max_hp=18,
+            ac=10,  # Base AC (no armor)
+            spellcasting_ability="int",
+            known_spells=["shield", "mage_armor"],
+            prepared_spells=["shield", "mage_armor"],
+        )
+        # Add spell slots
+        wizard.add_resource_pool(
+            ResourcePool(name="spell_slots_level_1", current=4, maximum=4, recovery_type="long_rest")
+        )
+        return wizard
+
+    @pytest.fixture
+    def game_state_with_spell_caster(self, wizard_with_shield):
+        """Create a GameState with a wizard who can cast Shield"""
+        from dnd_engine.core.dice import DiceRoller
+        from dnd_engine.core.party import Party
+
+        data_loader = DataLoader()
+        event_bus = EventBus()
+        dice_roller = DiceRoller()
+        party = Party()
+        party.add_character(wizard_with_shield)
+
+        game_state = GameState(
+            party=party,
+            dungeon_name="test_dungeon",
+            event_bus=event_bus,
+            data_loader=data_loader,
+            dice_roller=dice_roller,
+        )
+        return game_state
+
+    def test_casting_shield_applies_ac_bonus(self, game_state_with_spell_caster, wizard_with_shield):
+        """Casting Shield through cast_spell_exploration should apply +5 AC bonus"""
+        # Verify base AC before casting
+        assert game_state_with_spell_caster.get_effective_ac(wizard_with_shield) == 10
+
+        # Cast Shield
+        result = game_state_with_spell_caster.cast_spell_exploration("Thalia", "shield")
+
+        assert result["success"] is True
+        assert result["spell_name"] == "Shield"
+
+        # Verify AC is now boosted by +5
+        effective_ac = game_state_with_spell_caster.get_effective_ac(wizard_with_shield)
+        assert effective_ac == 15, f"Expected AC 15 (10 + 5), got {effective_ac}"
+
+    def test_casting_mage_armor_sets_ac(self, game_state_with_spell_caster, wizard_with_shield):
+        """Casting Mage Armor through cast_spell_exploration should set AC to 13 + DEX"""
+        # Verify base AC before casting
+        assert game_state_with_spell_caster.get_effective_ac(wizard_with_shield) == 10
+
+        # Cast Mage Armor
+        result = game_state_with_spell_caster.cast_spell_exploration("Thalia", "mage_armor")
+
+        assert result["success"] is True
+        assert result["spell_name"] == "Mage Armor"
+
+        # Verify AC is now 13 + DEX (+2) = 15
+        effective_ac = game_state_with_spell_caster.get_effective_ac(wizard_with_shield)
+        assert effective_ac == 15, f"Expected AC 15 (13 + 2 DEX), got {effective_ac}"
+
+    def test_casting_shield_and_mage_armor_stack(self, game_state_with_spell_caster, wizard_with_shield):
+        """Casting both Shield and Mage Armor should stack correctly"""
+        # Cast Mage Armor first
+        result1 = game_state_with_spell_caster.cast_spell_exploration("Thalia", "mage_armor")
+        assert result1["success"] is True
+
+        # Verify Mage Armor AC
+        assert game_state_with_spell_caster.get_effective_ac(wizard_with_shield) == 15
+
+        # Cast Shield
+        result2 = game_state_with_spell_caster.cast_spell_exploration("Thalia", "shield")
+        assert result2["success"] is True
+
+        # Verify stacked AC: 13 + 2 (DEX) + 5 (Shield) = 20
+        effective_ac = game_state_with_spell_caster.get_effective_ac(wizard_with_shield)
+        assert effective_ac == 20, f"Expected AC 20 (13 + 2 DEX + 5 Shield), got {effective_ac}"
+
+    def test_shield_effect_has_correct_metadata(self, game_state_with_spell_caster, wizard_with_shield):
+        """Verify Shield creates an ActiveEffect with correct effect_data"""
+        # Cast Shield
+        game_state_with_spell_caster.cast_spell_exploration("Thalia", "shield")
+
+        # Find the Shield effect
+        effects = game_state_with_spell_caster.time_manager.get_effects_for_character("Thalia")
+        shield_effects = [e for e in effects if e.source == "Shield"]
+
+        assert len(shield_effects) == 1
+        effect = shield_effects[0]
+
+        # Verify effect metadata
+        assert effect.effect_data.get("modifier_type") == "ac_bonus"
+        assert effect.effect_data.get("value") == 5
+        assert effect.duration_type == "rounds"
+        assert effect.remaining_value == 1
