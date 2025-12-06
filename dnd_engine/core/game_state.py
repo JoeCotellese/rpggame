@@ -3153,6 +3153,12 @@ class GameState:
                     while character.check_for_level_up(self.data_loader, self.event_bus):
                         pass  # Level-up event already emitted by check_for_level_up
 
+        # Clear short-duration conditions from party members
+        # Combat conditions like paralysis (1 minute) expire shortly after combat
+        # Use 5 minutes as threshold - anything shorter expires "immediately"
+        for character in self.party.characters:
+            character.clear_conditions_by_max_duration(max_minutes=5)
+
         # Clear combat state
         self.in_combat = False
         self.initiative_tracker = None

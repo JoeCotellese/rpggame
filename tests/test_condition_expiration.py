@@ -401,3 +401,111 @@ class TestConditionDurationConversion:
         assert duration_minutes == float("inf"), (
             "Permanent conditions should have infinite duration"
         )
+
+
+class TestConditionExpirationOnCombatEnd:
+    """Tests for conditions expiring when combat ends."""
+
+    def create_test_character(self) -> Character:
+        """Create a test character with standard stats."""
+        return Character(
+            name="Test Fighter",
+            character_class=CharacterClass.FIGHTER,
+            level=5,
+            abilities=Abilities(16, 14, 14, 10, 12, 10),
+            max_hp=44,
+            ac=16,
+            race="human",
+        )
+
+    def test_short_duration_conditions_clear_on_combat_end(self):
+        """
+        Short duration conditions (< 5 minutes) should clear when combat ends.
+
+        D&D 5E: Combat rounds are 6 seconds. A 10-round paralysis (1 minute)
+        would naturally expire shortly after combat ends.
+        """
+        from dnd_engine.core.game_state import GameState
+        from dnd_engine.core.party import Party
+
+        character = self.create_test_character()
+        party = Party([character])
+        game_state = GameState(party, "test_dungeon")
+
+        # Simulate being in combat
+        game_state.in_combat = True
+        game_state.active_enemies = []
+
+        # Apply paralysis (10 rounds = 1 minute)
+        character.apply_condition_with_metadata(
+            condition="paralyzed",
+            duration_type="rounds",
+            duration=10,
+            dc=10,
+            ability="constitution",
+            allow_repeat_save=True,
+        )
+
+        assert character.has_condition("paralyzed")
+
+        # End combat
+        game_state._end_combat()
+
+        # Paralysis should be cleared (1 minute << 5 minute threshold)
+        assert not character.has_condition("paralyzed"), (
+            "Short duration conditions should clear when combat ends"
+        )
+
+    def test_permanent_conditions_persist_after_combat(self):
+        """Permanent conditions should NOT be cleared when combat ends."""
+        from dnd_engine.core.game_state import GameState
+        from dnd_engine.core.party import Party
+
+        character = self.create_test_character()
+        party = Party([character])
+        game_state = GameState(party, "test_dungeon")
+
+        game_state.in_combat = True
+        game_state.active_enemies = []
+
+        # Apply a permanent curse
+        character.apply_condition_with_metadata(
+            condition="cursed",
+            duration_type="permanent",
+            duration=0,
+        )
+
+        game_state._end_combat()
+
+        assert character.has_condition("cursed"), (
+            "Permanent conditions should persist after combat ends"
+        )
+
+    def test_long_duration_conditions_persist_after_combat(self):
+        """
+        Long duration conditions (hours) should persist after combat.
+
+        These require rest or specific removal, not just combat ending.
+        """
+        from dnd_engine.core.game_state import GameState
+        from dnd_engine.core.party import Party
+
+        character = self.create_test_character()
+        party = Party([character])
+        game_state = GameState(party, "test_dungeon")
+
+        game_state.in_combat = True
+        game_state.active_enemies = []
+
+        # Apply a long-duration poison (8 hours)
+        character.apply_condition_with_metadata(
+            condition="poisoned",
+            duration_type="hours",
+            duration=8,
+        )
+
+        game_state._end_combat()
+
+        assert character.has_condition("poisoned"), (
+            "Long duration conditions should persist after combat"
+        )
