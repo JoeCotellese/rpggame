@@ -1253,6 +1253,7 @@ class Character(Creature):
 
         Effects:
         - Recover resources with recovery_type="short_rest" (living characters only)
+        - Clear conditions with duration <= 60 minutes
         - Can spend Hit Dice to heal (not implemented in MVP)
 
         Returns:
@@ -1260,18 +1261,23 @@ class Character(Creature):
             - "character": character name
             - "rest_type": "short"
             - "resources_recovered": list of recovered resource names
+            - "conditions_removed": list of conditions that were cleared
             - "hp_recovered": 0 (Hit Dice healing for future)
         """
         # Dead characters cannot benefit from rest - they need resurrection
         if self.is_dead:
             resources_recovered = []
+            conditions_removed = []
         else:
             resources_recovered = self.recover_resources("short_rest")
+            # Clear conditions that would expire within 1 hour (60 minutes)
+            conditions_removed = self.clear_conditions_by_max_duration(max_minutes=60)
 
         return {
             "character": self.name,
             "rest_type": "short",
             "resources_recovered": resources_recovered,
+            "conditions_removed": conditions_removed,
             "hp_recovered": 0,  # Hit Dice healing for future
         }
 
@@ -1282,6 +1288,7 @@ class Character(Creature):
         Effects:
         - Recover all HP (living characters only)
         - Recover all resources with recovery_type="long_rest" or "short_rest"
+        - Clear all non-permanent conditions (paralyzed, poisoned, etc.)
         - Recover half of spent Hit Dice (not implemented in MVP)
 
         Returns:
@@ -1290,7 +1297,7 @@ class Character(Creature):
             - "rest_type": "long"
             - "hp_recovered": amount of HP recovered
             - "resources_recovered": list of recovered resource names
-            - "conditions_removed": empty list (for future implementation)
+            - "conditions_removed": list of conditions that were cleared
             - "can_prepare_spells": whether character can prepare spells
         """
         # Dead characters cannot benefit from rest - they need resurrection
@@ -1299,9 +1306,12 @@ class Character(Creature):
         if character_is_dead:
             hp_recovered = 0
             resources_recovered = []
+            conditions_removed = []
         else:
             hp_recovered = self.recover_hp()
             resources_recovered = self.recover_resources("long_rest")
+            # Clear all non-permanent conditions (8 hours exceeds any timed condition)
+            conditions_removed = self.clear_expired_conditions()
 
         # Check if this character can prepare spells (Wizard, Cleric)
         # Dead characters cannot prepare spells
@@ -1314,7 +1324,7 @@ class Character(Creature):
             "hp_recovered": hp_recovered,
             "resources_recovered": resources_recovered,
             "can_prepare_spells": can_prepare,
-            "conditions_removed": [],  # Future
+            "conditions_removed": conditions_removed,
         }
 
     @property

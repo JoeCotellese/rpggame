@@ -257,6 +257,82 @@ class Creature:
 
         return results
 
+    def get_condition_duration_minutes(self, condition: str) -> float:
+        """
+        Get the remaining duration of a condition in minutes.
+
+        D&D 5E conversions:
+        - 1 round = 6 seconds
+        - 10 rounds = 1 minute
+
+        Args:
+            condition: Name of the condition
+
+        Returns:
+            Duration in minutes, or float('inf') for permanent conditions.
+            Returns 0 if condition not found.
+        """
+        condition_name = condition.lower()
+        if condition_name not in self.active_conditions:
+            return 0
+
+        metadata = self.active_conditions[condition_name]
+        duration_type = metadata.get("duration_type", "permanent")
+        duration_remaining = metadata.get("duration_remaining", 0)
+
+        if duration_type == "permanent":
+            return float("inf")
+        elif duration_type == "rounds":
+            # 10 rounds = 1 minute (6 seconds per round)
+            return duration_remaining / 10.0
+        elif duration_type == "minutes":
+            return float(duration_remaining)
+        elif duration_type == "hours":
+            return duration_remaining * 60.0
+        else:
+            # Unknown duration type, treat as permanent to be safe
+            return float("inf")
+
+    def clear_expired_conditions(self) -> list[str]:
+        """
+        Clear all non-permanent conditions.
+
+        Use this when time passes outside of combat (e.g., during rest)
+        to remove temporary conditions that would have expired.
+
+        Returns:
+            List of condition names that were removed.
+        """
+        removed = []
+        for condition_name, metadata in list(self.active_conditions.items()):
+            duration_type = metadata.get("duration_type", "permanent")
+            if duration_type != "permanent":
+                self.remove_condition(condition_name)
+                removed.append(condition_name)
+        return removed
+
+    def clear_conditions_by_max_duration(self, max_minutes: float) -> list[str]:
+        """
+        Clear conditions with remaining duration less than or equal to max_minutes.
+
+        Use this for short rests to clear conditions that would expire
+        within the rest duration.
+
+        Args:
+            max_minutes: Maximum duration in minutes. Conditions with
+                        durations <= this value will be cleared.
+
+        Returns:
+            List of condition names that were removed.
+        """
+        removed = []
+        for condition_name in list(self.active_conditions.keys()):
+            duration_minutes = self.get_condition_duration_minutes(condition_name)
+            if duration_minutes <= max_minutes:
+                self.remove_condition(condition_name)
+                removed.append(condition_name)
+        return removed
+
     @property
     def conditions(self) -> set[str]:
         """
