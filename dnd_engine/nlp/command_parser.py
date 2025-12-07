@@ -16,11 +16,19 @@ class ParseResult:
     error: str | None = None
     suggestions: list[str] = field(default_factory=list)
     confidence: float = 0.0
+    # Entity suggestions when fuzzy match fails (spell, item, target, npc)
+    # Keys are entity types, values are lists of candidate names
+    entity_suggestions: dict[str, list[str]] = field(default_factory=dict)
 
     @property
     def success(self) -> bool:
         """Return True if parsing was successful."""
         return self.action is not None and self.error is None
+
+    @property
+    def needs_clarification(self) -> bool:
+        """Return True if entity suggestions are available for user selection."""
+        return bool(self.entity_suggestions)
 
 
 class GameContextProvider(Protocol):
@@ -181,7 +189,9 @@ class CommandParser:
             )
 
         # Extract parameters based on action type
-        params, param_confidence = self._extract_params(action, remaining_tokens)
+        params, param_confidence, entity_suggestions = self._extract_params(
+            action, remaining_tokens
+        )
 
         # Validate action in current context
         validation_error = self._validate_action_context(action)
@@ -191,12 +201,14 @@ class CommandParser:
                 params=params,
                 error=validation_error,
                 confidence=action_confidence * param_confidence,
+                entity_suggestions=entity_suggestions,
             )
 
         return ParseResult(
             action=action,
             params=params,
             confidence=action_confidence * param_confidence,
+            entity_suggestions=entity_suggestions,
         )
 
     def _detect_action(self, tokens: list[str]) -> tuple[str | None, float, list[str]]:
@@ -230,18 +242,22 @@ class CommandParser:
 
         return None, 0.0, tokens
 
-    def _extract_params(self, action: str, tokens: list[str]) -> tuple[dict, float]:
+    def _extract_params(
+        self, action: str, tokens: list[str]
+    ) -> tuple[dict, float, dict[str, list[str]]]:
         """
         Extract parameters from remaining tokens based on action type.
 
         Returns:
-            Tuple of (params_dict, confidence)
+            Tuple of (params_dict, confidence, entity_suggestions)
+            entity_suggestions maps entity type to list of candidate names
         """
         # Filter out stop words (but keep target indicators for parsing)
         filtered = [t for t in tokens if t not in self.STOP_WORDS or t in self.TARGET_INDICATORS]
 
         if action == "move":
-            return self._extract_direction(filtered)
+            params, conf = self._extract_direction(filtered)
+            return params, conf, {}
         elif action in ("attack", "stabilize"):
             return self._extract_target(filtered, "enemy")
         elif action == "cast":
@@ -253,10 +269,11 @@ class CommandParser:
         elif action == "shop":
             return self._extract_npc(filtered)
         elif action == "unlock":
-            return self._extract_direction(filtered)
+            params, conf = self._extract_direction(filtered)
+            return params, conf, {}
 
         # Actions with no params (inventory, status, help, etc.)
-        return {}, 1.0
+        return {}, 1.0, {}
 
     def _extract_direction(self, tokens: list[str]) -> tuple[dict, float]:
         """Extract direction from tokens."""
@@ -273,10 +290,12 @@ class CommandParser:
 
         return {}, 0.5  # No direction found, will prompt user
 
-    def _extract_target(self, tokens: list[str], target_type: str) -> tuple[dict, float]:
+    def _extract_target(
+        self, tokens: list[str], target_type: str
+    ) -> tuple[dict, float, dict[str, list[str]]]:
         """Extract target entity from tokens."""
         if not tokens:
-            return {}, 0.5
+            return {}, 0.5, {}
 
         # Find target after indicator words
         target_start_idx = 0
@@ -291,7 +310,7 @@ class CommandParser:
         )
 
         if not target_text:
-            return {}, 0.5
+            return {}, 0.5, {}
 
         # Try fuzzy match against available entities
         if self.context_provider:
@@ -305,15 +324,26 @@ class CommandParser:
             if candidates:
                 match = process.extractOne(target_text, candidates, scorer=fuzz.WRatio)
                 if match and match[1] >= self.FUZZY_THRESHOLD:
-                    return {"target": match[0]}, match[1] / 100.0
+                    return {"target": match[0]}, match[1] / 100.0, {}
+
+                # No good match - return suggestions for user to pick from
+                suggestions = self._get_entity_suggestions(target_text, candidates)
+                if suggestions:
+                    return (
+                        {"target": target_text, "unmatched": True},
+                        0.3,
+                        {"target": suggestions},
+                    )
 
         # Return raw target if no context or no match
-        return {"target": target_text}, 0.7
+        return {"target": target_text}, 0.7, {}
 
-    def _extract_spell_and_target(self, tokens: list[str]) -> tuple[dict, float]:
+    def _extract_spell_and_target(
+        self, tokens: list[str]
+    ) -> tuple[dict, float, dict[str, list[str]]]:
         """Extract spell name and optional target from tokens."""
         if not tokens:
-            return {}, 0.5
+            return {}, 0.5, {}
 
         # Split on target indicators
         spell_tokens = []
@@ -334,6 +364,7 @@ class CommandParser:
 
         params: dict = {}
         confidence = 1.0
+        entity_suggestions: dict[str, list[str]] = {}
 
         # Match spell name
         if spell_text and self.context_provider:
@@ -344,8 +375,13 @@ class CommandParser:
                     params["spell"] = match[0]
                     confidence *= match[1] / 100.0
                 else:
+                    # No good match - provide spell suggestions
                     params["spell"] = spell_text
-                    confidence *= 0.6
+                    params["spell_unmatched"] = True
+                    confidence *= 0.3
+                    suggestions = self._get_entity_suggestions(spell_text, spells)
+                    if suggestions:
+                        entity_suggestions["spell"] = suggestions
             else:
                 params["spell"] = spell_text
         elif spell_text:
@@ -362,7 +398,7 @@ class CommandParser:
                         if match and match[1] >= self.FUZZY_THRESHOLD:
                             params["target"] = match[0]
                             confidence *= match[1] / 100.0
-                            return params, confidence
+                            return params, confidence, entity_suggestions
 
                 # Try party members (for healing/buff spells)
                 allies = self.context_provider.get_party_member_names()
@@ -371,51 +407,96 @@ class CommandParser:
                     if match and match[1] >= self.FUZZY_THRESHOLD:
                         params["target"] = match[0]
                         confidence *= match[1] / 100.0
-                        return params, confidence
+                        return params, confidence, entity_suggestions
 
             params["target"] = target_text
             confidence *= 0.7
 
-        return params, confidence
+        return params, confidence, entity_suggestions
 
-    def _extract_item(self, tokens: list[str]) -> tuple[dict, float]:
+    def _extract_item(
+        self, tokens: list[str]
+    ) -> tuple[dict, float, dict[str, list[str]]]:
         """Extract item name from tokens."""
         if not tokens:
-            return {}, 0.5
+            return {}, 0.5, {}
 
         # Filter out target indicators for item-only commands
         item_text = " ".join(t for t in tokens if t not in self.TARGET_INDICATORS)
 
         if not item_text:
-            return {}, 0.5
+            return {}, 0.5, {}
 
         if self.context_provider:
             items = self.context_provider.get_available_items()
             if items:
                 match = process.extractOne(item_text, items, scorer=fuzz.WRatio)
                 if match and match[1] >= self.FUZZY_THRESHOLD:
-                    return {"item": match[0]}, match[1] / 100.0
+                    return {"item": match[0]}, match[1] / 100.0, {}
 
-        return {"item": item_text}, 0.7
+                # No good match - provide item suggestions
+                suggestions = self._get_entity_suggestions(item_text, items)
+                if suggestions:
+                    return (
+                        {"item": item_text, "item_unmatched": True},
+                        0.3,
+                        {"item": suggestions},
+                    )
 
-    def _extract_npc(self, tokens: list[str]) -> tuple[dict, float]:
+        return {"item": item_text}, 0.7, {}
+
+    def _extract_npc(
+        self, tokens: list[str]
+    ) -> tuple[dict, float, dict[str, list[str]]]:
         """Extract NPC name from tokens."""
         if not tokens:
-            return {}, 0.5
+            return {}, 0.5, {}
 
         npc_text = " ".join(t for t in tokens if t not in self.TARGET_INDICATORS)
 
         if not npc_text:
-            return {}, 0.5
+            return {}, 0.5, {}
 
         if self.context_provider:
             npcs = self.context_provider.get_available_npcs()
             if npcs:
                 match = process.extractOne(npc_text, npcs, scorer=fuzz.WRatio)
                 if match and match[1] >= self.FUZZY_THRESHOLD:
-                    return {"npc": match[0]}, match[1] / 100.0
+                    return {"npc": match[0]}, match[1] / 100.0, {}
 
-        return {"npc": npc_text}, 0.7
+                # No good match - provide NPC suggestions
+                suggestions = self._get_entity_suggestions(npc_text, npcs)
+                if suggestions:
+                    return (
+                        {"npc": npc_text, "npc_unmatched": True},
+                        0.3,
+                        {"npc": suggestions},
+                    )
+
+        return {"npc": npc_text}, 0.7, {}
+
+    def _get_entity_suggestions(
+        self, text: str, candidates: list[str], limit: int = 5
+    ) -> list[str]:
+        """
+        Get fuzzy match suggestions for an entity.
+
+        Args:
+            text: The user's input text
+            candidates: Available entity names to match against
+            limit: Maximum number of suggestions to return
+
+        Returns:
+            List of suggested entity names, sorted by match score
+        """
+        if not candidates:
+            return []
+
+        # Get top matches above a low threshold (for suggestions we're more lenient)
+        matches = process.extract(text, candidates, scorer=fuzz.WRatio, limit=limit)
+
+        # Return suggestions that have at least some relevance (score >= 30)
+        return [match[0] for match in matches if match[1] >= 30]
 
     def _validate_action_context(self, action: str) -> str | None:
         """

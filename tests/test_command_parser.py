@@ -541,3 +541,123 @@ class TestConfidenceScoring:
         parser = CommandParser()  # No context provider
         result = parser.parse("attack goblin")
         assert result.confidence > 0.5
+
+
+class TestEntitySuggestions:
+    """Tests for entity suggestion behavior when fuzzy match fails."""
+
+    def test_spell_suggestions_when_no_match(self):
+        """Test that spell suggestions are returned when spell doesn't match."""
+        context = MockContextProvider(
+            spells=["Fireball", "Fire Bolt", "Flame Strike", "Magic Missile"],
+            in_combat=True,
+        )
+        parser = CommandParser(context_provider=context)
+        result = parser.parse("cast flaming orb")
+
+        assert result.success
+        assert result.action == "cast"
+        assert result.params.get("spell_unmatched") is True
+        assert "spell" in result.entity_suggestions
+        # Should suggest fire-related spells
+        assert len(result.entity_suggestions["spell"]) > 0
+
+    def test_item_suggestions_when_no_match(self):
+        """Test that item suggestions are returned when item doesn't match."""
+        context = MockContextProvider(
+            items=["Healing Potion", "Health Elixir", "Mana Potion"],
+        )
+        parser = CommandParser(context_provider=context)
+        result = parser.parse("take heal pot")
+
+        assert result.success
+        assert result.action == "take"
+        assert result.params.get("item_unmatched") is True
+        assert "item" in result.entity_suggestions
+        # Should suggest health-related items
+        assert "Healing Potion" in result.entity_suggestions["item"]
+
+    def test_target_suggestions_when_no_match(self):
+        """Test that target suggestions are returned when target doesn't match."""
+        context = MockContextProvider(
+            enemies=["Goblin 1", "Goblin 2", "Orc Warrior"],
+            in_combat=True,
+        )
+        parser = CommandParser(context_provider=context)
+        result = parser.parse("attack zombie")
+
+        assert result.success
+        assert result.action == "attack"
+        assert result.params.get("unmatched") is True
+        assert "target" in result.entity_suggestions
+        # Should suggest available enemies
+        assert len(result.entity_suggestions["target"]) > 0
+
+    def test_npc_suggestions_when_no_match(self):
+        """Test that NPC suggestions are returned when NPC doesn't match."""
+        context = MockContextProvider(
+            npcs=["Blacksmith Boris", "Merchant Maria", "Guard Gerald"],
+        )
+        parser = CommandParser(context_provider=context)
+        result = parser.parse("talk to shopkeeper")
+
+        assert result.success
+        assert result.action == "talk"
+        assert result.params.get("npc_unmatched") is True
+        assert "npc" in result.entity_suggestions
+        # Should suggest available NPCs
+        assert len(result.entity_suggestions["npc"]) > 0
+
+    def test_no_suggestions_when_match_found(self):
+        """Test that no suggestions are returned when a good match is found."""
+        context = MockContextProvider(
+            spells=["Fireball", "Fire Bolt", "Magic Missile"],
+            in_combat=True,
+        )
+        parser = CommandParser(context_provider=context)
+        result = parser.parse("cast fireball")
+
+        assert result.success
+        assert result.action == "cast"
+        assert result.params.get("spell") == "Fireball"
+        assert result.params.get("spell_unmatched") is None
+        assert not result.entity_suggestions
+
+    def test_needs_clarification_property(self):
+        """Test the needs_clarification property."""
+        context = MockContextProvider(
+            spells=["Fireball", "Fire Bolt"],
+            in_combat=True,
+        )
+        parser = CommandParser(context_provider=context)
+
+        # No suggestions needed
+        result = parser.parse("cast fireball")
+        assert not result.needs_clarification
+
+        # Suggestions needed
+        result = parser.parse("cast flaming orb")
+        assert result.needs_clarification
+
+    def test_suggestions_limited_to_reasonable_count(self):
+        """Test that suggestions are limited to a reasonable number."""
+        context = MockContextProvider(
+            items=[
+                "Sword",
+                "Shield",
+                "Helmet",
+                "Boots",
+                "Gloves",
+                "Ring",
+                "Amulet",
+                "Potion",
+                "Scroll",
+                "Wand",
+            ],
+        )
+        parser = CommandParser(context_provider=context)
+        result = parser.parse("take xyz")
+
+        # Should have suggestions but limited to 5
+        if result.entity_suggestions.get("item"):
+            assert len(result.entity_suggestions["item"]) <= 5

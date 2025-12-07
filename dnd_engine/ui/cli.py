@@ -3,6 +3,7 @@
 
 from typing import Any, Optional
 
+import questionary
 from rich.panel import Panel
 
 from dnd_engine.core.character import Character, CharacterClass
@@ -540,7 +541,14 @@ class CLI:
 
         if action == "attack":
             target = params.get("target")
-            if target:
+            # Check if target didn't match and we have suggestions
+            if params.get("unmatched") and "target" in result.entity_suggestions:
+                selected = self._prompt_entity_suggestion(
+                    "target", result.entity_suggestions["target"], target
+                )
+                if selected:
+                    self.handle_attack(selected)
+            elif target:
                 self.handle_attack(target)
             else:
                 # Prompt for target
@@ -553,6 +561,17 @@ class CLI:
         if action == "cast":
             spell = params.get("spell", "")
             target = params.get("target")
+
+            # Check if spell didn't match and we have suggestions
+            if params.get("spell_unmatched") and "spell" in result.entity_suggestions:
+                selected_spell = self._prompt_entity_suggestion(
+                    "spell", result.entity_suggestions["spell"], spell
+                )
+                if selected_spell:
+                    spell = selected_spell
+                else:
+                    return True  # User cancelled
+
             # Combine spell and target for existing handler
             if target:
                 spell_with_target = f"{spell} at {target}"
@@ -566,7 +585,14 @@ class CLI:
 
         if action == "take":
             item = params.get("item")
-            if item:
+            # Check if item didn't match and we have suggestions
+            if params.get("item_unmatched") and "item" in result.entity_suggestions:
+                selected = self._prompt_entity_suggestion(
+                    "item", result.entity_suggestions["item"], item
+                )
+                if selected:
+                    self.handle_take(selected)
+            elif item:
                 if item.lower() in ["all", "everything"]:
                     self.handle_take_all()
                 else:
@@ -584,7 +610,14 @@ class CLI:
 
         if action == "use":
             item = params.get("item")
-            if item:
+            # Check if item didn't match and we have suggestions
+            if params.get("item_unmatched") and "item" in result.entity_suggestions:
+                selected = self._prompt_entity_suggestion(
+                    "item", result.entity_suggestions["item"], item
+                )
+                if selected:
+                    self.handle_use_item(selected, None)
+            elif item:
                 # Find the item and use it
                 self.handle_use_item(item, None)
             else:
@@ -611,7 +644,14 @@ class CLI:
 
         if action == "equip":
             item = params.get("item")
-            if item:
+            # Check if item didn't match and we have suggestions
+            if params.get("item_unmatched") and "item" in result.entity_suggestions:
+                selected = self._prompt_entity_suggestion(
+                    "item", result.entity_suggestions["item"], item
+                )
+                if selected:
+                    self.handle_equip(selected, None)
+            elif item:
                 self.handle_equip(item, None)
             else:
                 print_error("Specify an item to equip. Example: 'equip longsword'")
@@ -619,7 +659,14 @@ class CLI:
 
         if action == "unequip":
             item = params.get("item")
-            if item:
+            # Check if item didn't match and we have suggestions
+            if params.get("item_unmatched") and "item" in result.entity_suggestions:
+                selected = self._prompt_entity_suggestion(
+                    "item", result.entity_suggestions["item"], item
+                )
+                if selected:
+                    self.handle_unequip(selected, None)
+            elif item:
                 self.handle_unequip(item, None)
             else:
                 print_error("Specify a slot to unequip. Example: 'unequip weapon'")
@@ -627,7 +674,14 @@ class CLI:
 
         if action == "look":
             item = params.get("item")
-            if item:
+            # Check if item didn't match and we have suggestions
+            if params.get("item_unmatched") and "item" in result.entity_suggestions:
+                selected = self._prompt_entity_suggestion(
+                    "item", result.entity_suggestions["item"], item
+                )
+                if selected:
+                    self.handle_examine(selected)
+            elif item:
                 self.handle_examine(item)
             else:
                 self.display_room()
@@ -639,7 +693,14 @@ class CLI:
 
         if action == "talk":
             npc = params.get("npc")
-            if npc:
+            # Check if NPC didn't match and we have suggestions
+            if params.get("npc_unmatched") and "npc" in result.entity_suggestions:
+                selected = self._prompt_entity_suggestion(
+                    "NPC", result.entity_suggestions["npc"], npc
+                )
+                if selected:
+                    self.handle_talk(selected)
+            elif npc:
                 self.handle_talk(npc)
             else:
                 self.handle_talk_menu()
@@ -647,7 +708,14 @@ class CLI:
 
         if action == "shop":
             npc = params.get("npc")
-            if npc:
+            # Check if NPC didn't match and we have suggestions
+            if params.get("npc_unmatched") and "npc" in result.entity_suggestions:
+                selected = self._prompt_entity_suggestion(
+                    "NPC", result.entity_suggestions["npc"], npc
+                )
+                if selected:
+                    self.handle_shop(selected)
+            elif npc:
                 self.handle_shop(npc)
             else:
                 self.handle_shop_menu()
@@ -729,6 +797,34 @@ class CLI:
 
         # Unknown action - shouldn't reach here if parser is working correctly
         return False
+
+    def _prompt_entity_suggestion(
+        self, entity_type: str, suggestions: list[str], original_input: str
+    ) -> str | None:
+        """
+        Prompt user to select from entity suggestions when fuzzy match fails.
+
+        Args:
+            entity_type: Type of entity (spell, item, target, npc)
+            suggestions: List of suggested entity names
+            original_input: The user's original input that didn't match
+
+        Returns:
+            Selected entity name, or None if cancelled
+        """
+        if not suggestions:
+            return None
+
+        choices = suggestions + ["[Cancel]"]
+        selected = questionary.select(
+            f'Unknown {entity_type} "{original_input}". Did you mean:',
+            choices=choices,
+            use_arrow_keys=True,
+        ).ask()
+
+        if selected == "[Cancel]" or selected is None:
+            return None
+        return selected
 
     def process_exploration_command(self, command: str) -> None:
         """
