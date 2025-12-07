@@ -3,6 +3,7 @@
 
 from typing import Any, Optional
 
+import questionary
 from rich.panel import Panel
 
 from dnd_engine.core.character import Character, CharacterClass
@@ -15,6 +16,7 @@ from dnd_engine.core.game_state import (
     PlayerAttackResult,
 )
 from dnd_engine.llm.npc_chat import NPCChatManager
+from dnd_engine.nlp import CLIContextAdapter, CommandParser
 from dnd_engine.systems.action_economy import ActionType
 from dnd_engine.systems.ai import EnemyAI
 from dnd_engine.systems.combat_context import CombatContextBuilder
@@ -116,6 +118,10 @@ class CLI:
 
         # Debug console for testing and development
         self.debug_console = DebugConsole(game_state, cli=self)
+
+        # Natural language command parser with game context
+        context_adapter = CLIContextAdapter(game_state)
+        self.command_parser = CommandParser(context_provider=context_adapter)
 
         # Subscribe to game events for display and auto-save
         self.game_state.event_bus.subscribe(EventType.COMBAT_START, self._on_combat_start)
@@ -495,6 +501,331 @@ class CLI:
             # Fallback to basic input if prompt_toolkit is not available
             return input("\n> ").strip().lower()
 
+    def _try_fuzzy_parse(self, command: str) -> bool:
+        """
+        Try to parse a command using fuzzy natural language processing.
+
+        This method attempts to understand natural language commands like
+        "hit the skeleton" or "grab the healing potion" and routes them
+        to the appropriate handler methods.
+
+        Args:
+            command: The raw user input
+
+        Returns:
+            True if the command was successfully handled, False otherwise
+        """
+        result = self.command_parser.parse(command)
+
+        if not result.success:
+            # Show suggestions if available
+            if result.suggestions:
+                suggestions_str = ", ".join(result.suggestions)
+                print_status_message(
+                    f"Unknown command. Did you mean: {suggestions_str}?", "warning"
+                )
+                return True  # We handled it (by showing error)
+            return False  # Let legacy parser handle it
+
+        # Route to appropriate handler based on action
+        action = result.action
+        params = result.params
+
+        if action == "move":
+            direction = params.get("direction")
+            if direction:
+                self.handle_move(direction)
+            else:
+                print_error("Which direction? Try: north, south, east, west, up, down")
+            return True
+
+        if action == "attack":
+            target = params.get("target")
+            # Check if target didn't match and we have suggestions
+            if params.get("unmatched") and "target" in result.entity_suggestions:
+                selected = self._prompt_entity_suggestion(
+                    "target", result.entity_suggestions["target"], target
+                )
+                if selected:
+                    self.handle_attack(selected)
+            elif target:
+                self.handle_attack(target)
+            else:
+                # Prompt for target
+                target = self._prompt_enemy_selection()
+                if target and target != "Cancel":
+                    target_name = self._get_enemy_display_name(target)
+                    self.handle_attack(target_name)
+            return True
+
+        if action == "cast":
+            spell = params.get("spell", "")
+            target = params.get("target")
+
+            # Check if spell didn't match and we have suggestions
+            if params.get("spell_unmatched") and "spell" in result.entity_suggestions:
+                selected_spell = self._prompt_entity_suggestion(
+                    "spell", result.entity_suggestions["spell"], spell
+                )
+                if selected_spell:
+                    spell = selected_spell
+                else:
+                    return True  # User cancelled
+
+            # Combine spell and target for existing handler
+            if target:
+                spell_with_target = f"{spell} at {target}"
+            else:
+                spell_with_target = spell
+            if self.game_state.in_combat:
+                self.handle_cast_spell(spell_with_target)
+            else:
+                self.handle_cast_spell_exploration()
+            return True
+
+        if action == "take":
+            item = params.get("item")
+            # Check if item didn't match and we have suggestions
+            if params.get("item_unmatched") and "item" in result.entity_suggestions:
+                selected = self._prompt_entity_suggestion(
+                    "item", result.entity_suggestions["item"], item
+                )
+                if selected:
+                    self.handle_take(selected)
+            elif item:
+                if item.lower() in ["all", "everything"]:
+                    self.handle_take_all()
+                else:
+                    self.handle_take(item)
+            else:
+                items_to_take = self._prompt_multi_items_to_take()
+                if items_to_take:
+                    for item_to_take in items_to_take:
+                        if item_to_take["type"] in ["gold", "currency"]:
+                            item_name = "currency"
+                        else:
+                            item_name = item_to_take.get("id", "")
+                        self.handle_take(item_name)
+            return True
+
+        if action == "use":
+            item = params.get("item")
+            # Check if item didn't match and we have suggestions
+            if params.get("item_unmatched") and "item" in result.entity_suggestions:
+                selected = self._prompt_entity_suggestion(
+                    "item", result.entity_suggestions["item"], item
+                )
+                if selected:
+                    self.handle_use_item(selected, None)
+            elif item:
+                # Find the item and use it
+                self.handle_use_item(item, None)
+            else:
+                # Prompt for item selection
+                item_selection = self._prompt_consumable_selection()
+                if item_selection:
+                    item_id, item_data = item_selection
+                    item_name = item_data.get("name", item_id)
+                    target_character = self._prompt_target_selection(item_name)
+                    if isinstance(target_character, Character):
+                        owner = None
+                        for char in self.game_state.party.characters:
+                            if char.is_alive:
+                                consumables = char.inventory.get_items_by_category("consumables")
+                                for inv_item in consumables:
+                                    if inv_item.item_id == item_id:
+                                        owner = char
+                                        break
+                            if owner:
+                                break
+                        if owner:
+                            self.handle_use_item_direct(item_id, target_character, owner)
+            return True
+
+        if action == "equip":
+            item = params.get("item")
+            # Check if item didn't match and we have suggestions
+            if params.get("item_unmatched") and "item" in result.entity_suggestions:
+                selected = self._prompt_entity_suggestion(
+                    "item", result.entity_suggestions["item"], item
+                )
+                if selected:
+                    self.handle_equip(selected, None)
+            elif item:
+                self.handle_equip(item, None)
+            else:
+                print_error("Specify an item to equip. Example: 'equip longsword'")
+            return True
+
+        if action == "unequip":
+            item = params.get("item")
+            # Check if item didn't match and we have suggestions
+            if params.get("item_unmatched") and "item" in result.entity_suggestions:
+                selected = self._prompt_entity_suggestion(
+                    "item", result.entity_suggestions["item"], item
+                )
+                if selected:
+                    self.handle_unequip(selected, None)
+            elif item:
+                self.handle_unequip(item, None)
+            else:
+                print_error("Specify a slot to unequip. Example: 'unequip weapon'")
+            return True
+
+        if action == "look":
+            item = params.get("item")
+            # Check if item didn't match and we have suggestions
+            if params.get("item_unmatched") and "item" in result.entity_suggestions:
+                selected = self._prompt_entity_suggestion(
+                    "item", result.entity_suggestions["item"], item
+                )
+                if selected:
+                    self.handle_examine(selected)
+            elif item:
+                self.handle_examine(item)
+            else:
+                self.display_room()
+            return True
+
+        if action == "search":
+            self.handle_search()
+            return True
+
+        if action == "talk":
+            npc = params.get("npc")
+            # Check if NPC didn't match and we have suggestions
+            if params.get("npc_unmatched") and "npc" in result.entity_suggestions:
+                selected = self._prompt_entity_suggestion(
+                    "NPC", result.entity_suggestions["npc"], npc
+                )
+                if selected:
+                    self.handle_talk(selected)
+            elif npc:
+                self.handle_talk(npc)
+            else:
+                self.handle_talk_menu()
+            return True
+
+        if action == "shop":
+            npc = params.get("npc")
+            # Check if NPC didn't match and we have suggestions
+            if params.get("npc_unmatched") and "npc" in result.entity_suggestions:
+                selected = self._prompt_entity_suggestion(
+                    "NPC", result.entity_suggestions["npc"], npc
+                )
+                if selected:
+                    self.handle_shop(selected)
+            elif npc:
+                self.handle_shop(npc)
+            else:
+                self.handle_shop_menu()
+            return True
+
+        if action == "flee":
+            self.handle_flee()
+            return True
+
+        if action == "rest":
+            self.handle_rest()
+            return True
+
+        if action == "inventory":
+            inventory_ui = InventoryUI(
+                party=self.game_state.party.characters, data_loader=self.game_state.data_loader
+            )
+            inventory_ui.run()
+            return True
+
+        if action == "status":
+            if self.game_state.in_combat:
+                self.display_combat_status()
+            else:
+                self.display_player_status()
+            return True
+
+        if action == "help":
+            if self.game_state.in_combat:
+                self.display_help_combat()
+            else:
+                self.display_help_exploration()
+            return True
+
+        if action == "save":
+            self.handle_save()
+            return True
+
+        if action == "stabilize":
+            target = params.get("target")
+            if target:
+                self.handle_stabilize(target)
+            else:
+                unconscious = [c for c in self.game_state.party.characters if c.is_unconscious]
+                if unconscious:
+                    names = ", ".join([c.name for c in unconscious])
+                    print_error(f"Specify an ally to stabilize. Unconscious: {names}")
+                else:
+                    print_error("No unconscious allies to stabilize.")
+            return True
+
+        if action == "end_turn":
+            self.handle_end_turn()
+            return True
+
+        if action == "spells":
+            self.handle_spells()
+            return True
+
+        if action == "prepare":
+            self.handle_prepare_spells()
+            return True
+
+        if action == "effects":
+            self.handle_effects()
+            return True
+
+        if action == "time":
+            self.handle_time()
+            return True
+
+        if action == "unlock":
+            direction = params.get("direction")
+            if direction:
+                self.handle_unlock(direction)
+            else:
+                print_error("Specify a direction to unlock. Example: 'unlock north'")
+            return True
+
+        # Unknown action - shouldn't reach here if parser is working correctly
+        return False
+
+    def _prompt_entity_suggestion(
+        self, entity_type: str, suggestions: list[str], original_input: str
+    ) -> str | None:
+        """
+        Prompt user to select from entity suggestions when fuzzy match fails.
+
+        Args:
+            entity_type: Type of entity (spell, item, target, npc)
+            suggestions: List of suggested entity names
+            original_input: The user's original input that didn't match
+
+        Returns:
+            Selected entity name, or None if cancelled
+        """
+        if not suggestions:
+            return None
+
+        choices = suggestions + ["[Cancel]"]
+        selected = questionary.select(
+            f'Unknown {entity_type} "{original_input}". Did you mean:',
+            choices=choices,
+            use_arrow_keys=True,
+        ).ask()
+
+        if selected == "[Cancel]" or selected is None:
+            return None
+        return selected
+
     def process_exploration_command(self, command: str) -> None:
         """
         Process a command during exploration mode.
@@ -763,6 +1094,10 @@ class CLI:
                 self.handle_shop(npc_name)
             return
 
+        # Try fuzzy natural language parsing as fallback
+        if self._try_fuzzy_parse(command):
+            return
+
         print_status_message("Unknown command. Type 'help' for available commands.", "warning")
 
     def process_combat_command(self, command: str) -> None:
@@ -977,6 +1312,10 @@ class CLI:
 
         if command in ["end turn", "end", "done", "pass", "skip"]:
             self.handle_end_turn()
+            return
+
+        # Try fuzzy natural language parsing as fallback
+        if self._try_fuzzy_parse(command):
             return
 
         # Provide helpful suggestions for unknown commands

@@ -17,6 +17,7 @@ dependencies = [
     "pytest>=9.0.1",
     "python-dotenv>=1.0.0",
     "questionary>=2.0.0",
+    "rapidfuzz>=3.0.0",
     "rich>=14.2.0",
 ]
 
