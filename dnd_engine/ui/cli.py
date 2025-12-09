@@ -1076,25 +1076,7 @@ class CLI:
                 print_error("Specify an item to take. Example: 'take dagger'")
             return
 
-        if command == "talk" or command.startswith("talk "):
-            parts = command.split()[1:]
-            if not parts:
-                self.handle_talk_menu()
-            else:
-                npc_name = " ".join(parts)
-                self.handle_talk(npc_name)
-            return
-
-        if command == "shop" or command.startswith("shop "):
-            parts = command.split()[1:]
-            if not parts:
-                self.handle_shop_menu()
-            else:
-                npc_name = " ".join(parts)
-                self.handle_shop(npc_name)
-            return
-
-        # Try fuzzy natural language parsing as fallback
+        # Try fuzzy natural language parsing for talk, shop, and other commands
         if self._try_fuzzy_parse(command):
             return
 

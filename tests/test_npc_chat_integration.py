@@ -50,6 +50,7 @@ class TestNPCTools:
         assert "get_available_quests" in tool_names
         assert "open_shop" in tool_names
         assert "get_player_gold" in tool_names
+        assert "charge_gold" in tool_names
         assert "give_item" in tool_names
         assert "check_reputation" in tool_names
 
@@ -212,6 +213,31 @@ class TestNPCChatManagerToolHandlers:
         result = manager._handle_get_player_gold()
 
         assert result["gold"] == 100
+
+    def test_handle_charge_gold_success(self, manager):
+        """Test charging gold successfully."""
+        result = manager._handle_charge_gold(amount=25, reason="room for the night")
+
+        assert result["success"] is True
+        assert result["charged"] == 25
+        assert result["reason"] == "room for the night"
+        assert result["remaining_gold"] == 75
+
+    def test_handle_charge_gold_insufficient(self, manager):
+        """Test charging gold when party doesn't have enough."""
+        result = manager._handle_charge_gold(amount=200, reason="expensive item")
+
+        assert result["success"] is False
+        assert result["error"] == "Insufficient gold"
+        assert result["party_gold"] == 100
+        assert result["amount_needed"] == 200
+
+    def test_handle_charge_gold_invalid_amount(self, manager):
+        """Test charging zero or negative gold."""
+        result = manager._handle_charge_gold(amount=0, reason="free")
+
+        assert result["success"] is False
+        assert "positive" in result["error"]
 
     def test_handle_open_shop_no_conversation(self, manager, mock_character):
         """Test open_shop fails without active conversation."""
