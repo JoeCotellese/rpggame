@@ -196,6 +196,8 @@ class NPCChatManager:
     dispatching tool calls to modify game state.
     """
 
+    MAX_TOOL_ITERATIONS = 10  # Prevent infinite tool call loops
+
     def __init__(
         self,
         provider: "LLMProvider | None",
@@ -415,9 +417,8 @@ class NPCChatManager:
         if not self._current_conversation or not self.provider:
             return None
 
-        max_tool_iterations = 10
         iteration = 0
-        while iteration < max_tool_iterations:
+        while iteration < self.MAX_TOOL_ITERATIONS:
             response = await self.provider.chat_with_tools(
                 messages=self._current_conversation.messages,
                 tools=NPC_TOOLS,
@@ -657,7 +658,8 @@ class NPCChatManager:
                 "amount_needed": amount,
             }
 
-        # Deduct gold from party members (starting from first character)
+        # Deduct gold from party members in order until amount is covered.
+        # First character pays as much as they can, then second, etc.
         remaining_to_deduct = amount
         for char in self.game_state.party.characters:
             if remaining_to_deduct <= 0:
