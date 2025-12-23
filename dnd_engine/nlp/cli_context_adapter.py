@@ -131,7 +131,7 @@ class CLIContextAdapter(GameContextProvider):
         npcs = []
         if self.game_state.npc_manager:
             npc_list = self.game_state.npc_manager.get_npcs_in_room(
-                self.game_state.current_room
+                self.game_state.current_room_id
             )
             for npc in npc_list:
                 npcs.append(npc.name)

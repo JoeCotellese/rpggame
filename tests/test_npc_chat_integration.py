@@ -50,6 +50,7 @@ class TestNPCTools:
         assert "get_available_quests" in tool_names
         assert "open_shop" in tool_names
         assert "get_player_gold" in tool_names
+        assert "charge_gold" in tool_names
         assert "give_item" in tool_names
         assert "check_reputation" in tool_names
 
@@ -212,6 +213,57 @@ class TestNPCChatManagerToolHandlers:
         result = manager._handle_get_player_gold()
 
         assert result["gold"] == 100
+
+    def test_handle_charge_gold_success(self, manager):
+        """Test charging gold successfully."""
+        result = manager._handle_charge_gold(amount=25, reason="room for the night")
+
+        assert result["success"] is True
+        assert result["charged"] == 25
+        assert result["reason"] == "room for the night"
+        assert result["remaining_gold"] == 75
+
+    def test_handle_charge_gold_insufficient(self, manager):
+        """Test charging gold when party doesn't have enough."""
+        result = manager._handle_charge_gold(amount=200, reason="expensive item")
+
+        assert result["success"] is False
+        assert result["error"] == "Insufficient gold"
+        assert result["party_gold"] == 100
+        assert result["amount_needed"] == 200
+
+    def test_handle_charge_gold_invalid_amount(self, manager):
+        """Test charging zero or negative gold."""
+        result = manager._handle_charge_gold(amount=0, reason="free")
+
+        assert result["success"] is False
+        assert "positive" in result["error"]
+
+    def test_handle_charge_gold_multi_character(self, mock_game_state):
+        """Test charging gold splits across multiple characters."""
+        # Set up two characters with different gold amounts
+        char1 = Mock()
+        char1.name = "Fighter"
+        char1.inventory = Mock()
+        char1.inventory.gold = 30
+
+        char2 = Mock()
+        char2.name = "Wizard"
+        char2.inventory = Mock()
+        char2.inventory.gold = 50
+
+        mock_game_state.party.characters = [char1, char2]
+        manager = NPCChatManager(provider=None, game_state=mock_game_state)
+
+        # Charge 60 gold (more than first character has)
+        result = manager._handle_charge_gold(amount=60, reason="expensive room")
+
+        assert result["success"] is True
+        assert result["charged"] == 60
+        # First character should be drained, second should have remainder deducted
+        assert char1.inventory.gold == 0  # 30 - 30 = 0
+        assert char2.inventory.gold == 20  # 50 - 30 = 20
+        assert result["remaining_gold"] == 20
 
     def test_handle_open_shop_no_conversation(self, manager, mock_character):
         """Test open_shop fails without active conversation."""

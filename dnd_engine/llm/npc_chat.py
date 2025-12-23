@@ -80,6 +80,31 @@ NPC_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "charge_gold",
+            "description": (
+                "Charge the player party gold for a service (room, repair, toll, etc.). "
+                "Returns success/failure and remaining gold. Use after confirming "
+                "the player agrees to pay."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "amount": {
+                        "type": "integer",
+                        "description": "Amount of gold to charge",
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "What the charge is for (e.g., 'room for the night')",
+                    },
+                },
+                "required": ["amount", "reason"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "give_item",
             "description": "Give an item from NPC to player (gift, quest reward, etc.)",
             "parameters": {
@@ -171,6 +196,8 @@ class NPCChatManager:
     dispatching tool calls to modify game state.
     """
 
+    MAX_TOOL_ITERATIONS = 10  # Prevent infinite tool call loops
+
     def __init__(
         self,
         provider: "LLMProvider | None",
@@ -200,6 +227,7 @@ class NPCChatManager:
             "get_available_quests": self._handle_get_available_quests,
             "open_shop": self._handle_open_shop,
             "get_player_gold": self._handle_get_player_gold,
+            "charge_gold": self._handle_charge_gold,
             "give_item": self._handle_give_item,
             "check_reputation": self._handle_check_reputation,
             "receive_item_from_player": self._handle_receive_item_from_player,
@@ -389,7 +417,8 @@ class NPCChatManager:
         if not self._current_conversation or not self.provider:
             return None
 
-        while True:
+        iteration = 0
+        while iteration < self.MAX_TOOL_ITERATIONS:
             response = await self.provider.chat_with_tools(
                 messages=self._current_conversation.messages,
                 tools=NPC_TOOLS,
@@ -437,6 +466,7 @@ class NPCChatManager:
                     )
 
                 # Continue loop for final response
+                iteration += 1
                 continue
 
             # No tool calls - final response
@@ -447,6 +477,10 @@ class NPCChatManager:
                 return response["content"]
 
             return None
+
+        # Max iterations reached - return graceful fallback
+        logger.warning("NPC response exceeded max tool iterations")
+        return "I'm sorry, I seem to have lost my train of thought. What were we talking about?"
 
     def _dispatch_tool(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Dispatch a tool call to its handler."""
@@ -482,6 +516,17 @@ class NPCChatManager:
         elif tool_name == "get_player_gold":
             gold = result.get("gold", 0)
             print_status_message(f"💰 Party gold: {gold}", "info")
+
+        elif tool_name == "charge_gold":
+            if result.get("success"):
+                charged = result.get("charged", 0)
+                reason = result.get("reason", "service")
+                remaining = result.get("remaining_gold", 0)
+                print_status_message(f"💰 Paid {charged} gold for {reason}", "info")
+                print_status_message(f"💰 Remaining gold: {remaining}", "info")
+            else:
+                error = result.get("error", "Payment failed")
+                print_status_message(f"💰 {error}", "warning")
 
         # Note: get_available_quests has no user feedback - NPC describes quests naturally
         # Note: turn_in_quest feedback is handled in _handle_turn_in_quest directly
@@ -597,6 +642,39 @@ class NPCChatManager:
         """Get party's total gold."""
         total = sum(char.inventory.gold for char in self.game_state.party.characters)
         return {"gold": total}
+
+    def _handle_charge_gold(self, amount: int, reason: str) -> dict[str, Any]:
+        """Charge the party gold for a service."""
+        if amount <= 0:
+            return {"success": False, "error": "Amount must be positive"}
+
+        total_gold = sum(char.inventory.gold for char in self.game_state.party.characters)
+
+        if total_gold < amount:
+            return {
+                "success": False,
+                "error": "Insufficient gold",
+                "party_gold": total_gold,
+                "amount_needed": amount,
+            }
+
+        # Deduct gold from party members in order until amount is covered.
+        # First character pays as much as they can, then second, etc.
+        remaining_to_deduct = amount
+        for char in self.game_state.party.characters:
+            if remaining_to_deduct <= 0:
+                break
+            deduct_from_char = min(char.inventory.gold, remaining_to_deduct)
+            char.inventory.gold -= deduct_from_char
+            remaining_to_deduct -= deduct_from_char
+
+        new_total = sum(char.inventory.gold for char in self.game_state.party.characters)
+        return {
+            "success": True,
+            "charged": amount,
+            "reason": reason,
+            "remaining_gold": new_total,
+        }
 
     def _handle_give_item(self, item_id: str) -> dict[str, Any]:
         """Give an item from NPC to player."""
