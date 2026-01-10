@@ -34,8 +34,9 @@ class LayoutLoader:
         """
         if content_path is None:
             # Default to dnd-engine content path
+            # Path: integration/ -> client_2d/ -> src/ -> client-2d/ -> rpggame/
             content_path = (
-                Path(__file__).parent.parent.parent.parent.parent.parent
+                Path(__file__).parent.parent.parent.parent.parent
                 / "dnd-engine"
                 / "dnd_engine"
                 / "data"
