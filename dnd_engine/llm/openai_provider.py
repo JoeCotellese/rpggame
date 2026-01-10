@@ -10,9 +10,7 @@ from openai import AsyncOpenAI
 
 logger = logging.getLogger(__name__)
 
-from dnd_engine.ui.rich_ui import print_error, print_status_message
-
-from .base import LLMProvider
+from .base import LLMProvider, StatusCallback
 
 
 class OpenAIProvider(LLMProvider):
@@ -28,6 +26,7 @@ class OpenAIProvider(LLMProvider):
         model: str = "gpt-4o-mini",
         timeout: float = 10.0,
         max_tokens: int = 1000,
+        status_callback: StatusCallback = None,
     ) -> None:
         """
         Initialize OpenAI provider.
@@ -37,8 +36,9 @@ class OpenAIProvider(LLMProvider):
             model: Model name (default: gpt-4o-mini for cost-effectiveness)
             timeout: Request timeout in seconds
             max_tokens: Maximum tokens in response
+            status_callback: Optional callback for status messages (msg, type)
         """
-        super().__init__(api_key, model, timeout, max_tokens)
+        super().__init__(api_key, model, timeout, max_tokens, status_callback)
         self.client = AsyncOpenAI(api_key=api_key)
 
     async def generate(self, prompt: str, temperature: float = 0.7) -> str | None:
@@ -79,10 +79,10 @@ class OpenAIProvider(LLMProvider):
             return response.choices[0].message.content.strip()
 
         except TimeoutError:
-            print_status_message(f"OpenAI request timed out after {self.timeout}s", "warning")
+            self._emit_status(f"OpenAI request timed out after {self.timeout}s", "warning")
             return None
         except Exception as e:
-            print_error(f"OpenAI API error: {e}")
+            self._emit_status(f"OpenAI API error: {e}", "error")
             return None
 
     def get_provider_name(self) -> str:
@@ -149,8 +149,8 @@ class OpenAIProvider(LLMProvider):
             }
 
         except TimeoutError:
-            print_status_message(f"OpenAI request timed out after {self.timeout}s", "warning")
+            self._emit_status(f"OpenAI request timed out after {self.timeout}s", "warning")
             return None
         except Exception as e:
-            print_error(f"OpenAI API error: {e}")
+            self._emit_status(f"OpenAI API error: {e}", "error")
             return None

@@ -73,7 +73,7 @@ def initialize_llm(args: argparse.Namespace) -> Optional:
         return None
 
     try:
-        provider = create_llm_provider(provider_name)
+        provider = create_llm_provider(provider_name, status_callback=print_status_message)
         if provider:
             print_status_message(f"LLM provider: {provider.get_provider_name()}", "success")
         else:

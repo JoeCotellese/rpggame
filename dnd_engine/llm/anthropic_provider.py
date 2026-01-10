@@ -6,9 +6,7 @@ from typing import Any
 
 from anthropic import AsyncAnthropic
 
-from dnd_engine.ui.rich_ui import print_error, print_status_message
-
-from .base import LLMProvider
+from .base import LLMProvider, StatusCallback
 
 
 class AnthropicProvider(LLMProvider):
@@ -24,6 +22,7 @@ class AnthropicProvider(LLMProvider):
         model: str = "claude-3-5-haiku-20241022",
         timeout: float = 10.0,
         max_tokens: int = 1000,
+        status_callback: StatusCallback = None,
     ) -> None:
         """
         Initialize Anthropic provider.
@@ -33,8 +32,9 @@ class AnthropicProvider(LLMProvider):
             model: Model name (default: claude-3-5-haiku for cost-effectiveness)
             timeout: Request timeout in seconds
             max_tokens: Maximum tokens in response
+            status_callback: Optional callback for status messages (msg, type)
         """
-        super().__init__(api_key, model, timeout, max_tokens)
+        super().__init__(api_key, model, timeout, max_tokens, status_callback)
         self.client = AsyncAnthropic(api_key=api_key)
 
     async def generate(self, prompt: str, temperature: float = 0.7) -> str | None:
@@ -70,10 +70,10 @@ class AnthropicProvider(LLMProvider):
             return response.content[0].text.strip()
 
         except TimeoutError:
-            print_status_message(f"Anthropic request timed out after {self.timeout}s", "warning")
+            self._emit_status(f"Anthropic request timed out after {self.timeout}s", "warning")
             return None
         except Exception as e:
-            print_error(f"Anthropic API error: {e}")
+            self._emit_status(f"Anthropic API error: {e}", "error")
             return None
 
     def get_provider_name(self) -> str:
