@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "dnd-game": {
+      "type": "stdio",
+      "command": "/Users/joec/git/rpggame/client-2d/scripts/run_mcp_server.sh",
+      "args": [],
+      "env": {}
+    }
+  }
+}

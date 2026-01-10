@@ -187,3 +187,104 @@ from dnd_engine.utils import helpers
 ### Extensibility
 - Plugin architecture allows adding new rule systems, content, or LLM providers
 - Clear interfaces for extending core systems
+
+## 2D Graphical Client (client-2d)
+
+The project includes a 2D graphical client built with **Python Arcade**.
+
+### Framework & Documentation
+- Uses Python Arcade (arcade library) for rendering
+- For up-to-date Arcade documentation, use the `docs-server` MCP with library 'arcade'
+- Entry point: `dnd-2d` command (or `uv run dnd-2d`)
+
+### Architecture
+```
+client-2d/
+├── src/client_2d/
+│   ├── core/          # Constants, game mode enums
+│   ├── rendering/     # Map, entity, fog rendering
+│   ├── systems/       # Fog of war, lighting, animation
+│   ├── input/         # Keyboard handling
+│   ├── assets/        # Sprite/asset loading with fallbacks
+│   ├── ui/            # UI overlays (HP bars, menus)
+│   └── integration/   # Event bridge to dnd-engine
+├── assets/            # Sprites, tilesets, maps
+├── tests/             # Test suite
+└── scripts/           # visual_test.py demo
+```
+
+### Key Systems
+- **InputHandler**: Maps keyboard events to game actions (WASD/arrows for movement)
+- **FogOfWarSystem**: D&D 5E compliant visibility (unexplored/dark/dim/bright)
+- **LightingSystem**: Calculates illumination from light sources (torch, lantern, darkvision)
+- **AssetManager**: Loads sprites with hierarchical fallback system
+- **SpriteResolver**: Resolves sprite paths (exact match → category → generic fallback)
+
+### Running the Visual Demo
+```bash
+cd client-2d
+uv run python scripts/visual_test.py
+```
+- WASD/Arrows: Move
+- L: Cycle light modes
+- ESC: Quit
+
+### Testing the 2D Client
+```bash
+cd client-2d
+uv run pytest tests/
+```
+
+### Claude-Driven Playtesting (MCP Server)
+
+The project includes an MCP server that allows Claude to playtest the game directly via tool calls, acting as a human player interacting with the client.
+
+**Architecture:**
+```
+Claude Code ◄──MCP──► Game MCP Server ◄──► client-2d (player view) ◄──► dnd-engine
+```
+
+**Enabling the MCP Server:**
+```bash
+# Add to project scope (already configured in .mcp.json)
+claude mcp add -s project dnd-game /path/to/client-2d/scripts/run_mcp_server.sh
+```
+
+**Available Tools:**
+| Tool | Description |
+|------|-------------|
+| `game_new()` | Start a new game session |
+| `game_state()` | Get current state (ASCII map + JSON) |
+| `game_move(direction)` | Move north/south/east/west |
+| `game_attack(target)` | Attack adjacent enemy |
+| `game_interact(target)` | Interact with adjacent object |
+| `game_wait()` | Wait one turn |
+
+**ASCII Map Legend:**
+- `@` = Player
+- `A-Z` = Entities (see legend in output)
+- `#` = Wall
+- `.` = Floor (bright light)
+- `,` = Floor (dim light)
+- `:` = Floor (dark/remembered)
+- ` ` = Unexplored
+
+**State Output Includes:**
+- ASCII map with fog of war
+- Player position, HP, light source
+- Visible entities with distance and direction
+- Available actions for current position
+
+**Example Session:**
+```
+> game_new()
+Turn: 0, Player: [20, 14], HP: 30/30
+Map shows @ surrounded by fog of war...
+
+> game_move("east")
+Moved east. Turn: 1, Player: [21, 14]
+New areas revealed, entities come into view...
+
+> game_attack("goblin_1")
+Attacked goblin_1! Enemy defeated.
+```

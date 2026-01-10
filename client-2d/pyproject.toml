@@ -26,6 +26,10 @@ engine = [
     # Required for Phase 2+ integration with dnd-engine
     # "dnd-engine",  # Uncomment when ready for integration
 ]
+mcp = [
+    # Required for MCP server (Claude-driven playtesting)
+    "mcp[cli]>=1.0.0",
+]
 dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
