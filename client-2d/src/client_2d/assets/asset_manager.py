@@ -5,7 +5,7 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from client_2d.assets.sprite_resolver import SpriteResolver
 
@@ -39,7 +39,7 @@ class AssetManager:
 
     def get_monster_sprite_path(
         self, creature_id: str, creature_type: str
-    ) -> Optional[Path]:
+    ) -> Path | None:
         """Get the sprite path for a monster.
 
         Args:
@@ -57,8 +57,8 @@ class AssetManager:
         return path
 
     def get_character_sprite_path(
-        self, class_name: str, race: Optional[str] = None
-    ) -> Optional[Path]:
+        self, class_name: str, race: str | None = None
+    ) -> Path | None:
         """Get the sprite path for a character.
 
         Args:
@@ -77,7 +77,7 @@ class AssetManager:
             )
         return path
 
-    def get_tileset_path(self, tileset_name: str) -> Optional[Path]:
+    def get_tileset_path(self, tileset_name: str) -> Path | None:
         """Get the path for a tileset.
 
         Args:
@@ -92,7 +92,7 @@ class AssetManager:
         self._missing_assets.add(f"tileset:{tileset_name}")
         return None
 
-    def get_map_path(self, dungeon_id: str, room_id: str) -> Optional[Path]:
+    def get_map_path(self, dungeon_id: str, room_id: str) -> Path | None:
         """Get the path for a room's tilemap.
 
         Args:
@@ -114,7 +114,7 @@ class AssetManager:
         self._missing_assets.add(f"map:{dungeon_id}:{room_id}")
         return None
 
-    def get_ui_sprite_path(self, ui_element: str) -> Optional[Path]:
+    def get_ui_sprite_path(self, ui_element: str) -> Path | None:
         """Get the path for a UI sprite element.
 
         Args:
@@ -123,11 +123,72 @@ class AssetManager:
         Returns:
             Path to sprite file, or None if not found
         """
-        ui_path = self.assets_path / "ui" / f"{ui_element}.png"
-        if ui_path.exists():
-            return ui_path
-        self._missing_assets.add(f"ui:{ui_element}")
-        return None
+        path = self._sprite_resolver.get_ui_sprite_path(ui_element)
+        if path is None:
+            self._missing_assets.add(f"ui:{ui_element}")
+        return path
+
+    def get_item_sprite_path(
+        self, item_id: str, item_category: str
+    ) -> Path | None:
+        """Get the sprite path for an item.
+
+        Args:
+            item_id: The item identifier (e.g., "longsword")
+            item_category: The item category (e.g., "weapons")
+
+        Returns:
+            Path to sprite file, or None if not found
+        """
+        path = self._sprite_resolver.get_item_sprite_path(item_id, item_category)
+        if path is None:
+            self._missing_assets.add(f"item:{item_category}:{item_id}")
+        return path
+
+    def get_effect_sprite_path(
+        self, effect_id: str, effect_type: str
+    ) -> Path | None:
+        """Get the sprite path for a visual effect.
+
+        Args:
+            effect_id: The effect identifier (e.g., "slash")
+            effect_type: The effect category (e.g., "damage")
+
+        Returns:
+            Path to sprite file, or None if not found
+        """
+        path = self._sprite_resolver.get_effect_sprite_path(effect_id, effect_type)
+        if path is None:
+            self._missing_assets.add(f"effect:{effect_type}:{effect_id}")
+        return path
+
+    def get_terrain_sprite_path(self, terrain_id: str) -> Path | None:
+        """Get the sprite path for a terrain tile.
+
+        Args:
+            terrain_id: The terrain identifier (e.g., "floor_stone", "wall_brick")
+
+        Returns:
+            Path to sprite file, or None if not found
+        """
+        path = self._sprite_resolver.get_terrain_sprite_path(terrain_id)
+        if path is None:
+            self._missing_assets.add(f"terrain:{terrain_id}")
+        return path
+
+    def get_decoration_sprite_path(self, decoration_id: str) -> Path | None:
+        """Get the sprite path for a decorative element.
+
+        Args:
+            decoration_id: The decoration identifier (e.g., "chest", "altar")
+
+        Returns:
+            Path to sprite file, or None if not found
+        """
+        path = self._sprite_resolver.get_decoration_sprite_path(decoration_id)
+        if path is None:
+            self._missing_assets.add(f"decoration:{decoration_id}")
+        return path
 
     def get_missing_assets(self) -> set[str]:
         """Get the set of assets that were requested but not found.
@@ -164,6 +225,13 @@ class AssetManager:
             "tilesets": self.assets_path / "tilesets",
             "maps": self.assets_path / "maps",
             "ui": self.assets_path / "ui",
+            "stonesoup": self.assets_path / "stonesoup",
+            "tile_mappings": self.assets_path / "tile_mappings.json",
         }
 
         return {name: path.exists() for name, path in required_dirs.items()}
+
+    @property
+    def has_stonesoup_tiles(self) -> bool:
+        """Check if Stone Soup tiles are available."""
+        return self._sprite_resolver.has_mappings
