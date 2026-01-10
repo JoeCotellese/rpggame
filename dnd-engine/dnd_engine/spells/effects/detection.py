@@ -149,7 +149,7 @@ class DetectionEffect(SpellEffect):
             if not hasattr(inventory, "items"):
                 continue
 
-            for item_id, inv_item in inventory.items.items():
+            for item_id, _inv_item in inventory.items.items():
                 # Try to load full item data to check if magical
                 item_data = game_state.data_loader.get_item_by_id(item_id)
                 if not item_data:

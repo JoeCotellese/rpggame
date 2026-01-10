@@ -3,11 +3,10 @@
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from dnd_engine.core.game_state import GameState
-    from dnd_engine.core.character import Character
 
 
 class Capability(str, Enum):
@@ -247,7 +246,7 @@ class CapabilityResolver:
             if not hasattr(inventory, "items"):
                 continue
 
-            for item_id, inv_item in inventory.items.items():
+            for item_id, _inv_item in inventory.items.items():
                 # Check if this item grants capabilities
                 item_id_lower = item_id.lower()
                 for item_pattern, caps in self.ITEM_CAPABILITIES.items():

@@ -82,8 +82,8 @@ class CharacterVault:
             # Validate UUID format
             try:
                 uuid.UUID(character_id)
-            except ValueError:
-                raise ValueError(f"Invalid character ID: {character_id}")
+            except ValueError as e:
+                raise ValueError(f"Invalid character ID: {character_id}") from e
 
         # Validate state consistency
         if state == CharacterState.ACTIVE and campaign_name is None:
@@ -125,7 +125,7 @@ class CharacterVault:
             with open(character_path, encoding="utf-8") as f:
                 character_data = json.load(f)
         except json.JSONDecodeError as e:
-            raise ValueError(f"Corrupted character file: {e}")
+            raise ValueError(f"Corrupted character file: {e}") from e
 
         # Validate character data
         self._validate_character_data(character_data)
@@ -252,7 +252,7 @@ class CharacterVault:
             with open(import_path, encoding="utf-8") as f:
                 import_data = json.load(f)
         except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid import file: {e}")
+            raise ValueError(f"Invalid import file: {e}") from e
 
         # Validate import data
         if "character" not in import_data:

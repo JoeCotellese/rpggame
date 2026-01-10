@@ -237,7 +237,7 @@ class SaveSlotManager:
             with open(slot_path, encoding="utf-8") as f:
                 slot_data = json.load(f)
         except json.JSONDecodeError as e:
-            raise ValueError(f"Corrupted slot file: {e}")
+            raise ValueError(f"Corrupted slot file: {e}") from e
 
         # Check if slot is empty
         metadata = slot_data.get("metadata", {})

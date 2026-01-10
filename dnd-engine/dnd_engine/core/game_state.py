@@ -2994,7 +2994,7 @@ class GameState:
 
         for enemy in self.active_enemies:
             # Find enemy's passive_perception from monster data
-            for monster_id, monster_data in monsters_data.items():
+            for _monster_id, monster_data in monsters_data.items():
                 if monster_data["name"] == enemy.name:
                     enemy_pp = monster_data.get("passive_perception", 10)
                     max_enemy_perception = max(max_enemy_perception, enemy_pp)
@@ -3138,7 +3138,7 @@ class GameState:
             for enemy in self.active_enemies:
                 if not enemy.is_alive:
                     # Find enemy XP value
-                    for monster_id, monster_data in monsters.items():
+                    for _monster_id, monster_data in monsters.items():
                         if monster_data["name"] == enemy.name:
                             total_xp += monster_data.get("xp", 0)
                             break
@@ -3397,7 +3397,7 @@ class GameState:
                 max_hp=creature.max_hp,
                 is_alive=creature.is_alive,
                 conditions=list(creature.conditions) if hasattr(creature, "conditions") else [],
-                is_player=creature in [c for c in self.party.characters],
+                is_player=creature in list(self.party.characters),
                 ac=creature.ac,
             )
 
@@ -3944,7 +3944,7 @@ class GameState:
         # Get monster data for attack
         monsters = self.data_loader.load_monsters()
         monster_data = None
-        for mid, mdata in monsters.items():
+        for _mid, mdata in monsters.items():
             if mdata["name"] == enemy.name:
                 monster_data = mdata
                 break
@@ -4135,7 +4135,7 @@ class GameState:
 
                 # Find enemy's attack data
                 monster_data = None
-                for monster_id, mdata in monsters.items():
+                for _monster_id, mdata in monsters.items():
                     if mdata["name"] == enemy.name:
                         monster_data = mdata
                         break
@@ -4339,7 +4339,7 @@ class GameState:
 
         # Find item in categories
         item_data = None
-        for category, category_items in items_data.items():
+        for _category, category_items in items_data.items():
             if item_id in category_items:
                 item_data = category_items[item_id]
                 break
@@ -4421,7 +4421,6 @@ class GameState:
 
         # Get damage from item
         damage_dice = used_item_data.get("damage", "1d4")
-        damage_type = used_item_data.get("damage_type", "damage")
 
         # Resolve the attack
         attack_result = self.combat_engine.resolve_attack(

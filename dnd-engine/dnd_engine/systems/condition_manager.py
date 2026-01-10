@@ -188,7 +188,6 @@ class ConditionManager:
         damage_amount = damage_roll.total
 
         # Apply damage
-        hp_before = creature.current_hp
         creature.take_damage(damage_amount)
 
         # Format message

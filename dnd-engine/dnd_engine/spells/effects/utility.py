@@ -236,7 +236,6 @@ class UtilityEffect(SpellEffect):
         """Return actions enabled by the utility effect."""
         actions: list[dict[str, Any]] = []
         capabilities = effect.effect_data.get("capabilities", [])
-        spell_name = effect.effect_data.get("spell_name", "utility spell")
 
         # Map capabilities to user-friendly actions
         action_map = {

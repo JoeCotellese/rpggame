@@ -24,7 +24,6 @@ def build_room_description_prompt(
     """
     base_desc = room_data.get("description", "")
     room_type = room_data.get("name", "chamber")
-    room_id = room_data.get("id", room_type.lower().replace(" ", "_"))
     monsters = room_data.get("monsters", [])
 
     # Room significance determines description length
@@ -32,10 +31,6 @@ def build_room_description_prompt(
     # "standard" = typical rooms (2-3 sentences)
     # "major" = story beats, boss rooms, reveals (3-4 sentences)
     significance = room_data.get("significance", "standard")
-
-    # Detect room transition for narrative context
-    previous_room_id = room_data.get("previous_room_id")
-    is_entering = previous_room_id != room_id if previous_room_id is not None else True
 
     # Extract lighting information
     base_lighting = room_data.get("base_lighting", "bright")
