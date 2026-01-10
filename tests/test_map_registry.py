@@ -19,8 +19,8 @@ class TestDungeonGridMaps:
         assert isinstance(DUNGEON_GRID_MAPS, dict)
 
     def test_registry_contains_laboratory(self):
-        """Registry should contain the poisoned laboratory."""
-        assert "poisoned_laboratory" in DUNGEON_GRID_MAPS
+        """Registry should contain the laboratory dungeon."""
+        assert "laboratory" in DUNGEON_GRID_MAPS
 
     def test_registry_values_are_filenames(self):
         """All registry values should be JSON filenames."""
@@ -36,17 +36,17 @@ class TestGetGridMapPath:
 
     def test_returns_path_for_known_dungeon(self):
         """Should return a Path for a known dungeon."""
-        result = get_grid_map_path("poisoned_laboratory")
+        result = get_grid_map_path("laboratory")
         assert isinstance(result, Path)
 
     def test_path_points_to_maps_directory(self):
         """Path should point to the maps content directory."""
-        result = get_grid_map_path("poisoned_laboratory")
+        result = get_grid_map_path("laboratory")
         assert "data/content/maps" in str(result)
 
     def test_path_has_correct_filename(self):
         """Path should have the filename from the registry."""
-        result = get_grid_map_path("poisoned_laboratory")
+        result = get_grid_map_path("laboratory")
         assert result.name == "laboratory_grid.json"
 
     def test_returns_none_for_unknown_dungeon(self):
@@ -65,7 +65,7 @@ class TestHasGridMap:
 
     def test_returns_true_for_known_dungeon(self):
         """Should return True for a dungeon with a grid map."""
-        assert has_grid_map("poisoned_laboratory") is True
+        assert has_grid_map("laboratory") is True
 
     def test_returns_false_for_unknown_dungeon(self):
         """Should return False for a dungeon without a grid map."""

@@ -4,9 +4,9 @@
 from pathlib import Path
 
 
-# Map dungeon IDs to their grid JSON files
+# Map dungeon IDs (filename without .json) to their grid JSON files
 DUNGEON_GRID_MAPS: dict[str, str] = {
-    "poisoned_laboratory": "laboratory_grid.json",
+    "laboratory": "laboratory_grid.json",
 }
 
 
@@ -15,7 +15,7 @@ def get_grid_map_path(dungeon_id: str) -> Path | None:
     Get the path to a dungeon's grid map file, if one exists.
 
     Args:
-        dungeon_id: The dungeon identifier (e.g., "poisoned_laboratory")
+        dungeon_id: The dungeon identifier (e.g., "laboratory")
 
     Returns:
         Path to the grid map JSON file, or None if no grid map exists
