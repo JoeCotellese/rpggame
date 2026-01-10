@@ -27,6 +27,13 @@ from dnd_engine.spatial.fov import (
     compute_los,
     compute_visibility_at_distance,
 )
+from dnd_engine.spatial.combat_grid import (
+    CombatGridManager,
+    CombatantInfo,
+    RangeCheckResult,
+    AttackType,
+    FEET_PER_TILE,
+)
 
 __all__ = [
     "Position",
@@ -54,4 +61,9 @@ __all__ = [
     "FOVConfig",
     "compute_los",
     "compute_visibility_at_distance",
+    "CombatGridManager",
+    "CombatantInfo",
+    "RangeCheckResult",
+    "AttackType",
+    "FEET_PER_TILE",
 ]
