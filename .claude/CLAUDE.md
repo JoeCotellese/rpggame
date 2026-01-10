@@ -234,3 +234,57 @@ uv run python scripts/visual_test.py
 cd client-2d
 uv run pytest tests/
 ```
+
+### Claude-Driven Playtesting (MCP Server)
+
+The project includes an MCP server that allows Claude to playtest the game directly via tool calls, acting as a human player interacting with the client.
+
+**Architecture:**
+```
+Claude Code ◄──MCP──► Game MCP Server ◄──► client-2d (player view) ◄──► dnd-engine
+```
+
+**Enabling the MCP Server:**
+```bash
+# Add to project scope (already configured in .mcp.json)
+claude mcp add -s project dnd-game /path/to/client-2d/scripts/run_mcp_server.sh
+```
+
+**Available Tools:**
+| Tool | Description |
+|------|-------------|
+| `game_new()` | Start a new game session |
+| `game_state()` | Get current state (ASCII map + JSON) |
+| `game_move(direction)` | Move north/south/east/west |
+| `game_attack(target)` | Attack adjacent enemy |
+| `game_interact(target)` | Interact with adjacent object |
+| `game_wait()` | Wait one turn |
+
+**ASCII Map Legend:**
+- `@` = Player
+- `A-Z` = Entities (see legend in output)
+- `#` = Wall
+- `.` = Floor (bright light)
+- `,` = Floor (dim light)
+- `:` = Floor (dark/remembered)
+- ` ` = Unexplored
+
+**State Output Includes:**
+- ASCII map with fog of war
+- Player position, HP, light source
+- Visible entities with distance and direction
+- Available actions for current position
+
+**Example Session:**
+```
+> game_new()
+Turn: 0, Player: [20, 14], HP: 30/30
+Map shows @ surrounded by fog of war...
+
+> game_move("east")
+Moved east. Turn: 1, Player: [21, 14]
+New areas revealed, entities come into view...
+
+> game_attack("goblin_1")
+Attacked goblin_1! Enemy defeated.
+```
