@@ -3,22 +3,19 @@
 
 """Phase 1 integration tests for the 2D client systems."""
 
-import pytest
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
+import pytest
+from client_2d.assets.asset_manager import AssetManager
 from client_2d.core.constants import (
     Action,
-    Direction,
     GameMode,
     LightingState,
-    TORCH_BRIGHT_RADIUS,
-    TORCH_DIM_RADIUS,
 )
+from client_2d.input.input_handler import KEY_DOWN, KEY_RIGHT, KEY_UP, InputHandler
 from client_2d.systems.fog_of_war import FogOfWarSystem
 from client_2d.systems.lighting import LightingSystem, LightSource
-from client_2d.input.input_handler import InputHandler, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT
-from client_2d.assets.asset_manager import AssetManager
 
 
 class TestNavigationWithFogAndLighting:

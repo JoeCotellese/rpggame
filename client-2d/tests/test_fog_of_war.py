@@ -3,7 +3,6 @@
 
 """Tests for the FogOfWarSystem."""
 
-import pytest
 
 from client_2d.core.constants import LightingState
 from client_2d.systems.fog_of_war import FogOfWarSystem

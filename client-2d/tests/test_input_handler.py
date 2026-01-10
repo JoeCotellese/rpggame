@@ -3,11 +3,10 @@
 
 """Tests for the InputHandler."""
 
-import pytest
 
 from client_2d.core.constants import Action, Direction, GameMode
 from client_2d.input.input_handler import (
-    InputHandler,
+    KEY_1,
     KEY_A,
     KEY_C,
     KEY_D,
@@ -22,7 +21,7 @@ from client_2d.input.input_handler import (
     KEY_TAB,
     KEY_UP,
     KEY_W,
-    KEY_1,
+    InputHandler,
 )
 
 

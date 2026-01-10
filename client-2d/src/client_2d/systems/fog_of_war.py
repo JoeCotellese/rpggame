@@ -4,7 +4,6 @@
 """Fog of War system for tracking tile visibility and exploration."""
 
 from dataclasses import dataclass, field
-from typing import Set, Tuple
 
 import numpy as np
 
@@ -32,7 +31,7 @@ class FogOfWarSystem:
     # Visibility grid using LightingState enum values
     _visibility: np.ndarray = field(init=False)
     # Set of tiles that have ever been explored
-    _explored: Set[Tuple[int, int]] = field(default_factory=set)
+    _explored: set[tuple[int, int]] = field(default_factory=set)
 
     def __post_init__(self):
         """Initialize the visibility grid to all unexplored."""
@@ -114,7 +113,7 @@ class FogOfWarSystem:
             self._visibility[x, y] = LightingState.DARK.value
 
     def apply_lighting(
-        self, lit_tiles: dict[Tuple[int, int], LightingState]
+        self, lit_tiles: dict[tuple[int, int], LightingState]
     ) -> None:
         """Apply lighting states from a lighting calculation.
 
@@ -132,7 +131,7 @@ class FogOfWarSystem:
                 if state.value > current:
                     self._visibility[x, y] = state.value
 
-    def get_all_visible_tiles(self) -> list[Tuple[int, int, LightingState]]:
+    def get_all_visible_tiles(self) -> list[tuple[int, int, LightingState]]:
         """Get all tiles that are visible (not unexplored).
 
         Returns:
@@ -146,7 +145,7 @@ class FogOfWarSystem:
 
     def get_tiles_in_state(
         self, state: LightingState
-    ) -> list[Tuple[int, int]]:
+    ) -> list[tuple[int, int]]:
         """Get all tiles currently in a specific visibility state.
 
         Args:

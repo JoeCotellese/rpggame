@@ -3,7 +3,6 @@
 
 """Tests for the LightingSystem and related classes."""
 
-import pytest
 
 from client_2d.core.constants import (
     LANTERN_BRIGHT_RADIUS,

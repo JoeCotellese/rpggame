@@ -5,7 +5,6 @@
 
 from enum import Enum, auto
 
-
 # Display settings
 TILE_SIZE = 32  # Pixels per tile
 WINDOW_WIDTH = 1280

@@ -5,7 +5,6 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Set, Tuple
 
 from client_2d.core.constants import (
     LANTERN_BRIGHT_RADIUS,
@@ -91,10 +90,10 @@ class LightingAlgorithm(ABC):
     def calculate_lit_tiles(
         self,
         source: LightSource,
-        obstacles: Set[Tuple[int, int]],
+        obstacles: set[tuple[int, int]],
         map_width: int,
         map_height: int,
-    ) -> dict[Tuple[int, int], LightingState]:
+    ) -> dict[tuple[int, int], LightingState]:
         """Calculate which tiles are lit by a light source.
 
         Args:
@@ -120,15 +119,15 @@ class SimpleLighting(LightingAlgorithm):
     def calculate_lit_tiles(
         self,
         source: LightSource,
-        obstacles: Set[Tuple[int, int]],
+        obstacles: set[tuple[int, int]],
         map_width: int,
         map_height: int,
-    ) -> dict[Tuple[int, int], LightingState]:
+    ) -> dict[tuple[int, int], LightingState]:
         """Calculate lit tiles using simple circular radius.
 
         Ignores obstacles - all tiles within radius are lit.
         """
-        lit_tiles: dict[Tuple[int, int], LightingState] = {}
+        lit_tiles: dict[tuple[int, int], LightingState] = {}
 
         total_radius = source.total_radius
 
@@ -164,10 +163,10 @@ class RaycastLighting(LightingAlgorithm):
     def calculate_lit_tiles(
         self,
         source: LightSource,
-        obstacles: Set[Tuple[int, int]],
+        obstacles: set[tuple[int, int]],
         map_width: int,
         map_height: int,
-    ) -> dict[Tuple[int, int], LightingState]:
+    ) -> dict[tuple[int, int], LightingState]:
         """Calculate lit tiles using recursive shadowcasting.
 
         This algorithm casts rays from the light source and stops at obstacles.
@@ -200,7 +199,7 @@ class LightingSystem:
     map_height: int
     algorithm: LightingAlgorithm = None
     _light_sources: list[LightSource] = None
-    _obstacles: Set[Tuple[int, int]] = None
+    _obstacles: set[tuple[int, int]] = None
 
     def __post_init__(self):
         """Initialize with default simple lighting algorithm."""
@@ -232,7 +231,7 @@ class LightingSystem:
         """Remove all light sources."""
         self._light_sources.clear()
 
-    def set_obstacles(self, obstacles: Set[Tuple[int, int]]) -> None:
+    def set_obstacles(self, obstacles: set[tuple[int, int]]) -> None:
         """Set the obstacle positions that block light.
 
         Args:
@@ -248,14 +247,14 @@ class LightingSystem:
         """Remove a single obstacle position."""
         self._obstacles.discard((x, y))
 
-    def calculate_lighting(self) -> dict[Tuple[int, int], LightingState]:
+    def calculate_lighting(self) -> dict[tuple[int, int], LightingState]:
         """Calculate combined illumination from all light sources.
 
         Returns:
             Dict mapping (x, y) to LightingState for all lit tiles.
             Tiles not in the dict are considered dark/unlit.
         """
-        combined: dict[Tuple[int, int], LightingState] = {}
+        combined: dict[tuple[int, int], LightingState] = {}
 
         for source in self._light_sources:
             source_lighting = self.algorithm.calculate_lit_tiles(
@@ -284,7 +283,7 @@ class LightingSystem:
 
     def update_party_lights(
         self,
-        party_positions: list[Tuple[int, int]],
+        party_positions: list[tuple[int, int]],
         light_type: str = "torch",
     ) -> None:
         """Update light sources for party members.

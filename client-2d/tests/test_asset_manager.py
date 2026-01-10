@@ -3,11 +3,10 @@
 
 """Tests for AssetManager and SpriteResolver."""
 
-import pytest
-from pathlib import Path
 import tempfile
-import os
+from pathlib import Path
 
+import pytest
 from client_2d.assets.asset_manager import AssetManager
 from client_2d.assets.sprite_resolver import SpriteResolver
 

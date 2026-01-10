@@ -4,10 +4,8 @@
 """Input handler for keyboard-based game control."""
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 from client_2d.core.constants import Action, Direction, GameMode
-
 
 # Key code constants (matching arcade.key values for testing without arcade)
 # These match arcade.key.* constants
@@ -112,7 +110,7 @@ class InputHandler:
 
     def handle_key_press(
         self, key: int, modifiers: int = 0
-    ) -> Optional[Action]:
+    ) -> Action | None:
         """Convert a key press to a game action.
 
         Args:
@@ -200,7 +198,7 @@ class InputHandler:
         """
         self.current_mode = mode
 
-    def get_direction_from_action(self, action: Action) -> Optional[Direction]:
+    def get_direction_from_action(self, action: Action) -> Direction | None:
         """Convert a movement action to a direction.
 
         Args:

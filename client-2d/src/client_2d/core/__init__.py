@@ -5,11 +5,11 @@
 
 from client_2d.core.constants import (
     TILE_SIZE,
-    WINDOW_WIDTH,
     WINDOW_HEIGHT,
-    LightingState,
+    WINDOW_WIDTH,
     Direction,
     GameMode,
+    LightingState,
 )
 
 __all__ = [
