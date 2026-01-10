@@ -826,6 +826,39 @@ client-2d/
 - Torch illuminates surrounding tiles
 - Exiting room loads adjacent room
 
+### Phase 1.5: UI Design & Specification
+
+**Goal**: Complete UI/UX design before deep engine integration.
+
+**Deliverables**:
+- [ ] Create mockups for all game modes (exploration, combat, dialogue, inventory)
+- [ ] Define UI layout zones:
+  - [ ] Primary viewport area (game world)
+  - [ ] Party status panel (HP, conditions, initiative)
+  - [ ] Action bar / hotkeys
+  - [ ] Combat log / message feed
+  - [ ] Context menu area
+- [ ] Specify UI interactions:
+  - [ ] How does combat grid overlay work?
+  - [ ] Where do damage numbers appear?
+  - [ ] How does targeting work visually?
+- [ ] Define asset requirements:
+  - [ ] UI sprite atlas dimensions
+  - [ ] Font choices and sizes
+  - [ ] Icon set needs (attack, spell, item, etc.)
+- [ ] Address accessibility considerations:
+  - [ ] Color-blind friendly palette
+  - [ ] Minimum readable font sizes
+  - [ ] Keyboard-only navigation flow
+
+**Success Criteria**:
+- Annotated mockups completed (with dimensions)
+- UI specification document listing all UI elements and behaviors
+- Updated `constants.py` with UI layout constants
+- Design decisions documented for viewport management
+
+**Rationale**: Designing the UI before Phase 2 (Engine Integration) prevents rework by ensuring viewport management and data access patterns accommodate UI panels. This allows parallel development where UI implementation can begin while engine integration continues.
+
 ### Phase 2: Entity Integration
 
 **Goal**: GameState integration, entity rendering, movement animations.
@@ -843,7 +876,7 @@ client-2d/
 - Smooth movement animations
 - Sprites update on game state changes
 
-### Phase 3: Combat UI
+### Phase 3: Combat Visualization
 
 **Goal**: Playable combat through the 2D interface.
 
@@ -863,7 +896,7 @@ client-2d/
 - Target selection works
 - Visual feedback for all actions
 
-### Phase 4: Essential Overlays
+### Phase 4: UI Overlay Implementation
 
 **Goal**: Complete UI for full gameplay.
 
