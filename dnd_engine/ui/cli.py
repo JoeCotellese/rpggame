@@ -93,7 +93,9 @@ class CLI:
         self.npc_chat_manager: NPCChatManager | None = None
         if llm_enhancer and llm_enhancer.provider:
             self.npc_chat_manager = NPCChatManager(
-                provider=llm_enhancer.provider, game_state=game_state
+                provider=llm_enhancer.provider,
+                game_state=game_state,
+                status_callback=print_status_message,
             )
 
         # Condition manager for handling status effects

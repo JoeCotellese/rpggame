@@ -4,20 +4,36 @@
 import os
 from typing import Any
 
-from dnd_engine.ui.rich_ui import print_status_message
-
 from .anthropic_provider import AnthropicProvider
-from .base import LLMProvider
+from .base import LLMProvider, StatusCallback
 from .debug_provider import DebugProvider
 from .openai_provider import OpenAIProvider
 
 
-def create_llm_provider(provider_name: str | None = None, **kwargs: Any) -> LLMProvider | None:
+def _emit_factory_status(
+    message: str, message_type: str, callback: StatusCallback
+) -> None:
+    """Emit status from factory, with fallback to print."""
+    if callback:
+        callback(message, message_type)
+    else:
+        # Fallback during transition - remove in Phase 5
+        from dnd_engine.ui.rich_ui import print_status_message
+
+        print_status_message(message, message_type)
+
+
+def create_llm_provider(
+    provider_name: str | None = None,
+    status_callback: StatusCallback = None,
+    **kwargs: Any,
+) -> LLMProvider | None:
     """
     Factory function to create LLM provider from config.
 
     Args:
         provider_name: Provider name or None to auto-detect from environment
+        status_callback: Optional callback for status messages (msg, type)
         **kwargs: Additional provider configuration (model, timeout, etc.)
 
     Returns:
@@ -48,20 +64,26 @@ def create_llm_provider(provider_name: str | None = None, **kwargs: Any) -> LLMP
     if provider_name == "openai":
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
-            print_status_message("OPENAI_API_KEY not set, LLM disabled", "warning")
+            _emit_factory_status("OPENAI_API_KEY not set, LLM disabled", "warning", status_callback)
             return None
 
         model = kwargs.get("model") or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
         timeout = float(os.getenv("LLM_TIMEOUT", "20"))
         max_tokens = int(os.getenv("LLM_MAX_TOKENS", "1000"))
 
-        return OpenAIProvider(api_key=api_key, model=model, timeout=timeout, max_tokens=max_tokens)
+        return OpenAIProvider(
+            api_key=api_key,
+            model=model,
+            timeout=timeout,
+            max_tokens=max_tokens,
+            status_callback=status_callback,
+        )
 
     # Anthropic provider
     elif provider_name == "anthropic":
         api_key = os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
-            print_status_message("ANTHROPIC_API_KEY not set, LLM disabled", "warning")
+            _emit_factory_status("ANTHROPIC_API_KEY not set, LLM disabled", "warning", status_callback)
             return None
 
         model = kwargs.get("model") or os.getenv("ANTHROPIC_MODEL", "claude-3-5-haiku-20241022")
@@ -69,10 +91,14 @@ def create_llm_provider(provider_name: str | None = None, **kwargs: Any) -> LLMP
         max_tokens = int(os.getenv("LLM_MAX_TOKENS", "1000"))
 
         return AnthropicProvider(
-            api_key=api_key, model=model, timeout=timeout, max_tokens=max_tokens
+            api_key=api_key,
+            model=model,
+            timeout=timeout,
+            max_tokens=max_tokens,
+            status_callback=status_callback,
         )
 
     # Unknown provider
     else:
-        print_status_message(f"Unknown LLM provider '{provider_name}', LLM disabled", "warning")
+        _emit_factory_status(f"Unknown LLM provider '{provider_name}', LLM disabled", "warning", status_callback)
         return None

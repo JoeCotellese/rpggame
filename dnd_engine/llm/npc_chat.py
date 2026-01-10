@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from dnd_engine.core.npc import NPC
-from dnd_engine.ui.rich_ui import print_status_message
+from dnd_engine.llm.base import StatusCallback
 
 if TYPE_CHECKING:
     from dnd_engine.core.game_state import GameState
@@ -202,6 +202,7 @@ class NPCChatManager:
         self,
         provider: "LLMProvider | None",
         game_state: "GameState",
+        status_callback: StatusCallback = None,
     ):
         """
         Initialize NPC chat manager.
@@ -209,9 +210,11 @@ class NPCChatManager:
         Args:
             provider: LLM provider for generating responses (None for fallback mode)
             game_state: Game state for tool dispatch
+            status_callback: Optional callback for status messages (msg, type)
         """
         self.provider = provider
         self.game_state = game_state
+        self.status_callback = status_callback
         self._current_conversation: ConversationState | None = None
         self.shop_requested: bool = False  # Flag to signal shop UI should open
 
@@ -234,6 +237,22 @@ class NPCChatManager:
             "turn_in_quest": self._handle_turn_in_quest,
             "get_pending_rewards": self._handle_get_pending_rewards,
         }
+
+    def _emit_status(self, message: str, message_type: str = "info") -> None:
+        """
+        Emit status message via callback if available, fallback to print.
+
+        Args:
+            message: Status message text
+            message_type: One of "info", "success", "warning", "error"
+        """
+        if self.status_callback:
+            self.status_callback(message, message_type)
+        else:
+            # Fallback during transition - remove in Phase 5
+            from dnd_engine.ui.rich_ui import print_status_message
+
+            print_status_message(message, message_type)
 
     def _start_event_loop(self) -> None:
         """Start background thread with event loop for async tasks."""
@@ -502,31 +521,31 @@ class NPCChatManager:
             quest_id = arguments.get("quest_id", "quest")
             if result.get("success"):
                 quest_name = result.get("quest_name", quest_id)
-                print_status_message(f"📜 Quest activated: {quest_name}", "success")
+                self._emit_status(f"📜 Quest activated: {quest_name}", "success")
             else:
-                print_status_message(f"📜 Quest activation failed: {result.get('error')}", "error")
+                self._emit_status(f"📜 Quest activation failed: {result.get('error')}", "error")
 
         elif tool_name == "give_item":
             item_id = arguments.get("item_id", "item")
             if result.get("success"):
-                print_status_message(f"🎁 Received: {item_id}", "success")
+                self._emit_status(f"🎁 Received: {item_id}", "success")
             else:
-                print_status_message(f"🎁 Failed to receive item: {result.get('error')}", "error")
+                self._emit_status(f"🎁 Failed to receive item: {result.get('error')}", "error")
 
         elif tool_name == "get_player_gold":
             gold = result.get("gold", 0)
-            print_status_message(f"💰 Party gold: {gold}", "info")
+            self._emit_status(f"💰 Party gold: {gold}", "info")
 
         elif tool_name == "charge_gold":
             if result.get("success"):
                 charged = result.get("charged", 0)
                 reason = result.get("reason", "service")
                 remaining = result.get("remaining_gold", 0)
-                print_status_message(f"💰 Paid {charged} gold for {reason}", "info")
-                print_status_message(f"💰 Remaining gold: {remaining}", "info")
+                self._emit_status(f"💰 Paid {charged} gold for {reason}", "info")
+                self._emit_status(f"💰 Remaining gold: {remaining}", "info")
             else:
                 error = result.get("error", "Payment failed")
-                print_status_message(f"💰 {error}", "warning")
+                self._emit_status(f"💰 {error}", "warning")
 
         # Note: get_available_quests has no user feedback - NPC describes quests naturally
         # Note: turn_in_quest feedback is handled in _handle_turn_in_quest directly
@@ -735,7 +754,7 @@ class NPCChatManager:
         if deliver_result.get("success"):
             # Remove item from player inventory
             item_holder.inventory.remove_item(item_id)
-            print_status_message(f"🎁 Gave {item_id} to {npc.display_name}", "success")
+            self._emit_status(f"🎁 Gave {item_id} to {npc.display_name}", "success")
             return {
                 "success": True,
                 "item_received": item_id,
@@ -757,8 +776,8 @@ class NPCChatManager:
             if reward_category:
                 reward_recipient.inventory.add_item(bonus.reward_item, reward_category)
 
-            print_status_message(f"🎁 Gave {item_id} to {npc.display_name}", "success")
-            print_status_message(f"🎁 Received: {bonus.reward_item}", "success")
+            self._emit_status(f"🎁 Gave {item_id} to {npc.display_name}", "success")
+            self._emit_status(f"🎁 Received: {bonus.reward_item}", "success")
 
             return {
                 "success": True,
@@ -783,7 +802,7 @@ class NPCChatManager:
 
         # NPC accepts the item but no special reward
         item_holder.inventory.remove_item(item_id)
-        print_status_message(f"🎁 Gave {item_id} to {npc.display_name}", "success")
+        self._emit_status(f"🎁 Gave {item_id} to {npc.display_name}", "success")
 
         return {
             "success": True,
@@ -810,7 +829,7 @@ class NPCChatManager:
                 leader = self.game_state.party.characters[0]
                 leader.inventory.gold += reward_gold
 
-                print_status_message(
+                self._emit_status(
                     f"💰 Received {reward_gold} gold for completing '{result['quest_name']}'",
                     "success",
                 )

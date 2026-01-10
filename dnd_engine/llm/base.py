@@ -2,7 +2,13 @@
 # ABOUTME: Defines interface for text generation with timeout and error handling
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from typing import Any
+
+# Type alias for status callback function
+# Signature: (message: str, message_type: str) -> None
+# message_type is one of: "info", "success", "warning", "error"
+StatusCallback = Callable[[str, str], None] | None
 
 
 class LLMProvider(ABC):
@@ -15,7 +21,12 @@ class LLMProvider(ABC):
     """
 
     def __init__(
-        self, api_key: str, model: str, timeout: float = 10.0, max_tokens: int = 1000
+        self,
+        api_key: str,
+        model: str,
+        timeout: float = 10.0,
+        max_tokens: int = 1000,
+        status_callback: StatusCallback = None,
     ) -> None:
         """
         Initialize LLM provider.
@@ -25,11 +36,29 @@ class LLMProvider(ABC):
             model: Model name/ID to use
             timeout: Request timeout in seconds
             max_tokens: Maximum tokens in response
+            status_callback: Optional callback for status messages (msg, type)
         """
         self.api_key = api_key
         self.model = model
         self.timeout = timeout
         self.max_tokens = max_tokens
+        self.status_callback = status_callback
+
+    def _emit_status(self, message: str, message_type: str = "info") -> None:
+        """
+        Emit status message via callback if available, fallback to print.
+
+        Args:
+            message: Status message text
+            message_type: One of "info", "success", "warning", "error"
+        """
+        if self.status_callback:
+            self.status_callback(message, message_type)
+        else:
+            # Fallback during transition - remove in Phase 5
+            from dnd_engine.ui.rich_ui import print_status_message
+
+            print_status_message(message, message_type)
 
     @abstractmethod
     async def generate(self, prompt: str, temperature: float = 0.7) -> str | None:
