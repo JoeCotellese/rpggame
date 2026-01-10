@@ -952,61 +952,6 @@ class Character(Creature):
 
         return self.proficiency_bonus + modifier
 
-    def get_spell_save_dc(self, ability: str) -> int:
-        """
-        Calculate spell save DC.
-
-        Spell save DC = 8 + proficiency bonus + spellcasting ability modifier
-
-        Args:
-            ability: Spellcasting ability (e.g., "int", "wis", "cha")
-
-        Returns:
-            Spell save DC
-
-        Raises:
-            ValueError: If ability name is invalid
-        """
-        # Map short ability names to full names
-        short_to_full = {
-            "str": "strength",
-            "dex": "dexterity",
-            "con": "constitution",
-            "int": "intelligence",
-            "wis": "wisdom",
-            "cha": "charisma",
-        }
-
-        # Normalize to short ability name
-        ability_lower = ability.lower()
-        if ability_lower in short_to_full:
-            ability_full = short_to_full[ability_lower]
-        else:
-            # Assume it's already a full name
-            full_to_short = {v: k for k, v in short_to_full.items()}
-            if ability_lower in full_to_short:
-                ability_full = ability_lower
-            else:
-                raise ValueError(f"Invalid ability name: {ability}")
-
-        # Get ability modifier
-        if ability_full == "strength":
-            modifier = self.abilities.str_mod
-        elif ability_full == "dexterity":
-            modifier = self.abilities.dex_mod
-        elif ability_full == "constitution":
-            modifier = self.abilities.con_mod
-        elif ability_full == "intelligence":
-            modifier = self.abilities.int_mod
-        elif ability_full == "wisdom":
-            modifier = self.abilities.wis_mod
-        elif ability_full == "charisma":
-            modifier = self.abilities.cha_mod
-        else:
-            raise ValueError(f"Invalid ability name: {ability}")
-
-        return 8 + self.proficiency_bonus + modifier
-
     def get_available_spell_slots(self, level: int) -> int:
         """
         Get the number of available spell slots for a given level.

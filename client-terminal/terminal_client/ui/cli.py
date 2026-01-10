@@ -13,6 +13,7 @@ from dnd_engine.core.game_state import (
     EnemyTurnAction,
     EnemyTurnResult,
     GameState,
+    PartyRestResult,
     PlayerAttackResult,
 )
 from dnd_engine.llm.npc_chat import NPCChatManager
@@ -2251,7 +2252,7 @@ class CLI:
         regular_items = [item for item in available_items if item["type"] == "item"]
 
         # Take all currency items (auto-distributed)
-        for item in currency_items:
+        for _item in currency_items:
             self.game_state.take_item("currency", living_members[0])
 
         if currency_items:
@@ -3669,7 +3670,7 @@ class CLI:
         """
         # Use new InitiativeTracker API for target lookup
         if self.game_state.initiative_tracker:
-            player_creatures = [char for char in self.game_state.party.characters]
+            player_creatures = list(self.game_state.party.characters)
             entry = self.game_state.initiative_tracker.find_combatant_by_reference(
                 target, player_creatures=player_creatures
             )
@@ -5693,7 +5694,7 @@ class CLI:
         """
         # Use new InitiativeTracker API for assigning enemy numbers
         if self.game_state.initiative_tracker:
-            player_creatures = [char for char in self.game_state.party.characters]
+            player_creatures = list(self.game_state.party.characters)
             self.game_state.initiative_tracker.assign_combat_numbers(player_creatures)
 
         # Build numbered enemy list for display using new display_name

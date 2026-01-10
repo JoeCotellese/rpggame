@@ -244,9 +244,6 @@ class DungeonGenerator:
             theme: Theme dictionary with monster types
             level: Character level for difficulty scaling
         """
-        room_ids = list(rooms.keys())
-        num_rooms = len(room_ids)
-
         # Determine boss room (last room in main path or dead end)
         boss_room_id = self._find_boss_room(rooms)
 

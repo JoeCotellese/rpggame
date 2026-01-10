@@ -247,7 +247,7 @@ class CampaignManager:
             with open(save_path, encoding="utf-8") as f:
                 save_data = json.load(f)
         except json.JSONDecodeError as e:
-            raise ValueError(f"Corrupted save file: {e}")
+            raise ValueError(f"Corrupted save file: {e}") from e
 
         # Validate save file
         self._validate_save_data(save_data)

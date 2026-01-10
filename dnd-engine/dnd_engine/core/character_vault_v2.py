@@ -72,7 +72,7 @@ class CharacterVaultV2:
             with open(self.vault_path, encoding="utf-8") as f:
                 return json.load(f)
         except json.JSONDecodeError as e:
-            raise ValueError(f"Corrupted vault file: {e}")
+            raise ValueError(f"Corrupted vault file: {e}") from e
 
     def _save_vault(self, vault_data: dict[str, Any]) -> None:
         """
@@ -105,8 +105,8 @@ class CharacterVaultV2:
             # Validate UUID format
             try:
                 uuid.UUID(character_id)
-            except ValueError:
-                raise ValueError(f"Invalid character ID: {character_id}")
+            except ValueError as e:
+                raise ValueError(f"Invalid character ID: {character_id}") from e
 
         # Load vault
         vault_data = self._load_vault()

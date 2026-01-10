@@ -108,7 +108,6 @@ class ShopUI:
         """Show character selection menu."""
         choices = []
         for char in self.party:
-            gold = char.inventory.currency.gold
             total_cp = char.inventory.currency.to_copper()
             # Show gold equivalent for display
             gold_display = total_cp // 100

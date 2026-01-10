@@ -465,7 +465,7 @@ class DebugConsole:
 
             # Find monster (case-insensitive)
             monster_id = None
-            for key, data in monsters.items():
+            for key, _data in monsters.items():
                 if key.lower() == monster_name.lower():
                     monster_id = key
                     break
@@ -477,7 +477,7 @@ class DebugConsole:
 
             # Create creatures
             spawned = []
-            for i in range(count):
+            for _i in range(count):
                 creature = self.game_state.data_loader.create_monster(monster_id)
                 spawned.append(creature)
 
@@ -541,7 +541,6 @@ class DebugConsole:
             print_error("No initiative tracker active")
             return
 
-        current = self.game_state.initiative_tracker.get_current_combatant()
         self.game_state.initiative_tracker.next_turn()
         next_combatant = self.game_state.initiative_tracker.get_current_combatant()
 
@@ -623,7 +622,7 @@ class DebugConsole:
 
         # Find item in inventory
         item_id = None
-        for iid, qty in character.inventory.items.items():
+        for iid, _qty in character.inventory.items.items():
             if iid.lower().replace("_", " ") == item_name.lower():
                 item_id = iid
                 break
