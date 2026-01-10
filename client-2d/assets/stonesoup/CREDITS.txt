@@ -1,0 +1,18 @@
+Dungeon Crawl Stone Soup Tiles
+==============================
+
+License: CC0 (Public Domain)
+Source: https://opengameart.org/content/dungeon-crawl-32x32-tiles
+
+Original artists: Chris Hamons and the DCSS development team
+
+This tileset is released under CC0, meaning it can be used for any purpose
+without attribution required. However, we include this credit file as a
+courtesy to the original creators.
+
+The tileset includes over 3000 32x32 pixel tiles covering:
+- Monsters and creatures
+- Player characters and equipment overlays
+- Dungeon terrain (floors, walls, doors, stairs)
+- Items (weapons, armor, potions, scrolls)
+- Visual effects and UI elements

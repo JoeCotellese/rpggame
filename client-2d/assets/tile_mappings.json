@@ -1,0 +1,69 @@
+{
+  "_meta": {
+    "description": "Maps game entity IDs to Stone Soup tile paths",
+    "source": "Dungeon Crawl Stone Soup 32x32 tiles (CC0)",
+    "base_path": "stonesoup/"
+  },
+  "monsters": {
+    "skeleton": "monster/undead/skeletons/skeleton_small.png",
+    "ghoul": "monster/undead/ghoul.png",
+    "ghast": "monster/undead/wight_new.png",
+    "goblin": "monster/goblin_new.png",
+    "goblin_boss": "monster/hobgoblin_new.png",
+    "wolf": "monster/animals/wolf.png",
+    "giant_rat": "monster/animals/rat.png",
+    "bandit": "monster/human_new.png",
+    "cultist": "monster/necromancer_new.png",
+    "acolyte": "monster/orc_priest_new.png",
+    "spy": "player/base/human_female.png",
+    "cult_fanatic": "monster/orc_high_priest_new.png",
+    "mage_weakened": "monster/wizard.png",
+    "animated_armor": "monster/nonliving/iron_golem.png",
+    "bearded_devil": "monster/demons/blue_devil_new.png"
+  },
+  "characters": {
+    "fighter": "player/base/human_male.png",
+    "rogue": "player/base/halfling_male.png",
+    "wizard": "player/base/deep_elf_male.png",
+    "cleric": "player/base/dwarf_male.png"
+  },
+  "items": {
+    "longsword": "item/weapon/long_sword_1_new.png",
+    "longsword_plus_1": "item/weapon/long_sword_2.png",
+    "shortsword": "item/weapon/short_sword_1_new.png",
+    "dagger": "item/weapon/dagger_new.png",
+    "rapier": "item/weapon/dagger_3.png",
+    "greataxe": "item/weapon/executioner_axe.png",
+    "battleaxe": "item/weapon/battle_axe_1.png",
+    "handaxe": "item/weapon/axe.png",
+    "warhammer": "item/weapon/mace_large_2_new.png",
+    "mace": "item/weapon/mace_1_old.png",
+    "quarterstaff": "item/weapon/quarterstaff_new.png",
+    "light_crossbow": "item/weapon/ranged/crossbow_1.png",
+    "heavy_crossbow": "item/weapon/ranged/crossbow_2.png",
+    "shortbow": "item/weapon/ranged/bow_1.png",
+    "longbow": "item/weapon/ranged/longbow.png",
+    "leather_armor": "item/armor/torso/leather_armor_1.png",
+    "chain_mail": "item/armor/torso/chain_mail_1.png",
+    "potion_of_healing": "item/potion/emerald.png",
+    "potion_of_fire_resistance": "item/potion/brown_new.png",
+    "torch": "player/hand_left/misc/torch.png"
+  },
+  "terrain": {
+    "floor_stone": "dungeon/floor/grey_dirt_0_new.png",
+    "floor_crypt": "dungeon/floor/crypt_10.png",
+    "wall_brick": "dungeon/wall/brick_brown_0.png",
+    "wall_stone": "dungeon/wall/stone_dark_2.png",
+    "door_closed": "dungeon/doors/closed_door.png",
+    "door_open": "dungeon/doors/open_door.png"
+  },
+  "effects": {
+    "damage_slash": "effect/arrow_0.png",
+    "damage_fire": "effect/cloud_fire_2.png"
+  },
+  "decorations": {
+    "chest_closed": "dungeon/chest_2_closed.png",
+    "chest_open": "dungeon/chest_2_open.png",
+    "bones": "dungeon/floor/green_bones_1.png"
+  }
+}
