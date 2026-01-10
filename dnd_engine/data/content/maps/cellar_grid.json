@@ -1,0 +1,83 @@
+{
+  "id": "cellar",
+  "name": "Tavern Cellar",
+  "description": "A damp cellar beneath The Rusty Cauldron, overrun with rats",
+  "width": 25,
+  "height": 15,
+  "tiles": [
+    "#########################",
+    "#.......................#",
+    "#.......................#",
+    "#.......STORAGE.........#",
+    "#.......................#",
+    "#.........R...R.........#",
+    "#.......................#",
+    "#.........R...R......../#",
+    "#.......................#",
+    "#######+#################",
+    "#...........#",
+    "#...STAIRS..#",
+    "#.....@.....#",
+    "#...........#",
+    "#############"
+  ],
+  "legend": {
+    "#": {"type": "wall"},
+    ".": {"type": "floor"},
+    " ": {"type": "void"},
+    "+": {"type": "door_closed"},
+    "/": {"type": "door_hidden", "examine_dc": 10},
+    "@": {"type": "floor", "spawn": "player"},
+    "R": {"type": "floor", "spawn": {"type": "monster", "id": "giant_rat", "char": "R", "name": "Giant Rat"}}
+  },
+  "regions": {
+    "stairs": {
+      "x1": 1,
+      "y1": 10,
+      "x2": 11,
+      "y2": 13,
+      "description": "Rickety wooden stairs descending into darkness with the musty smell of old ale",
+      "metadata": {
+        "room_id": "cellar.stairs",
+        "lighting": "dim"
+      }
+    },
+    "storage": {
+      "x1": 1,
+      "y1": 1,
+      "x2": 23,
+      "y2": 8,
+      "description": "A large storage area filled with barrels, crates, and the stench of rat droppings",
+      "metadata": {
+        "room_id": "cellar.storage",
+        "lighting": "dim"
+      }
+    }
+  },
+  "connections": [
+    {
+      "x": 6,
+      "y": 13,
+      "target_map": "town_grid",
+      "target_x": 10,
+      "target_y": 10,
+      "type": "stairs_up",
+      "label": "Back to Tavern"
+    },
+    {
+      "x": 23,
+      "y": 7,
+      "target_map": "laboratory_grid",
+      "target_x": 18,
+      "target_y": 22,
+      "type": "hidden_passage",
+      "label": "Hidden Passage to Laboratory"
+    }
+  ],
+  "metadata": {
+    "campaign": "poisoned_laboratory",
+    "dungeon_id": "cellar",
+    "start_region": "stairs",
+    "player_spawn": {"x": 6, "y": 12}
+  }
+}

@@ -45,6 +45,7 @@ from dnd_engine.spatial import (
     KEY_TO_DIRECTION,
 )
 from dnd_engine.ui.debug_console import DebugConsole
+from dnd_engine.ui.grid_input import GridAction, GridInputHandler, GridInputResult
 from dnd_engine.ui.grid_renderer import GridRenderer, CompactGridRenderer
 from dnd_engine.ui.inventory_ui import InventoryUI
 from dnd_engine.ui.rich_ui import (
@@ -174,6 +175,9 @@ class CLI:
         # Grid renderer for display
         self.grid_renderer = None
 
+        # Real-time input handler for grid mode
+        self.grid_input_handler = GridInputHandler(self)
+
         # Track which dungeon's grid is currently loaded
         self._current_grid_dungeon: str | None = None
 
@@ -194,7 +198,7 @@ class CLI:
 
             # Find player spawn point
             for spawn in result.spawn_points:
-                if spawn.spawn_type == "player":
+                if spawn.entity_type == "player":
                     self.player_position = spawn.position
                     break
 
@@ -224,7 +228,7 @@ class CLI:
 
             # Initialize renderer
             self.grid_renderer = CompactGridRenderer(
-                tile_map=self.tile_map, viewport_width=40, viewport_height=15
+                width=40, height=15, show_fog=True
             )
 
             return True
@@ -263,12 +267,210 @@ class CLI:
 
     def _display_grid(self) -> None:
         """Display the 2D grid map."""
-        if self.grid_renderer is None or self.player_position is None:
+        if self.grid_renderer is None or self.tile_map is None or self.player_position is None:
             return
 
-        # Render centered on player
-        output = self.grid_renderer.render_to_text(center=self.player_position)
+        # Clear screen and render centered on player
+        console.clear()
+        output = self.grid_renderer.render_to_text(self.tile_map, self.player_position)
         console.print(output)
+
+    def _run_grid_mode(self) -> bool:
+        """
+        Run the real-time grid input loop.
+
+        Processes single keypresses for movement and actions without
+        requiring Enter. Returns when combat starts, player leaves grid,
+        or player switches to text mode.
+
+        Returns:
+            True if should continue running, False if should exit game
+        """
+        if not hasattr(self, "grid_input_handler"):
+            return True
+
+        # Display initial grid state
+        self._display_grid()
+        print_status_message("Grid mode (? for help, : for text mode)", "info")
+
+        while self.running and not self.game_state.is_game_over():
+            # Check for combat - exit grid loop to handle in main loop
+            if self.game_state.in_combat:
+                return True
+
+            # Check if grid is still loaded
+            if self.tile_map is None:
+                return True
+
+            # Read and process a single keypress
+            key = self.grid_input_handler.read_key()
+            result = self.grid_input_handler.handle_key(key)
+
+            # Handle the result
+            if result.action == GridAction.QUIT:
+                return self._handle_grid_quit()
+
+            elif result.action == GridAction.TEXT_MODE:
+                return self._handle_grid_text_mode()
+
+            elif result.action == GridAction.MOVE:
+                self._handle_grid_move(result)
+
+            elif result.action == GridAction.ATTACK:
+                self._handle_grid_attack(result)
+
+            elif result.action == GridAction.PICKUP:
+                self._handle_grid_pickup()
+
+            elif result.action == GridAction.LOOK:
+                self._handle_grid_look()
+
+            elif result.action == GridAction.OPEN_DOOR:
+                self._handle_grid_door()
+
+            elif result.action == GridAction.INVENTORY:
+                self._handle_grid_inventory()
+
+            elif result.action == GridAction.WAIT:
+                print_status_message("You wait...", "info")
+
+            elif result.action == GridAction.HELP:
+                print(self.grid_input_handler.get_help_text())
+
+            elif result.action == GridAction.TALK:
+                self._handle_grid_talk()
+
+            elif result.action == GridAction.CAST:
+                self._handle_grid_cast()
+
+            elif result.action == GridAction.NONE:
+                if result.message:
+                    print_status_message(result.message, "info")
+
+        return True
+
+    def _handle_grid_quit(self) -> bool:
+        """Handle quit action in grid mode. Returns whether to continue."""
+        response = questionary.confirm("Exit game?", default=False).ask()
+        if response:
+            self.running = False
+            return False
+        self._display_grid()
+        return True
+
+    def _handle_grid_text_mode(self) -> bool:
+        """Switch to text command mode temporarily."""
+        print_status_message("Enter command (empty to return to grid):", "info")
+        command = self.get_player_command()
+        if command.strip():
+            self.process_exploration_command(command)
+        self._display_grid()
+        return True
+
+    def _handle_grid_move(self, result: GridInputResult) -> None:
+        """Handle movement in grid mode."""
+        if result.direction is None or self.movement_controller is None:
+            return
+
+        # Check for bump-to-attack (entity in target position)
+        if self.tile_map is not None and self.player_position is not None:
+            target_pos = self.player_position + result.direction
+            target_entity = self.tile_map.get_entity_at(target_pos)
+
+            if target_entity and not target_entity.is_player:
+                # Bump-to-attack: start combat with this enemy
+                print_status_message(
+                    f"You bump into {target_entity.display_name}!", "warning"
+                )
+                return
+
+        # Normal movement
+        move_result = self.movement_controller.move("player", result.direction)
+        if move_result.success and move_result.new_position:
+            self.player_position = move_result.new_position
+            if self.fov:
+                self.fov.compute_and_apply(self.player_position)
+            self._display_grid()
+        elif move_result.blocked_by == "door":
+            print_status_message("There's a door there. Press 'o' to open it.", "info")
+        elif move_result.blocked_by:
+            print_status_message(f"Blocked by {move_result.blocked_by}", "info")
+
+    def _handle_grid_attack(self, result: GridInputResult) -> None:
+        """Handle attack action in grid mode."""
+        if result.target_id:
+            print_status_message(f"Attacking {result.target_id}...", "info")
+        else:
+            # Show nearby enemies for selection
+            if self.tile_map and self.player_position:
+                nearby = self.tile_map.get_entities_in_radius(
+                    self.player_position, radius=5, include_center=False
+                )
+                enemies = [e for e in nearby if not e.is_player]
+                if enemies:
+                    print_status_message("Nearby enemies:", "info")
+                    for i, enemy in enumerate(enemies[:9], 1):
+                        print(f"  {i}. {enemy.display_name}")
+                    self.grid_input_handler.set_pending_targets(
+                        [e.entity_id for e in enemies[:9]]
+                    )
+                else:
+                    print_status_message("No enemies nearby", "info")
+
+    def _handle_grid_pickup(self) -> None:
+        """Handle item pickup in grid mode."""
+        if self.tile_map and self.player_position:
+            tile = self.tile_map.get_tile(self.player_position)
+            if tile and tile.has_items:
+                print_status_message("You pick up items from the floor", "success")
+            else:
+                print_status_message("Nothing to pick up here", "info")
+
+    def _handle_grid_look(self) -> None:
+        """Handle look action in grid mode."""
+        if self.tile_map and self.player_position:
+            tile = self.tile_map.get_tile(self.player_position)
+            if tile:
+                print_status_message(f"You see: {tile.tile_type.value} floor", "info")
+                if tile.has_items:
+                    print_status_message("There are items here", "info")
+                # Check nearby entities
+                nearby = self.tile_map.get_adjacent_entities(self.player_position)
+                for entity in nearby:
+                    print_status_message(
+                        f"  {entity.display_name} is nearby", "info"
+                    )
+
+    def _handle_grid_door(self) -> None:
+        """Handle door interaction in grid mode."""
+        if self.movement_controller:
+            opened_pos = self.movement_controller.open_adjacent_door("player")
+            if opened_pos:
+                print_status_message("You open the door", "success")
+                if self.fov and self.player_position:
+                    self.fov.compute_and_apply(self.player_position)
+                self._display_grid()
+            else:
+                print_status_message("No door nearby to open", "info")
+
+    def _handle_grid_inventory(self) -> None:
+        """Handle inventory action in grid mode."""
+        print_status_message("Opening inventory...", "info")
+        self.display_inventory()
+
+    def _handle_grid_talk(self) -> None:
+        """Handle talk action in grid mode."""
+        if self.tile_map and self.player_position:
+            nearby = self.tile_map.get_adjacent_entities(self.player_position)
+            npcs = [e for e in nearby if not e.is_player]
+            if npcs:
+                print_status_message(f"You approach {npcs[0].display_name}...", "info")
+            else:
+                print_status_message("Nobody nearby to talk to", "info")
+
+    def _handle_grid_cast(self) -> None:
+        """Handle spell casting in grid mode."""
+        print_status_message("Spell casting not yet implemented in grid mode", "info")
 
     def _handle_grid_for_dungeon(self, dungeon_id: str | None) -> None:
         """
@@ -5840,8 +6042,13 @@ class CLI:
                 else:
                     self.process_enemy_turns()
             else:
-                command = self.get_player_command()
-                self.process_exploration_command(command)
+                # Use grid mode if 2D mode with loaded grid, otherwise text mode
+                if self.game_mode == "2d" and self.tile_map is not None:
+                    if not self._run_grid_mode():
+                        break  # Exit if grid mode returns False (quit)
+                else:
+                    command = self.get_player_command()
+                    self.process_exploration_command(command)
 
         # Game over
         if self.game_state.is_game_over():

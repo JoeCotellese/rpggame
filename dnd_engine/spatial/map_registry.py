@@ -6,6 +6,7 @@ from pathlib import Path
 
 # Map dungeon IDs (filename without .json) to their grid JSON files
 DUNGEON_GRID_MAPS: dict[str, str] = {
+    "cellar": "cellar_grid.json",
     "laboratory": "laboratory_grid.json",
 }
 
