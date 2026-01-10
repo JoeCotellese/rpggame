@@ -187,3 +187,50 @@ from dnd_engine.utils import helpers
 ### Extensibility
 - Plugin architecture allows adding new rule systems, content, or LLM providers
 - Clear interfaces for extending core systems
+
+## 2D Graphical Client (client-2d)
+
+The project includes a 2D graphical client built with **Python Arcade**.
+
+### Framework & Documentation
+- Uses Python Arcade (arcade library) for rendering
+- For up-to-date Arcade documentation, use the `docs-server` MCP with library 'arcade'
+- Entry point: `dnd-2d` command (or `uv run dnd-2d`)
+
+### Architecture
+```
+client-2d/
+├── src/client_2d/
+│   ├── core/          # Constants, game mode enums
+│   ├── rendering/     # Map, entity, fog rendering
+│   ├── systems/       # Fog of war, lighting, animation
+│   ├── input/         # Keyboard handling
+│   ├── assets/        # Sprite/asset loading with fallbacks
+│   ├── ui/            # UI overlays (HP bars, menus)
+│   └── integration/   # Event bridge to dnd-engine
+├── assets/            # Sprites, tilesets, maps
+├── tests/             # Test suite
+└── scripts/           # visual_test.py demo
+```
+
+### Key Systems
+- **InputHandler**: Maps keyboard events to game actions (WASD/arrows for movement)
+- **FogOfWarSystem**: D&D 5E compliant visibility (unexplored/dark/dim/bright)
+- **LightingSystem**: Calculates illumination from light sources (torch, lantern, darkvision)
+- **AssetManager**: Loads sprites with hierarchical fallback system
+- **SpriteResolver**: Resolves sprite paths (exact match → category → generic fallback)
+
+### Running the Visual Demo
+```bash
+cd client-2d
+uv run python scripts/visual_test.py
+```
+- WASD/Arrows: Move
+- L: Cycle light modes
+- ESC: Quit
+
+### Testing the 2D Client
+```bash
+cd client-2d
+uv run pytest tests/
+```
