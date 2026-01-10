@@ -33,7 +33,19 @@ from dnd_engine.systems.targeting import (
     get_item_targeting_requirements,
     get_spell_targeting_requirements,
 )
+from dnd_engine.spatial import (
+    TileMap,
+    MapLoader,
+    Position,
+    Direction,
+    MovementController,
+    MovementMode,
+    FieldOfView,
+    FOVConfig,
+    KEY_TO_DIRECTION,
+)
 from dnd_engine.ui.debug_console import DebugConsole
+from dnd_engine.ui.grid_renderer import GridRenderer, CompactGridRenderer
 from dnd_engine.ui.inventory_ui import InventoryUI
 from dnd_engine.ui.rich_ui import (
     console,
@@ -71,6 +83,7 @@ class CLI:
         campaign_name: str,
         auto_save_enabled: bool = True,
         llm_enhancer=None,
+        game_mode: str = "text",
     ):
         """
         Initialize the CLI.
@@ -81,6 +94,7 @@ class CLI:
             campaign_name: Name of the current campaign
             auto_save_enabled: Whether to enable auto-save feature
             llm_enhancer: Optional LLM enhancer for narrative generation
+            game_mode: Display mode - 'text' (default) or '2d' for grid crawler
         """
         self.game_state = game_state
         self.campaign_manager = campaign_manager
@@ -88,6 +102,13 @@ class CLI:
         self.running = True
         self.auto_save_enabled = auto_save_enabled
         self.llm_enhancer = llm_enhancer
+        self.game_mode = game_mode
+
+        # Grid-based 2D mode components (initialized if mode is "2d")
+        self.grid_renderer = None
+        self.movement_controller = None
+        if game_mode == "2d":
+            self._init_2d_mode()
 
         # NPC chat manager for LLM-powered conversations
         self.npc_chat_manager: NPCChatManager | None = None
@@ -138,6 +159,113 @@ class CLI:
         self.game_state.event_bus.subscribe(EventType.SKILL_CHECK, self._on_skill_check)
         self.game_state.event_bus.subscribe(EventType.QUEST_ACTIVATED, self._on_quest_activated)
         self.game_state.event_bus.subscribe(EventType.QUEST_COMPLETED, self._on_quest_completed)
+
+    def _init_2d_mode(self) -> None:
+        """Initialize 2D grid mode components."""
+        # Initialize grid renderer for displaying the map
+        # Create a simple placeholder map until a dungeon map is loaded
+        self.tile_map = None
+        self.player_position = None
+        self.fov = None
+
+        # Movement controller will be created when a map is loaded
+        self.movement_controller = None
+
+        # Grid renderer for display
+        self.grid_renderer = None
+
+    def _load_grid_map(self, map_path: str) -> bool:
+        """
+        Load a grid map for 2D mode.
+
+        Args:
+            map_path: Path to the JSON map file
+
+        Returns:
+            True if map was loaded successfully
+        """
+        try:
+            loader = MapLoader()
+            result = loader.load_from_file(map_path)
+            self.tile_map = result.tile_map
+
+            # Find player spawn point
+            for spawn in result.spawn_points:
+                if spawn.spawn_type == "player":
+                    self.player_position = spawn.position
+                    break
+
+            if self.player_position is None:
+                # Default to center of map
+                self.player_position = Position(
+                    self.tile_map.width // 2, self.tile_map.height // 2
+                )
+
+            # Add player to map
+            self.tile_map.add_entity(
+                "player", self.player_position, "@", "Player", is_player=True
+            )
+
+            # Initialize movement controller
+            self.movement_controller = MovementController(
+                tile_map=self.tile_map,
+                mode=MovementMode.EXPLORATION,
+                event_bus=self.game_state.event_bus,
+            )
+
+            # Initialize FOV
+            self.fov = FieldOfView(
+                self.tile_map, FOVConfig(max_radius=10, walls_block=True)
+            )
+            self.fov.compute_and_apply(self.player_position)
+
+            # Initialize renderer
+            self.grid_renderer = CompactGridRenderer(
+                tile_map=self.tile_map, viewport_width=40, viewport_height=15
+            )
+
+            return True
+        except Exception as e:
+            print_error(f"Failed to load grid map: {e}")
+            return False
+
+    def _handle_movement_input(self, key: str) -> bool:
+        """
+        Handle movement input in 2D mode.
+
+        Args:
+            key: The key pressed (w/a/s/d, arrows, etc.)
+
+        Returns:
+            True if movement was handled, False otherwise
+        """
+        if self.game_mode != "2d" or self.movement_controller is None:
+            return False
+
+        direction = KEY_TO_DIRECTION.get(key.lower())
+        if direction is None:
+            return False
+
+        result = self.movement_controller.move("player", direction)
+        if result.success and result.new_position:
+            self.player_position = result.new_position
+            # Update FOV
+            if self.fov:
+                self.fov.compute_and_apply(self.player_position)
+            # Redraw the grid
+            self._display_grid()
+            return True
+
+        return False
+
+    def _display_grid(self) -> None:
+        """Display the 2D grid map."""
+        if self.grid_renderer is None or self.player_position is None:
+            return
+
+        # Render centered on player
+        output = self.grid_renderer.render_to_text(center=self.player_position)
+        console.print(output)
 
     def display_banner(self) -> None:
         """Display the game banner."""

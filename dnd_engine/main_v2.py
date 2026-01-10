@@ -55,6 +55,13 @@ Examples:
     )
 
     parser.add_argument(
+        "--mode",
+        choices=["text", "2d"],
+        default="text",
+        help="Game display mode: 'text' (default) or '2d' for grid-based dungeon crawler",
+    )
+
+    parser.add_argument(
         "--version", action="version", version="D&D 5E Terminal Game v0.2.0 (Save Slot System)"
     )
 
@@ -204,6 +211,14 @@ def main() -> None:
             slot_manager, slot_number, session_start, character_vault=menu.vault
         )
 
+        # Handle game mode
+        game_mode = args.mode
+        if game_mode == "2d":
+            print_status_message("2D grid mode enabled (experimental)", "info")
+            print_status_message(
+                "Use WASD/arrows for movement, standard commands still work", "info"
+            )
+
         # Initialize CLI with adapter (compatible with old interface)
         # Note: CLI expects campaign_manager and campaign_name, we provide adapter and slot number
         cli = CLI(
@@ -212,6 +227,7 @@ def main() -> None:
             campaign_name=f"slot_{slot_number}",  # Dummy name for compatibility
             auto_save_enabled=True,
             llm_enhancer=llm_enhancer,
+            game_mode=game_mode,  # Pass mode for 2D grid support
         )
 
         # Start game loop
