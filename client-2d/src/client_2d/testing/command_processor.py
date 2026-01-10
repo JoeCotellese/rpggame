@@ -195,9 +195,10 @@ class CommandProcessor:
                     message="OK",
                     action_taken=command.raw_action,
                 )
+            dir_name = command.direction.name.lower() if command.direction else "unknown"
             return CommandResult(
                 success=False,
-                message=f"Cannot move {command.direction.name.lower()}: blocked",
+                message=f"Cannot move {dir_name}: blocked",
             )
 
         # Attack validation
