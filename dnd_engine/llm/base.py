@@ -2,7 +2,8 @@
 # ABOUTME: Defines interface for text generation with timeout and error handling
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 # Type alias for status callback function
 # Signature: (message: str, message_type: str) -> None

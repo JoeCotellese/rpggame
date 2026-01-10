@@ -8,9 +8,9 @@ from typing import Any
 
 from openai import AsyncOpenAI
 
-logger = logging.getLogger(__name__)
-
 from .base import LLMProvider, StatusCallback
+
+logger = logging.getLogger(__name__)
 
 
 class OpenAIProvider(LLMProvider):
