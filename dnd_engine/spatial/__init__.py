@@ -34,6 +34,11 @@ from dnd_engine.spatial.combat_grid import (
     AttackType,
     FEET_PER_TILE,
 )
+from dnd_engine.spatial.map_registry import (
+    DUNGEON_GRID_MAPS,
+    get_grid_map_path,
+    has_grid_map,
+)
 
 __all__ = [
     "Position",
@@ -66,4 +71,7 @@ __all__ = [
     "RangeCheckResult",
     "AttackType",
     "FEET_PER_TILE",
+    "DUNGEON_GRID_MAPS",
+    "get_grid_map_path",
+    "has_grid_map",
 ]

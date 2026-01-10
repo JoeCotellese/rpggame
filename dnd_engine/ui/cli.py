@@ -174,6 +174,9 @@ class CLI:
         # Grid renderer for display
         self.grid_renderer = None
 
+        # Track which dungeon's grid is currently loaded
+        self._current_grid_dungeon: str | None = None
+
     def _load_grid_map(self, map_path: str) -> bool:
         """
         Load a grid map for 2D mode.
@@ -266,6 +269,40 @@ class CLI:
         # Render centered on player
         output = self.grid_renderer.render_to_text(center=self.player_position)
         console.print(output)
+
+    def _handle_grid_for_dungeon(self, dungeon_id: str | None) -> None:
+        """
+        Load or unload grid map based on dungeon.
+
+        Called when entering a new room to check if we need to switch
+        between text mode and grid mode.
+
+        Args:
+            dungeon_id: The dungeon being entered, or None
+        """
+        from dnd_engine.spatial.map_registry import get_grid_map_path
+
+        if dungeon_id is None:
+            return
+
+        grid_path = get_grid_map_path(dungeon_id)
+
+        if grid_path and grid_path.exists():
+            # Dungeon has a grid map - load it if not already loaded
+            if self._current_grid_dungeon != dungeon_id:
+                if self._load_grid_map(str(grid_path)):
+                    self._current_grid_dungeon = dungeon_id
+                    print_status_message(f"Entering {dungeon_id} - 2D grid loaded", "info")
+                    self._display_grid()
+        else:
+            # No grid map for this dungeon - clear grid state (back to text mode)
+            if self.tile_map is not None:
+                print_status_message("Leaving grid area - returning to text mode", "info")
+                self.tile_map = None
+                self.grid_renderer = None
+                self.movement_controller = None
+                self.fov = None
+                self._current_grid_dungeon = None
 
     def display_banner(self) -> None:
         """Display the game banner."""
@@ -5977,6 +6014,11 @@ class CLI:
         """Handle room enter event."""
         # Auto-save when entering a new room
         self._auto_save("room_change")
+
+        # Handle 2D grid mode - load/unload grid based on dungeon
+        if self.game_mode == "2d":
+            dungeon_id = event.data.get("dungeon_id")
+            self._handle_grid_for_dungeon(dungeon_id)
 
     def _on_long_rest(self, event: Event) -> None:
         """Handle long rest event."""
