@@ -5917,6 +5917,10 @@ class CLI:
         # Start the game (GameState handles checking starting room for enemies)
         self.game_state.start()
 
+        # Load grid map if resuming in a dungeon with 2D support
+        if self.game_mode == "2d" and self.game_state.dungeon_name:
+            self._handle_grid_for_dungeon(self.game_state.dungeon_name)
+
         print_status_message("Type 'help' for available commands", "info")
 
         while self.running and not self.game_state.is_game_over():
