@@ -11,7 +11,7 @@ from dnd_engine.core.character_factory import CharacterFactory
 from dnd_engine.core.creature import Abilities
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.rules.loader import DataLoader
-from dnd_engine.ui.rich_ui import (
+from terminal_client.ui.rich_ui import (
     console,
     print_banner,
     print_error,

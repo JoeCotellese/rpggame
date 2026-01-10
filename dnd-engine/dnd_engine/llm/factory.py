@@ -13,14 +13,9 @@ from .openai_provider import OpenAIProvider
 def _emit_factory_status(
     message: str, message_type: str, callback: StatusCallback
 ) -> None:
-    """Emit status from factory, with fallback to print."""
+    """Emit status from factory via callback if available."""
     if callback:
         callback(message, message_type)
-    else:
-        # Fallback during transition - remove in Phase 5
-        from dnd_engine.ui.rich_ui import print_status_message
-
-        print_status_message(message, message_type)
 
 
 def create_llm_provider(

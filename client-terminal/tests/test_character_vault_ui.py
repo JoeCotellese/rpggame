@@ -78,7 +78,7 @@ class TestSelectCharacterForDeletion:
     """Test questionary-based character selection for deletion."""
 
     @patch.object(MainMenuV2, "__init__", lambda x: None)
-    @patch("dnd_engine.ui.main_menu_v2.questionary")
+    @patch("terminal_client.ui.main_menu_v2.questionary")
     def test_select_character_shows_all_characters(self, mock_questionary, character_list):
         """Test that all characters are shown in selection."""
         menu = MainMenuV2()
@@ -95,7 +95,7 @@ class TestSelectCharacterForDeletion:
         assert len(choice_calls) == 3
 
     @patch.object(MainMenuV2, "__init__", lambda x: None)
-    @patch("dnd_engine.ui.main_menu_v2.questionary")
+    @patch("terminal_client.ui.main_menu_v2.questionary")
     def test_select_character_returns_none_on_back(self, mock_questionary, character_list):
         """Test that selecting back returns None."""
         menu = MainMenuV2()
@@ -108,7 +108,7 @@ class TestSelectCharacterForDeletion:
         assert result is None
 
     @patch.object(MainMenuV2, "__init__", lambda x: None)
-    @patch("dnd_engine.ui.main_menu_v2.questionary")
+    @patch("terminal_client.ui.main_menu_v2.questionary")
     def test_select_character_handles_keyboard_interrupt(self, mock_questionary, character_list):
         """Test that keyboard interrupt returns None."""
         menu = MainMenuV2()
@@ -121,7 +121,7 @@ class TestSelectCharacterForDeletion:
         assert result is None
 
     @patch.object(MainMenuV2, "__init__", lambda x: None)
-    @patch("dnd_engine.ui.main_menu_v2.questionary")
+    @patch("terminal_client.ui.main_menu_v2.questionary")
     def test_select_character_handles_eof_error(self, mock_questionary, character_list):
         """Test that EOF error returns None."""
         menu = MainMenuV2()
@@ -134,7 +134,7 @@ class TestSelectCharacterForDeletion:
         assert result is None
 
     @patch.object(MainMenuV2, "__init__", lambda x: None)
-    @patch("dnd_engine.ui.main_menu_v2.print_status_message")
+    @patch("terminal_client.ui.main_menu_v2.print_status_message")
     def test_select_character_shows_warning_when_empty(self, mock_print):
         """Test warning message when no characters in vault."""
         menu = MainMenuV2()
@@ -149,9 +149,9 @@ class TestHandleCharacterVault:
     """Test character vault management flow."""
 
     @patch.object(MainMenuV2, "__init__", lambda x: None)
-    @patch("dnd_engine.ui.main_menu_v2.questionary")
-    @patch("dnd_engine.ui.main_menu_v2.print_section")
-    @patch("dnd_engine.ui.main_menu_v2.console")
+    @patch("terminal_client.ui.main_menu_v2.questionary")
+    @patch("terminal_client.ui.main_menu_v2.print_section")
+    @patch("terminal_client.ui.main_menu_v2.console")
     def test_vault_shows_action_menu(self, mock_console, mock_print_section, mock_questionary):
         """Test that vault shows action selection."""
         menu = MainMenuV2()
@@ -170,10 +170,10 @@ class TestHandleCharacterVault:
 
     @patch.object(MainMenuV2, "__init__", lambda x: None)
     @patch.object(MainMenuV2, "_create_character_interactive")
-    @patch("dnd_engine.ui.main_menu_v2.questionary")
-    @patch("dnd_engine.ui.main_menu_v2.print_section")
-    @patch("dnd_engine.ui.main_menu_v2.print_status_message")
-    @patch("dnd_engine.ui.main_menu_v2.console")
+    @patch("terminal_client.ui.main_menu_v2.questionary")
+    @patch("terminal_client.ui.main_menu_v2.print_section")
+    @patch("terminal_client.ui.main_menu_v2.print_status_message")
+    @patch("terminal_client.ui.main_menu_v2.console")
     def test_vault_create_action_calls_wizard(
         self,
         mock_console,
@@ -202,10 +202,10 @@ class TestHandleCharacterVault:
 
     @patch.object(MainMenuV2, "__init__", lambda x: None)
     @patch.object(MainMenuV2, "_select_character_for_deletion")
-    @patch("dnd_engine.ui.main_menu_v2.questionary")
-    @patch("dnd_engine.ui.main_menu_v2.print_section")
-    @patch("dnd_engine.ui.main_menu_v2.print_status_message")
-    @patch("dnd_engine.ui.main_menu_v2.console")
+    @patch("terminal_client.ui.main_menu_v2.questionary")
+    @patch("terminal_client.ui.main_menu_v2.print_section")
+    @patch("terminal_client.ui.main_menu_v2.print_status_message")
+    @patch("terminal_client.ui.main_menu_v2.console")
     def test_vault_delete_uses_character_selector(
         self,
         mock_console,
@@ -234,9 +234,9 @@ class TestHandleCharacterVault:
 
     @patch.object(MainMenuV2, "__init__", lambda x: None)
     @patch.object(MainMenuV2, "_select_character_for_deletion")
-    @patch("dnd_engine.ui.main_menu_v2.questionary")
-    @patch("dnd_engine.ui.main_menu_v2.print_section")
-    @patch("dnd_engine.ui.main_menu_v2.console")
+    @patch("terminal_client.ui.main_menu_v2.questionary")
+    @patch("terminal_client.ui.main_menu_v2.print_section")
+    @patch("terminal_client.ui.main_menu_v2.console")
     def test_vault_delete_respects_cancel_confirmation(
         self,
         mock_console,
@@ -264,9 +264,9 @@ class TestHandleCharacterVault:
 
     @patch.object(MainMenuV2, "__init__", lambda x: None)
     @patch.object(MainMenuV2, "_select_character_for_deletion")
-    @patch("dnd_engine.ui.main_menu_v2.questionary")
-    @patch("dnd_engine.ui.main_menu_v2.print_section")
-    @patch("dnd_engine.ui.main_menu_v2.console")
+    @patch("terminal_client.ui.main_menu_v2.questionary")
+    @patch("terminal_client.ui.main_menu_v2.print_section")
+    @patch("terminal_client.ui.main_menu_v2.console")
     def test_vault_delete_cancel_at_selection(
         self,
         mock_console,
@@ -293,9 +293,9 @@ class TestHandleCharacterVault:
         menu.vault.delete_character.assert_not_called()
 
     @patch.object(MainMenuV2, "__init__", lambda x: None)
-    @patch("dnd_engine.ui.main_menu_v2.questionary")
-    @patch("dnd_engine.ui.main_menu_v2.print_section")
-    @patch("dnd_engine.ui.main_menu_v2.console")
+    @patch("terminal_client.ui.main_menu_v2.questionary")
+    @patch("terminal_client.ui.main_menu_v2.print_section")
+    @patch("terminal_client.ui.main_menu_v2.console")
     def test_vault_hides_delete_when_empty(
         self, mock_console, mock_print_section, mock_questionary
     ):
@@ -315,9 +315,9 @@ class TestHandleCharacterVault:
         assert not any("delete" in title.lower() for title in choice_titles)
 
     @patch.object(MainMenuV2, "__init__", lambda x: None)
-    @patch("dnd_engine.ui.main_menu_v2.questionary")
-    @patch("dnd_engine.ui.main_menu_v2.print_section")
-    @patch("dnd_engine.ui.main_menu_v2.console")
+    @patch("terminal_client.ui.main_menu_v2.questionary")
+    @patch("terminal_client.ui.main_menu_v2.print_section")
+    @patch("terminal_client.ui.main_menu_v2.console")
     def test_vault_shows_delete_when_has_characters(
         self, mock_console, mock_print_section, mock_questionary, character_list
     ):
@@ -337,9 +337,9 @@ class TestHandleCharacterVault:
         assert any("delete" in title.lower() for title in choice_titles)
 
     @patch.object(MainMenuV2, "__init__", lambda x: None)
-    @patch("dnd_engine.ui.main_menu_v2.questionary")
-    @patch("dnd_engine.ui.main_menu_v2.print_section")
-    @patch("dnd_engine.ui.main_menu_v2.console")
+    @patch("terminal_client.ui.main_menu_v2.questionary")
+    @patch("terminal_client.ui.main_menu_v2.print_section")
+    @patch("terminal_client.ui.main_menu_v2.console")
     def test_vault_handles_keyboard_interrupt(
         self, mock_console, mock_print_section, mock_questionary
     ):
@@ -355,9 +355,9 @@ class TestHandleCharacterVault:
         menu.handle_character_vault()
 
     @patch.object(MainMenuV2, "__init__", lambda x: None)
-    @patch("dnd_engine.ui.main_menu_v2.questionary")
-    @patch("dnd_engine.ui.main_menu_v2.print_section")
-    @patch("dnd_engine.ui.main_menu_v2.console")
+    @patch("terminal_client.ui.main_menu_v2.questionary")
+    @patch("terminal_client.ui.main_menu_v2.print_section")
+    @patch("terminal_client.ui.main_menu_v2.console")
     def test_vault_handles_eof_error(self, mock_console, mock_print_section, mock_questionary):
         """Test that EOF error exits gracefully."""
         menu = MainMenuV2()

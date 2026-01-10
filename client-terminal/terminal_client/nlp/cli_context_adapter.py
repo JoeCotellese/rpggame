@@ -2,7 +2,7 @@
 # ABOUTME: Implements GameContextProvider protocol to provide game context for fuzzy matching.
 
 from dnd_engine.core.game_state import GameState
-from dnd_engine.nlp.command_parser import GameContextProvider
+from terminal_client.nlp.command_parser import GameContextProvider
 
 
 class CLIContextAdapter(GameContextProvider):

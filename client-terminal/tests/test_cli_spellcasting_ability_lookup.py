@@ -116,8 +116,8 @@ class TestCLISpellcastingAbilityLookup:
         mock_game_state.initiative_tracker.get_current_turn_state.return_value = mock_turn_state
 
         # Mock print_error to capture any error messages
-        with patch("dnd_engine.ui.cli.print_error") as mock_print_error:
-            with patch("dnd_engine.ui.cli.console"):
+        with patch("terminal_client.ui.cli.print_error") as mock_print_error:
+            with patch("terminal_client.ui.cli.console"):
                 # Call without specifying spell name - will prompt for selection
                 # Since we're not mocking the prompt, this will fail,
                 # but the key test is that we don't get "cannot cast spells" error
@@ -152,7 +152,7 @@ class TestCLISpellcastingAbilityLookup:
         mock_game_state.initiative_tracker.get_current_turn_state.return_value = mock_turn_state
 
         # Mock print_error to capture the error message
-        with patch("dnd_engine.ui.cli.print_error") as mock_print_error:
+        with patch("terminal_client.ui.cli.print_error") as mock_print_error:
             cli.handle_cast_spell("magic_missile")
 
         # Verify error message was printed
@@ -182,7 +182,7 @@ class TestCLISpellcastingAbilityLookup:
         mock_game_state.initiative_tracker.get_current_turn_state.return_value = mock_turn_state
 
         # Should not crash, should print error instead
-        with patch("dnd_engine.ui.cli.print_error") as mock_print_error:
+        with patch("terminal_client.ui.cli.print_error") as mock_print_error:
             cli.handle_cast_spell("magic_missile")
 
         # Should have printed an error
@@ -216,7 +216,7 @@ class TestCLISpellcastingAbilityLookup:
         mock_game_state.initiative_tracker.get_current_turn_state.return_value = mock_turn_state
 
         # Should print error about not being able to cast spells
-        with patch("dnd_engine.ui.cli.print_error") as mock_print_error:
+        with patch("terminal_client.ui.cli.print_error") as mock_print_error:
             cli.handle_cast_spell("magic_missile")
 
         # Should have printed an error
@@ -254,9 +254,9 @@ class TestCLISpellcastingAbilityLookup:
 
         # Mock user inputs to cancel spell selection
         with patch("builtins.input", side_effect=["1", "1", "n"]):
-            with patch("dnd_engine.ui.cli.console"):
+            with patch("terminal_client.ui.cli.console"):
                 # Should not crash and should not print error
-                with patch("dnd_engine.ui.cli.print_error") as mock_print_error:
+                with patch("terminal_client.ui.cli.print_error") as mock_print_error:
                     cli.handle_cast_spell("magic_missile")
 
                     # Should NOT have printed "cannot cast spells" error
@@ -391,8 +391,8 @@ class TestSpellSlotValidationBeforeAction:
         cli = CLI(mock_game_state, Mock(), "test_campaign")
 
         # Mock user selecting target (first enemy)
-        with patch("dnd_engine.ui.cli.print_error") as mock_print_error:
-            with patch("dnd_engine.ui.cli.console"):
+        with patch("terminal_client.ui.cli.print_error") as mock_print_error:
+            with patch("terminal_client.ui.cli.console"):
                 with patch("questionary.select") as mock_select:
                     mock_select.return_value.ask.return_value = "Goblin"
 

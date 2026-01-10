@@ -240,7 +240,7 @@ class NPCChatManager:
 
     def _emit_status(self, message: str, message_type: str = "info") -> None:
         """
-        Emit status message via callback if available, fallback to print.
+        Emit status message via callback if available.
 
         Args:
             message: Status message text
@@ -248,11 +248,6 @@ class NPCChatManager:
         """
         if self.status_callback:
             self.status_callback(message, message_type)
-        else:
-            # Fallback during transition - remove in Phase 5
-            from dnd_engine.ui.rich_ui import print_status_message
-
-            print_status_message(message, message_type)
 
     def _start_event_loop(self) -> None:
         """Start background thread with event loop for async tasks."""

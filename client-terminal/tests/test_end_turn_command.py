@@ -92,7 +92,7 @@ class TestEndTurnCommand:
         """Test that end turn fails when not in combat"""
         mock_game_state.in_combat = False
 
-        with patch("dnd_engine.ui.cli.print_error") as mock_error:
+        with patch("terminal_client.ui.cli.print_error") as mock_error:
             cli.handle_end_turn()
             mock_error.assert_called_with("You're not in combat!")
 
@@ -103,7 +103,7 @@ class TestEndTurnCommand:
         """Test that end turn fails when no initiative tracker exists"""
         mock_game_state.initiative_tracker = None
 
-        with patch("dnd_engine.ui.cli.print_error") as mock_error:
+        with patch("terminal_client.ui.cli.print_error") as mock_error:
             cli.handle_end_turn()
             mock_error.assert_called_with("No initiative tracker!")
 
@@ -111,7 +111,7 @@ class TestEndTurnCommand:
         """Test that end turn fails when no current combatant"""
         mock_game_state.initiative_tracker.get_current_combatant.return_value = None
 
-        with patch("dnd_engine.ui.cli.print_error") as mock_error:
+        with patch("terminal_client.ui.cli.print_error") as mock_error:
             cli.handle_end_turn()
             mock_error.assert_called_with("No current combatant!")
 
@@ -125,7 +125,7 @@ class TestEndTurnCommand:
         mock_game_state.initiative_tracker.get_current_combatant.return_value = combatant
         mock_game_state.party.characters = [mock_character]  # Enemy not in party
 
-        with patch("dnd_engine.ui.cli.print_error") as mock_error:
+        with patch("terminal_client.ui.cli.print_error") as mock_error:
             cli.handle_end_turn()
             mock_error.assert_called_with("It's not a party member's turn!")
 
@@ -140,7 +140,7 @@ class TestEndTurnCommand:
         mock_game_state.party.characters = [mock_character]
         cli.process_enemy_turns = Mock()
 
-        with patch("dnd_engine.ui.cli.print_status_message") as mock_status:
+        with patch("terminal_client.ui.cli.print_status_message") as mock_status:
             cli.handle_end_turn()
             mock_status.assert_called_with(f"{mock_character.name} ends their turn.", "info")
 
@@ -178,7 +178,7 @@ class TestEndTurnIntegration:
         )
 
         # Capture help output
-        with patch("dnd_engine.ui.cli.print_help_section") as mock_help:
+        with patch("terminal_client.ui.cli.print_help_section") as mock_help:
             cli.display_help_combat()
 
             # Verify help was called
@@ -243,7 +243,7 @@ class TestEndTurnIntegration:
         item_data = {"name": "Potion of Healing", "action_required": "action"}
 
         # Track status messages
-        with patch("dnd_engine.ui.cli.print_status_message") as mock_status:
+        with patch("terminal_client.ui.cli.print_status_message") as mock_status:
             cli.handle_use_item_combat_with_target(
                 "potion_of_healing", item_data, character, character
             )

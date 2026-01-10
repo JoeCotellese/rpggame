@@ -9,8 +9,8 @@ from rich.table import Table
 from dnd_engine.core.campaign_manager import CampaignManager
 from dnd_engine.core.character_vault import CharacterVault
 from dnd_engine.core.game_state import GameState
-from dnd_engine.ui.campaign_wizard import CampaignCreationWizard
-from dnd_engine.ui.rich_ui import (
+from terminal_client.ui.campaign_wizard import CampaignCreationWizard
+from terminal_client.ui.rich_ui import (
     console,
     print_banner,
     print_choice_menu,

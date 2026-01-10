@@ -12,8 +12,8 @@ from dnd_engine.core.party import Party
 from dnd_engine.core.room_registry import RoomRegistry
 from dnd_engine.core.save_slot_manager import SaveSlotManager
 from dnd_engine.rules.loader import DataLoader
-from dnd_engine.ui.character_wizard import CharacterCreationWizard
-from dnd_engine.ui.rich_ui import (
+from terminal_client.ui.character_wizard import CharacterCreationWizard
+from terminal_client.ui.rich_ui import (
     console,
     print_banner,
     print_choice_menu,
