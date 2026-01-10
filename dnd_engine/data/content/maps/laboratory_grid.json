@@ -1,0 +1,139 @@
+{
+  "id": "laboratory",
+  "name": "The Poisoned Laboratory",
+  "description": "An abandoned alchemist's workshop filled with dangerous fumes and volatile chemicals",
+  "width": 45,
+  "height": 25,
+  "tiles": [
+    "#############################################",
+    "#...........#############...................#",
+    "#...........#           #...................#",
+    "#...........#  FURNACE  #........SANCTUM....#",
+    "#...........#           #...................#",
+    "#....@......+     W     +........B..........#",
+    "#...........#           #...................#",
+    "#...........#############...................#",
+    "#...........#...........##########+#########",
+    "#...........#...........#................./#",
+    "######+######...........#..................#",
+    "#           #...........#...LABORATORY.....#",
+    "#  ENTRANCE #..STORAGE..#..................#",
+    "#           #...........#......G...G.......#",
+    "######+######...........#..................#",
+    "#...........#...........##########+#########",
+    "#...........#...........#................./#",
+    "#...........#############..................#",
+    "#...........+           +......SPECIMEN....#",
+    "#...........#  CELLAR   #..................#",
+    "#...........#  TUNNEL   #........S.........#",
+    "#...........#           #..................#",
+    "#...........#############..................#",
+    "#...........................................#",
+    "#############################################"
+  ],
+  "legend": {
+    "#": {"type": "wall"},
+    ".": {"type": "floor"},
+    " ": {"type": "floor"},
+    "+": {"type": "door_closed"},
+    "/": {"type": "door_open"},
+    "@": {"type": "floor", "spawn": "player"},
+    "G": {"type": "floor", "spawn": {"type": "monster", "id": "goblin", "char": "G", "name": "Goblin"}},
+    "W": {"type": "floor", "spawn": {"type": "monster", "id": "wolf", "char": "W", "name": "Singed Wolf"}},
+    "S": {"type": "floor", "spawn": {"type": "monster", "id": "skeleton", "char": "S", "name": "Skeleton"}},
+    "B": {"type": "floor", "spawn": {"type": "monster", "id": "goblin_boss", "char": "B", "name": "Archibald the Mad"}}
+  },
+  "regions": {
+    "entrance": {
+      "x1": 1,
+      "y1": 10,
+      "x2": 11,
+      "y2": 14,
+      "description": "The collapsed entrance hall with broken glass and chemical smells",
+      "metadata": {
+        "room_id": "laboratory.entrance"
+      }
+    },
+    "storage": {
+      "x1": 1,
+      "y1": 1,
+      "x2": 11,
+      "y2": 9,
+      "description": "Alchemical storage with labeled bottles and ingredients",
+      "metadata": {
+        "room_id": "laboratory.storage",
+        "safe_rest": true
+      }
+    },
+    "furnace_room": {
+      "x1": 13,
+      "y1": 1,
+      "x2": 23,
+      "y2": 7,
+      "description": "A sweltering room with a massive roaring furnace",
+      "metadata": {
+        "room_id": "laboratory.furnace_room",
+        "hazard": "extreme_heat"
+      }
+    },
+    "laboratory": {
+      "x1": 25,
+      "y1": 8,
+      "x2": 43,
+      "y2": 16,
+      "description": "The main laboratory with bubbling cauldrons and mysterious liquids",
+      "metadata": {
+        "room_id": "laboratory.laboratory",
+        "hazard": "poison_gas"
+      }
+    },
+    "sanctum": {
+      "x1": 25,
+      "y1": 1,
+      "x2": 43,
+      "y2": 7,
+      "description": "The mad alchemist's private sanctum crackling with volatile energy",
+      "metadata": {
+        "room_id": "laboratory.sanctum",
+        "boss_room": true
+      }
+    },
+    "specimen_chamber": {
+      "x1": 25,
+      "y1": 17,
+      "x2": 43,
+      "y2": 23,
+      "description": "A cold room with glass tanks containing preserved creatures",
+      "metadata": {
+        "room_id": "laboratory.specimen_chamber",
+        "lighting": "dark"
+      }
+    },
+    "cellar_tunnel": {
+      "x1": 13,
+      "y1": 17,
+      "x2": 23,
+      "y2": 23,
+      "description": "A tunnel leading to the cellar below",
+      "metadata": {
+        "room_id": "laboratory.cellar_tunnel"
+      }
+    }
+  },
+  "connections": [
+    {
+      "x": 18,
+      "y": 23,
+      "target_map": "cellar_grid",
+      "target_x": 5,
+      "target_y": 5,
+      "type": "stairs_down"
+    }
+  ],
+  "metadata": {
+    "campaign": "poisoned_laboratory",
+    "dungeon_id": "laboratory",
+    "start_region": "entrance",
+    "player_spawn": {"x": 5, "y": 5}
+  }
+}

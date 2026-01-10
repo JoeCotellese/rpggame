@@ -90,6 +90,15 @@ class EventType(Enum):
     QUEST_COMPLETED = "quest_completed"
     QUEST_REWARDED = "quest_rewarded"
 
+    # Spatial/2D map events
+    ENTITY_MOVED = "entity_moved"
+    TILE_REVEALED = "tile_revealed"
+    MAP_LOADED = "map_loaded"
+    DOOR_OPENED = "door_opened"
+    DOOR_CLOSED = "door_closed"
+    ENTITY_SPAWNED = "entity_spawned"
+    ENTITY_REMOVED = "entity_removed"
+
 
 @dataclass
 class Event:
