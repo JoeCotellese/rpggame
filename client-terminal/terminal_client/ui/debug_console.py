@@ -13,7 +13,7 @@ from dnd_engine.core.creature import Creature
 from dnd_engine.core.game_state import GameState
 from dnd_engine.core.quest import QuestState
 from dnd_engine.systems.currency import Currency
-from dnd_engine.ui.rich_ui import (
+from terminal_client.ui.rich_ui import (
     console,
     print_error,
     print_message,

@@ -1,27 +1,4 @@
-[project]
-name = "dnd-terminal-game"
-version = "0.1.0"
-description = "A D&D 5E terminal-based game with LLM-powered narrative enhancement"
-readme = "README.md"
-requires-python = ">=3.11"
-license = { text = "MIT" }
-authors = [
-    { name = "Joe Cotellese" }
-]
-
-dependencies = [
-    "anthropic>=0.18.0",
-    "openai>=1.0.0",
-    "prompt-toolkit>=3.0.52",
-    "pydantic>=2.5.0",
-    "pytest>=9.0.1",
-    "python-dotenv>=1.0.0",
-    "questionary>=2.0.0",
-    "rapidfuzz>=3.0.0",
-    "rich>=14.2.0",
-]
-
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
@@ -30,24 +7,18 @@ dev = [
     "ruff>=0.1.0",
 ]
 
-[project.scripts]
-dnd-game = "dnd_engine.main_v2:main"
+[tool.uv.workspace]
+members = ["dnd-engine", "client-terminal", "client-2d"]
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.hatch.build.targets.wheel]
-packages = ["dnd_engine"]
+[tool.uv.sources]
+dnd-engine = { workspace = true }
+dnd-terminal-client = { workspace = true }
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["dnd-engine/tests", "client-terminal/tests"]
 asyncio_mode = "auto"
 addopts = [
     "--verbose",
-    "--cov=dnd_engine",
-    "--cov-report=term-missing",
-    "--cov-report=html",
 ]
 
 [tool.mypy]
@@ -84,11 +55,11 @@ ignore = [
 "tests/*" = ["D"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["dnd_engine"]
+known-first-party = ["dnd_engine", "terminal_client"]
 
 [tool.coverage.run]
-source = ["dnd_engine"]
-omit = ["tests/*", "venv/*"]
+source = ["dnd_engine", "terminal_client"]
+omit = ["*/tests/*", "venv/*"]
 
 [tool.coverage.report]
 exclude_lines = [

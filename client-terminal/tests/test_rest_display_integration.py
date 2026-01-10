@@ -109,10 +109,10 @@ class TestRestDisplayIntegration:
             printed_messages.append(str(message))
 
         # Mock the print functions to capture output and mock user input for short rest choice
-        with patch("dnd_engine.ui.rich_ui.print_message", side_effect=capture_print):
-            with patch("dnd_engine.ui.rich_ui.print_section", side_effect=capture_print):
+        with patch("terminal_client.ui.rich_ui.print_message", side_effect=capture_print):
+            with patch("terminal_client.ui.rich_ui.print_section", side_effect=capture_print):
                 with patch(
-                    "dnd_engine.ui.rich_ui.print_status_message",
+                    "terminal_client.ui.rich_ui.print_status_message",
                     side_effect=lambda msg, status: capture_print(msg),
                 ):
                     with patch("builtins.input", return_value="1"):  # Choose short rest
@@ -179,10 +179,10 @@ class TestRestDisplayIntegration:
         def capture_print(message):
             printed_messages.append(str(message))
 
-        with patch("dnd_engine.ui.rich_ui.print_message", side_effect=capture_print):
-            with patch("dnd_engine.ui.rich_ui.print_section", side_effect=capture_print):
+        with patch("terminal_client.ui.rich_ui.print_message", side_effect=capture_print):
+            with patch("terminal_client.ui.rich_ui.print_section", side_effect=capture_print):
                 with patch(
-                    "dnd_engine.ui.rich_ui.print_status_message",
+                    "terminal_client.ui.rich_ui.print_status_message",
                     side_effect=lambda msg, status: capture_print(msg),
                 ):
                     with patch("builtins.input", return_value="1"):  # Choose short rest
@@ -226,10 +226,10 @@ class TestRestDisplayIntegration:
         def capture_print(message):
             printed_messages.append(str(message))
 
-        with patch("dnd_engine.ui.rich_ui.print_message", side_effect=capture_print):
-            with patch("dnd_engine.ui.rich_ui.print_section", side_effect=capture_print):
+        with patch("terminal_client.ui.rich_ui.print_message", side_effect=capture_print):
+            with patch("terminal_client.ui.rich_ui.print_section", side_effect=capture_print):
                 with patch(
-                    "dnd_engine.ui.rich_ui.print_status_message",
+                    "terminal_client.ui.rich_ui.print_status_message",
                     side_effect=lambda msg, status: capture_print(msg),
                 ):
                     with patch("builtins.input", return_value="2"):  # Choose long rest
@@ -288,10 +288,10 @@ class TestRestDisplayIntegration:
         def capture_print(message):
             printed_messages.append(str(message))
 
-        with patch("dnd_engine.ui.rich_ui.print_message", side_effect=capture_print):
-            with patch("dnd_engine.ui.rich_ui.print_section", side_effect=capture_print):
+        with patch("terminal_client.ui.rich_ui.print_message", side_effect=capture_print):
+            with patch("terminal_client.ui.rich_ui.print_section", side_effect=capture_print):
                 with patch(
-                    "dnd_engine.ui.rich_ui.print_status_message",
+                    "terminal_client.ui.rich_ui.print_status_message",
                     side_effect=lambda msg, status: capture_print(msg),
                 ):
                     with patch("builtins.input", return_value="2"):  # Choose long rest

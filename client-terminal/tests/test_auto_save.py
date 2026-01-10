@@ -229,7 +229,7 @@ class TestQuickSave:
         quick_saves = [s for s in save_slots if s.save_type == "quick"]
         assert len(quick_saves) == 1
 
-    @patch("dnd_engine.ui.cli.console")
+    @patch("terminal_client.ui.cli.console")
     def test_quick_save_command_in_exploration(self, mock_console, cli_with_campaign):
         """Test 'qs' command triggers quick-save"""
         # Mock to prevent actual input loop

@@ -13,15 +13,15 @@ from dnd_engine.core.game_state import GameState
 from dnd_engine.core.save_slot_manager import SaveSlotManager
 from dnd_engine.llm.enhancer import LLMEnhancer
 from dnd_engine.llm.factory import create_llm_provider
-from dnd_engine.ui.cli import CLI
-from dnd_engine.ui.main_menu_v2 import MainMenuV2
-from dnd_engine.ui.rich_ui import (
+from dnd_engine.utils.logging_config import get_logging_config
+from terminal_client.ui.cli import CLI
+from terminal_client.ui.main_menu_v2 import MainMenuV2
+from terminal_client.ui.rich_ui import (
     console,
     init_console,
     print_error,
     print_status_message,
 )
-from dnd_engine.utils.logging_config import get_logging_config
 
 
 def parse_arguments() -> argparse.Namespace:

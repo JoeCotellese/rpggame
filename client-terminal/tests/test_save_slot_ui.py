@@ -95,7 +95,7 @@ class TestSelectSaveSlot:
     """Test questionary-based save slot selection."""
 
     @patch.object(MainMenuV2, "__init__", lambda x: None)
-    @patch("dnd_engine.ui.main_menu_v2.questionary")
+    @patch("terminal_client.ui.main_menu_v2.questionary")
     def test_select_slot_shows_all_slots(self, mock_questionary, mock_slot_manager):
         """Test that all slots are shown in selection."""
         menu = MainMenuV2()
@@ -113,7 +113,7 @@ class TestSelectSaveSlot:
         assert len(choice_calls) == 11
 
     @patch.object(MainMenuV2, "__init__", lambda x: None)
-    @patch("dnd_engine.ui.main_menu_v2.questionary")
+    @patch("terminal_client.ui.main_menu_v2.questionary")
     def test_select_slot_filters_empty_when_requested(
         self, mock_questionary, mock_slot_manager, used_slot
     ):
@@ -134,7 +134,7 @@ class TestSelectSaveSlot:
         assert len(choice_calls) == 2
 
     @patch.object(MainMenuV2, "__init__", lambda x: None)
-    @patch("dnd_engine.ui.main_menu_v2.questionary")
+    @patch("terminal_client.ui.main_menu_v2.questionary")
     def test_select_slot_disables_empty_when_not_allowed(self, mock_questionary, mock_slot_manager):
         """Test that empty slots are disabled when allow_empty=False."""
         menu = MainMenuV2()
@@ -154,7 +154,7 @@ class TestSelectSaveSlot:
         assert disabled_count == 9
 
     @patch.object(MainMenuV2, "__init__", lambda x: None)
-    @patch("dnd_engine.ui.main_menu_v2.questionary")
+    @patch("terminal_client.ui.main_menu_v2.questionary")
     def test_select_slot_returns_none_on_back(self, mock_questionary, mock_slot_manager):
         """Test that selecting back returns None."""
         menu = MainMenuV2()
@@ -168,7 +168,7 @@ class TestSelectSaveSlot:
         assert result is None
 
     @patch.object(MainMenuV2, "__init__", lambda x: None)
-    @patch("dnd_engine.ui.main_menu_v2.questionary")
+    @patch("terminal_client.ui.main_menu_v2.questionary")
     def test_select_slot_handles_keyboard_interrupt(self, mock_questionary, mock_slot_manager):
         """Test that keyboard interrupt returns None."""
         menu = MainMenuV2()
@@ -182,7 +182,7 @@ class TestSelectSaveSlot:
         assert result is None
 
     @patch.object(MainMenuV2, "__init__", lambda x: None)
-    @patch("dnd_engine.ui.main_menu_v2.print_status_message")
+    @patch("terminal_client.ui.main_menu_v2.print_status_message")
     def test_select_slot_shows_warning_when_no_slots(self, mock_print):
         """Test warning message when no slots match filter."""
         menu = MainMenuV2()
@@ -200,8 +200,8 @@ class TestHandleLoadGame:
 
     @patch.object(MainMenuV2, "__init__", lambda x: None)
     @patch.object(MainMenuV2, "_select_save_slot")
-    @patch("dnd_engine.ui.main_menu_v2.print_section")
-    @patch("dnd_engine.ui.main_menu_v2.console")
+    @patch("terminal_client.ui.main_menu_v2.print_section")
+    @patch("terminal_client.ui.main_menu_v2.console")
     def test_load_game_uses_slot_selector(
         self, mock_console, mock_print_section, mock_select, used_slot
     ):
@@ -220,8 +220,8 @@ class TestHandleLoadGame:
 
     @patch.object(MainMenuV2, "__init__", lambda x: None)
     @patch.object(MainMenuV2, "_select_save_slot")
-    @patch("dnd_engine.ui.main_menu_v2.print_section")
-    @patch("dnd_engine.ui.main_menu_v2.console")
+    @patch("terminal_client.ui.main_menu_v2.print_section")
+    @patch("terminal_client.ui.main_menu_v2.console")
     def test_load_game_returns_none_on_cancel(self, mock_console, mock_print_section, mock_select):
         """Test that canceling slot selection returns None."""
         menu = MainMenuV2()
@@ -236,9 +236,9 @@ class TestHandleManageSlots:
     """Test manage slots flow with questionary."""
 
     @patch.object(MainMenuV2, "__init__", lambda x: None)
-    @patch("dnd_engine.ui.main_menu_v2.questionary")
-    @patch("dnd_engine.ui.main_menu_v2.print_section")
-    @patch("dnd_engine.ui.main_menu_v2.console")
+    @patch("terminal_client.ui.main_menu_v2.questionary")
+    @patch("terminal_client.ui.main_menu_v2.print_section")
+    @patch("terminal_client.ui.main_menu_v2.console")
     def test_manage_slots_shows_action_menu(
         self, mock_console, mock_print_section, mock_questionary
     ):
@@ -258,10 +258,10 @@ class TestHandleManageSlots:
 
     @patch.object(MainMenuV2, "__init__", lambda x: None)
     @patch.object(MainMenuV2, "_select_save_slot")
-    @patch("dnd_engine.ui.main_menu_v2.questionary")
-    @patch("dnd_engine.ui.main_menu_v2.print_section")
-    @patch("dnd_engine.ui.main_menu_v2.print_status_message")
-    @patch("dnd_engine.ui.main_menu_v2.console")
+    @patch("terminal_client.ui.main_menu_v2.questionary")
+    @patch("terminal_client.ui.main_menu_v2.print_section")
+    @patch("terminal_client.ui.main_menu_v2.print_status_message")
+    @patch("terminal_client.ui.main_menu_v2.console")
     def test_manage_slots_rename_uses_slot_selector(
         self, mock_console, mock_print, mock_print_section, mock_questionary, mock_select, used_slot
     ):
@@ -284,10 +284,10 @@ class TestHandleManageSlots:
 
     @patch.object(MainMenuV2, "__init__", lambda x: None)
     @patch.object(MainMenuV2, "_select_save_slot")
-    @patch("dnd_engine.ui.main_menu_v2.questionary")
-    @patch("dnd_engine.ui.main_menu_v2.print_section")
-    @patch("dnd_engine.ui.main_menu_v2.print_status_message")
-    @patch("dnd_engine.ui.main_menu_v2.console")
+    @patch("terminal_client.ui.main_menu_v2.questionary")
+    @patch("terminal_client.ui.main_menu_v2.print_section")
+    @patch("terminal_client.ui.main_menu_v2.print_status_message")
+    @patch("terminal_client.ui.main_menu_v2.console")
     def test_manage_slots_clear_with_confirmation(
         self, mock_console, mock_print, mock_print_section, mock_questionary, mock_select, used_slot
     ):

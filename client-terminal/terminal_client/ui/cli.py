@@ -17,7 +17,6 @@ from dnd_engine.core.game_state import (
     PlayerAttackResult,
 )
 from dnd_engine.llm.npc_chat import NPCChatManager
-from dnd_engine.nlp import CLIContextAdapter, CommandParser
 from dnd_engine.systems.action_economy import ActionType
 from dnd_engine.systems.ai import EnemyAI
 from dnd_engine.systems.combat_context import CombatContextBuilder
@@ -34,9 +33,11 @@ from dnd_engine.systems.targeting import (
     get_item_targeting_requirements,
     get_spell_targeting_requirements,
 )
-from dnd_engine.ui.debug_console import DebugConsole
-from dnd_engine.ui.inventory_ui import InventoryUI
-from dnd_engine.ui.rich_ui import (
+from dnd_engine.utils.events import Event, EventType
+from terminal_client.nlp import CLIContextAdapter, CommandParser
+from terminal_client.ui.debug_console import DebugConsole
+from terminal_client.ui.inventory_ui import InventoryUI
+from terminal_client.ui.rich_ui import (
     console,
     create_combat_table,
     create_inventory_table,
@@ -50,8 +51,7 @@ from dnd_engine.ui.rich_ui import (
     print_status_message,
     print_title,
 )
-from dnd_engine.ui.shop_ui import ShopUI
-from dnd_engine.utils.events import Event, EventType
+from terminal_client.ui.shop_ui import ShopUI
 
 
 class CLI:
@@ -4793,7 +4793,7 @@ class CLI:
         Prompts player to choose between short rest or long rest.
         Game logic is handled by GameState.party_rest().
         """
-        from dnd_engine.ui.rich_ui import print_message, print_section, print_status_message
+        from terminal_client.ui.rich_ui import print_message, print_section, print_status_message
 
         print_section("Rest")
         print_message("The party takes a moment to rest and recover...")
@@ -4840,7 +4840,7 @@ class CLI:
         Args:
             result: PartyRestResult from GameState.party_rest()
         """
-        from dnd_engine.ui.rich_ui import print_message, print_section, print_status_message
+        from terminal_client.ui.rich_ui import print_message, print_section, print_status_message
 
         rest_type_display = "Short" if result.rest_type == "short" else "Long"
         print_section(f"{rest_type_display} Rest Complete")
@@ -4901,7 +4901,7 @@ class CLI:
         import questionary
         from questionary import Choice
 
-        from dnd_engine.ui.rich_ui import print_message, print_section, print_status_message
+        from terminal_client.ui.rich_ui import print_message, print_section, print_status_message
 
         # Load spell data
         spells_data = self.game_state.data_loader.load_spells()
@@ -5030,7 +5030,7 @@ class CLI:
         Works for both exploration and combat modes. Shows all spellcasters
         in the party with their prepared spells organized by level.
         """
-        from dnd_engine.ui.rich_ui import print_message, print_section, print_status_message
+        from terminal_client.ui.rich_ui import print_message, print_section, print_status_message
 
         spells_data = self.game_state.data_loader.load_spells()
         found_caster = False
@@ -5149,7 +5149,7 @@ class CLI:
         """
         import questionary
 
-        from dnd_engine.ui.rich_ui import print_error, print_status_message
+        from terminal_client.ui.rich_ui import print_error, print_status_message
 
         if self.game_state.in_combat:
             print_error("You cannot change prepared spells during combat.")
@@ -5204,7 +5204,7 @@ class CLI:
         """
         import questionary
 
-        from dnd_engine.ui.rich_ui import (
+        from terminal_client.ui.rich_ui import (
             print_error,
             print_message,
             print_section,
@@ -5365,7 +5365,7 @@ class CLI:
                 choices.append(questionary.Choice(title=choice_text, value=character))
 
         if not choices:
-            from dnd_engine.ui.rich_ui import print_error
+            from terminal_client.ui.rich_ui import print_error
 
             print_error("No party members available!")
             return None

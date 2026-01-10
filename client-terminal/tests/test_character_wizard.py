@@ -61,7 +61,7 @@ class TestCharacterCreationWizard:
         }
 
         # Should not raise exception
-        with patch("dnd_engine.ui.character_wizard.print_message"):
+        with patch("terminal_client.ui.character_wizard.print_message"):
             wizard._display_abilities(abilities)
 
     def test_display_abilities_with_bonuses(self, wizard):
@@ -85,7 +85,7 @@ class TestCharacterCreationWizard:
         }
 
         # Should not raise exception
-        with patch("dnd_engine.ui.character_wizard.print_message"):
+        with patch("terminal_client.ui.character_wizard.print_message"):
             wizard._display_abilities(after, before=before)
 
     def test_generate_random_character(self, wizard):
@@ -140,8 +140,8 @@ class TestCharacterCreationWizard:
         mock_select = MagicMock()
         mock_select.ask.side_effect = ["strength", "dexterity"]
 
-        with patch("dnd_engine.ui.character_wizard.questionary.select", return_value=mock_select):
-            with patch("dnd_engine.ui.character_wizard.print_status_message"):
+        with patch("terminal_client.ui.character_wizard.questionary.select", return_value=mock_select):
+            with patch("terminal_client.ui.character_wizard.print_status_message"):
                 result = wizard._swap_abilities_interactive()
 
         # Should swap successfully
@@ -164,7 +164,7 @@ class TestCharacterCreationWizard:
         mock_select = MagicMock()
         mock_select.ask.return_value = None
 
-        with patch("dnd_engine.ui.character_wizard.questionary.select", return_value=mock_select):
+        with patch("terminal_client.ui.character_wizard.questionary.select", return_value=mock_select):
             result = wizard._swap_abilities_interactive()
 
         # Should fail (cancelled)
@@ -183,9 +183,9 @@ class TestCharacterCreationWizard:
         mock_text = MagicMock()
         mock_text.ask.return_value = "Test Character"
 
-        with patch("dnd_engine.ui.character_wizard.questionary.text", return_value=mock_text):
-            with patch("dnd_engine.ui.character_wizard.console.print"):
-                with patch("dnd_engine.ui.character_wizard.print_status_message"):
+        with patch("terminal_client.ui.character_wizard.questionary.text", return_value=mock_text):
+            with patch("terminal_client.ui.character_wizard.console.print"):
+                with patch("terminal_client.ui.character_wizard.print_status_message"):
                     # Mock finalize to return None (we just want to test state setting)
                     with patch.object(wizard, "_finalize_character", return_value=None):
                         wizard._create_from_template(template_id)
@@ -219,7 +219,7 @@ class TestCharacterCreationWizard:
         wizard.level = 1
 
         # Should not raise exception
-        with patch("dnd_engine.ui.character_wizard.console.print"):
+        with patch("terminal_client.ui.character_wizard.console.print"):
             wizard._show_character_summary()
 
     def test_create_character_from_wizard_state(self, wizard):
@@ -242,8 +242,8 @@ class TestCharacterCreationWizard:
         wizard.level = 1
 
         # Create character
-        with patch("dnd_engine.ui.character_wizard.console.status"):
-            with patch("dnd_engine.ui.character_wizard.print_status_message"):
+        with patch("terminal_client.ui.character_wizard.console.status"):
+            with patch("terminal_client.ui.character_wizard.print_status_message"):
                 character = wizard._create_character()
 
         # Verify character properties
@@ -277,8 +277,8 @@ class TestCharacterCreationWizard:
         wizard.level = 1
 
         # Create character
-        with patch("dnd_engine.ui.character_wizard.console.status"):
-            with patch("dnd_engine.ui.character_wizard.print_status_message"):
+        with patch("terminal_client.ui.character_wizard.console.status"):
+            with patch("terminal_client.ui.character_wizard.print_status_message"):
                 character = wizard._create_character()
 
         # Verify expertise
@@ -348,9 +348,9 @@ class TestCharacterCreationWizard:
         }
 
         # Should display without error
-        with patch("dnd_engine.ui.character_wizard.console.print"):
-            with patch("dnd_engine.ui.character_wizard.console.input"):
-                with patch("dnd_engine.ui.character_wizard.print_section"):
+        with patch("terminal_client.ui.character_wizard.console.print"):
+            with patch("terminal_client.ui.character_wizard.console.input"):
+                with patch("terminal_client.ui.character_wizard.print_section"):
                     wizard._show_progress_summary()
 
     def test_step_choose_path_custom(self, wizard):
@@ -358,9 +358,9 @@ class TestCharacterCreationWizard:
         mock_select = MagicMock()
         mock_select.ask.return_value = CreationPath.CUSTOM
 
-        with patch("dnd_engine.ui.character_wizard.questionary.select", return_value=mock_select):
-            with patch("dnd_engine.ui.character_wizard.print_section"):
-                with patch("dnd_engine.ui.character_wizard.console.print"):
+        with patch("terminal_client.ui.character_wizard.questionary.select", return_value=mock_select):
+            with patch("terminal_client.ui.character_wizard.print_section"):
+                with patch("terminal_client.ui.character_wizard.console.print"):
                     result = wizard._step_choose_path()
 
         assert result is True
@@ -371,9 +371,9 @@ class TestCharacterCreationWizard:
         mock_select = MagicMock()
         mock_select.ask.return_value = None
 
-        with patch("dnd_engine.ui.character_wizard.questionary.select", return_value=mock_select):
-            with patch("dnd_engine.ui.character_wizard.print_section"):
-                with patch("dnd_engine.ui.character_wizard.console.print"):
+        with patch("terminal_client.ui.character_wizard.questionary.select", return_value=mock_select):
+            with patch("terminal_client.ui.character_wizard.print_section"):
+                with patch("terminal_client.ui.character_wizard.console.print"):
                     result = wizard._step_choose_path()
 
         assert result is False
@@ -388,11 +388,11 @@ class TestCharacterCreationWizard:
         mock_nav.ask.return_value = "next"
 
         with patch(
-            "dnd_engine.ui.character_wizard.questionary.select",
+            "terminal_client.ui.character_wizard.questionary.select",
             side_effect=[mock_select, mock_nav],
         ):
-            with patch("dnd_engine.ui.character_wizard.print_status_message"):
-                with patch("dnd_engine.ui.character_wizard.console.print"):
+            with patch("terminal_client.ui.character_wizard.print_status_message"):
+                with patch("terminal_client.ui.character_wizard.console.print"):
                     result = wizard._custom_step_race()
 
         assert wizard.race == "human"
@@ -407,11 +407,11 @@ class TestCharacterCreationWizard:
         mock_nav.ask.return_value = "next"
 
         with patch(
-            "dnd_engine.ui.character_wizard.questionary.select",
+            "terminal_client.ui.character_wizard.questionary.select",
             side_effect=[mock_select, mock_nav],
         ):
-            with patch("dnd_engine.ui.character_wizard.print_status_message"):
-                with patch("dnd_engine.ui.character_wizard.console.print"):
+            with patch("terminal_client.ui.character_wizard.print_status_message"):
+                with patch("terminal_client.ui.character_wizard.console.print"):
                     result = wizard._custom_step_class()
 
         assert wizard.character_class == "fighter"
@@ -428,13 +428,13 @@ class TestCharacterCreationWizard:
         mock_nav = MagicMock()
         mock_nav.ask.return_value = "next"
 
-        with patch("dnd_engine.ui.character_wizard.questionary.text", return_value=mock_text):
+        with patch("terminal_client.ui.character_wizard.questionary.text", return_value=mock_text):
             with patch(
-                "dnd_engine.ui.character_wizard.questionary.select",
+                "terminal_client.ui.character_wizard.questionary.select",
                 return_value=mock_nav,
             ):
-                with patch("dnd_engine.ui.character_wizard.print_status_message"):
-                    with patch("dnd_engine.ui.character_wizard.console.print"):
+                with patch("terminal_client.ui.character_wizard.print_status_message"):
+                    with patch("terminal_client.ui.character_wizard.console.print"):
                         result = wizard._custom_step_name()
 
         assert wizard.name == "Test Hero"
@@ -448,10 +448,10 @@ class TestCharacterCreationWizard:
         mock_checkbox.ask.return_value = ["athletics", "intimidation"]
 
         with patch(
-            "dnd_engine.ui.character_wizard.questionary.checkbox",
+            "terminal_client.ui.character_wizard.questionary.checkbox",
             return_value=mock_checkbox,
         ):
-            with patch("dnd_engine.ui.character_wizard.print_status_message"):
+            with patch("terminal_client.ui.character_wizard.print_status_message"):
                 result = wizard._select_skills_questionary(class_data, wizard.skills_data)
 
         assert result == ["athletics", "intimidation"]
@@ -468,7 +468,7 @@ class TestCharacterCreationWizard:
         ]
 
         # Should not raise exception for any step
-        with patch("dnd_engine.ui.character_wizard.console.print"):
+        with patch("terminal_client.ui.character_wizard.console.print"):
             for i in range(len(steps)):
                 wizard._display_progress_bar(i, len(steps), steps)
 
@@ -493,11 +493,11 @@ class TestCharacterCreationWizard:
         mock_select = MagicMock()
         mock_select.ask.return_value = "confirm"
 
-        with patch("dnd_engine.ui.character_wizard.questionary.select", return_value=mock_select):
-            with patch("dnd_engine.ui.character_wizard.console.print"):
-                with patch("dnd_engine.ui.character_wizard.console.status"):
-                    with patch("dnd_engine.ui.character_wizard.print_section"):
-                        with patch("dnd_engine.ui.character_wizard.print_status_message"):
+        with patch("terminal_client.ui.character_wizard.questionary.select", return_value=mock_select):
+            with patch("terminal_client.ui.character_wizard.console.print"):
+                with patch("terminal_client.ui.character_wizard.console.status"):
+                    with patch("terminal_client.ui.character_wizard.print_section"):
+                        with patch("terminal_client.ui.character_wizard.print_status_message"):
                             character = wizard._finalize_character()
 
         assert character is not None

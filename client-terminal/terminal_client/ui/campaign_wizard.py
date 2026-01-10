@@ -12,8 +12,8 @@ from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.character_factory import CharacterFactory
 from dnd_engine.core.character_vault import CharacterState, CharacterVault
 from dnd_engine.rules.loader import DataLoader
-from dnd_engine.ui.character_wizard import CharacterCreationWizard
-from dnd_engine.ui.rich_ui import (
+from terminal_client.ui.character_wizard import CharacterCreationWizard
+from terminal_client.ui.rich_ui import (
     console,
     print_banner,
     print_choice_menu,
