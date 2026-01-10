@@ -17,18 +17,19 @@
     "#######+#################",
     "#...........#",
     "#...STAIRS..#",
-    "#.....@.....#",
+    "#.....@..<..#",
     "#...........#",
     "#############"
   ],
   "legend": {
     "#": {"type": "wall"},
     ".": {"type": "floor"},
-    " ": {"type": "void"},
+    " ": {"type": "wall"},
     "+": {"type": "door_closed"},
-    "/": {"type": "door_hidden", "examine_dc": 10},
+    "/": {"type": "door_closed"},
     "@": {"type": "floor", "spawn": "player"},
-    "R": {"type": "floor", "spawn": {"type": "monster", "id": "giant_rat", "char": "R", "name": "Giant Rat"}}
+    "R": {"type": "floor", "spawn": {"type": "monster", "id": "giant_rat", "char": "R", "name": "Giant Rat"}},
+    "<": {"type": "stairs_up"}
   },
   "regions": {
     "stairs": {
@@ -56,8 +57,8 @@
   },
   "connections": [
     {
-      "x": 6,
-      "y": 13,
+      "x": 10,
+      "y": 12,
       "target_map": "town_grid",
       "target_x": 10,
       "target_y": 10,

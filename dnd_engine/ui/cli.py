@@ -213,6 +213,9 @@ class CLI:
                 "player", self.player_position, "@", "Player", is_player=True
             )
 
+            # Spawn monsters and NPCs (not player - we handle that above)
+            loader.spawn_entities(result, spawn_players=False)
+
             # Initialize movement controller
             self.movement_controller = MovementController(
                 tile_map=self.tile_map,
@@ -391,6 +394,9 @@ class CLI:
             if self.fov:
                 self.fov.compute_and_apply(self.player_position)
             self._display_grid()
+
+            # Check if standing on stairs or special tile
+            self._check_tile_features(self.player_position)
         elif move_result.blocked_by == "door":
             print_status_message("There's a door there. Press 'o' to open it.", "info")
         elif move_result.blocked_by:
@@ -471,6 +477,30 @@ class CLI:
     def _handle_grid_cast(self) -> None:
         """Handle spell casting in grid mode."""
         print_status_message("Spell casting not yet implemented in grid mode", "info")
+
+    def _check_tile_features(self, pos: Position) -> None:
+        """Check for special features on the tile the player is standing on."""
+        if self.tile_map is None:
+            return
+
+        from dnd_engine.spatial.tile import TileType
+
+        tile = self.tile_map.get_tile(pos)
+        if not tile:
+            return
+
+        if tile.tile_type == TileType.STAIRS_UP:
+            print_status_message(
+                "You see stairs leading up. Type ':' then 'go up' to climb.", "info"
+            )
+        elif tile.tile_type == TileType.STAIRS_DOWN:
+            print_status_message(
+                "You see stairs leading down. Type ':' then 'go down' to descend.", "info"
+            )
+        elif tile.tile_type == TileType.CHEST:
+            print_status_message(
+                "There's a chest here. Press 'g' to open it.", "info"
+            )
 
     def _handle_grid_for_dungeon(self, dungeon_id: str | None) -> None:
         """
