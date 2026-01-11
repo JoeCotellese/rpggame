@@ -7,6 +7,7 @@ This module provides the entry point for the 2D client, which can be
 launched via `dnd-game --mode 2d`.
 """
 
+from datetime import datetime
 from pathlib import Path
 
 import arcade
@@ -44,6 +45,10 @@ ENEMY_TURN_DELAY = 1.5  # Seconds before enemy acts
 
 # Assets directory
 ASSETS_DIR = Path(__file__).parent.parent.parent / "assets"
+
+# Screenshots directory
+SCREENSHOTS_DIR = Path.home() / ".dnd_game" / "screenshots"
+SCREENSHOT_FEEDBACK_DURATION = 2.0  # Seconds to show "Screenshot saved!"
 
 # Lighting tint colors (RGB multipliers as 0-255)
 LIGHTING_TINTS = {
@@ -106,6 +111,10 @@ class GameWindow(arcade.Window):
         self.processing_enemy_turn = False
         self.combat_log: list[str] = []
 
+        # Screenshot feedback state
+        self.screenshot_message: str = ""
+        self.screenshot_message_timer: float = 0.0
+
         # Initialize the game
         self._initialize_game()
 
@@ -153,6 +162,37 @@ class GameWindow(arcade.Window):
         # Keep only last 10 messages
         if len(self.combat_log) > 10:
             self.combat_log = self.combat_log[-10:]
+
+    def save_screenshot(self) -> Path | None:
+        """Save a screenshot of the current game window.
+
+        Returns:
+            Path to the saved screenshot, or None if save failed.
+        """
+        # Ensure screenshots directory exists
+        SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+
+        # Generate timestamped filename
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        filename = f"screenshot_{timestamp}.png"
+        filepath = SCREENSHOTS_DIR / filename
+
+        try:
+            # Capture the framebuffer
+            image = arcade.get_image(0, 0, *self.get_size())
+            image.save(str(filepath))
+
+            # Show feedback
+            self.screenshot_message = f"Screenshot saved: {filename}"
+            self.screenshot_message_timer = SCREENSHOT_FEEDBACK_DURATION
+
+            print(f"Screenshot saved: {filepath}")
+            return filepath
+        except Exception as e:
+            print(f"Failed to save screenshot: {e}")
+            self.screenshot_message = "Screenshot failed!"
+            self.screenshot_message_timer = SCREENSHOT_FEEDBACK_DURATION
+            return None
 
     def _load_textures(self) -> None:
         """Load tile textures from Stone Soup assets."""
@@ -495,6 +535,10 @@ class GameWindow(arcade.Window):
         self._draw_game_viewport(0, narrative_h, viewport_w, main_h)
         self._draw_context_panel(viewport_w, narrative_h, context_w, main_h)
         self._draw_narrative_panel(0, 0, self.width, narrative_h)
+
+        # Draw screenshot feedback overlay
+        if self.screenshot_message:
+            self._draw_screenshot_feedback()
 
     def _draw_game_viewport(self, x: float, y: float, w: float, h: float) -> None:
         """Draw the main game viewport with dungeon tiles."""
@@ -931,10 +975,40 @@ class GameWindow(arcade.Window):
                 FONT_SIZE_BODY,
             )
 
+    def _draw_screenshot_feedback(self) -> None:
+        """Draw screenshot saved feedback overlay."""
+        # Semi-transparent background box at top center
+        msg_width = len(self.screenshot_message) * 10 + 40
+        msg_height = 40
+        msg_x = (self.width - msg_width) // 2
+        msg_y = self.height - msg_height - 10
+
+        # Draw background
+        bg_rect = arcade.LBWH(msg_x, msg_y, msg_width, msg_height)
+        arcade.draw_rect_filled(bg_rect, (0, 0, 0, 200))
+        arcade.draw_rect_outline(bg_rect, UIColors.TEXT_HIGHLIGHT, 2)
+
+        # Draw text
+        arcade.draw_text(
+            self.screenshot_message,
+            self.width // 2,
+            msg_y + msg_height // 2 - 8,
+            UIColors.TEXT_HIGHLIGHT,
+            FONT_SIZE_BODY,
+            anchor_x="center",
+            bold=True,
+        )
+
     # ========== Update Loop ==========
 
     def on_update(self, delta_time: float) -> None:
         """Update game state."""
+        # Update screenshot feedback timer
+        if self.screenshot_message_timer > 0:
+            self.screenshot_message_timer -= delta_time
+            if self.screenshot_message_timer <= 0:
+                self.screenshot_message = ""
+
         if not self.engine.in_combat:
             return
 
@@ -992,6 +1066,11 @@ class GameWindow(arcade.Window):
         # ESC to quit
         if key == arcade.key.ESCAPE:
             self.close()
+            return
+
+        # Ctrl-P to take screenshot
+        if key == arcade.key.P and (modifiers & arcade.key.MOD_CTRL):
+            self.save_screenshot()
             return
 
         if self.engine.in_combat and not self.processing_enemy_turn:
