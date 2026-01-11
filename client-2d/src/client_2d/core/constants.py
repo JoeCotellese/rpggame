@@ -161,7 +161,7 @@ class UIColors:
     SELECTION = (80, 70, 55)         # #504637 - Selected item bg
 
     # HP bar colors
-    HP_FULL = (85, 170, 119)         # #5aa77 - Forest green
+    HP_FULL = (85, 170, 119)         # #55aa77 - Forest green
     HP_MEDIUM = (170, 170, 85)       # #aaaa55 - Caution yellow-green
     HP_LOW = (187, 136, 85)          # #bb8855 - Autumn orange
     HP_CRITICAL = (153, 51, 51)      # #993333 - Dark crimson
