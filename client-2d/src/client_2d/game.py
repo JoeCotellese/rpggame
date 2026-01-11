@@ -343,7 +343,7 @@ class GameWindow(arcade.Window):
             for entity_id, info in state_dict["visible_entities"].items():
                 lines.append(
                     f"  {info['symbol']} {info['type']}:{entity_id} "
-                    f"at {info['position']} ({info['distance']} tiles {info['direction']})"
+                    f"at {info['position']} ({info['distance']} squares {info['direction']})"
                 )
 
         # Add party status
@@ -421,13 +421,21 @@ class GameWindow(arcade.Window):
         # Check entity collision (can't move through monsters)
         entity_at_dest = self.entity_manager.get_at_position(new_x, new_y)
         if entity_at_dest is not None and entity_at_dest in self.entity_manager.get_monsters():
-            return f"Path blocked! {entity_at_dest.display_name} is in the way."
+            # Get display name from creature reference or format sub_type
+            if entity_at_dest._creature_ref:
+                name = entity_at_dest._creature_ref.name
+            else:
+                name = entity_at_dest.sub_type.replace("_", " ").title()
+            return f"Path blocked! {name} is in the way."
 
         # Execute movement
         self.player_x = new_x
         self.player_y = new_y
         turn_state.consume_movement(5)
         self._update_lighting()
+
+        # Sync visual position of current turn character
+        self.entity_manager.update_current_turn_position(self.engine, new_x, new_y)
 
         # Return state with movement info
         remaining = turn_state.movement_remaining
