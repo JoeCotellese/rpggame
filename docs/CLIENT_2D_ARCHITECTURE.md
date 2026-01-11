@@ -826,6 +826,116 @@ client-2d/
 - Torch illuminates surrounding tiles
 - Exiting room loads adjacent room
 
+### Phase 1.5: UI Design & Layout
+
+**Goal**: Define UI layout and specifications before deep implementation.
+
+#### Screen Layout
+
+```
+┌─────────────────────────────────┬──────────────────┐
+│                                 │                  │
+│                                 │  Context Panel   │
+│       Game World Viewport       │  (~30% width)    │
+│       (~70% width)              │                  │
+│                                 │  - Party status  │
+│                                 │  - Combat state  │
+│                                 │                  │
+├─────────────────────────────────┴──────────────────┤
+│                                                    │
+│              Narrative Exposition                  │
+│              (LLM-enhanced text)                   │
+│                                                    │
+└────────────────────────────────────────────────────┘
+```
+
+#### Layout Zones
+
+| Zone | Position | Purpose |
+|------|----------|---------|
+| **Game Viewport** | Top-left (~70%) | Dungeon tiles, sprites, fog of war |
+| **Context Panel** | Top-right (~30%) | Contextual info based on game mode |
+| **Narrative Area** | Bottom (full width) | Room descriptions, combat narration, dialogue |
+
+#### Context Panel States
+
+The right sidebar changes content based on current game mode:
+
+| Mode | Trigger | Panel Shows |
+|------|---------|-------------|
+| **Exploration** | Default | Party list (names, HP bars, conditions, light source) |
+| **Combat** | Combat starts | Initiative order, enemy HP, current turn indicator |
+| **Dialogue** | Talk to NPC | NPC info, dialogue choices |
+| **Character** | Press `C` | Selected character stats, skills, abilities |
+
+#### Full Modal Overlays
+
+Some UI elements take over the full screen as modal dialogs:
+
+**Inventory Modal** (Press `I`):
+```
+┌────────────────────────────────────────────────────┐
+│                    INVENTORY                       │
+├──────────────────────┬─────────────────────────────┤
+│   EQUIPMENT          │   BACKPACK                  │
+│  ┌─────┐ ┌─────┐     │  ┌───┬───┬───┬───┬───┐     │
+│  │Head │ │Neck │     │  │   │   │   │   │   │     │
+│  ├─────┼─────┤       │  ├───┼───┼───┼───┼───┤     │
+│  │Chest│ │Hands│     │  │   │   │   │   │   │     │
+│  ├─────┼─────┤       │  └───┴───┴───┴───┴───┘     │
+│  │Legs │ │Feet │     │                             │
+│  └─────┘ └─────┘     │  Gold: --      Weight: --   │
+│                      │                             │
+│  Main Hand: ----     ├─────────────────────────────┤
+│  Off Hand:  ----     │  [Item Description]         │
+│                      │                             │
+└──────────────────────┴─────────────────────────────┘
+                    [ESC to close]
+```
+
+**Other Modals** (future):
+- Save/Load menu
+- Settings/Options
+- Character creation/level up
+
+#### Key Bindings
+
+| Key | Action |
+|-----|--------|
+| `WASD` / Arrows | Movement |
+| `I` | Toggle inventory modal |
+| `C` | Toggle character panel |
+| `ESC` | Close modal / Back to exploration |
+| `TAB` | Cycle targets (combat) |
+| `SPACE` | Interact / Confirm |
+| `1-9` | Quick action slots (combat) |
+
+#### Narrative Area Content
+
+The bottom narrative panel displays:
+- Room descriptions on entering new areas
+- Combat narration (LLM-enhanced attack descriptions)
+- NPC dialogue during conversations
+- Item/lore discovery text
+- System messages (save confirmations, etc.)
+
+This area is **read-only** - player input is via keyboard controls, not text commands.
+
+**Deliverables**:
+- [x] Layout zones defined (ASCII wireframe above)
+- [x] Context panel states documented
+- [x] Modal overlay design documented
+- [x] Key bindings specified
+- [ ] Pixel dimensions for 1280x720 base resolution
+- [ ] Font sizes and UI element spacing
+- [ ] Color palette for UI elements
+
+**Success Criteria**:
+- UI layout documented with clear zones
+- All game modes have defined panel states
+- Key bindings specified
+- Ready for implementation in later phases
+
 ### Phase 2: Entity Integration
 
 **Goal**: GameState integration, entity rendering, movement animations.
