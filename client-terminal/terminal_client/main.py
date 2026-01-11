@@ -31,13 +31,35 @@ def parse_arguments() -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  dnd-game                          # Start with new menu system
+  dnd-game                          # Start terminal client (default)
+  dnd-game --mode 2d                # Start 2D graphical client
   dnd-game --no-llm                 # Disable LLM enhancement
   dnd-game --llm-provider openai    # Use OpenAI (default)
   dnd-game --llm-provider anthropic # Use Anthropic Claude
   dnd-game --llm-provider debug     # Debug mode
   dnd-game --debug                  # Enable debug logging
         """,
+    )
+
+    parser.add_argument(
+        "--mode",
+        choices=["terminal", "2d"],
+        default="terminal",
+        help="Client mode: terminal (text UI) or 2d (graphical)",
+    )
+
+    # 2D client options
+    parser.add_argument(
+        "--size",
+        choices=["small", "medium", "large"],
+        default="medium",
+        help="Window size for 2D client: small (800x600), medium (1280x900), large (1600x1000)",
+    )
+
+    parser.add_argument(
+        "--fullscreen",
+        action="store_true",
+        help="Run 2D client in fullscreen mode",
     )
 
     parser.add_argument("--no-llm", action="store_true", help="Disable LLM narrative enhancement")
@@ -161,6 +183,18 @@ def main() -> None:
 
     # Parse arguments
     args = parse_arguments()
+
+    # Dispatch to 2D client if requested
+    if args.mode == "2d":
+        try:
+            from client_2d.game import run_2d_client
+            run_2d_client(size=args.size, fullscreen=args.fullscreen)
+            return
+        except ImportError as e:
+            print("Error: 2D client not installed. Install client-2d package first.")
+            print("  cd client-2d && uv pip install -e .")
+            print(f"Details: {e}")
+            sys.exit(1)
 
     # Initialize console with debug logging
     init_console(debug_mode=args.debug)
