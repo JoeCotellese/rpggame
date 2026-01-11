@@ -16,6 +16,7 @@ Usage:
 Controls:
     WASD / Arrow keys: Move player
     L: Cycle light mode (torch -> lantern -> light spell -> darkvision -> full bright)
+    Tab: Cycle UI mode (exploration -> combat -> character)
     ESC: Quit
 """
 
@@ -63,6 +64,46 @@ MOCK_NARRATIVE = (
     "Faded symbols on the walls hint at experiments long abandoned. "
     "Somewhere deeper within, you hear the scrape of bone against stone..."
 )
+
+# Mock combat data (initiative order with combatants)
+MOCK_COMBAT = {
+    "round": 2,
+    "current_turn": 1,  # Index into initiative order
+    "initiative": [
+        {"name": "Thorne", "init": 18, "is_player": True, "hp": 22, "max_hp": 24},
+        {"name": "Skeleton", "init": 15, "is_player": False, "hp": 8, "max_hp": 13},
+        {"name": "Aldric", "init": 12, "is_player": True, "hp": 28, "max_hp": 32},
+        {"name": "Skeleton", "init": 10, "is_player": False, "hp": 13, "max_hp": 13},
+        {"name": "Mira", "init": 8, "is_player": True, "hp": 14, "max_hp": 18},
+        {"name": "Elena", "init": 5, "is_player": True, "hp": 8, "max_hp": 20},
+    ],
+}
+
+# Mock character data (selected character details)
+MOCK_CHARACTER = {
+    "name": "Aldric",
+    "class": "Fighter",
+    "level": 3,
+    "hp": 28,
+    "max_hp": 32,
+    "ac": 18,
+    "stats": {
+        "STR": 16,
+        "DEX": 12,
+        "CON": 14,
+        "INT": 10,
+        "WIS": 11,
+        "CHA": 13,
+    },
+    "equipment": {
+        "weapon": "Longsword",
+        "armor": "Chain Mail",
+        "shield": "Shield",
+    },
+}
+
+# UI modes for cycling (for testing purposes)
+UI_MODES = [GameMode.EXPLORATION, GameMode.COMBAT, GameMode.CHARACTER]
 
 # Window settings
 WINDOW_TITLE = "D&D 2D Client - Stone Soup Tiles Demo"
@@ -119,6 +160,10 @@ class DemoGame(arcade.Window):
 
         # Light mode cycling
         self.light_mode_index = 0
+
+        # UI mode for context panel (Tab to cycle for testing)
+        self.ui_mode_index = 0
+        self.current_ui_mode = UI_MODES[0]
 
         # Initialize asset manager
         self.assets = AssetManager(assets_path=ASSETS_DIR)
@@ -518,7 +563,16 @@ class DemoGame(arcade.Window):
         arcade.draw_rect_outline(bar_rect, UIColors.BORDER, 1)
 
     def _draw_context_panel(self, layout: dict) -> None:
-        """Draw the context panel with party status."""
+        """Draw the appropriate context panel based on current UI mode."""
+        if self.current_ui_mode == GameMode.COMBAT:
+            self._draw_combat_panel(layout)
+        elif self.current_ui_mode == GameMode.CHARACTER:
+            self._draw_character_panel(layout)
+        else:
+            self._draw_party_panel(layout)
+
+    def _draw_party_panel(self, layout: dict) -> None:
+        """Draw the context panel with party status (exploration mode)."""
         ctx = layout["context"]
         self._draw_panel(ctx["x"], ctx["y"], ctx["w"], ctx["h"], "Party")
 
@@ -567,6 +621,171 @@ class DemoGame(arcade.Window):
                     UIColors.BUFF,
                     FONT_SIZE_SMALL,
                 )
+
+    def _draw_combat_panel(self, layout: dict) -> None:
+        """Draw the combat panel with initiative order."""
+        ctx = layout["context"]
+        self._draw_panel(
+            ctx["x"], ctx["y"], ctx["w"], ctx["h"],
+            f"Combat - Round {MOCK_COMBAT['round']}"
+        )
+
+        # Draw initiative order
+        start_y = ctx["y"] + ctx["h"] - UI_PADDING - FONT_SIZE_TITLE - 30
+        hp_text_width = 50
+        bar_width = ctx["w"] - (UI_PADDING * 3) - hp_text_width
+        current_turn = MOCK_COMBAT["current_turn"]
+
+        for i, combatant in enumerate(MOCK_COMBAT["initiative"]):
+            entry_y = start_y - (i * 40)
+            is_current = i == current_turn
+
+            # Highlight current turn
+            if is_current:
+                highlight_rect = arcade.LBWH(
+                    ctx["x"] + 2,
+                    entry_y - 25,
+                    ctx["w"] - 4,
+                    38
+                )
+                arcade.draw_rect_filled(highlight_rect, UIColors.SELECTION)
+
+            # Initiative number
+            init_color = UIColors.HIGHLIGHT if is_current else UIColors.TEXT_DIM
+            arcade.draw_text(
+                f"{combatant['init']:2d}",
+                ctx["x"] + UI_PADDING,
+                entry_y,
+                init_color,
+                FONT_SIZE_BODY,
+                bold=is_current,
+            )
+
+            # Name with player/enemy indicator
+            name_color = UIColors.TEXT if combatant["is_player"] else UIColors.DAMAGE
+            arcade.draw_text(
+                combatant["name"],
+                ctx["x"] + UI_PADDING + 30,
+                entry_y,
+                name_color,
+                FONT_SIZE_BODY,
+                bold=is_current,
+            )
+
+            # HP bar
+            self._draw_hp_bar(
+                ctx["x"] + UI_PADDING,
+                entry_y - 18,
+                bar_width,
+                combatant["hp"],
+                combatant["max_hp"],
+            )
+
+            # HP text
+            arcade.draw_text(
+                f"{combatant['hp']}/{combatant['max_hp']}",
+                ctx["x"] + UI_PADDING + bar_width + 8,
+                entry_y - 16,
+                UIColors.TEXT_DIM,
+                FONT_SIZE_SMALL,
+            )
+
+    def _draw_character_panel(self, layout: dict) -> None:
+        """Draw the character details panel."""
+        ctx = layout["context"]
+        char = MOCK_CHARACTER
+        self._draw_panel(ctx["x"], ctx["y"], ctx["w"], ctx["h"], char["name"])
+
+        start_y = ctx["y"] + ctx["h"] - UI_PADDING - FONT_SIZE_TITLE - 30
+        hp_text_width = 60
+        bar_width = ctx["w"] - (UI_PADDING * 3) - hp_text_width
+
+        # Class and level
+        arcade.draw_text(
+            f"Level {char['level']} {char['class']}",
+            ctx["x"] + UI_PADDING,
+            start_y,
+            UIColors.TEXT,
+            FONT_SIZE_BODY,
+        )
+
+        # HP bar
+        self._draw_hp_bar(
+            ctx["x"] + UI_PADDING,
+            start_y - 25,
+            bar_width,
+            char["hp"],
+            char["max_hp"],
+        )
+        arcade.draw_text(
+            f"{char['hp']}/{char['max_hp']}",
+            ctx["x"] + UI_PADDING + bar_width + 8,
+            start_y - 23,
+            UIColors.TEXT_DIM,
+            FONT_SIZE_SMALL,
+        )
+
+        # AC
+        arcade.draw_text(
+            f"AC: {char['ac']}",
+            ctx["x"] + UI_PADDING,
+            start_y - 50,
+            UIColors.TEXT_HIGHLIGHT,
+            FONT_SIZE_BODY,
+        )
+
+        # Stats section
+        stats_y = start_y - 85
+        arcade.draw_text(
+            "Abilities",
+            ctx["x"] + UI_PADDING,
+            stats_y,
+            UIColors.TEXT_HIGHLIGHT,
+            FONT_SIZE_BODY,
+            bold=True,
+        )
+
+        # Draw stats in two columns
+        stats_start_y = stats_y - 25
+        stat_names = list(char["stats"].keys())
+        for i, stat_name in enumerate(stat_names):
+            stat_val = char["stats"][stat_name]
+            modifier = (stat_val - 10) // 2
+            mod_str = f"+{modifier}" if modifier >= 0 else str(modifier)
+
+            col = i % 2
+            row = i // 2
+            stat_x = ctx["x"] + UI_PADDING + (col * 90)
+            stat_y = stats_start_y - (row * 22)
+
+            arcade.draw_text(
+                f"{stat_name}: {stat_val} ({mod_str})",
+                stat_x,
+                stat_y,
+                UIColors.TEXT,
+                FONT_SIZE_SMALL,
+            )
+
+        # Equipment section
+        equip_y = stats_start_y - 85
+        arcade.draw_text(
+            "Equipment",
+            ctx["x"] + UI_PADDING,
+            equip_y,
+            UIColors.TEXT_HIGHLIGHT,
+            FONT_SIZE_BODY,
+            bold=True,
+        )
+
+        equip_start_y = equip_y - 25
+        for i, (slot, item) in enumerate(char["equipment"].items()):
+            arcade.draw_text(
+                f"{slot.title()}: {item}",
+                ctx["x"] + UI_PADDING,
+                equip_start_y - (i * 20),
+                UIColors.TEXT,
+                FONT_SIZE_SMALL,
+            )
 
     def _draw_narrative_panel(self, layout: dict) -> None:
         """Draw the narrative exposition panel."""
@@ -692,13 +911,19 @@ class DemoGame(arcade.Window):
         self._draw_context_panel(layout)
         self._draw_narrative_panel(layout)
 
-        # Draw status bar in viewport (light mode, controls)
+        # Draw status bar in viewport (light mode, UI mode, controls)
         _, _, light_desc = LIGHT_MODES[self.light_mode_index]
         explored_pct = (self.fog.explored_count / self.fog.total_tiles) * 100
+        mode_short = {
+            GameMode.EXPLORATION: "Party",
+            GameMode.COMBAT: "Combat",
+            GameMode.CHARACTER: "Character",
+        }
         status_text = (
+            f"[{mode_short.get(self.current_ui_mode, '?')}]  |  "
             f"Light: {light_desc}  |  "
             f"Explored: {explored_pct:.0f}%  |  "
-            f"L: light  |  WASD: move  |  ESC: quit"
+            f"Tab: mode  |  L: light  |  ESC: quit"
         )
         arcade.draw_text(
             status_text,
@@ -721,6 +946,18 @@ class DemoGame(arcade.Window):
             mode_name, _, desc = LIGHT_MODES[self.light_mode_index]
             print(f"Light mode: {desc}")
             self._update_lighting()
+            return
+
+        # Check for UI mode cycling (Tab for testing)
+        if key == arcade.key.TAB:
+            self.ui_mode_index = (self.ui_mode_index + 1) % len(UI_MODES)
+            self.current_ui_mode = UI_MODES[self.ui_mode_index]
+            mode_names = {
+                GameMode.EXPLORATION: "Exploration (Party)",
+                GameMode.COMBAT: "Combat (Initiative)",
+                GameMode.CHARACTER: "Character (Details)",
+            }
+            print(f"UI mode: {mode_names.get(self.current_ui_mode, 'Unknown')}")
             return
 
         # Handle movement
@@ -789,6 +1026,7 @@ def main():
     print("Controls:")
     print("  WASD / Arrow keys: Move player")
     print("  L: Cycle light mode (torch -> lantern -> light spell -> darkvision -> full bright)")
+    print("  Tab: Cycle UI mode (exploration -> combat -> character)")
     print("  ESC: Quit")
     print()
 

@@ -106,6 +106,7 @@ class GameMode(Enum):
     COMBAT = auto()
     DIALOGUE = auto()
     INVENTORY = auto()
+    CHARACTER = auto()
     MENU = auto()
 
 
