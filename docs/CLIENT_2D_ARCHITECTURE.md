@@ -926,9 +926,24 @@ This area is **read-only** - player input is via keyboard controls, not text com
 - [x] Context panel states documented
 - [x] Modal overlay design documented
 - [x] Key bindings specified
+- [x] Color palette defined (see `UIColors` in `client_2d/core/constants.py`)
 - [ ] Pixel dimensions for 1280x720 base resolution
 - [ ] Font sizes and UI element spacing
-- [ ] Color palette for UI elements
+
+#### Color Palette (Earthy Theme)
+
+Defined in `client_2d/core/constants.py` as `UIColors` class:
+
+| Purpose | Color | Hex |
+|---------|-------|-----|
+| Background | Deep earth | `#1c1a17` |
+| Panel BG | Worn leather | `#2e2a24` |
+| Border | Wood grain | `#5c4d3c` |
+| Text | Parchment | `#d4c8b0` |
+| Highlight | Torchlight gold | `#c9a227` |
+| HP Full | Forest green | `#5aa777` |
+| HP Low | Autumn orange | `#bb8855` |
+| HP Critical | Dark crimson | `#993333` |
 
 **Success Criteria**:
 - UI layout documented with clear zones

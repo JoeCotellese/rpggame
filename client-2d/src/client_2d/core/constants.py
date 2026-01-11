@@ -110,3 +110,53 @@ class Action(Enum):
     SPELL = auto()
     ITEM = auto()
     WAIT = auto()
+
+
+# =============================================================================
+# UI Color Palette (Earthy Theme)
+# =============================================================================
+# All colors defined as (R, G, B) tuples for use with Arcade.
+# Single source of truth - change colors here to update entire UI.
+
+class UIColors:
+    """Centralized color palette for the 2D client UI.
+
+    Earthy theme inspired by worn leather, parchment, and dungeon stone.
+    """
+
+    # Background colors
+    BACKGROUND = (28, 26, 23)        # #1c1a17 - Deep earth
+    PANEL_BG = (46, 42, 36)          # #2e2a24 - Worn leather
+    PANEL_BG_DARK = (35, 32, 28)     # #23201c - Darker panel variant
+
+    # Border and frame colors
+    BORDER = (92, 77, 60)            # #5c4d3c - Wood grain
+    BORDER_HIGHLIGHT = (120, 100, 78)  # #78644e - Lighter wood
+
+    # Text colors
+    TEXT = (212, 200, 176)           # #d4c8b0 - Parchment
+    TEXT_DIM = (150, 142, 125)       # #968e7d - Faded parchment
+    TEXT_HIGHLIGHT = (255, 240, 200)  # #fff0c8 - Bright parchment
+    TEXT_DISABLED = (100, 95, 85)    # #645f55 - Aged/disabled
+
+    # Accent colors
+    HIGHLIGHT = (201, 162, 39)       # #c9a227 - Torchlight gold
+    SELECTION = (80, 70, 55)         # #504637 - Selected item bg
+
+    # HP bar colors
+    HP_FULL = (85, 170, 119)         # #5aa77 - Forest green
+    HP_MEDIUM = (170, 170, 85)       # #aaaa55 - Caution yellow-green
+    HP_LOW = (187, 136, 85)          # #bb8855 - Autumn orange
+    HP_CRITICAL = (153, 51, 51)      # #993333 - Dark crimson
+    HP_BG = (40, 35, 30)             # #28231e - HP bar background
+
+    # Combat/status colors
+    DAMAGE = (200, 80, 80)           # #c85050 - Damage numbers
+    HEALING = (80, 200, 120)         # #50c878 - Healing numbers
+    BUFF = (100, 150, 220)           # #6496dc - Buff effects
+    DEBUFF = (180, 100, 180)         # #b464b4 - Debuff effects
+
+    # Lighting overlay tints (for fog of war)
+    FOG_UNEXPLORED = (0, 0, 0)       # Pure black
+    FOG_DARK = (60, 55, 50)          # Dark memory tint
+    FOG_DIM = (140, 135, 125)        # Dim light tint
