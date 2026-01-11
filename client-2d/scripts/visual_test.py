@@ -30,11 +30,39 @@ from arcade.types import Color
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from client_2d.assets.asset_manager import AssetManager
-from client_2d.core.constants import TILE_SIZE, GameMode, LightingState
+from client_2d.core.constants import (
+    FONT_SIZE_BODY,
+    FONT_SIZE_SMALL,
+    FONT_SIZE_TITLE,
+    NARRATIVE_HEIGHT_PCT,
+    TILE_SIZE,
+    UI_BORDER_WIDTH,
+    UI_PADDING,
+    VIEWPORT_WIDTH_PCT,
+    GameMode,
+    LightingState,
+    UIColors,
+)
 from client_2d.input.input_handler import InputHandler
 from client_2d.integration.layout_loader import LayoutLoader
 from client_2d.systems.fog_of_war import FogOfWarSystem
 from client_2d.systems.lighting import LightingSystem
+
+# Mock party data for UI demo
+MOCK_PARTY = [
+    {"name": "Aldric", "class": "Fighter", "hp": 28, "max_hp": 32, "conditions": []},
+    {"name": "Mira", "class": "Wizard", "hp": 14, "max_hp": 18, "conditions": ["Concentrating"]},
+    {"name": "Thorne", "class": "Rogue", "hp": 22, "max_hp": 24, "conditions": []},
+    {"name": "Elena", "class": "Cleric", "hp": 8, "max_hp": 20, "conditions": ["Blessed"]},
+]
+
+# Mock narrative text
+MOCK_NARRATIVE = (
+    "You descend into the crumbling entrance hall of the poisoned laboratory. "
+    "The air is thick with dust and the faint scent of old alchemical reagents. "
+    "Faded symbols on the walls hint at experiments long abandoned. "
+    "Somewhere deeper within, you hear the scrape of bone against stone..."
+)
 
 # Window settings
 WINDOW_TITLE = "D&D 2D Client - Stone Soup Tiles Demo"
@@ -427,13 +455,149 @@ class DemoGame(arcade.Window):
         rect = arcade.LBWH(x, y, width, height)
         arcade.draw_rect_filled(rect, color)
 
+    def _calculate_layout(self) -> dict:
+        """Calculate pixel positions for UI zones based on window size."""
+        narrative_h = int(self.height * NARRATIVE_HEIGHT_PCT)
+        game_area_h = self.height - narrative_h
+        viewport_w = int(self.width * VIEWPORT_WIDTH_PCT)
+        context_w = self.width - viewport_w
+
+        return {
+            "viewport": {"x": 0, "y": narrative_h, "w": viewport_w, "h": game_area_h},
+            "context": {"x": viewport_w, "y": narrative_h, "w": context_w, "h": game_area_h},
+            "narrative": {"x": 0, "y": 0, "w": self.width, "h": narrative_h},
+        }
+
+    def _draw_panel(
+        self, x: float, y: float, w: float, h: float, title: str = ""
+    ) -> None:
+        """Draw a UI panel with background and border."""
+        # Background
+        self._draw_rect(x, y, w, h, UIColors.PANEL_BG)
+
+        # Border
+        border_rect = arcade.LBWH(x, y, w, h)
+        arcade.draw_rect_outline(border_rect, UIColors.BORDER, UI_BORDER_WIDTH)
+
+        # Title if provided
+        if title:
+            arcade.draw_text(
+                title,
+                x + UI_PADDING,
+                y + h - UI_PADDING - FONT_SIZE_TITLE,
+                UIColors.TEXT_HIGHLIGHT,
+                FONT_SIZE_TITLE,
+                bold=True,
+            )
+
+    def _draw_hp_bar(
+        self, x: float, y: float, width: float, hp: int, max_hp: int
+    ) -> None:
+        """Draw an HP bar with color based on health percentage."""
+        bar_height = 8
+        hp_pct = hp / max_hp if max_hp > 0 else 0
+
+        # Background
+        self._draw_rect(x, y, width, bar_height, UIColors.HP_BG)
+
+        # Determine color based on HP percentage
+        if hp_pct > 0.6:
+            color = UIColors.HP_FULL
+        elif hp_pct > 0.3:
+            color = UIColors.HP_LOW
+        else:
+            color = UIColors.HP_CRITICAL
+
+        # HP fill
+        fill_width = int(width * hp_pct)
+        if fill_width > 0:
+            self._draw_rect(x, y, fill_width, bar_height, color)
+
+        # Border
+        bar_rect = arcade.LBWH(x, y, width, bar_height)
+        arcade.draw_rect_outline(bar_rect, UIColors.BORDER, 1)
+
+    def _draw_context_panel(self, layout: dict) -> None:
+        """Draw the context panel with party status."""
+        ctx = layout["context"]
+        self._draw_panel(ctx["x"], ctx["y"], ctx["w"], ctx["h"], "Party")
+
+        # Draw each party member
+        start_y = ctx["y"] + ctx["h"] - UI_PADDING - FONT_SIZE_TITLE - 30
+        hp_text_width = 60  # Reserve space for "30/30" style text
+        bar_width = ctx["w"] - (UI_PADDING * 3) - hp_text_width
+
+        for i, member in enumerate(MOCK_PARTY):
+            member_y = start_y - (i * 50)
+
+            # Name and class
+            arcade.draw_text(
+                f"{member['name']} ({member['class']})",
+                ctx["x"] + UI_PADDING,
+                member_y,
+                UIColors.TEXT,
+                FONT_SIZE_BODY,
+            )
+
+            # HP bar
+            self._draw_hp_bar(
+                ctx["x"] + UI_PADDING,
+                member_y - 18,
+                bar_width,
+                member["hp"],
+                member["max_hp"],
+            )
+
+            # HP text (to the right of the bar with padding)
+            arcade.draw_text(
+                f"{member['hp']}/{member['max_hp']}",
+                ctx["x"] + UI_PADDING + bar_width + 8,
+                member_y - 16,
+                UIColors.TEXT_DIM,
+                FONT_SIZE_SMALL,
+            )
+
+            # Conditions
+            if member["conditions"]:
+                cond_text = ", ".join(member["conditions"])
+                arcade.draw_text(
+                    cond_text,
+                    ctx["x"] + UI_PADDING,
+                    member_y - 32,
+                    UIColors.BUFF,
+                    FONT_SIZE_SMALL,
+                )
+
+    def _draw_narrative_panel(self, layout: dict) -> None:
+        """Draw the narrative exposition panel."""
+        narr = layout["narrative"]
+        self._draw_panel(narr["x"], narr["y"], narr["w"], narr["h"])
+
+        # Draw narrative text with word wrap
+        arcade.draw_text(
+            MOCK_NARRATIVE,
+            narr["x"] + UI_PADDING,
+            narr["y"] + narr["h"] - UI_PADDING - FONT_SIZE_BODY,
+            UIColors.TEXT,
+            FONT_SIZE_BODY,
+            width=int(narr["w"] - UI_PADDING * 2),
+            multiline=True,
+        )
+
     def on_draw(self):
         """Render the game."""
         self.clear()
 
-        # Calculate offset to center the map
-        offset_x = (self.width - self.map_width * TILE_SIZE) // 2
-        offset_y = (self.height - self.map_height * TILE_SIZE) // 2
+        # Set background color
+        arcade.set_background_color(UIColors.BACKGROUND)
+
+        # Calculate layout zones
+        layout = self._calculate_layout()
+        vp = layout["viewport"]
+
+        # Calculate offset to center the map within the viewport
+        offset_x = vp["x"] + (vp["w"] - self.map_width * TILE_SIZE) // 2
+        offset_y = vp["y"] + (vp["h"] - self.map_height * TILE_SIZE) // 2
 
         # Draw floor and walls with lighting
         for y in range(self.map_height):
@@ -524,25 +688,24 @@ class DemoGame(arcade.Window):
             light_color,
         )
 
-        # Draw UI text
-        _, _, light_desc = LIGHT_MODES[self.light_mode_index]
-        tiles_info = "Stone Soup" if self.assets.has_stonesoup_tiles else "Placeholders"
-        arcade.draw_text(
-            f"Light: {light_desc}  |  Tiles: {tiles_info}",
-            10,
-            self.height - 25,
-            arcade.color.WHITE,
-            14,
-        )
+        # Draw UI panels
+        self._draw_context_panel(layout)
+        self._draw_narrative_panel(layout)
 
+        # Draw status bar in viewport (light mode, controls)
+        _, _, light_desc = LIGHT_MODES[self.light_mode_index]
         explored_pct = (self.fog.explored_count / self.fog.total_tiles) * 100
+        status_text = (
+            f"Light: {light_desc}  |  "
+            f"Explored: {explored_pct:.0f}%  |  "
+            f"L: light  |  WASD: move  |  ESC: quit"
+        )
         arcade.draw_text(
-            f"Explored: {self.fog.explored_count}/{self.fog.total_tiles} ({explored_pct:.0f}%)  |  "
-            f"Entities: {len(self.entities)}  |  L: cycle light  |  WASD: move  |  ESC: quit",
-            10,
-            self.height - 45,
-            arcade.color.LIGHT_GRAY,
-            12,
+            status_text,
+            vp["x"] + UI_PADDING,
+            vp["y"] + UI_PADDING,
+            UIColors.TEXT_DIM,
+            FONT_SIZE_SMALL,
         )
 
     def on_key_press(self, key: int, modifiers: int):
