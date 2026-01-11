@@ -13,6 +13,7 @@ authors = [
 ]
 
 dependencies = [
+    "fastmcp>=2.14.2",
     # Phase 1: Standalone systems (fog, lighting, input, assets) - no engine dependency
     "numpy>=1.24.0",
 ]
