@@ -86,10 +86,16 @@ class EmbeddedMCPServer:
         def game_state() -> str:
             """Get current game state with ASCII map and entity info.
 
+            Returns ASCII map with fog of war, party HP, combat status, and
+            available actions. Call this first to understand the situation.
+
+            Example:
+                game_state()
+                # Returns map showing @ (player), A-Z (entities), # (walls)
+                # Plus party HP, visible enemies, and suggested actions
+
             Returns:
-                ASCII map showing visible area with fog of war,
-                party status, combat info if in combat,
-                and available actions.
+                Formatted string with map, legend, party status, available actions.
             """
             request = CommandRequest(command_type=CommandType.GET_STATE)
             return bridge.submit_command(request, timeout=5.0)
@@ -98,11 +104,19 @@ class EmbeddedMCPServer:
         def game_move(direction: str) -> str:
             """Move the party in a direction. May trigger room transitions or combat.
 
+            Use during exploration (not combat). Moving into a room with enemies
+            starts combat automatically.
+
+            Examples:
+                game_move("north")  # Move north, may enter new room
+                game_move("east")   # Move east within current room
+                game_move("SOUTH")  # Case insensitive
+
             Args:
-                direction: One of 'north', 'south', 'east', 'west'
+                direction: One of 'north', 'south', 'east', 'west' (case insensitive)
 
             Returns:
-                Updated game state after movement, or error if blocked.
+                Updated game state after movement, or error if blocked/in combat.
             """
             request = CommandRequest(
                 command_type=CommandType.MOVE,
@@ -114,11 +128,18 @@ class EmbeddedMCPServer:
         def game_attack(target_index: int) -> str:
             """Attack an enemy in combat using real D&D 5E combat rules.
 
+            Only works during combat when it's a player's turn. Target index
+            corresponds to visible enemies listed in game_state output.
+
+            Examples:
+                game_attack(0)  # Attack first enemy (e.g., "A rat")
+                game_attack(1)  # Attack second enemy (e.g., "B goblin")
+
             Args:
-                target_index: Index of the enemy to attack (0 = first living enemy)
+                target_index: 0-based index of enemy to attack (see Visible Entities)
 
             Returns:
-                Combat result with attack roll, damage, and updated state.
+                Attack result (hit/miss, damage) and updated game state.
             """
             request = CommandRequest(
                 command_type=CommandType.ATTACK,
@@ -128,13 +149,16 @@ class EmbeddedMCPServer:
 
         @mcp.tool()
         def game_wait() -> str:
-            """Wait/pass your turn in combat.
+            """Wait/pass your turn in combat, letting enemies act.
 
-            If it's a player's turn, passes that turn.
-            Then processes enemy turns until a player can act again.
+            Use when you want to skip a player's turn or let enemy turns resolve.
+            Processes all enemy turns until a player can act again.
+
+            Example:
+                game_wait()  # Pass turn, enemies will attack, returns new state
 
             Returns:
-                Updated game state after waiting.
+                Updated game state after all enemy turns complete.
             """
             request = CommandRequest(command_type=CommandType.WAIT)
             return bridge.submit_command(request, timeout=10.0)
