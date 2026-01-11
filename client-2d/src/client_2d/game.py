@@ -32,6 +32,8 @@ from client_2d.integration.engine_adapter import EngineAdapter
 from client_2d.integration.layout_loader import LayoutLoader
 from client_2d.systems.fog_of_war import FogOfWarSystem
 from client_2d.systems.lighting import LightingSystem
+from client_2d.testing.state_renderer import Entity as StateEntity
+from client_2d.testing.state_renderer import StateRenderer
 
 # Window settings
 WINDOW_TITLE = "D&D 5E - 2D Client"
@@ -68,6 +70,8 @@ class GameWindow(arcade.Window):
         width: int = 1280,
         height: int = 900,
         fullscreen: bool = False,
+        enable_mcp: bool = False,
+        mcp_port: int = 8765,
     ):
         """Initialize the game window.
 
@@ -75,9 +79,18 @@ class GameWindow(arcade.Window):
             width: Window width in pixels.
             height: Window height in pixels.
             fullscreen: Whether to run in fullscreen mode.
+            enable_mcp: Whether to start embedded MCP server.
+            mcp_port: Port for MCP HTTP server.
         """
         super().__init__(width, height, WINDOW_TITLE, fullscreen=fullscreen)
         arcade.set_background_color(UIColors.PANEL_BG_DARK)
+
+        # MCP server integration (initialized later if enabled)
+        self._mcp_bridge = None
+        self._mcp_server = None
+        self._state_renderer: StateRenderer | None = None
+        self._enable_mcp = enable_mcp
+        self._mcp_port = mcp_port
 
         # Engine adapter
         self.engine = EngineAdapter()
@@ -118,6 +131,10 @@ class GameWindow(arcade.Window):
 
         # Initialize the game
         self._initialize_game()
+
+        # Initialize MCP server if enabled
+        if self._enable_mcp:
+            self._initialize_mcp_server()
 
     def _initialize_game(self) -> None:
         """Initialize game with party and dungeon."""
@@ -163,6 +180,240 @@ class GameWindow(arcade.Window):
         # Keep only last 10 messages
         if len(self.combat_log) > 10:
             self.combat_log = self.combat_log[-10:]
+
+    # ========== MCP Server Integration ==========
+
+    def _initialize_mcp_server(self) -> None:
+        """Initialize embedded MCP server with HTTP transport."""
+        from client_2d.embedded_mcp_server import EmbeddedMCPServer
+        from client_2d.mcp_bridge import MCPBridge
+
+        self._mcp_bridge = MCPBridge()
+        self._mcp_bridge.set_game_window(self)
+
+        # Create StateRenderer for ASCII map generation
+        width = self.room_layout.width if self.room_layout else 25
+        height = self.room_layout.height if self.room_layout else 18
+        self._state_renderer = StateRenderer(width=width, height=height)
+
+        self._mcp_server = EmbeddedMCPServer(
+            bridge=self._mcp_bridge,
+            port=self._mcp_port,
+        )
+        self._mcp_server.start()
+
+    def _process_mcp_commands(self) -> None:
+        """Process pending MCP commands from the HTTP server thread.
+
+        Called from on_update() to process commands in the main thread.
+        Only processes one command per frame to avoid blocking rendering.
+        """
+        if self._mcp_bridge is None:
+            return
+
+        # Skip if enemy turn is being processed (avoid inconsistent state)
+        if self.processing_enemy_turn:
+            return
+
+        request = self._mcp_bridge.poll_commands()
+        if request is None:
+            return
+
+        from client_2d.mcp_bridge import CommandType
+
+        try:
+            if request.command_type == CommandType.GET_STATE:
+                result = self._mcp_get_state()
+            elif request.command_type == CommandType.MOVE:
+                result = self._mcp_move(request.args.get("direction", ""))
+            elif request.command_type == CommandType.ATTACK:
+                result = self._mcp_attack(request.args.get("target_index", 0))
+            elif request.command_type == CommandType.WAIT:
+                result = self._mcp_wait()
+            else:
+                result = f"Unknown command: {request.command_type}"
+            request.response_future.set_result(result)
+        except Exception as e:
+            request.response_future.set_exception(e)
+
+    def _mcp_get_state(self) -> str:
+        """Generate state response using StateRenderer."""
+        if self._state_renderer is None or self.room_layout is None or self.fog is None:
+            return "Game not initialized"
+
+        entities = self._build_state_entities()
+
+        # Get turn info
+        turn = 0
+        if self.engine.game_state:
+            tracker = self.engine.game_state.initiative_tracker
+            if tracker:
+                turn = tracker.round_number
+
+        # Get party HP
+        player_hp = 30
+        player_max_hp = 30
+        party_data = self.engine.get_party_data()
+        if party_data:
+            player_hp = sum(c["hp"] for c in party_data)
+            player_max_hp = sum(c["max_hp"] for c in party_data)
+
+        state = self._state_renderer.render_state(
+            room=self.room_tiles,
+            player_x=self.player_x,
+            player_y=self.player_y,
+            entities=entities,
+            fog=self.fog,
+            turn=turn,
+            player_hp=player_hp,
+            player_max_hp=player_max_hp,
+            light_source="torch",
+        )
+
+        return self._format_mcp_state_response(state)
+
+    def _build_state_entities(self) -> list[StateEntity]:
+        """Build entity list for StateRenderer from EntityManager."""
+        entities: list[StateEntity] = []
+
+        # Sync from engine and remove dead entities before rendering
+        self.entity_manager.sync_from_engine(self.engine)
+        self.entity_manager.remove_dead_entities()
+
+        for entity in self.entity_manager.get_all():
+            if not entity.is_alive:
+                continue
+
+            # Map EntityType to string type for StateRenderer
+            if entity.entity_type == EntityType.MONSTER:
+                type_str = "monster"
+            elif entity.entity_type == EntityType.ITEM:
+                type_str = "item"
+            elif entity.entity_type == EntityType.PARTY_MEMBER:
+                type_str = "party"
+            else:
+                type_str = "decoration"
+
+            entities.append(
+                StateEntity(
+                    x=entity.grid_x,
+                    y=entity.grid_y,
+                    entity_type=type_str,
+                    entity_id=entity.sub_type or entity.entity_id,
+                )
+            )
+
+        return entities
+
+    def _format_mcp_state_response(self, state_dict: dict) -> str:
+        """Format state dict as readable MCP response."""
+        if "error" in state_dict:
+            return f"Error: {state_dict['error']}"
+
+        lines = [
+            f"Turn: {state_dict['turn']}",
+            f"Party HP: {state_dict['player']['hp']}/{state_dict['player']['max_hp']} "
+            f"Light: {state_dict['player']['light_source']}",
+            f"Explored: {state_dict['explored_tiles']}/{state_dict['total_tiles']}",
+        ]
+
+        # Add combat info if in combat
+        if self.engine.in_combat:
+            combat_data = self.engine.get_combat_data()
+            if combat_data:
+                lines.append(f"Combat Round: {combat_data['round']}")
+                current = self.engine.get_current_combatant()
+                if current:
+                    lines.append(f"Current Turn: {current['name']}")
+
+        lines.extend([
+            "",
+            "Map:",
+            state_dict["map"],
+            "",
+            "Legend:",
+        ])
+
+        for symbol, entity in state_dict["legend"].items():
+            lines.append(f"  {symbol} = {entity}")
+
+        if state_dict["visible_entities"]:
+            lines.append("")
+            lines.append("Visible Entities:")
+            for entity_id, info in state_dict["visible_entities"].items():
+                lines.append(
+                    f"  {info['symbol']} {info['type']}:{entity_id} "
+                    f"at {info['position']} ({info['distance']} tiles {info['direction']})"
+                )
+
+        # Add party status
+        party_data = self.engine.get_party_data()
+        if party_data:
+            lines.append("")
+            lines.append("Party:")
+            for member in party_data:
+                conditions = ", ".join(member.get("conditions", [])) or "healthy"
+                lines.append(
+                    f"  {member['name']} ({member['class']}): "
+                    f"{member['hp']}/{member['max_hp']} HP - {conditions}"
+                )
+
+        # Add available actions
+        lines.append("")
+        lines.append("Available Actions:")
+        if self.engine.in_combat:
+            lines.append("  - game_attack(target_index) - Attack enemy")
+            lines.append("  - game_wait() - Pass turn")
+        else:
+            lines.append("  - game_move(direction) - Move north/south/east/west")
+
+        return "\n".join(lines)
+
+    def _mcp_move(self, direction: str) -> str:
+        """Handle MCP move command."""
+        if self.engine.in_combat:
+            return "Cannot move during combat!"
+
+        direction = direction.lower()
+        if direction not in ("north", "south", "east", "west"):
+            return f"Invalid direction: {direction}. Use north/south/east/west."
+
+        self._move_player(direction)
+        return self._mcp_get_state()
+
+    def _mcp_attack(self, target_index: int) -> str:
+        """Handle MCP attack command."""
+        if not self.engine.in_combat:
+            return "Not in combat! Use game_move() to explore."
+
+        if not self.engine.is_player_turn():
+            return "Not your turn! Wait for enemies to act."
+
+        # Validate target index
+        monsters = self.entity_manager.get_monsters()
+        if target_index < 0 or target_index >= len(monsters):
+            return f"Invalid target index {target_index}. Valid: 0-{len(monsters)-1}"
+
+        # Set selected enemy and execute attack
+        self.selected_enemy = target_index
+        self._execute_attack()
+
+        return self._mcp_get_state()
+
+    def _mcp_wait(self) -> str:
+        """Handle MCP wait command."""
+        if not self.engine.in_combat:
+            return "Not in combat! Use game_move() to explore."
+
+        self._pass_turn()
+
+        # Process enemy turns synchronously for MCP
+        while self.processing_enemy_turn:
+            self._process_enemy_turn()
+
+        return self._mcp_get_state()
+
+    # ========== End MCP Server Integration ==========
 
     def save_screenshot(self) -> Path | None:
         """Save a screenshot of the current game window.
@@ -976,6 +1227,9 @@ class GameWindow(arcade.Window):
 
     def on_update(self, delta_time: float) -> None:
         """Update game state."""
+        # Process any pending MCP commands (thread-safe)
+        self._process_mcp_commands()
+
         # Update screenshot feedback timer
         if self.screenshot_message_timer > 0:
             self.screenshot_message_timer -= delta_time
@@ -1142,12 +1396,19 @@ class GameWindow(arcade.Window):
             self.enemy_turn_timer = ENEMY_TURN_DELAY
 
 
-def run_2d_client(size: str = "medium", fullscreen: bool = False) -> None:
+def run_2d_client(
+    size: str = "medium",
+    fullscreen: bool = False,
+    enable_mcp: bool = False,
+    mcp_port: int = 8765,
+) -> None:
     """Entry point for the 2D client.
 
     Args:
         size: Window size preset (small, medium, large).
         fullscreen: Whether to run in fullscreen mode.
+        enable_mcp: Whether to start embedded MCP HTTP server.
+        mcp_port: Port for MCP server (default 8765).
     """
     width, height = WINDOW_SIZES.get(size, WINDOW_SIZES["medium"])
 
@@ -1162,9 +1423,17 @@ def run_2d_client(size: str = "medium", fullscreen: bool = False) -> None:
         print("Mode: Fullscreen")
     else:
         print(f"Window: {width}x{height} ({size})")
+    if enable_mcp:
+        print(f"MCP Server: http://127.0.0.1:{mcp_port}/sse")
     print()
 
-    GameWindow(width=width, height=height, fullscreen=fullscreen)
+    GameWindow(
+        width=width,
+        height=height,
+        fullscreen=fullscreen,
+        enable_mcp=enable_mcp,
+        mcp_port=mcp_port,
+    )
     arcade.run()
 
 
