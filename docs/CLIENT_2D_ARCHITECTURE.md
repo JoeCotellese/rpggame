@@ -826,6 +826,160 @@ client-2d/
 - Torch illuminates surrounding tiles
 - Exiting room loads adjacent room
 
+### Phase 1.5: UI Design & Layout
+
+**Goal**: Define UI layout and specifications before deep implementation.
+
+#### Screen Layout
+
+```
+┌─────────────────────────────────┬──────────────────┐
+│                                 │                  │
+│                                 │  Context Panel   │
+│       Game World Viewport       │  (~30% width)    │
+│       (~70% width)              │                  │
+│                                 │  - Party status  │
+│                                 │  - Combat state  │
+│                                 │                  │
+├─────────────────────────────────┴──────────────────┤
+│                                                    │
+│              Narrative Exposition                  │
+│              (LLM-enhanced text)                   │
+│                                                    │
+└────────────────────────────────────────────────────┘
+```
+
+#### Layout Zones
+
+| Zone | Position | Size | Purpose |
+|------|----------|------|---------|
+| **Game Viewport** | Top-left | 70% width, 75% height | Dungeon tiles, sprites, fog of war |
+| **Context Panel** | Top-right | 30% width, 75% height | Contextual info based on game mode |
+| **Narrative Area** | Bottom | 100% width, 25% height | Room descriptions, combat narration, dialogue |
+
+```
+        70% width              30% width
+    ◄─────────────────────►◄────────────►
+    ┌─────────────────────┬─────────────┐ ▲
+    │                     │             │ │
+    │                     │   Context   │ │ 75%
+    │   Game Viewport     │   Panel     │ │ height
+    │                     │             │ │
+    │                     │             │ ▼
+    ├─────────────────────┴─────────────┤ ▲
+    │         Narrative Area            │ │ 25%
+    └───────────────────────────────────┘ ▼
+              100% width
+```
+
+#### Context Panel States
+
+The right sidebar changes content based on current game mode:
+
+| Mode | Trigger | Panel Shows |
+|------|---------|-------------|
+| **Exploration** | Default | Party list (names, HP bars, conditions, light source) |
+| **Combat** | Combat starts | Initiative order, enemy HP, current turn indicator |
+| **Dialogue** | Talk to NPC | NPC info, dialogue choices |
+| **Character** | Press `C` | Selected character stats, skills, abilities |
+
+#### Full Modal Overlays
+
+Some UI elements take over the full screen as modal dialogs:
+
+**Inventory Modal** (Press `I`):
+```
+┌────────────────────────────────────────────────────┐
+│                    INVENTORY                       │
+├──────────────────────┬─────────────────────────────┤
+│   EQUIPMENT          │   BACKPACK                  │
+│  ┌─────┐ ┌─────┐     │  ┌───┬───┬───┬───┬───┐     │
+│  │Head │ │Neck │     │  │   │   │   │   │   │     │
+│  ├─────┼─────┤       │  ├───┼───┼───┼───┼───┤     │
+│  │Chest│ │Hands│     │  │   │   │   │   │   │     │
+│  ├─────┼─────┤       │  └───┴───┴───┴───┴───┘     │
+│  │Legs │ │Feet │     │                             │
+│  └─────┘ └─────┘     │  Gold: --      Weight: --   │
+│                      │                             │
+│  Main Hand: ----     ├─────────────────────────────┤
+│  Off Hand:  ----     │  [Item Description]         │
+│                      │                             │
+└──────────────────────┴─────────────────────────────┘
+                    [ESC to close]
+```
+
+**Other Modals** (future):
+- Save/Load menu
+- Settings/Options
+- Character creation/level up
+
+#### Key Bindings
+
+| Key | Action |
+|-----|--------|
+| `WASD` / Arrows | Movement |
+| `I` | Toggle inventory modal |
+| `C` | Toggle character panel |
+| `ESC` | Close modal / Back to exploration |
+| `TAB` | Cycle targets (combat) |
+| `SPACE` | Interact / Confirm |
+| `1-9` | Quick action slots (combat) |
+
+#### Narrative Area Content
+
+The bottom narrative panel displays:
+- Room descriptions on entering new areas
+- Combat narration (LLM-enhanced attack descriptions)
+- NPC dialogue during conversations
+- Item/lore discovery text
+- System messages (save confirmations, etc.)
+
+This area is **read-only** - player input is via keyboard controls, not text commands.
+
+**Deliverables**:
+- [x] Layout zones defined (ASCII wireframe above)
+- [x] Context panel states documented
+- [x] Modal overlay design documented
+- [x] Key bindings specified
+- [x] Color palette defined (see `UIColors` in `client_2d/core/constants.py`)
+- [x] Layout dimensions defined as percentages (see constants in `client_2d/core/constants.py`)
+- [x] Font sizes and UI element spacing (see constants in `client_2d/core/constants.py`)
+
+#### Typography & Spacing
+
+Defined in `client_2d/core/constants.py`:
+
+| Constant | Value | Use |
+|----------|-------|-----|
+| `FONT_SIZE_TITLE` | 18pt | Panel headers, modal titles |
+| `FONT_SIZE_BODY` | 14pt | Narrative text, item names |
+| `FONT_SIZE_SMALL` | 12pt | Stats, labels, secondary info |
+| `FONT_SIZE_TINY` | 10pt | Tooltips, fine print |
+| `UI_PADDING` | 8px | Inside panels |
+| `UI_MARGIN` | 4px | Between elements |
+| `UI_BORDER_WIDTH` | 2px | Panel border thickness |
+
+#### Color Palette (Earthy Theme)
+
+Defined in `client_2d/core/constants.py` as `UIColors` class:
+
+| Purpose | Color | Hex |
+|---------|-------|-----|
+| Background | Deep earth | `#1c1a17` |
+| Panel BG | Worn leather | `#2e2a24` |
+| Border | Wood grain | `#5c4d3c` |
+| Text | Parchment | `#d4c8b0` |
+| Highlight | Torchlight gold | `#c9a227` |
+| HP Full | Forest green | `#5aa777` |
+| HP Low | Autumn orange | `#bb8855` |
+| HP Critical | Dark crimson | `#993333` |
+
+**Success Criteria**:
+- UI layout documented with clear zones
+- All game modes have defined panel states
+- Key bindings specified
+- Ready for implementation in later phases
+
 ### Phase 2: Entity Integration
 
 **Goal**: GameState integration, entity rendering, movement animations.
