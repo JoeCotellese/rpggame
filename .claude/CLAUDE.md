@@ -288,3 +288,14 @@ New areas revealed, entities come into view...
 > game_attack("goblin_1")
 Attacked goblin_1! Enemy defeated.
 ```
+
+### Playtester Skill
+
+Use the `/playtester` skill (or say "let's playtest", "test our fix", "qa the game") to have Claude QA the game through the embedded MCP server.
+
+**What it does:**
+- Starts game with `uv run dnd-2d --mcp`
+- Plays the game using MCP tools as a human would
+- If working on a ticket, focuses testing on that functionality
+- Creates GitHub issues for bugs found
+- Stops on blocking bugs, continues logging non-blocking issues
