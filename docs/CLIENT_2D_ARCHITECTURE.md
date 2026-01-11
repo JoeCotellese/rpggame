@@ -851,11 +851,26 @@ client-2d/
 
 #### Layout Zones
 
-| Zone | Position | Purpose |
-|------|----------|---------|
-| **Game Viewport** | Top-left (~70%) | Dungeon tiles, sprites, fog of war |
-| **Context Panel** | Top-right (~30%) | Contextual info based on game mode |
-| **Narrative Area** | Bottom (full width) | Room descriptions, combat narration, dialogue |
+| Zone | Position | Size | Purpose |
+|------|----------|------|---------|
+| **Game Viewport** | Top-left | 70% width, 75% height | Dungeon tiles, sprites, fog of war |
+| **Context Panel** | Top-right | 30% width, 75% height | Contextual info based on game mode |
+| **Narrative Area** | Bottom | 100% width, 25% height | Room descriptions, combat narration, dialogue |
+
+```
+        70% width              30% width
+    ◄─────────────────────►◄────────────►
+    ┌─────────────────────┬─────────────┐ ▲
+    │                     │             │ │
+    │                     │   Context   │ │ 75%
+    │   Game Viewport     │   Panel     │ │ height
+    │                     │             │ │
+    │                     │             │ ▼
+    ├─────────────────────┴─────────────┤ ▲
+    │         Narrative Area            │ │ 25%
+    └───────────────────────────────────┘ ▼
+              100% width
+```
 
 #### Context Panel States
 
@@ -927,7 +942,7 @@ This area is **read-only** - player input is via keyboard controls, not text com
 - [x] Modal overlay design documented
 - [x] Key bindings specified
 - [x] Color palette defined (see `UIColors` in `client_2d/core/constants.py`)
-- [ ] Pixel dimensions for 1280x720 base resolution
+- [x] Layout dimensions defined as percentages (see constants in `client_2d/core/constants.py`)
 - [ ] Font sizes and UI element spacing
 
 #### Color Palette (Earthy Theme)

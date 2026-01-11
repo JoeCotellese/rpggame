@@ -10,6 +10,12 @@ TILE_SIZE = 32  # Pixels per tile
 WINDOW_WIDTH = 1280
 WINDOW_HEIGHT = 720
 
+# UI Layout (percentage-based for flexibility)
+VIEWPORT_WIDTH_PCT = 0.70      # Game viewport takes 70% of window width
+CONTEXT_PANEL_WIDTH_PCT = 0.30  # Context panel takes 30% of window width
+NARRATIVE_HEIGHT_PCT = 0.25     # Narrative area takes 25% of window height
+GAME_AREA_HEIGHT_PCT = 0.75     # Game viewport + context panel take 75% of height
+
 # Map settings
 MAP_WIDTH_TILES = 40  # Default map width in tiles
 MAP_HEIGHT_TILES = 22  # Default map height in tiles
