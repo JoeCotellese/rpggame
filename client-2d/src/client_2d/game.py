@@ -27,6 +27,7 @@ from client_2d.core.constants import (
     LightingState,
     UIColors,
 )
+from client_2d.entities import EntityManager, EntityType
 from client_2d.integration.engine_adapter import EngineAdapter
 from client_2d.integration.layout_loader import LayoutLoader
 from client_2d.systems.fog_of_war import FogOfWarSystem
@@ -100,8 +101,8 @@ class GameWindow(arcade.Window):
         self.fog: FogOfWarSystem | None = None
         self.lighting: LightingSystem | None = None
 
-        # Entities in current room (x, y, type_string, texture)
-        self.entities: list[tuple[int, int, str, arcade.Texture | None]] = []
+        # Entity manager for live-synced entities with engine references
+        self.entity_manager = EntityManager()
 
         # Game state
         self.running = True
@@ -317,26 +318,14 @@ class GameWindow(arcade.Window):
 
         cx, cy = self.player_x, self.player_y
 
-        # Formation offsets: front row closer to enemies (north = lower y)
-        # Index 0,1 = front row (fighters), Index 2,3 = back row (casters)
-        offsets = [
-            (-1, 0),   # Front-left
-            (1, 0),    # Front-right
-            (-1, 1),   # Back-left
-            (1, 1),    # Back-right
-        ]
-
-        # Calculate positions, checking for valid tiles
-        self.party_positions = []
-        for dx, dy in offsets:
-            px, py = cx + dx, cy + dy
-            # Clamp to room bounds and avoid walls
-            px = max(1, min(px, self.room_layout.width - 2))
-            py = max(1, min(py, self.room_layout.height - 2))
-            # If blocked, try the center position
-            if self.room_layout.is_blocking(px, py):
-                px, py = cx, cy
-            self.party_positions.append((px, py))
+        # Use EntityManager to create party member entities in formation
+        self.party_positions = self.entity_manager.spread_party_for_combat(
+            engine=self.engine,
+            center_x=cx,
+            center_y=cy,
+            layout=self.room_layout,
+            character_textures=self.character_textures,
+        )
 
         self.party_spread = True
         self._update_lighting()
@@ -349,6 +338,9 @@ class GameWindow(arcade.Window):
             avg_y = sum(p[1] for p in self.party_positions) // len(self.party_positions)
             self.player_x = avg_x
             self.player_y = avg_y
+
+        # Remove party member entities
+        self.entity_manager.collapse_party()
 
         self.party_spread = False
         self.party_positions = []
@@ -404,37 +396,14 @@ class GameWindow(arcade.Window):
                 if self.room_layout.is_blocking(x, y):
                     self.lighting.add_obstacle(x, y)
 
-        # Load entities from room data
-        self.entities = []
-        if room_data:
-            # Add enemies
-            room_enemies = room_data.get("enemies", [])
-            enemy_positions = self.room_layout.entity_positions.enemies
-            for i, enemy_type in enumerate(room_enemies):
-                if i < len(enemy_positions):
-                    ex, ey = enemy_positions[i]
-                else:
-                    ex = self.room_layout.width // 2 + i
-                    ey = self.room_layout.height // 2
-                texture = self.monster_textures.get(enemy_type)
-                self.entities.append((ex, ey, f"monster:{enemy_type}", texture))
-
-            # Add visible items
-            room_items = room_data.get("items", [])
-            item_positions = self.room_layout.entity_positions.items
-            visible_idx = 0
-            for item_data in room_items:
-                if not item_data.get("visible", True):
-                    continue
-                item_id = item_data.get("id", f"item_{visible_idx}")
-                if visible_idx < len(item_positions):
-                    ix, iy = item_positions[visible_idx]
-                else:
-                    ix = 3 + (visible_idx * 2) % (self.room_layout.width - 6)
-                    iy = 3 + (visible_idx * 3) % (self.room_layout.height - 6)
-                texture = self.item_textures.get(item_id)
-                self.entities.append((ix, iy, f"item:{item_id}", texture))
-                visible_idx += 1
+        # Load entities from engine state using EntityManager
+        self.entity_manager.load_from_room(
+            engine=self.engine,
+            layout=self.room_layout,
+            room_data=room_data,
+            monster_textures=self.monster_textures,
+            item_textures=self.item_textures,
+        )
 
         # Initial lighting update
         self._update_lighting()
@@ -647,10 +616,18 @@ class GameWindow(arcade.Window):
                         tile_rect = arcade.LBWH(screen_x, screen_y, tile_size - 1, tile_size - 1)
                         arcade.draw_rect_filled(tile_rect, (40, 35, 30))
 
-        # Draw entities (monsters, items) with lighting
-        for ex, ey, entity_type, texture in self.entities:
+        # Draw entities (monsters, items) from EntityManager with lighting
+        for entity in self.entity_manager.get_all():
+            # Skip party members - they're drawn separately in combat
+            if entity.entity_type == EntityType.PARTY_MEMBER:
+                continue
+
+            # Skip dead entities
+            if not entity.is_alive:
+                continue
+
             if self.fog:
-                state = self.fog.get_visibility(ex, ey)
+                state = self.fog.get_visibility(entity.grid_x, entity.grid_y)
                 tint = LIGHTING_TINTS.get(state)
             else:
                 tint = (255, 255, 255)
@@ -659,16 +636,16 @@ class GameWindow(arcade.Window):
             if tint is None:
                 continue
 
-            screen_x = offset_x + ex * tile_size
-            screen_y = offset_y + (self.room_layout.height - 1 - ey) * tile_size
+            screen_x = offset_x + entity.grid_x * tile_size
+            screen_y = offset_y + (self.room_layout.height - 1 - entity.grid_y) * tile_size
 
-            if texture:
-                self._draw_texture(texture, screen_x, screen_y, tint)
+            if entity.texture:
+                self._draw_texture(entity.texture, screen_x, screen_y, tint)
             else:
                 # Fallback: colored squares based on entity type
-                if entity_type.startswith("monster:"):
+                if entity.entity_type == EntityType.MONSTER:
                     fallback_color = (180, 50, 50)  # Red for monsters
-                elif entity_type.startswith("item:"):
+                elif entity.entity_type == EntityType.ITEM:
                     fallback_color = (50, 180, 50)  # Green for items
                 else:
                     fallback_color = (180, 140, 50)  # Gold for decorations
@@ -679,18 +656,14 @@ class GameWindow(arcade.Window):
 
         # Draw party/player
         if self.party_spread and self.party_positions:
-            # Combat formation - draw each party member separately
-            party_data = self.engine.get_party_for_rendering()
-            for i, (px, py) in enumerate(self.party_positions):
-                if i >= len(party_data):
-                    break
+            # Combat formation - draw each party member from EntityManager
+            for party_entity in self.entity_manager.get_party_members():
+                char_screen_x = offset_x + party_entity.grid_x * tile_size
+                char_screen_y = offset_y + (self.room_layout.height - 1 - party_entity.grid_y) * tile_size
 
-                char_screen_x = offset_x + px * tile_size
-                char_screen_y = offset_y + (self.room_layout.height - 1 - py) * tile_size
-
-                char_class = party_data[i]["class"].lower()
-                is_current_turn = party_data[i]["is_current_turn"]
-                texture = self.character_textures.get(char_class, self.player_texture)
+                char_class = party_entity.character_class
+                is_current_turn = party_entity.is_current_turn
+                texture = party_entity.texture or self.player_texture
 
                 # Draw current turn highlight (selection ring)
                 if is_current_turn:
@@ -1035,6 +1008,10 @@ class GameWindow(arcade.Window):
             else:
                 self._add_combat_log(f"{result['enemy_name']} takes no action.")
 
+        # Sync entity state from engine after enemy action
+        self.entity_manager.sync_from_engine(self.engine)
+        self.entity_manager.update_party_turn_status(self.engine)
+
         # Advance turn
         turn_result = self.engine.advance_turn()
 
@@ -1085,10 +1062,11 @@ class GameWindow(arcade.Window):
 
         # Number keys to select enemy
         if arcade.key.KEY_1 <= key <= arcade.key.KEY_9:
-            index = key - arcade.key.KEY_1
+            display_index = key - arcade.key.KEY_1
             enemies = self.engine.get_enemies()
-            if index < len(enemies):
-                self.selected_enemy = index
+            if display_index < len(enemies):
+                # Use actual enemy index from engine, not display position
+                self.selected_enemy = enemies[display_index]["index"]
 
         # A to attack
         elif key == arcade.key.A:
@@ -1129,6 +1107,11 @@ class GameWindow(arcade.Window):
                     f"(rolled {result['attack_roll']} vs AC {result['target_ac']})"
                 )
 
+            # Sync entity state from engine and remove dead enemies
+            self.entity_manager.sync_from_engine(self.engine)
+            self.entity_manager.remove_dead_entities()
+            self.entity_manager.update_party_turn_status(self.engine)
+
             # Advance turn
             turn_result = self.engine.advance_turn()
 
@@ -1146,6 +1129,9 @@ class GameWindow(arcade.Window):
         current = self.engine.get_current_combatant()
         if current:
             self._add_combat_log(f"{current['name']} waits...")
+
+        # Update turn status after passing
+        self.entity_manager.update_party_turn_status(self.engine)
 
         turn_result = self.engine.advance_turn()
 

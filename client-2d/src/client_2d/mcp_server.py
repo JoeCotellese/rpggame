@@ -35,6 +35,7 @@ Tools:
 
 from mcp.server.fastmcp import FastMCP
 
+from client_2d.entities import EntityManager, EntityType
 from client_2d.integration.engine_adapter import EngineAdapter
 from client_2d.integration.layout_loader import LayoutLoader, RoomLayout
 from client_2d.systems.fog_of_war import FogOfWarSystem
@@ -51,8 +52,12 @@ _room_layout: RoomLayout | None = None
 _fog: FogOfWarSystem | None = None
 _lighting: LightingSystem | None = None
 _renderer: StateRenderer | None = None
+_entity_manager: EntityManager | None = None
 _player_x: int = 0
 _player_y: int = 0
+
+# Empty texture dict for EntityManager (MCP server doesn't render sprites)
+_empty_textures: dict = {}
 
 
 def _get_layout_loader() -> LayoutLoader:
@@ -65,7 +70,7 @@ def _get_layout_loader() -> LayoutLoader:
 
 def _load_room_layout() -> None:
     """Load the current room's tile layout for ASCII rendering."""
-    global _room_layout, _fog, _lighting, _renderer, _player_x, _player_y
+    global _room_layout, _fog, _lighting, _renderer, _entity_manager, _player_x, _player_y
 
     if _engine is None or _engine.game_state is None:
         return
@@ -117,6 +122,16 @@ def _load_room_layout() -> None:
     # Set player position from spawn point
     _player_x, _player_y = _room_layout.spawn_points.player
 
+    # Initialize EntityManager and load entities from engine state
+    _entity_manager = EntityManager()
+    _entity_manager.load_from_room(
+        engine=_engine,
+        layout=_room_layout,
+        room_data=room_data,
+        monster_textures=_empty_textures,
+        item_textures=_empty_textures,
+    )
+
     # Initialize renderer
     _renderer = StateRenderer(
         width=_room_layout.width,
@@ -139,31 +154,43 @@ def _update_lighting() -> None:
 
 
 def _build_entities() -> list[Entity]:
-    """Build entity list from engine state for ASCII rendering."""
+    """Build entity list from EntityManager for ASCII rendering.
+
+    Converts EntityManager entities to StateRenderer Entity objects
+    for ASCII map rendering.
+    """
     entities: list[Entity] = []
 
-    if _engine is None or _room_layout is None:
+    if _entity_manager is None:
         return entities
 
-    game_state = _engine.game_state
-    if game_state is None:
-        return entities
+    # Sync from engine and remove dead entities before rendering
+    if _engine:
+        _entity_manager.sync_from_engine(_engine)
+        _entity_manager.remove_dead_entities()
 
-    # Add enemies from engine
-    enemy_positions = _room_layout.entity_positions.enemies
-    for i, enemy in enumerate(game_state.active_enemies):
-        if enemy.is_alive:
-            if i < len(enemy_positions):
-                ex, ey = enemy_positions[i]
-            else:
-                ex = _room_layout.width // 2 + i
-                ey = _room_layout.height // 2
-            entities.append(Entity(
-                x=ex,
-                y=ey,
-                entity_type="monster",
-                entity_id=f"{enemy.name.lower().replace(' ', '_')}_{i + 1}",
-            ))
+    # Convert EntityManager entities to StateRenderer entities
+    for entity in _entity_manager.get_all():
+        # Skip dead entities
+        if not entity.is_alive:
+            continue
+
+        # Map EntityType to string type for StateRenderer
+        if entity.entity_type == EntityType.MONSTER:
+            type_str = "monster"
+        elif entity.entity_type == EntityType.ITEM:
+            type_str = "item"
+        elif entity.entity_type == EntityType.PARTY_MEMBER:
+            type_str = "party"
+        else:
+            type_str = "decoration"
+
+        entities.append(Entity(
+            x=entity.grid_x,
+            y=entity.grid_y,
+            entity_type=type_str,
+            entity_id=f"{entity.sub_type}_{entity.entity_id}",
+        ))
 
     return entities
 
@@ -258,14 +285,15 @@ def _format_state_response(state_dict: dict) -> str:
                     f"{member['hp']}/{member['max_hp']} HP - {conditions}"
                 )
 
-    # Add enemies in combat
-    if _engine and _engine.in_combat:
-        enemies = _engine.get_enemies()
-        if enemies:
+    # Add enemies in combat (from EntityManager for consistency with visual display)
+    if _engine and _engine.in_combat and _entity_manager:
+        monsters = _entity_manager.get_monsters()
+        if monsters:
             lines.append("")
             lines.append("Enemies:")
-            for e in enemies:
-                lines.append(f"  [{e['index']}] {e['name']}: {e['hp']}/{e['max_hp']} HP")
+            for i, m in enumerate(monsters):
+                name = m._creature_ref.name if m._creature_ref else m.sub_type
+                lines.append(f"  [{i}] {name}: {m.hp}/{m.max_hp} HP")
 
     lines.append("")
     lines.append("Available Actions:")
@@ -458,7 +486,7 @@ def game_attack(target_index: int) -> str:
     """Attack an enemy in combat using real D&D 5E combat rules.
 
     Args:
-        target_index: Index of the enemy to attack (from enemies list)
+        target_index: Index of the enemy to attack (0 = first living enemy)
 
     Returns:
         Combat result with attack roll, damage, and updated state.
@@ -473,8 +501,18 @@ def game_attack(target_index: int) -> str:
         return "Not your turn! Wait for enemies to act."
 
     try:
+        # Map display index to actual engine index via EntityManager
+        if _entity_manager is None:
+            return "Entity manager not initialized."
+
+        monsters = _entity_manager.get_monsters()
+        if target_index < 0 or target_index >= len(monsters):
+            return f"Invalid target index {target_index}. Valid range: 0-{len(monsters) - 1}"
+
+        actual_index = monsters[target_index].enemy_index
+
         # Execute attack through engine
-        result = _engine.execute_attack(target_index=target_index)
+        result = _engine.execute_attack(target_index=actual_index)
 
         if not result["success"]:
             return f"Attack failed: {result.get('error', 'Unknown error')}"
