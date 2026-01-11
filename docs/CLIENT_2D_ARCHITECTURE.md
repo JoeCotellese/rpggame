@@ -943,7 +943,21 @@ This area is **read-only** - player input is via keyboard controls, not text com
 - [x] Key bindings specified
 - [x] Color palette defined (see `UIColors` in `client_2d/core/constants.py`)
 - [x] Layout dimensions defined as percentages (see constants in `client_2d/core/constants.py`)
-- [ ] Font sizes and UI element spacing
+- [x] Font sizes and UI element spacing (see constants in `client_2d/core/constants.py`)
+
+#### Typography & Spacing
+
+Defined in `client_2d/core/constants.py`:
+
+| Constant | Value | Use |
+|----------|-------|-----|
+| `FONT_SIZE_TITLE` | 18pt | Panel headers, modal titles |
+| `FONT_SIZE_BODY` | 14pt | Narrative text, item names |
+| `FONT_SIZE_SMALL` | 12pt | Stats, labels, secondary info |
+| `FONT_SIZE_TINY` | 10pt | Tooltips, fine print |
+| `UI_PADDING` | 8px | Inside panels |
+| `UI_MARGIN` | 4px | Between elements |
+| `UI_BORDER_WIDTH` | 2px | Panel border thickness |
 
 #### Color Palette (Earthy Theme)
 

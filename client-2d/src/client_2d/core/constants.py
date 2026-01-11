@@ -16,6 +16,17 @@ CONTEXT_PANEL_WIDTH_PCT = 0.30  # Context panel takes 30% of window width
 NARRATIVE_HEIGHT_PCT = 0.25     # Narrative area takes 25% of window height
 GAME_AREA_HEIGHT_PCT = 0.75     # Game viewport + context panel take 75% of height
 
+# Font sizes (in points)
+FONT_SIZE_TITLE = 18      # Panel headers, modal titles
+FONT_SIZE_BODY = 14       # Narrative text, item names, descriptions
+FONT_SIZE_SMALL = 12      # Stats, labels, secondary info
+FONT_SIZE_TINY = 10       # Tooltips, fine print
+
+# UI spacing (in pixels)
+UI_PADDING = 8            # Inside panels
+UI_MARGIN = 4             # Between elements
+UI_BORDER_WIDTH = 2       # Panel border thickness
+
 # Map settings
 MAP_WIDTH_TILES = 40  # Default map width in tiles
 MAP_HEIGHT_TILES = 22  # Default map height in tiles
