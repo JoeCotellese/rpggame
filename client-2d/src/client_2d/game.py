@@ -398,6 +398,17 @@ class GameWindow(arcade.Window):
         self.selected_enemy = target_index
         self._execute_attack()
 
+        # Check if attack actually succeeded by seeing if turn advanced
+        # If still same player's turn and not processing enemies, attack failed
+        if self.engine.is_player_turn() and not self.processing_enemy_turn:
+            current = self.engine.get_current_combatant()
+            name = current["name"] if current else "Character"
+            return f"Attack failed! {name} cannot reach the target. Use game_wait() to pass."
+
+        # Process enemy turns synchronously for MCP
+        while self.processing_enemy_turn:
+            self._process_enemy_turn()
+
         return self._mcp_get_state()
 
     def _mcp_wait(self) -> str:
