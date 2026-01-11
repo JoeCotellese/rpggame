@@ -1,10 +1,18 @@
 # ABOUTME: MCP server exposing game client as tools for Claude-driven playtesting.
-# ABOUTME: Provides game_new, game_state, game_move, game_attack, game_interact, game_wait.
+# ABOUTME: Uses real dnd-engine via EngineAdapter for authentic game mechanics.
 
 """MCP server for the 2D game client.
 
 This server exposes the game client as MCP tools, allowing Claude to
-playtest the game by calling tools directly instead of using stdin/stdout.
+playtest the game by calling tools directly. Uses the real dnd-engine
+for authentic combat, party management, and game mechanics.
+
+Architecture:
+    Claude (MCP) --> EngineAdapter --> dnd-engine (real game)
+                 |
+                 --> LayoutLoader --> room tiles (for ASCII map)
+
+Issue: #326
 
 Usage:
     Add to Claude Code MCP settings:
@@ -18,33 +26,33 @@ Usage:
     }
 
 Tools:
-    game_new: Start a new game session (demo or from campaign)
+    game_new: Start a new game session with real engine
     game_state: Get current game state (ASCII map + JSON)
-    game_move: Move player in a direction
-    game_attack: Attack an adjacent enemy
-    game_interact: Interact with an adjacent object
-    game_wait: Wait one turn
+    game_move: Move party in a direction (room transitions)
+    game_attack: Attack an enemy (real combat rolls)
+    game_wait: Wait/pass turn in combat
 """
 
 from mcp.server.fastmcp import FastMCP
 
-from client_2d.core.constants import Direction
-from client_2d.integration.layout_loader import LayoutLoader
+from client_2d.integration.engine_adapter import EngineAdapter
+from client_2d.integration.layout_loader import LayoutLoader, RoomLayout
 from client_2d.systems.fog_of_war import FogOfWarSystem
 from client_2d.systems.lighting import LightingSystem
-from client_2d.testing.command_processor import CommandProcessor
 from client_2d.testing.state_renderer import Entity, StateRenderer
-from client_2d.testing.test_harness import GameState, create_demo_game_state
 
 # Initialize MCP server
 mcp = FastMCP("dnd-game")
 
-# Global game state (persists across tool calls)
-_game_state: GameState | None = None
-_renderer: StateRenderer | None = None
-_processor: CommandProcessor | None = None
-_current_room_id: str | None = None
+# Global state (persists across tool calls)
+_engine: EngineAdapter | None = None
 _layout_loader: LayoutLoader | None = None
+_room_layout: RoomLayout | None = None
+_fog: FogOfWarSystem | None = None
+_lighting: LightingSystem | None = None
+_renderer: StateRenderer | None = None
+_player_x: int = 0
+_player_y: int = 0
 
 
 def _get_layout_loader() -> LayoutLoader:
@@ -55,169 +63,175 @@ def _get_layout_loader() -> LayoutLoader:
     return _layout_loader
 
 
-def _create_game_from_layout(
-    campaign_id: str,
-    dungeon_name: str,
-    room_id: str,
-) -> GameState | None:
-    """Create a GameState from a real campaign room layout.
+def _load_room_layout() -> None:
+    """Load the current room's tile layout for ASCII rendering."""
+    global _room_layout, _fog, _lighting, _renderer, _player_x, _player_y
 
-    Args:
-        campaign_id: Campaign containing the dungeon
-        dungeon_name: Dungeon file name (without .json)
-        room_id: Room ID within the dungeon
+    if _engine is None or _engine.game_state is None:
+        return
 
-    Returns:
-        GameState or None if room/layout not found
-    """
     loader = _get_layout_loader()
+    game_state = _engine.game_state
 
-    # Get room data for metadata
+    room_id = game_state.current_room_id
+    dungeon_name = game_state.dungeon_name
+    campaign_id = game_state.campaign_id
+
+    # Get room data for exits
     room_data = loader.get_room_data(dungeon_name, room_id, campaign_id)
-    if not room_data:
-        return None
+    exits = {}
+    if room_data:
+        raw_exits = room_data.get("exits", {})
+        for direction, dest in raw_exits.items():
+            if isinstance(dest, dict):
+                exits[direction] = dest.get("destination", "")
+            else:
+                exits[direction] = dest
 
-    # Get layout (from file or generated)
-    exits = room_data.get("exits", {})
-    # Normalize exits to just direction -> destination strings
-    exit_map = {}
-    for direction, dest in exits.items():
-        if isinstance(dest, dict):
-            exit_map[direction] = dest.get("destination", "")
-        else:
-            exit_map[direction] = dest
-
-    layout = loader.load_room_with_fallback(
-        dungeon_name,
-        room_id,
-        campaign_id,
+    # Load layout with fallback generation
+    _room_layout = loader.load_room_with_fallback(
+        dungeon_name=dungeon_name,
+        room_id=room_id,
+        campaign_id=campaign_id,
         default_width=25,
         default_height=18,
-        exits=exit_map,
+        exits=exits,
     )
 
-    # Convert layout tiles to room format (list of lists of ints)
-    room = layout.tiles
-
-    # Initialize systems
-    fog = FogOfWarSystem(width=layout.width, height=layout.height)
-    lighting = LightingSystem(map_width=layout.width, map_height=layout.height)
+    # Initialize fog of war and lighting
+    _fog = FogOfWarSystem(
+        width=_room_layout.width,
+        height=_room_layout.height,
+    )
+    _lighting = LightingSystem(
+        map_width=_room_layout.width,
+        map_height=_room_layout.height,
+    )
 
     # Set walls as obstacles for lighting
-    for y in range(layout.height):
-        for x in range(layout.width):
-            if layout.is_blocking(x, y):
-                lighting.add_obstacle(x, y)
+    for y in range(_room_layout.height):
+        for x in range(_room_layout.width):
+            if _room_layout.is_blocking(x, y):
+                _lighting.add_obstacle(x, y)
 
-    # Get player spawn position
-    player_x, player_y = layout.spawn_points.player
+    # Set player position from spawn point
+    _player_x, _player_y = _room_layout.spawn_points.player
 
-    # Create entities from room data
-    entities: list[Entity] = []
-
-    # Add enemies from room data
-    room_enemies = room_data.get("enemies", [])
-    enemy_positions = layout.entity_positions.enemies
-    for i, enemy_type in enumerate(room_enemies):
-        if i < len(enemy_positions):
-            ex, ey = enemy_positions[i]
-        else:
-            # Place remaining enemies near center
-            ex = layout.width // 2 + i
-            ey = layout.height // 2
-        entities.append(Entity(
-            x=ex,
-            y=ey,
-            entity_type="monster",
-            entity_id=f"{enemy_type}_{i + 1}",
-        ))
-
-    # Add items from room data
-    room_items = room_data.get("items", [])
-    item_positions = layout.entity_positions.items
-    for i, item_data in enumerate(room_items):
-        if not item_data.get("visible", True):
-            continue  # Skip hidden items
-        item_id = item_data.get("id", f"item_{i + 1}")
-        if i < len(item_positions):
-            ix, iy = item_positions[i]
-        else:
-            # Place remaining items scattered
-            ix = 3 + (i * 2) % (layout.width - 6)
-            iy = 3 + (i * 3) % (layout.height - 6)
-        entities.append(Entity(
-            x=ix,
-            y=iy,
-            entity_type="item",
-            entity_id=item_id,
-        ))
-
-    # Create game state
-    state = GameState(
-        room=room,
-        player_x=player_x,
-        player_y=player_y,
-        entities=entities,
-        fog=fog,
-        lighting=lighting,
-        turn=0,
-        player_hp=30,
-        player_max_hp=30,
-        light_source="torch",
+    # Initialize renderer
+    _renderer = StateRenderer(
+        width=_room_layout.width,
+        height=_room_layout.height,
     )
 
-    # Initialize lighting from player position
-    lighting.update_party_lights([(player_x, player_y)], "torch")
-    lit_tiles = lighting.calculate_lighting()
-    fog.apply_lighting(lit_tiles)
-
-    return state
+    # Update lighting
+    _update_lighting()
 
 
-def _ensure_game() -> tuple[GameState, StateRenderer, CommandProcessor]:
-    """Ensure game is initialized, create if needed."""
-    global _game_state, _renderer, _processor
+def _update_lighting() -> None:
+    """Recalculate fog of war and lighting from player position."""
+    if _fog is None or _lighting is None:
+        return
 
-    if _game_state is None:
-        _game_state = create_demo_game_state()
-        width = len(_game_state.room[0])
-        height = len(_game_state.room)
-        _renderer = StateRenderer(width=width, height=height)
-        _processor = CommandProcessor()
+    _fog.reset_to_dark()
+    _lighting.update_party_lights([(_player_x, _player_y)], "torch")
+    lit_tiles = _lighting.calculate_lighting()
+    _fog.apply_lighting(lit_tiles)
 
-    return _game_state, _renderer, _processor
+
+def _build_entities() -> list[Entity]:
+    """Build entity list from engine state for ASCII rendering."""
+    entities: list[Entity] = []
+
+    if _engine is None or _room_layout is None:
+        return entities
+
+    game_state = _engine.game_state
+    if game_state is None:
+        return entities
+
+    # Add enemies from engine
+    enemy_positions = _room_layout.entity_positions.enemies
+    for i, enemy in enumerate(game_state.active_enemies):
+        if enemy.is_alive:
+            if i < len(enemy_positions):
+                ex, ey = enemy_positions[i]
+            else:
+                ex = _room_layout.width // 2 + i
+                ey = _room_layout.height // 2
+            entities.append(Entity(
+                x=ex,
+                y=ey,
+                entity_type="monster",
+                entity_id=f"{enemy.name.lower().replace(' ', '_')}_{i + 1}",
+            ))
+
+    return entities
 
 
 def _get_current_state() -> dict:
     """Get the current rendered game state."""
-    state, renderer, _ = _ensure_game()
-    return renderer.render_state(
-        room=state.room,
-        player_x=state.player_x,
-        player_y=state.player_y,
-        entities=state.entities,
-        fog=state.fog,
-        turn=state.turn,
-        player_hp=state.player_hp,
-        player_max_hp=state.player_max_hp,
-        light_source=state.light_source,
+    if _renderer is None or _room_layout is None or _fog is None:
+        return {"error": "Game not initialized"}
+
+    entities = _build_entities()
+
+    # Get turn info from engine
+    turn = 0
+    if _engine and _engine.game_state:
+        tracker = _engine.game_state.initiative_tracker
+        if tracker:
+            turn = tracker.round_number
+
+    # Get party HP (sum of all characters)
+    player_hp = 30
+    player_max_hp = 30
+    if _engine:
+        party_data = _engine.get_party_data()
+        if party_data:
+            player_hp = sum(c["hp"] for c in party_data)
+            player_max_hp = sum(c["max_hp"] for c in party_data)
+
+    return _renderer.render_state(
+        room=_room_layout.tiles,
+        player_x=_player_x,
+        player_y=_player_y,
+        entities=entities,
+        fog=_fog,
+        turn=turn,
+        player_hp=player_hp,
+        player_max_hp=player_max_hp,
+        light_source="torch",
     )
 
 
 def _format_state_response(state_dict: dict) -> str:
     """Format state dict as readable response."""
+    if "error" in state_dict:
+        return f"Error: {state_dict['error']}"
+
     lines = [
         f"Turn: {state_dict['turn']}",
-        f"Player: {state_dict['player']['position']} "
-        f"HP: {state_dict['player']['hp']}/{state_dict['player']['max_hp']} "
+        f"Party HP: {state_dict['player']['hp']}/{state_dict['player']['max_hp']} "
         f"Light: {state_dict['player']['light_source']}",
         f"Explored: {state_dict['explored_tiles']}/{state_dict['total_tiles']}",
+    ]
+
+    # Add combat info if in combat
+    if _engine and _engine.in_combat:
+        combat_data = _engine.get_combat_data()
+        if combat_data:
+            lines.append(f"Combat Round: {combat_data['round']}")
+            current = _engine.get_current_combatant()
+            if current:
+                lines.append(f"Current Turn: {current['name']}")
+
+    lines.extend([
         "",
         "Map:",
         state_dict["map"],
         "",
         "Legend:",
-    ]
+    ])
 
     for symbol, entity in state_dict["legend"].items():
         lines.append(f"  {symbol} = {entity}")
@@ -231,57 +245,123 @@ def _format_state_response(state_dict: dict) -> str:
                 f"at {info['position']} ({info['distance']} tiles {info['direction']})"
             )
 
+    # Add party status
+    if _engine:
+        party_data = _engine.get_party_data()
+        if party_data:
+            lines.append("")
+            lines.append("Party:")
+            for member in party_data:
+                conditions = ", ".join(member.get("conditions", [])) or "healthy"
+                lines.append(
+                    f"  {member['name']} ({member['class']}): "
+                    f"{member['hp']}/{member['max_hp']} HP - {conditions}"
+                )
+
+    # Add enemies in combat
+    if _engine and _engine.in_combat:
+        enemies = _engine.get_enemies()
+        if enemies:
+            lines.append("")
+            lines.append("Enemies:")
+            for e in enemies:
+                lines.append(f"  [{e['index']}] {e['name']}: {e['hp']}/{e['max_hp']} HP")
+
     lines.append("")
     lines.append("Available Actions:")
     for action in state_dict["available_actions"]:
         lines.append(f"  - {action}")
 
+    # Add combat actions if in combat
+    if _engine and _engine.in_combat and _engine.is_player_turn():
+        lines.append("")
+        lines.append("Combat Actions:")
+        lines.append("  - game_attack(target_index) - e.g., game_attack(0)")
+        lines.append("  - game_wait() - pass turn")
+
     return "\n".join(lines)
+
+
+def _get_available_exits() -> dict[str, str]:
+    """Get available exits from current room."""
+    if _engine is None or _engine.game_state is None:
+        return {}
+
+    room = _engine.game_state.get_current_room()
+    exits = {}
+    raw_exits = room.get("exits", {})
+    for direction, dest in raw_exits.items():
+        if isinstance(dest, dict):
+            if not dest.get("hidden", False):
+                exits[direction] = dest.get("destination", "")
+        else:
+            exits[direction] = dest
+    return exits
 
 
 @mcp.tool()
 def game_new(
-    room_id: str = "",
+    dungeon_name: str = "cellar",
     campaign_id: str = "poisoned_laboratory",
-    dungeon_name: str = "laboratory",
+    start_room: str = "cellar.stairs",
 ) -> str:
-    """Start a new game session.
+    """Start a new game session with real dnd-engine.
 
     Args:
-        room_id: Room ID to start in (e.g., 'laboratory.entrance').
-                 If empty, starts in demo mode.
+        dungeon_name: Dungeon file name without .json (default: cellar)
         campaign_id: Campaign containing the dungeon (default: poisoned_laboratory)
-        dungeon_name: Dungeon file name without .json (default: laboratory)
+        start_room: Room ID to start in (default: cellar.stairs)
 
     Returns:
-        Initial game state with ASCII map and available actions.
+        Initial game state with ASCII map, party info, and available actions.
 
     Examples:
-        game_new()  # Demo mode
-        game_new(room_id="laboratory.entrance")  # Real room from campaign
+        game_new()  # Start in cellar stairs (safe room)
+        game_new(start_room="cellar.storage")  # Start in storage (has rats!)
     """
-    global _game_state, _renderer, _processor, _current_room_id
+    global _engine
 
-    if room_id:
-        # Load from real campaign room
-        _game_state = _create_game_from_layout(campaign_id, dungeon_name, room_id)
-        if _game_state is None:
-            return f"Failed to load room '{room_id}' from {campaign_id}/{dungeon_name}"
-        _current_room_id = room_id
-        mode_msg = f"Loaded room: {room_id}"
-    else:
-        # Demo mode
-        _game_state = create_demo_game_state()
-        _current_room_id = "demo"
-        mode_msg = "Demo mode"
+    try:
+        # Initialize real engine
+        _engine = EngineAdapter()
 
-    width = len(_game_state.room[0])
-    height = len(_game_state.room)
-    _renderer = StateRenderer(width=width, height=height)
-    _processor = CommandProcessor()
+        # Load party from vault
+        party_info = _engine.load_party_from_vault()
+        party_names = [p["name"] for p in party_info]
 
-    state = _get_current_state()
-    return f"New game started! ({mode_msg})\n\n" + _format_state_response(state)
+        # Initialize game
+        game_info = _engine.initialize_game(
+            dungeon_name=dungeon_name,
+            campaign_id=campaign_id,
+            start_room=start_room,
+        )
+
+        # Start game (checks for enemies)
+        start_info = _engine.start_game()
+
+        # Load room layout for ASCII rendering
+        _load_room_layout()
+
+        # Build response
+        lines = [
+            "New game started! (Real Engine)",
+            f"Dungeon: {game_info['dungeon']} / {game_info['campaign']}",
+            f"Room: {game_info['room_name']} ({game_info['room_id']})",
+            f"Party: {', '.join(party_names)}",
+        ]
+
+        if start_info["in_combat"]:
+            lines.append(f"COMBAT! Enemies: {', '.join(start_info['enemies'])}")
+        else:
+            lines.append("No enemies in starting room. Explore with game_move()!")
+
+        lines.append("")
+
+        state = _get_current_state()
+        return "\n".join(lines) + _format_state_response(state)
+
+    except Exception as e:
+        return f"Failed to start game: {e}"
 
 
 @mcp.tool()
@@ -290,16 +370,19 @@ def game_state() -> str:
 
     Returns:
         ASCII map showing visible area with fog of war,
-        player position and stats, visible entities,
+        party status, combat info if in combat,
         and available actions.
     """
+    if _engine is None:
+        return "No game in progress. Use game_new() to start."
+
     state = _get_current_state()
     return _format_state_response(state)
 
 
 @mcp.tool()
 def game_move(direction: str) -> str:
-    """Move the player in a direction.
+    """Move the party in a direction. May trigger room transitions or combat.
 
     Args:
         direction: One of 'north', 'south', 'east', 'west'
@@ -307,130 +390,225 @@ def game_move(direction: str) -> str:
     Returns:
         Updated game state after movement, or error if blocked.
     """
-    state, renderer, processor = _ensure_game()
+    global _player_x, _player_y
 
-    direction_map = {
-        "north": Direction.NORTH,
-        "south": Direction.SOUTH,
-        "east": Direction.EAST,
-        "west": Direction.WEST,
-    }
+    if _engine is None or _engine.game_state is None:
+        return "No game in progress. Use game_new() to start."
+
+    if _engine.in_combat:
+        return "Cannot move during combat! Use game_attack() or game_wait()."
 
     dir_lower = direction.lower()
-    if dir_lower not in direction_map:
+    if dir_lower not in ("north", "south", "east", "west"):
         return f"Invalid direction: {direction}. Use north, south, east, or west."
 
-    # Check if move is valid
-    current_state = _get_current_state()
-    action_name = f"move_{dir_lower}"
+    # Check for room exit
+    exits = _get_available_exits()
+    if dir_lower in exits:
+        # Room transition via engine
+        try:
+            result = _engine.game_state.move(dir_lower)
+            if result:
+                _load_room_layout()
 
-    if action_name not in current_state["available_actions"]:
-        return f"Cannot move {dir_lower}: blocked by wall or obstacle."
+                room = _engine.game_state.get_current_room()
+                room_name = room.get("name", "Unknown")
 
-    # Execute move
-    dir_obj = direction_map[dir_lower]
-    dx, dy = dir_obj.delta
-    state.player_x += dx
-    state.player_y += dy
-    state.turn += 1
+                lines = [f"Moved {dir_lower}. Entered: {room_name}"]
 
-    # Update lighting
-    state.fog.reset_to_dark()
-    state.lighting.update_party_lights(
-        [(state.player_x, state.player_y)], state.light_source
-    )
-    lit_tiles = state.lighting.calculate_lighting()
-    state.fog.apply_lighting(lit_tiles)
+                # Check for combat
+                if _engine.in_combat:
+                    enemies = [e.name for e in _engine.game_state.active_enemies]
+                    lines.append(f"COMBAT! Enemies: {', '.join(enemies)}")
 
-    new_state = _get_current_state()
-    return f"Moved {dir_lower}.\n\n" + _format_state_response(new_state)
+                lines.append("")
+                state = _get_current_state()
+                return "\n".join(lines) + _format_state_response(state)
+            else:
+                return f"Cannot move {dir_lower}: path blocked."
+        except Exception as e:
+            return f"Move failed: {e}"
+
+    # Intra-room movement
+    dx, dy = {
+        "north": (0, -1),
+        "south": (0, 1),
+        "east": (1, 0),
+        "west": (-1, 0),
+    }[dir_lower]
+
+    new_x = _player_x + dx
+    new_y = _player_y + dy
+
+    # Check bounds and walls
+    if _room_layout and 0 <= new_x < _room_layout.width and 0 <= new_y < _room_layout.height:
+        if not _room_layout.is_blocking(new_x, new_y):
+            _player_x = new_x
+            _player_y = new_y
+            _update_lighting()
+
+            state = _get_current_state()
+            return f"Moved {dir_lower}.\n\n" + _format_state_response(state)
+
+    return f"Cannot move {dir_lower}: blocked by wall."
 
 
 @mcp.tool()
-def game_attack(target: str) -> str:
-    """Attack an adjacent enemy.
+def game_attack(target_index: int) -> str:
+    """Attack an enemy in combat using real D&D 5E combat rules.
 
     Args:
-        target: The entity ID to attack (e.g., 'goblin_1', 'skeleton_1')
+        target_index: Index of the enemy to attack (from enemies list)
 
     Returns:
-        Result of the attack and updated game state.
+        Combat result with attack roll, damage, and updated state.
     """
-    state, _, _ = _ensure_game()
+    if _engine is None:
+        return "No game in progress. Use game_new() to start."
 
-    # Check if attack is valid
-    current_state = _get_current_state()
-    action_name = f"attack_{target}"
+    if not _engine.in_combat:
+        return "Not in combat. Move to find enemies!"
 
-    if action_name not in current_state["available_actions"]:
-        return f"Cannot attack {target}: not adjacent or not visible."
+    if not _engine.is_player_turn():
+        return "Not your turn! Wait for enemies to act."
 
-    # Find and remove the target (simple combat for now)
-    for entity in state.entities:
-        if entity.entity_id == target and entity.entity_type == "monster":
-            state.entities.remove(entity)
-            state.turn += 1
-            new_state = _get_current_state()
-            return f"Attacked {target}! Enemy defeated.\n\n" + _format_state_response(
-                new_state
+    try:
+        # Execute attack through engine
+        result = _engine.execute_attack(target_index=target_index)
+
+        if not result["success"]:
+            return f"Attack failed: {result.get('error', 'Unknown error')}"
+
+        # Build response
+        lines = []
+        if result["hit"]:
+            crit = " CRITICAL!" if result.get("critical") else ""
+            lines.append(
+                f"{result['attacker_name']} hits {result['target_name']} "
+                f"for {result['damage']} damage!{crit}"
+            )
+            if result.get("target_killed"):
+                lines.append(f"{result['target_name']} is defeated!")
+        else:
+            lines.append(
+                f"{result['attacker_name']} misses {result['target_name']}! "
+                f"(rolled {result['attack_roll']} vs AC {result['target_ac']})"
             )
 
-    return f"Could not find target: {target}"
+        # Advance turn
+        turn_result = _engine.advance_turn()
 
+        if turn_result.get("combat_ended"):
+            check = _engine.end_combat_check()
+            if check.get("victory"):
+                lines.append("Victory! All enemies defeated!")
+            elif check.get("party_wiped"):
+                lines.append("Defeat! Your party has fallen...")
+        else:
+            # Process enemy turns automatically
+            while not _engine.is_player_turn() and _engine.in_combat:
+                enemy_result = _engine.process_enemy_turn()
+                if enemy_result["success"]:
+                    if enemy_result.get("hit") is not None:
+                        if enemy_result["hit"]:
+                            lines.append(
+                                f"{enemy_result['enemy_name']} hits "
+                                f"{enemy_result['target_name']} "
+                                f"for {enemy_result['damage']} damage!"
+                            )
+                        else:
+                            lines.append(
+                                f"{enemy_result['enemy_name']} misses "
+                                f"{enemy_result['target_name']}!"
+                            )
 
-@mcp.tool()
-def game_interact(target: str) -> str:
-    """Interact with an adjacent object (item, chest, door, etc.).
+                adv = _engine.advance_turn()
+                if adv.get("combat_ended"):
+                    check = _engine.end_combat_check()
+                    if check.get("victory"):
+                        lines.append("Victory! All enemies defeated!")
+                    break
 
-    Args:
-        target: The entity ID to interact with (e.g., 'chest_1', 'potion_1')
+        lines.append("")
+        state = _get_current_state()
+        return "\n".join(lines) + _format_state_response(state)
 
-    Returns:
-        Result of the interaction and updated game state.
-    """
-    state, _, _ = _ensure_game()
-
-    # Check if interact is valid
-    current_state = _get_current_state()
-    action_name = f"interact_{target}"
-
-    if action_name not in current_state["available_actions"]:
-        return f"Cannot interact with {target}: not adjacent or not visible."
-
-    # Find and handle the target
-    for entity in state.entities:
-        if entity.entity_id == target:
-            if entity.entity_type == "item":
-                state.entities.remove(entity)
-                state.turn += 1
-                new_state = _get_current_state()
-                return f"Picked up {target}!\n\n" + _format_state_response(new_state)
-            elif entity.entity_type == "deco":
-                state.entities.remove(entity)
-                state.turn += 1
-                new_state = _get_current_state()
-                return f"Opened {target}!\n\n" + _format_state_response(new_state)
-            else:
-                state.turn += 1
-                new_state = _get_current_state()
-                return f"Interacted with {target}.\n\n" + _format_state_response(
-                    new_state
-                )
-
-    return f"Could not find target: {target}"
+    except Exception as e:
+        return f"Attack error: {e}"
 
 
 @mcp.tool()
 def game_wait() -> str:
-    """Wait one turn without taking action.
+    """Wait/pass your turn in combat, or let enemies act if it's their turn.
+
+    If it's a player's turn, passes that turn.
+    Then processes all enemy turns until it's a player's turn again.
 
     Returns:
         Updated game state after waiting.
     """
-    state, _, _ = _ensure_game()
-    state.turn += 1
-    new_state = _get_current_state()
-    return "Waited one turn.\n\n" + _format_state_response(new_state)
+    if _engine is None:
+        return "No game in progress. Use game_new() to start."
+
+    if not _engine.in_combat:
+        return "Not in combat. Use game_move() to explore."
+
+    try:
+        lines = []
+
+        # If it's player's turn, pass it first
+        if _engine.is_player_turn():
+            current = _engine.get_current_combatant()
+            if current:
+                lines.append(f"{current['name']} waits...")
+            turn_result = _engine.advance_turn()
+            if turn_result.get("combat_ended"):
+                check = _engine.end_combat_check()
+                if check.get("victory"):
+                    lines.append("Victory! All enemies defeated!")
+                elif check.get("party_wiped"):
+                    lines.append("Defeat! Your party has fallen...")
+                lines.append("")
+                state = _get_current_state()
+                return "\n".join(lines) + _format_state_response(state)
+
+        # Process enemy turns until it's a player's turn again
+        max_enemy_turns = 20  # Safety limit
+        enemy_turns = 0
+
+        while not _engine.is_player_turn() and _engine.in_combat and enemy_turns < max_enemy_turns:
+            enemy_result = _engine.process_enemy_turn()
+            enemy_turns += 1
+
+            if enemy_result["success"]:
+                if enemy_result.get("hit") is not None:
+                    if enemy_result["hit"]:
+                        lines.append(
+                            f"{enemy_result['enemy_name']} hits "
+                            f"{enemy_result['target_name']} "
+                            f"for {enemy_result['damage']} damage!"
+                        )
+                    else:
+                        lines.append(
+                            f"{enemy_result['enemy_name']} misses "
+                            f"{enemy_result['target_name']}!"
+                        )
+
+            adv = _engine.advance_turn()
+            if adv.get("combat_ended"):
+                check = _engine.end_combat_check()
+                if check.get("victory"):
+                    lines.append("Victory! All enemies defeated!")
+                elif check.get("party_wiped"):
+                    lines.append("Defeat! Your party has fallen...")
+                break
+
+        lines.append("")
+        state = _get_current_state()
+        return "\n".join(lines) + _format_state_response(state)
+
+    except Exception as e:
+        return f"Wait error: {e}"
 
 
 if __name__ == "__main__":
