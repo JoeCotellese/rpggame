@@ -77,8 +77,17 @@ class DataLoader:
         hp_roll = self.dice_roller.roll(data["hp"])
         max_hp = max(1, hp_roll.total)  # Minimum 1 HP
 
+        # Get speed (default 30 ft if not specified)
+        speed = data.get("speed", 30)
+
         # Create the creature
-        creature = Creature(name=data["name"], max_hp=max_hp, ac=data["ac"], abilities=abilities)
+        creature = Creature(
+            name=data["name"],
+            max_hp=max_hp,
+            ac=data["ac"],
+            abilities=abilities,
+            speed=speed,
+        )
 
         return creature
 

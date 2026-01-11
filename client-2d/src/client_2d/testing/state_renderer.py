@@ -228,9 +228,10 @@ class StateRenderer:
                 key = f"{entity.entity_type}:{entity.entity_id}"
                 if key in self._entity_symbols:
                     # Calculate distance and direction from player
+                    # Use Chebyshev distance (D&D 5E: diagonal = 1 square)
                     dx = entity.x - player_x
                     dy = entity.y - player_y
-                    distance = abs(dx) + abs(dy)  # Manhattan distance
+                    distance = max(abs(dx), abs(dy))  # Chebyshev distance
                     direction = self._get_direction(dx, dy)
 
                     visible_entities[entity.entity_id] = {

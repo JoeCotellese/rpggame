@@ -343,7 +343,7 @@ class GameWindow(arcade.Window):
             for entity_id, info in state_dict["visible_entities"].items():
                 lines.append(
                     f"  {info['symbol']} {info['type']}:{entity_id} "
-                    f"at {info['position']} ({info['distance']} tiles {info['direction']})"
+                    f"at {info['position']} ({info['distance']} squares {info['direction']})"
                 )
 
         # Add party status
@@ -362,7 +362,12 @@ class GameWindow(arcade.Window):
         lines.append("")
         lines.append("Available Actions:")
         if self.engine.in_combat:
-            lines.append("  - game_attack(target_index) - Attack enemy")
+            # Show movement remaining during combat
+            turn_state = self.engine.get_current_turn_state()
+            if turn_state:
+                lines.append(f"  Movement: {turn_state.movement_remaining} ft remaining")
+            lines.append("  - game_move(direction) - Move north/south/east/west")
+            lines.append("  - game_attack(target_index) - Attack adjacent enemy")
             lines.append("  - game_wait() - Pass turn")
         else:
             lines.append("  - game_move(direction) - Move north/south/east/west")
@@ -370,16 +375,71 @@ class GameWindow(arcade.Window):
         return "\n".join(lines)
 
     def _mcp_move(self, direction: str) -> str:
-        """Handle MCP move command."""
-        if self.engine.in_combat:
-            return "Cannot move during combat!"
-
+        """Handle MCP move command - works in exploration AND combat."""
         direction = direction.lower()
         if direction not in ("north", "south", "east", "west"):
             return f"Invalid direction: {direction}. Use north/south/east/west."
 
-        self._move_player(direction)
-        return self._mcp_get_state()
+        if self.engine.in_combat:
+            return self._mcp_combat_move(direction)
+        else:
+            self._move_player(direction)
+            return self._mcp_get_state()
+
+    def _mcp_combat_move(self, direction: str) -> str:
+        """Handle movement during combat with action economy."""
+        # Check if it's player's turn
+        if not self.engine.is_player_turn():
+            return "Not your turn! Wait for enemies to act."
+
+        # Get turn state for movement tracking
+        turn_state = self.engine.get_current_turn_state()
+        if turn_state is None:
+            return "Error: Could not get turn state."
+
+        # Check movement remaining (5 ft per grid square)
+        if turn_state.movement_remaining < 5:
+            current = self.engine.get_current_combatant()
+            speed = current["creature"].speed if current else 30
+            return f"No movement remaining (0/{speed} ft). Use game_attack() or game_wait()."
+
+        # Calculate new position
+        dx, dy = {"north": (0, -1), "south": (0, 1), "east": (1, 0), "west": (-1, 0)}[direction]
+        new_x = self.player_x + dx
+        new_y = self.player_y + dy
+
+        # Check bounds
+        if not self.room_layout or not (
+            0 <= new_x < self.room_layout.width and 0 <= new_y < self.room_layout.height
+        ):
+            return "Path blocked! Cannot move outside room."
+
+        # Check wall
+        if self.room_layout.is_blocking(new_x, new_y):
+            return "Path blocked! Wall in the way."
+
+        # Check entity collision (can't move through monsters)
+        entity_at_dest = self.entity_manager.get_at_position(new_x, new_y)
+        if entity_at_dest is not None and entity_at_dest in self.entity_manager.get_monsters():
+            # Get display name from creature reference or format sub_type
+            if entity_at_dest._creature_ref:
+                name = entity_at_dest._creature_ref.name
+            else:
+                name = entity_at_dest.sub_type.replace("_", " ").title()
+            return f"Path blocked! {name} is in the way."
+
+        # Execute movement
+        self.player_x = new_x
+        self.player_y = new_y
+        turn_state.consume_movement(5)
+        self._update_lighting()
+
+        # Sync visual position of current turn character
+        self.entity_manager.update_current_turn_position(self.engine, new_x, new_y)
+
+        # Return state with movement info
+        remaining = turn_state.movement_remaining
+        return f"Moved {direction}. Movement remaining: {remaining} ft.\n" + self._mcp_get_state()
 
     def _mcp_attack(self, target_index: int) -> str:
         """Handle MCP attack command."""
@@ -393,6 +453,25 @@ class GameWindow(arcade.Window):
         monsters = self.entity_manager.get_monsters()
         if target_index < 0 or target_index >= len(monsters):
             return f"Invalid target index {target_index}. Valid: 0-{len(monsters)-1}"
+
+        # Check melee range (must be adjacent for melee attack)
+        target = monsters[target_index]
+        from dnd_engine.core.distance import chebyshev_distance
+
+        distance = chebyshev_distance(
+            self.player_x, self.player_y, target.grid_x, target.grid_y
+        )
+        if distance > 1:
+            turn_state = self.engine.get_current_turn_state()
+            movement_info = (
+                f" Movement remaining: {turn_state.movement_remaining} ft."
+                if turn_state
+                else ""
+            )
+            return (
+                f"Target not in melee range (distance: {distance} squares). "
+                f"Move closer first.{movement_info}"
+            )
 
         # Set selected enemy and execute attack
         self.selected_enemy = target_index

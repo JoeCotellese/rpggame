@@ -310,6 +310,40 @@ class EntityManager:
                 and party_member._creature_ref is current_creature
             )
 
+    def update_current_turn_position(
+        self, engine: EngineAdapter, new_x: int, new_y: int
+    ) -> bool:
+        """Update the grid position of the current turn character.
+
+        Used during MCP combat movement to sync visual position with game state.
+
+        Args:
+            engine: EngineAdapter to identify current combatant.
+            new_x: New grid X position.
+            new_y: New grid Y position.
+
+        Returns:
+            True if a party member was updated, False otherwise.
+        """
+        current = engine.get_current_combatant()
+        if not current or not current.get("is_player"):
+            return False
+
+        current_creature = current.get("creature")
+        if not current_creature:
+            return False
+
+        for party_member in self._party_members.values():
+            if (
+                party_member._creature_ref is not None
+                and party_member._creature_ref is current_creature
+            ):
+                party_member.grid_x = new_x
+                party_member.grid_y = new_y
+                return True
+
+        return False
+
     def _add_entity(self, entity: Entity) -> None:
         """Add an entity to the appropriate collections."""
         self._entities[entity.entity_id] = entity

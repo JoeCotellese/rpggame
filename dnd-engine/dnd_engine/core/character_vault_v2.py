@@ -396,6 +396,7 @@ class CharacterVaultV2:
             "spellcasting_ability": character.spellcasting_ability,
             "known_spells": character.known_spells,
             "prepared_spells": character.prepared_spells,
+            "speed": character.speed,
         }
 
     def _serialize_inventory(self, inventory: Inventory) -> dict[str, Any]:
@@ -442,6 +443,11 @@ class CharacterVaultV2:
         abilities = Abilities(**char_data["abilities"])
         inventory = self._deserialize_inventory(char_data["inventory"])
 
+        # Get speed from saved data, or derive from race for backward compatibility
+        speed = char_data.get("speed")
+        if speed is None:
+            speed = self._get_race_speed(char_data.get("race", ""))
+
         character = Character(
             name=char_data["name"],
             character_class=CharacterClass(char_data["character_class"]),
@@ -463,6 +469,7 @@ class CharacterVaultV2:
             spellcasting_ability=char_data.get("spellcasting_ability"),
             known_spells=char_data.get("known_spells"),
             prepared_spells=char_data.get("prepared_spells"),
+            speed=speed,
         )
 
         # Restore conditions
@@ -475,6 +482,22 @@ class CharacterVaultV2:
             character.add_resource_pool(pool)
 
         return character
+
+    def _get_race_speed(self, race: str) -> int:
+        """Get movement speed for a race (D&D 5E SRD values).
+
+        Used for backward compatibility when loading characters saved
+        before speed was persisted.
+
+        Args:
+            race: Race name (e.g., "halfling", "human", "hill_dwarf")
+
+        Returns:
+            Movement speed in feet (25 for small races, 30 for others)
+        """
+        # Races with 25 ft speed per D&D 5E SRD
+        slow_races = {"halfling", "dwarf", "hill_dwarf", "mountain_dwarf", "gnome"}
+        return 25 if race.lower() in slow_races else 30
 
     def _deserialize_inventory(self, inv_data: dict[str, Any]) -> Inventory:
         """

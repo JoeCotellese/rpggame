@@ -59,7 +59,13 @@ class Creature:
     """
 
     def __init__(
-        self, name: str, max_hp: int, ac: int, abilities: Abilities, current_hp: int | None = None
+        self,
+        name: str,
+        max_hp: int,
+        ac: int,
+        abilities: Abilities,
+        current_hp: int | None = None,
+        speed: int = 30,
     ):
         """
         Initialize a creature.
@@ -70,12 +76,14 @@ class Creature:
             ac: Armor class (target number for attacks)
             abilities: Ability scores (STR, DEX, CON, INT, WIS, CHA)
             current_hp: Starting HP (defaults to max_hp if not specified)
+            speed: Movement speed in feet per round (default 30 ft)
         """
         self.name = name
         self.max_hp = max_hp
         self.current_hp = current_hp if current_hp is not None else max_hp
         self._base_ac = ac  # Store base AC (before modifiers from spells/effects)
         self.abilities = abilities
+        self.speed = speed  # Movement speed in feet (5 ft = 1 grid square)
         # Condition tracking with metadata for duration and repeat saves
         # Maps condition name -> metadata dict
         self.active_conditions: dict[str, dict] = {}

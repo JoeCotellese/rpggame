@@ -518,6 +518,20 @@ class EngineAdapter:
             return False
         return current["is_player"]
 
+    def get_current_turn_state(self):
+        """Get the TurnState for the current combatant.
+
+        Returns:
+            TurnState object with action/movement availability, or None if not in combat.
+        """
+        if (
+            self._game_state is None
+            or not self._game_state.in_combat
+            or self._game_state.initiative_tracker is None
+        ):
+            return None
+        return self._game_state.initiative_tracker.get_current_turn_state()
+
     def execute_attack(
         self,
         target_index: int,
