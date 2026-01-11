@@ -93,8 +93,8 @@ class InitiativeTracker:
         entry = InitiativeEntry(creature=creature, initiative_roll=initiative_roll)
         self.combatants.append(entry)
 
-        # Initialize turn state for this combatant
-        self.turn_states[creature] = TurnState()
+        # Initialize turn state for this combatant with their movement speed
+        self.turn_states[creature] = TurnState(movement_remaining=creature.speed)
 
         # Sort by initiative (highest first), ties broken by DEX modifier
         self._sort_initiative()
@@ -143,7 +143,7 @@ class InitiativeTracker:
         # This handles the case where removing a combatant shifts us to a different turn
         current = self.get_current_combatant()
         if current and current.creature in self.turn_states:
-            self.turn_states[current.creature].reset()
+            self.turn_states[current.creature].reset(speed=current.creature.speed)
 
     def get_current_combatant(self) -> InitiativeEntry | None:
         """
@@ -196,10 +196,10 @@ class InitiativeTracker:
                 # Advance time-based effects (Mage Armor: 8 hours)
                 self.time_manager.advance_time(0.1, reason="combat_round")
 
-        # Reset actions for the new turn
+        # Reset actions and movement for the new turn
         current = self.get_current_combatant()
         if current and current.creature in self.turn_states:
-            self.turn_states[current.creature].reset()
+            self.turn_states[current.creature].reset(speed=current.creature.speed)
 
     def get_all_combatants(self) -> list[InitiativeEntry]:
         """

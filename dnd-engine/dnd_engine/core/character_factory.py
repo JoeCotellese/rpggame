@@ -555,6 +555,9 @@ class CharacterFactory:
         armor_data = items_data["armor"].get(armor_id) if armor_id else None
         ac = self.calculate_ac(armor_data, abilities_obj.dex_mod)
 
+        # Get speed from race data (default 30 ft if not specified)
+        speed = race_data.get("speed", 30)
+
         # Auto-select skill proficiencies if not provided
         if skill_proficiencies is None:
             skill_profs = class_data.get("skill_proficiencies", {})
@@ -592,6 +595,7 @@ class CharacterFactory:
             armor_proficiencies=armor_proficiencies,
             tool_proficiencies=tool_proficiencies,
             saving_throw_proficiencies=saving_throw_proficiencies,
+            speed=speed,
         )
 
         # Store race and darkvision

@@ -31,12 +31,13 @@ class TurnState:
     - Each turn gets: 1 action, 1 bonus action, 1 free object interaction
     - Actions are consumed when used
     - All actions reset at the start of the next turn
-    - Movement is tracked separately (not implemented here)
+    - Movement is tracked per turn (typically 30 ft, varies by creature speed)
     """
 
     action_available: bool = True
     bonus_action_available: bool = True
     free_object_interaction_used: bool = False
+    movement_remaining: int = 30  # Movement in feet (5 ft = 1 grid square)
 
     def consume_action(self, action_type: ActionType) -> bool:
         """
@@ -79,6 +80,28 @@ class TurnState:
 
         return False
 
+    def consume_movement(self, feet: int = 5) -> bool:
+        """
+        Consume movement from remaining movement pool.
+
+        Args:
+            feet: Amount of movement to consume (default 5 ft = 1 grid square)
+
+        Returns:
+            True if movement was available and consumed, False if insufficient
+
+        Example:
+            >>> turn = TurnState(movement_remaining=30)
+            >>> turn.consume_movement(5)  # Move 1 square
+            True
+            >>> turn.movement_remaining
+            25
+        """
+        if self.movement_remaining >= feet:
+            self.movement_remaining -= feet
+            return True
+        return False
+
     def is_action_available(self, action_type: ActionType) -> bool:
         """
         Check if an action type is available without consuming it.
@@ -99,15 +122,20 @@ class TurnState:
             return True
         return False
 
-    def reset(self) -> None:
+    def reset(self, speed: int = 30) -> None:
         """
         Reset all actions for a new turn.
 
-        Called at the start of each turn to refresh available actions.
+        Called at the start of each turn to refresh available actions
+        and movement.
+
+        Args:
+            speed: Creature's movement speed in feet (default 30)
         """
         self.action_available = True
         self.bonus_action_available = True
         self.free_object_interaction_used = False
+        self.movement_remaining = speed
 
     def has_any_action(self) -> bool:
         """
@@ -128,7 +156,5 @@ class TurnState:
         if not self.free_object_interaction_used:
             parts.append("Free Object")
 
-        if not parts:
-            return "No actions remaining"
-
-        return f"Available: {', '.join(parts)}"
+        action_str = ", ".join(parts) if parts else "No actions"
+        return f"Available: {action_str} | Movement: {self.movement_remaining} ft"

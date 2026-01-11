@@ -168,7 +168,8 @@ class TestTurnState:
         turn.consume_action(ActionType.FREE_OBJECT)
 
         str_repr = str(turn)
-        assert "No actions remaining" in str_repr
+        assert "No actions" in str_repr
+        assert "Movement:" in str_repr
 
 
 class TestInitiativeTrackerActions:
@@ -303,6 +304,97 @@ class TestInitiativeTrackerActions:
 
         turn_state = tracker.get_current_turn_state()
         assert turn_state is None
+
+
+class TestMovementTracking:
+    """Test movement tracking in TurnState and InitiativeTracker"""
+
+    def test_initial_movement(self):
+        """Test that TurnState initializes with default movement"""
+        turn = TurnState()
+        assert turn.movement_remaining == 30
+
+    def test_custom_initial_movement(self):
+        """Test that TurnState can be initialized with custom movement"""
+        turn = TurnState(movement_remaining=25)
+        assert turn.movement_remaining == 25
+
+    def test_consume_movement_success(self):
+        """Test successful movement consumption"""
+        turn = TurnState(movement_remaining=30)
+        result = turn.consume_movement(5)
+        assert result is True
+        assert turn.movement_remaining == 25
+
+    def test_consume_movement_failure(self):
+        """Test movement consumption fails when insufficient"""
+        turn = TurnState(movement_remaining=5)
+        result = turn.consume_movement(10)
+        assert result is False
+        assert turn.movement_remaining == 5  # Unchanged
+
+    def test_consume_movement_exact(self):
+        """Test consuming exactly remaining movement"""
+        turn = TurnState(movement_remaining=10)
+        result = turn.consume_movement(10)
+        assert result is True
+        assert turn.movement_remaining == 0
+
+    def test_reset_restores_movement_with_speed(self):
+        """Test that reset restores movement to creature's speed"""
+        turn = TurnState(movement_remaining=5)
+        turn.reset(speed=25)  # Dwarf speed
+        assert turn.movement_remaining == 25
+
+    def test_movement_str_representation(self):
+        """Test that movement is shown in string representation"""
+        turn = TurnState(movement_remaining=30)
+        str_repr = str(turn)
+        assert "Movement: 30 ft" in str_repr
+
+    def test_initiative_tracker_initializes_movement_from_speed(self):
+        """Test that InitiativeTracker uses creature's speed for movement"""
+        tracker = InitiativeTracker()
+        abilities = Abilities(10, 10, 10, 10, 10, 10)
+
+        # Create creatures with different speeds
+        human = Creature("Human Fighter", max_hp=20, ac=15, abilities=abilities, speed=30)
+        dwarf = Creature("Dwarf Cleric", max_hp=20, ac=15, abilities=abilities, speed=25)
+
+        tracker.add_combatant(human)
+        tracker.add_combatant(dwarf)
+
+        # Check movement is set from creature's speed
+        assert tracker.turn_states[human].movement_remaining == 30
+        assert tracker.turn_states[dwarf].movement_remaining == 25
+
+    def test_initiative_tracker_resets_movement_with_speed(self):
+        """Test that movement resets to creature's speed on turn advance"""
+        tracker = InitiativeTracker()
+        abilities = Abilities(10, 10, 10, 10, 10, 10)
+
+        dwarf = Creature("Dwarf", max_hp=20, ac=15, abilities=abilities, speed=25)
+        human = Creature("Human", max_hp=20, ac=15, abilities=abilities, speed=30)
+
+        tracker.add_combatant(dwarf)
+        tracker.add_combatant(human)
+
+        # Get first combatant and their speed
+        first_combatant = tracker.get_current_combatant()
+        first_speed = first_combatant.creature.speed
+
+        # Consume some movement for first combatant
+        first_state = tracker.get_current_turn_state()
+        first_state.consume_movement(10)
+        assert first_state.movement_remaining == first_speed - 10
+
+        # Advance to next turn
+        tracker.next_turn()
+
+        # Next combatant should have full movement based on their speed
+        second_state = tracker.get_current_turn_state()
+        second_combatant = tracker.get_current_combatant()
+        assert second_state.movement_remaining == second_combatant.creature.speed
 
 
 if __name__ == "__main__":

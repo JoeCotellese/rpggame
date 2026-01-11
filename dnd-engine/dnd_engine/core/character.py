@@ -55,6 +55,7 @@ class Character(Creature):
         known_spells: list[str] | None = None,
         prepared_spells: list[str] | None = None,
         vault_id: str | None = None,
+        speed: int = 30,
     ):
         """
         Initialize a player character.
@@ -81,9 +82,15 @@ class Character(Creature):
             known_spells: List of spell IDs the character knows
             prepared_spells: List of spell IDs the character has prepared
             vault_id: UUID linking this character to their vault entry (for syncing progression)
+            speed: Movement speed in feet per round (default 30, varies by race)
         """
         super().__init__(
-            name=name, max_hp=max_hp, ac=ac, abilities=abilities, current_hp=current_hp
+            name=name,
+            max_hp=max_hp,
+            ac=ac,
+            abilities=abilities,
+            current_hp=current_hp,
+            speed=speed,
         )
 
         self.character_class = character_class
