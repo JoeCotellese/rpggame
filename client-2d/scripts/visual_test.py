@@ -15,9 +15,10 @@ Usage:
 
 Controls:
     WASD / Arrow keys: Move player
+    I: Open inventory modal
     L: Cycle light mode (torch -> lantern -> light spell -> darkvision -> full bright)
     Tab: Cycle UI mode (exploration -> combat -> character)
-    ESC: Quit
+    ESC: Quit (or close inventory)
 """
 
 import argparse
@@ -49,12 +50,14 @@ from client_2d.integration.layout_loader import LayoutLoader
 from client_2d.systems.fog_of_war import FogOfWarSystem
 from client_2d.systems.lighting import LightingSystem
 
-# Mock party data for UI demo
+# Mock party data for UI demo (6 characters max supported)
 MOCK_PARTY = [
     {"name": "Aldric", "class": "Fighter", "hp": 28, "max_hp": 32, "conditions": []},
     {"name": "Mira", "class": "Wizard", "hp": 14, "max_hp": 18, "conditions": ["Concentrating"]},
     {"name": "Thorne", "class": "Rogue", "hp": 22, "max_hp": 24, "conditions": []},
     {"name": "Elena", "class": "Cleric", "hp": 8, "max_hp": 20, "conditions": ["Blessed"]},
+    {"name": "Grimjaw", "class": "Barbarian", "hp": 38, "max_hp": 38, "conditions": ["Raging"]},
+    {"name": "Lyra", "class": "Bard", "hp": 16, "max_hp": 20, "conditions": []},
 ]
 
 # Mock narrative text
@@ -70,7 +73,9 @@ MOCK_COMBAT = {
     "round": 2,
     "current_turn": 1,  # Index into initiative order
     "initiative": [
+        {"name": "Grimjaw", "init": 19, "is_player": True, "hp": 38, "max_hp": 38},
         {"name": "Thorne", "init": 18, "is_player": True, "hp": 22, "max_hp": 24},
+        {"name": "Lyra", "init": 16, "is_player": True, "hp": 16, "max_hp": 20},
         {"name": "Skeleton", "init": 15, "is_player": False, "hp": 8, "max_hp": 13},
         {"name": "Aldric", "init": 12, "is_player": True, "hp": 28, "max_hp": 32},
         {"name": "Skeleton", "init": 10, "is_player": False, "hp": 13, "max_hp": 13},
@@ -99,6 +104,97 @@ MOCK_CHARACTER = {
         "weapon": "Longsword",
         "armor": "Chain Mail",
         "shield": "Shield",
+    },
+}
+
+# Mock inventory data per party member (matches engine structure)
+MOCK_INVENTORIES = {
+    "Aldric": {
+        "equipped": {
+            "weapon": {"item_id": "longsword", "name": "Longsword", "damage": "1d8", "damage_type": "slashing"},
+            "armor": {"item_id": "chain_mail", "name": "Chain Mail", "ac": 16, "armor_type": "heavy"},
+            "shield": {"item_id": "shield", "name": "Shield", "ac_bonus": 2},
+        },
+        "backpack": [
+            {"item_id": "potion_of_healing", "name": "Potion of Healing", "category": "consumables", "quantity": 2, "effect": "2d4+2 HP"},
+            {"item_id": "torch", "name": "Torch", "category": "equipment", "quantity": 3},
+            {"item_id": "rations", "name": "Rations", "category": "equipment", "quantity": 5},
+            {"item_id": "dagger", "name": "Dagger", "category": "weapons", "quantity": 1, "damage": "1d4"},
+        ],
+        "currency": {"gold": 47, "silver": 15, "copper": 23},
+    },
+    "Mira": {
+        "equipped": {
+            "weapon": {"item_id": "quarterstaff", "name": "Quarterstaff", "damage": "1d6", "damage_type": "bludgeoning"},
+            "armor": None,
+            "shield": None,
+        },
+        "backpack": [
+            {"item_id": "potion_of_healing", "name": "Potion of Healing", "category": "consumables", "quantity": 1, "effect": "2d4+2 HP"},
+            {"item_id": "scroll_of_magic_missile", "name": "Scroll of Magic Missile", "category": "consumables", "quantity": 2},
+            {"item_id": "component_pouch", "name": "Component Pouch", "category": "equipment", "quantity": 1},
+            {"item_id": "spellbook", "name": "Spellbook", "category": "equipment", "quantity": 1},
+        ],
+        "currency": {"gold": 32, "silver": 8, "copper": 0},
+    },
+    "Thorne": {
+        "equipped": {
+            "weapon": {"item_id": "rapier", "name": "Rapier", "damage": "1d8", "damage_type": "piercing"},
+            "armor": {"item_id": "leather_armor", "name": "Leather Armor", "ac": 11, "armor_type": "light"},
+            "shield": None,
+        },
+        "backpack": [
+            {"item_id": "potion_of_healing", "name": "Potion of Healing", "category": "consumables", "quantity": 3, "effect": "2d4+2 HP"},
+            {"item_id": "thieves_tools", "name": "Thieves' Tools", "category": "tools", "quantity": 1, "proficient": True},
+            {"item_id": "rope_hempen", "name": "Hempen Rope (50 ft)", "category": "equipment", "quantity": 1},
+            {"item_id": "dagger", "name": "Dagger", "category": "weapons", "quantity": 3, "damage": "1d4"},
+            {"item_id": "shortbow", "name": "Shortbow", "category": "weapons", "quantity": 1, "damage": "1d6"},
+            {"item_id": "arrows", "name": "Arrows", "category": "ammunition", "quantity": 20},
+        ],
+        "currency": {"gold": 89, "silver": 42, "copper": 15},
+    },
+    "Elena": {
+        "equipped": {
+            "weapon": {"item_id": "mace", "name": "Mace", "damage": "1d6", "damage_type": "bludgeoning"},
+            "armor": {"item_id": "scale_mail", "name": "Scale Mail", "ac": 14, "armor_type": "medium"},
+            "shield": {"item_id": "shield", "name": "Shield", "ac_bonus": 2},
+        },
+        "backpack": [
+            {"item_id": "potion_of_healing", "name": "Potion of Healing", "category": "consumables", "quantity": 5, "effect": "2d4+2 HP"},
+            {"item_id": "holy_symbol", "name": "Holy Symbol", "category": "equipment", "quantity": 1},
+            {"item_id": "healer_kit", "name": "Healer's Kit", "category": "tools", "quantity": 1, "uses": 10},
+            {"item_id": "rations", "name": "Rations", "category": "equipment", "quantity": 8},
+        ],
+        "currency": {"gold": 28, "silver": 5, "copper": 12},
+    },
+    "Grimjaw": {
+        "equipped": {
+            "weapon": {"item_id": "greataxe", "name": "Greataxe", "damage": "1d12", "damage_type": "slashing"},
+            "armor": None,
+            "shield": None,
+        },
+        "backpack": [
+            {"item_id": "potion_of_healing", "name": "Potion of Healing", "category": "consumables", "quantity": 1, "effect": "2d4+2 HP"},
+            {"item_id": "javelin", "name": "Javelin", "category": "weapons", "quantity": 4, "damage": "1d6"},
+            {"item_id": "bedroll", "name": "Bedroll", "category": "equipment", "quantity": 1},
+            {"item_id": "rations", "name": "Rations", "category": "equipment", "quantity": 10},
+        ],
+        "currency": {"gold": 12, "silver": 3, "copper": 45},
+    },
+    "Lyra": {
+        "equipped": {
+            "weapon": {"item_id": "rapier", "name": "Rapier", "damage": "1d8", "damage_type": "piercing"},
+            "armor": {"item_id": "leather_armor", "name": "Leather Armor", "ac": 11, "armor_type": "light"},
+            "shield": None,
+        },
+        "backpack": [
+            {"item_id": "potion_of_healing", "name": "Potion of Healing", "category": "consumables", "quantity": 2, "effect": "2d4+2 HP"},
+            {"item_id": "lute", "name": "Lute", "category": "equipment", "quantity": 1},
+            {"item_id": "disguise_kit", "name": "Disguise Kit", "category": "tools", "quantity": 1},
+            {"item_id": "perfume", "name": "Perfume", "category": "equipment", "quantity": 1},
+            {"item_id": "fine_clothes", "name": "Fine Clothes", "category": "equipment", "quantity": 1},
+        ],
+        "currency": {"gold": 65, "silver": 20, "copper": 8},
     },
 }
 
@@ -164,6 +260,11 @@ class DemoGame(arcade.Window):
         # UI mode for context panel (Tab to cycle for testing)
         self.ui_mode_index = 0
         self.current_ui_mode = UI_MODES[0]
+
+        # Inventory modal state
+        self.inventory_open = False
+        self.inventory_selected = 0  # Selected item index in backpack
+        self.inventory_char_index = 0  # Selected party member (0-3)
 
         # Initialize asset manager
         self.assets = AssetManager(assets_path=ASSETS_DIR)
@@ -803,6 +904,304 @@ class DemoGame(arcade.Window):
             multiline=True,
         )
 
+    def _get_current_inventory(self) -> dict:
+        """Get the inventory for the currently selected character."""
+        char_names = list(MOCK_INVENTORIES.keys())
+        char_name = char_names[self.inventory_char_index]
+        return MOCK_INVENTORIES[char_name]
+
+    def _draw_inventory_modal(self) -> None:
+        """Draw the full-screen inventory modal overlay."""
+        # Modal dimensions (80% of window, centered)
+        modal_w = int(self.width * 0.8)
+        modal_h = int(self.height * 0.85)
+        modal_x = (self.width - modal_w) // 2
+        modal_y = (self.height - modal_h) // 2
+
+        # Semi-transparent backdrop
+        backdrop_rect = arcade.LBWH(0, 0, self.width, self.height)
+        arcade.draw_rect_filled(backdrop_rect, (0, 0, 0, 180))
+
+        # Modal background
+        self._draw_panel(modal_x, modal_y, modal_w, modal_h, "INVENTORY")
+
+        # ========== CHARACTER TABS (Top) ==========
+        tabs_y = modal_y + modal_h - 45
+        self._draw_character_tabs(modal_x + UI_PADDING, tabs_y, modal_w - UI_PADDING * 2)
+
+        # Layout: Left side = Equipment, Right side = Backpack
+        equip_w = int(modal_w * 0.35)
+        backpack_w = modal_w - equip_w - UI_PADDING * 3
+        tab_h = 32  # Must match _draw_character_tabs
+        content_y = tabs_y - tab_h - UI_PADDING * 2  # Below tabs with padding
+
+        # ========== EQUIPMENT SECTION (Left) ==========
+        equip_x = modal_x + UI_PADDING
+        self._draw_equipment_section(equip_x, content_y, equip_w)
+
+        # ========== BACKPACK SECTION (Right) ==========
+        backpack_x = equip_x + equip_w + UI_PADDING
+        self._draw_backpack_section(backpack_x, content_y, backpack_w)
+
+        # ========== CURRENCY (Bottom Left) ==========
+        currency_y = modal_y + UI_PADDING + 30
+        self._draw_currency_section(equip_x, currency_y)
+
+        # ========== ITEM DETAILS (Bottom Right) ==========
+        details_y = modal_y + UI_PADDING
+        details_h = 100
+        self._draw_item_details(backpack_x, details_y, backpack_w, details_h)
+
+        # Instructions
+        arcade.draw_text(
+            "←→: Character  |  ↑↓: Select Item  |  E: Equip  |  U: Use  |  I/ESC: Close",
+            modal_x + modal_w // 2,
+            modal_y + 8,
+            UIColors.TEXT_DIM,
+            FONT_SIZE_SMALL,
+            anchor_x="center",
+        )
+
+    def _draw_character_tabs(self, x: float, y: float, width: float) -> None:
+        """Draw character selection tabs."""
+        char_names = list(MOCK_INVENTORIES.keys())
+        tab_w = width // len(char_names) - 8
+        tab_h = 32
+
+        for i, name in enumerate(char_names):
+            tab_x = x + i * (tab_w + 8)
+            is_selected = i == self.inventory_char_index
+
+            # Tab background
+            tab_color = UIColors.SELECTION if is_selected else UIColors.PANEL_BG_DARK
+            tab_rect = arcade.LBWH(tab_x, y - tab_h, tab_w, tab_h)
+            arcade.draw_rect_filled(tab_rect, tab_color)
+
+            # Tab border (highlight if selected)
+            border_color = UIColors.HIGHLIGHT if is_selected else UIColors.BORDER
+            arcade.draw_rect_outline(tab_rect, border_color, 2 if is_selected else 1)
+
+            # Character name
+            text_color = UIColors.TEXT_HIGHLIGHT if is_selected else UIColors.TEXT
+            arcade.draw_text(
+                name,
+                tab_x + tab_w // 2,
+                y - tab_h // 2 - 5,
+                text_color,
+                FONT_SIZE_BODY,
+                anchor_x="center",
+                bold=is_selected,
+            )
+
+    def _draw_equipment_section(self, x: float, y: float, width: float) -> None:
+        """Draw the equipment slots section."""
+        inventory = self._get_current_inventory()
+
+        arcade.draw_text(
+            "Equipment",
+            x,
+            y,
+            UIColors.TEXT_HIGHLIGHT,
+            FONT_SIZE_TITLE,
+            bold=True,
+        )
+
+        slot_h = 45
+        slot_w = width - UI_PADDING
+        slots = [
+            ("Weapon", inventory["equipped"].get("weapon")),
+            ("Armor", inventory["equipped"].get("armor")),
+            ("Shield", inventory["equipped"].get("shield")),
+        ]
+
+        for i, (slot_name, item) in enumerate(slots):
+            slot_y = y - 35 - (i * (slot_h + 8))
+
+            # Slot background
+            slot_rect = arcade.LBWH(x, slot_y - slot_h + 15, slot_w, slot_h)
+            arcade.draw_rect_filled(slot_rect, UIColors.PANEL_BG_DARK)
+            arcade.draw_rect_outline(slot_rect, UIColors.BORDER, 1)
+
+            # Slot label
+            arcade.draw_text(
+                f"{slot_name}:",
+                x + 5,
+                slot_y,
+                UIColors.TEXT_DIM,
+                FONT_SIZE_SMALL,
+            )
+
+            if item:
+                # Item name
+                arcade.draw_text(
+                    item["name"],
+                    x + 5,
+                    slot_y - 18,
+                    UIColors.TEXT,
+                    FONT_SIZE_BODY,
+                )
+                # Item stats
+                if "damage" in item:
+                    stat_text = f"{item['damage']} {item.get('damage_type', '')}"
+                elif "ac" in item:
+                    stat_text = f"AC {item['ac']}"
+                elif "ac_bonus" in item:
+                    stat_text = f"+{item['ac_bonus']} AC"
+                else:
+                    stat_text = ""
+                if stat_text:
+                    arcade.draw_text(
+                        stat_text,
+                        x + slot_w - 5,
+                        slot_y - 18,
+                        UIColors.HIGHLIGHT,
+                        FONT_SIZE_SMALL,
+                        anchor_x="right",
+                    )
+            else:
+                arcade.draw_text(
+                    "-- empty --",
+                    x + 5,
+                    slot_y - 18,
+                    UIColors.TEXT_DISABLED,
+                    FONT_SIZE_BODY,
+                )
+
+    def _draw_backpack_section(self, x: float, y: float, width: float) -> None:
+        """Draw the backpack items list."""
+        inventory = self._get_current_inventory()
+
+        arcade.draw_text(
+            "Backpack",
+            x,
+            y,
+            UIColors.TEXT_HIGHLIGHT,
+            FONT_SIZE_TITLE,
+            bold=True,
+        )
+
+        item_h = 28
+        items = inventory["backpack"]
+        list_y = y - 30
+
+        for i, item in enumerate(items):
+            item_y = list_y - (i * item_h)
+            is_selected = i == self.inventory_selected
+
+            # Selection highlight
+            if is_selected:
+                sel_rect = arcade.LBWH(x, item_y - 8, width - UI_PADDING, item_h - 2)
+                arcade.draw_rect_filled(sel_rect, UIColors.SELECTION)
+
+            # Item name with quantity
+            qty_str = f" x{item['quantity']}" if item["quantity"] > 1 else ""
+            name_color = UIColors.TEXT_HIGHLIGHT if is_selected else UIColors.TEXT
+            arcade.draw_text(
+                f"{item['name']}{qty_str}",
+                x + 5,
+                item_y,
+                name_color,
+                FONT_SIZE_BODY,
+            )
+
+            # Category tag
+            cat_colors = {
+                "weapons": UIColors.DAMAGE,
+                "consumables": UIColors.HEALING,
+                "equipment": UIColors.TEXT_DIM,
+                "tools": UIColors.BUFF,
+                "ammunition": UIColors.TEXT_DIM,
+            }
+            cat_color = cat_colors.get(item.get("category", ""), UIColors.TEXT_DIM)
+            arcade.draw_text(
+                item.get("category", "misc"),
+                x + width - UI_PADDING - 5,
+                item_y,
+                cat_color,
+                FONT_SIZE_SMALL,
+                anchor_x="right",
+            )
+
+    def _draw_currency_section(self, x: float, y: float) -> None:
+        """Draw the currency display."""
+        inventory = self._get_current_inventory()
+        currency = inventory["currency"]
+
+        arcade.draw_text(
+            "Currency",
+            x,
+            y,
+            UIColors.TEXT_HIGHLIGHT,
+            FONT_SIZE_BODY,
+            bold=True,
+        )
+
+        currency_str = (
+            f"{currency.get('gold', 0)} gp  "
+            f"{currency.get('silver', 0)} sp  "
+            f"{currency.get('copper', 0)} cp"
+        )
+        arcade.draw_text(
+            currency_str,
+            x,
+            y - 22,
+            UIColors.HIGHLIGHT,
+            FONT_SIZE_BODY,
+        )
+
+    def _draw_item_details(
+        self, x: float, y: float, width: float, height: float
+    ) -> None:
+        """Draw details for the currently selected item."""
+        inventory = self._get_current_inventory()
+        items = inventory["backpack"]
+        if not items or self.inventory_selected >= len(items):
+            return
+
+        item = items[self.inventory_selected]
+
+        # Details box
+        details_rect = arcade.LBWH(x, y, width - UI_PADDING, height)
+        arcade.draw_rect_filled(details_rect, UIColors.PANEL_BG_DARK)
+        arcade.draw_rect_outline(details_rect, UIColors.BORDER, 1)
+
+        # Item name
+        arcade.draw_text(
+            item["name"],
+            x + UI_PADDING,
+            y + height - 25,
+            UIColors.TEXT_HIGHLIGHT,
+            FONT_SIZE_BODY,
+            bold=True,
+        )
+
+        # Item details line
+        details_parts = []
+        if "damage" in item:
+            details_parts.append(f"Damage: {item['damage']}")
+        if "effect" in item:
+            details_parts.append(f"Effect: {item['effect']}")
+        if item.get("proficient"):
+            details_parts.append("Proficient ✓")
+
+        if details_parts:
+            arcade.draw_text(
+                "  |  ".join(details_parts),
+                x + UI_PADDING,
+                y + height - 50,
+                UIColors.TEXT,
+                FONT_SIZE_SMALL,
+            )
+
+        # Category and quantity
+        arcade.draw_text(
+            f"Category: {item.get('category', 'misc')}  |  Qty: {item['quantity']}",
+            x + UI_PADDING,
+            y + height - 75,
+            UIColors.TEXT_DIM,
+            FONT_SIZE_SMALL,
+        )
+
     def on_draw(self):
         """Render the game."""
         self.clear()
@@ -923,7 +1322,7 @@ class DemoGame(arcade.Window):
             f"[{mode_short.get(self.current_ui_mode, '?')}]  |  "
             f"Light: {light_desc}  |  "
             f"Explored: {explored_pct:.0f}%  |  "
-            f"Tab: mode  |  L: light  |  ESC: quit"
+            f"I: inventory  |  Tab: mode  |  L: light"
         )
         arcade.draw_text(
             status_text,
@@ -933,11 +1332,26 @@ class DemoGame(arcade.Window):
             FONT_SIZE_SMALL,
         )
 
+        # Draw inventory modal if open (on top of everything)
+        if self.inventory_open:
+            self._draw_inventory_modal()
+
     def on_key_press(self, key: int, modifiers: int):
         """Handle key press."""
-        # Check for quit
+        # Inventory modal input handling
+        if self.inventory_open:
+            self._handle_inventory_input(key)
+            return
+
+        # Check for quit (ESC when no modal open)
         if key == arcade.key.ESCAPE:
             arcade.close_window()
+            return
+
+        # Toggle inventory modal
+        if key == arcade.key.I:
+            self.inventory_open = True
+            print("Inventory opened")
             return
 
         # Check for light mode cycling
@@ -980,6 +1394,48 @@ class DemoGame(arcade.Window):
                 self.player_x = new_x
                 self.player_y = new_y
                 self._update_lighting()
+
+    def _handle_inventory_input(self, key: int) -> None:
+        """Handle input when inventory modal is open."""
+        # Close inventory
+        if key in (arcade.key.ESCAPE, arcade.key.I):
+            self.inventory_open = False
+            print("Inventory closed")
+            return
+
+        inventory = self._get_current_inventory()
+        num_chars = len(MOCK_INVENTORIES)
+        num_items = len(inventory["backpack"])
+
+        # Switch character (left/right)
+        if key == arcade.key.LEFT or key == arcade.key.A:
+            self.inventory_char_index = (self.inventory_char_index - 1) % num_chars
+            self.inventory_selected = 0  # Reset item selection
+            char_name = list(MOCK_INVENTORIES.keys())[self.inventory_char_index]
+            print(f"Viewing {char_name}'s inventory")
+        elif key == arcade.key.RIGHT or key == arcade.key.D:
+            self.inventory_char_index = (self.inventory_char_index + 1) % num_chars
+            self.inventory_selected = 0  # Reset item selection
+            char_name = list(MOCK_INVENTORIES.keys())[self.inventory_char_index]
+            print(f"Viewing {char_name}'s inventory")
+
+        # Navigate items (up/down)
+        elif key == arcade.key.UP or key == arcade.key.W:
+            if num_items > 0:
+                self.inventory_selected = (self.inventory_selected - 1) % num_items
+        elif key == arcade.key.DOWN or key == arcade.key.S:
+            if num_items > 0:
+                self.inventory_selected = (self.inventory_selected + 1) % num_items
+
+        # Actions (placeholder - would interact with engine)
+        elif key == arcade.key.E:
+            if num_items > 0:
+                item = inventory["backpack"][self.inventory_selected]
+                print(f"Would equip: {item['name']}")
+        elif key == arcade.key.U:
+            if num_items > 0:
+                item = inventory["backpack"][self.inventory_selected]
+                print(f"Would use: {item['name']}")
 
 
 def main():
@@ -1025,9 +1481,10 @@ def main():
     print()
     print("Controls:")
     print("  WASD / Arrow keys: Move player")
+    print("  I: Open inventory modal")
     print("  L: Cycle light mode (torch -> lantern -> light spell -> darkvision -> full bright)")
     print("  Tab: Cycle UI mode (exploration -> combat -> character)")
-    print("  ESC: Quit")
+    print("  ESC: Quit (or close inventory)")
     print()
 
     _game = DemoGame(
