@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 # ABOUTME: Visual demo of the 2D client with Stone Soup sprites.
-# ABOUTME: Run with: python scripts/visual_test.py
+# ABOUTME: Run with: python scripts/visual_test.py [room_id]
 
 """Visual test demo with Stone Soup tile rendering.
 
 Usage:
     cd client-2d
     uv pip install -e ".[graphics]"
-    python scripts/visual_test.py
+    python scripts/visual_test.py                           # Demo mode (medium window)
+    python scripts/visual_test.py laboratory.entrance       # Load real room
+    python scripts/visual_test.py --fullscreen              # Full screen mode
+    python scripts/visual_test.py --size small              # Small window (800x600)
+    python scripts/visual_test.py --size large              # Large window (1600x1000)
 
 Controls:
     WASD / Arrow keys: Move player
@@ -15,6 +19,7 @@ Controls:
     ESC: Quit
 """
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -27,13 +32,19 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from client_2d.assets.asset_manager import AssetManager
 from client_2d.core.constants import TILE_SIZE, GameMode, LightingState
 from client_2d.input.input_handler import InputHandler
+from client_2d.integration.layout_loader import LayoutLoader
 from client_2d.systems.fog_of_war import FogOfWarSystem
 from client_2d.systems.lighting import LightingSystem
 
 # Window settings
-WINDOW_WIDTH = 1280
-WINDOW_HEIGHT = 900
 WINDOW_TITLE = "D&D 2D Client - Stone Soup Tiles Demo"
+
+# Window size presets
+WINDOW_SIZES = {
+    "small": (800, 600),
+    "medium": (1280, 900),
+    "large": (1600, 1000),
+}
 
 # Map settings (in tiles)
 MAP_WIDTH = 40
@@ -63,13 +74,20 @@ ASSETS_DIR = Path(__file__).parent.parent / "assets"
 class DemoGame(arcade.Window):
     """Demo window with Stone Soup sprite rendering."""
 
-    def __init__(self):
-        super().__init__(WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_TITLE)
+    def __init__(
+        self,
+        room_id: str = "",
+        width: int = 1280,
+        height: int = 900,
+        fullscreen: bool = False,
+    ):
+        super().__init__(width, height, WINDOW_TITLE, fullscreen=fullscreen)
         arcade.set_background_color(arcade.color.BLACK)
 
-        # Player position (in tiles)
-        self.player_x = MAP_WIDTH // 2
-        self.player_y = MAP_HEIGHT // 2
+        # Store room info
+        self.room_id = room_id
+        self.map_width = MAP_WIDTH
+        self.map_height = MAP_HEIGHT
 
         # Light mode cycling
         self.light_mode_index = 0
@@ -83,25 +101,117 @@ class DemoGame(arcade.Window):
         # Entity positions (placed after room creation)
         self.entities: list[tuple[int, int, str, arcade.Texture | None]] = []
 
-        # Initialize systems
-        self.fog = FogOfWarSystem(width=MAP_WIDTH, height=MAP_HEIGHT)
-        self.lighting = LightingSystem(map_width=MAP_WIDTH, map_height=MAP_HEIGHT)
+        # Load from campaign or create demo room
+        if room_id:
+            self._load_from_campaign(room_id)
+        else:
+            # Player position (in tiles)
+            self.player_x = MAP_WIDTH // 2
+            self.player_y = MAP_HEIGHT // 2
+
+            # Initialize systems
+            self.fog = FogOfWarSystem(width=MAP_WIDTH, height=MAP_HEIGHT)
+            self.lighting = LightingSystem(map_width=MAP_WIDTH, map_height=MAP_HEIGHT)
+
+            # Simple room layout (1 = wall, 0 = floor)
+            self.room = self._create_room()
+
+            # Set walls as obstacles for lighting
+            for y in range(MAP_HEIGHT):
+                for x in range(MAP_WIDTH):
+                    if self.room[y][x] == 1:
+                        self.lighting.add_obstacle(x, y)
+
+            # Place entities on the map
+            self._place_entities()
+
         self.input_handler = InputHandler(current_mode=GameMode.EXPLORATION)
-
-        # Simple room layout (1 = wall, 0 = floor)
-        self.room = self._create_room()
-
-        # Set walls as obstacles for lighting
-        for y in range(MAP_HEIGHT):
-            for x in range(MAP_WIDTH):
-                if self.room[y][x] == 1:
-                    self.lighting.add_obstacle(x, y)
-
-        # Place entities on the map
-        self._place_entities()
 
         # Initial lighting update
         self._update_lighting()
+
+    def _load_from_campaign(self, room_id: str) -> None:
+        """Load room layout and entities from campaign data."""
+        loader = LayoutLoader()
+
+        # Parse room_id to get dungeon name (e.g., "laboratory.entrance" -> "laboratory")
+        dungeon_name = room_id.split(".")[0] if "." in room_id else "laboratory"
+
+        # Get room data
+        room_data = loader.get_room_data(dungeon_name, room_id, "poisoned_laboratory")
+        if not room_data:
+            print(f"Failed to load room: {room_id}")
+            sys.exit(1)
+
+        # Get exits for fallback generation
+        exits = room_data.get("exits", {})
+        exit_map = {}
+        for direction, dest in exits.items():
+            if isinstance(dest, dict):
+                exit_map[direction] = dest.get("destination", "")
+            else:
+                exit_map[direction] = dest
+
+        # Load layout
+        layout = loader.load_room_with_fallback(
+            dungeon_name, room_id, "poisoned_laboratory",
+            default_width=25, default_height=18, exits=exit_map
+        )
+
+        # Set dimensions
+        self.map_width = layout.width
+        self.map_height = layout.height
+
+        # Convert layout to room format
+        self.room = layout.tiles
+
+        # Player spawn position
+        self.player_x, self.player_y = layout.spawn_points.player
+
+        # Initialize systems with room dimensions
+        self.fog = FogOfWarSystem(width=self.map_width, height=self.map_height)
+        self.lighting = LightingSystem(map_width=self.map_width, map_height=self.map_height)
+
+        # Set walls as obstacles
+        for y in range(self.map_height):
+            for x in range(self.map_width):
+                if layout.is_blocking(x, y):
+                    self.lighting.add_obstacle(x, y)
+
+        # Place entities from room data
+        # Enemies
+        room_enemies = room_data.get("enemies", [])
+        enemy_positions = layout.entity_positions.enemies
+        for i, enemy_type in enumerate(room_enemies):
+            if i < len(enemy_positions):
+                ex, ey = enemy_positions[i]
+            else:
+                ex = self.map_width // 2 + i
+                ey = self.map_height // 2
+            texture = self.monster_textures.get(enemy_type)
+            self.entities.append((ex, ey, f"monster:{enemy_type}", texture))
+
+        # Items
+        room_items = room_data.get("items", [])
+        item_positions = layout.entity_positions.items
+        visible_item_idx = 0
+        for item_data in room_items:
+            if not item_data.get("visible", True):
+                continue
+            item_id = item_data.get("id", f"item_{visible_item_idx}")
+            if visible_item_idx < len(item_positions):
+                ix, iy = item_positions[visible_item_idx]
+            else:
+                ix = 3 + (visible_item_idx * 2) % (self.map_width - 6)
+                iy = 3 + (visible_item_idx * 3) % (self.map_height - 6)
+            texture = self.item_textures.get(item_id)
+            self.entities.append((ix, iy, f"item:{item_id}", texture))
+            visible_item_idx += 1
+
+        print(f"Loaded room: {room_data.get('name', room_id)}")
+        print(f"  Size: {self.map_width}x{self.map_height}")
+        print(f"  Player spawn: ({self.player_x}, {self.player_y})")
+        print(f"  Entities: {len(self.entities)}")
 
     def _load_textures(self):
         """Load tile textures from Stone Soup assets."""
@@ -322,14 +432,14 @@ class DemoGame(arcade.Window):
         self.clear()
 
         # Calculate offset to center the map
-        offset_x = (WINDOW_WIDTH - MAP_WIDTH * TILE_SIZE) // 2
-        offset_y = (WINDOW_HEIGHT - MAP_HEIGHT * TILE_SIZE) // 2
+        offset_x = (self.width - self.map_width * TILE_SIZE) // 2
+        offset_y = (self.height - self.map_height * TILE_SIZE) // 2
 
         # Draw floor and walls with lighting
-        for y in range(MAP_HEIGHT):
-            for x in range(MAP_WIDTH):
+        for y in range(self.map_height):
+            for x in range(self.map_width):
                 screen_x = offset_x + x * TILE_SIZE
-                screen_y = offset_y + (MAP_HEIGHT - 1 - y) * TILE_SIZE  # Flip Y
+                screen_y = offset_y + (self.map_height - 1 - y) * TILE_SIZE  # Flip Y
 
                 # Get lighting state for tinting
                 state = self.fog.get_visibility(x, y)
@@ -364,7 +474,7 @@ class DemoGame(arcade.Window):
                 continue
 
             screen_x = offset_x + ex * TILE_SIZE
-            screen_y = offset_y + (MAP_HEIGHT - 1 - ey) * TILE_SIZE
+            screen_y = offset_y + (self.map_height - 1 - ey) * TILE_SIZE
 
             if texture:
                 self._draw_texture(texture, screen_x, screen_y, tint)
@@ -383,7 +493,7 @@ class DemoGame(arcade.Window):
 
         # Draw player
         player_screen_x = offset_x + self.player_x * TILE_SIZE
-        player_screen_y = offset_y + (MAP_HEIGHT - 1 - self.player_y) * TILE_SIZE
+        player_screen_y = offset_y + (self.map_height - 1 - self.player_y) * TILE_SIZE
 
         if self.player_texture:
             self._draw_texture(self.player_texture, player_screen_x, player_screen_y)
@@ -420,7 +530,7 @@ class DemoGame(arcade.Window):
         arcade.draw_text(
             f"Light: {light_desc}  |  Tiles: {tiles_info}",
             10,
-            WINDOW_HEIGHT - 25,
+            self.height - 25,
             arcade.color.WHITE,
             14,
         )
@@ -430,7 +540,7 @@ class DemoGame(arcade.Window):
             f"Explored: {self.fog.explored_count}/{self.fog.total_tiles} ({explored_pct:.0f}%)  |  "
             f"Entities: {len(self.entities)}  |  L: cycle light  |  WASD: move  |  ESC: quit",
             10,
-            WINDOW_HEIGHT - 45,
+            self.height - 45,
             arcade.color.LIGHT_GRAY,
             12,
         )
@@ -465,7 +575,7 @@ class DemoGame(arcade.Window):
         new_y = self.player_y + dy
 
         # Check bounds and walls
-        if 0 <= new_x < MAP_WIDTH and 0 <= new_y < MAP_HEIGHT:
+        if 0 <= new_x < self.map_width and 0 <= new_y < self.map_height:
             if self.room[new_y][new_x] == 0:  # Not a wall
                 self.player_x = new_x
                 self.player_y = new_y
@@ -474,14 +584,57 @@ class DemoGame(arcade.Window):
 
 def main():
     """Run the demo."""
+    parser = argparse.ArgumentParser(
+        description="D&D 2D Client - Stone Soup Tiles Demo"
+    )
+    parser.add_argument(
+        "room_id",
+        nargs="?",
+        default="",
+        help="Room ID to load (e.g., laboratory.entrance)",
+    )
+    parser.add_argument(
+        "-f", "--fullscreen",
+        action="store_true",
+        help="Run in fullscreen mode",
+    )
+    parser.add_argument(
+        "-s", "--size",
+        choices=["small", "medium", "large"],
+        default="medium",
+        help="Window size preset: small (800x600), medium (1280x900), large (1600x1000)",
+    )
+
+    args = parser.parse_args()
+
+    # Get window dimensions
+    width, height = WINDOW_SIZES[args.size]
+    if args.fullscreen:
+        # For fullscreen, start with large dimensions (arcade will handle actual size)
+        width, height = WINDOW_SIZES["large"]
+
     print("Starting D&D 2D Client - Stone Soup Tiles Demo")
+    if args.room_id:
+        print(f"Loading room: {args.room_id}")
+    else:
+        print("Demo mode (no room specified)")
+    if args.fullscreen:
+        print("Mode: Fullscreen")
+    else:
+        print(f"Window: {width}x{height} ({args.size})")
+    print()
     print("Controls:")
     print("  WASD / Arrow keys: Move player")
     print("  L: Cycle light mode (torch -> lantern -> light spell -> darkvision -> full bright)")
     print("  ESC: Quit")
     print()
 
-    _game = DemoGame()  # Window registered with arcade
+    _game = DemoGame(
+        room_id=args.room_id,
+        width=width,
+        height=height,
+        fullscreen=args.fullscreen,
+    )
     arcade.run()
 
 

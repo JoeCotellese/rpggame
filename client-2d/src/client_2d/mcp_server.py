@@ -18,7 +18,7 @@ Usage:
     }
 
 Tools:
-    game_new: Start a new game session
+    game_new: Start a new game session (demo or from campaign)
     game_state: Get current game state (ASCII map + JSON)
     game_move: Move player in a direction
     game_attack: Attack an adjacent enemy
@@ -29,8 +29,11 @@ Tools:
 from mcp.server.fastmcp import FastMCP
 
 from client_2d.core.constants import Direction
+from client_2d.integration.layout_loader import LayoutLoader
+from client_2d.systems.fog_of_war import FogOfWarSystem
+from client_2d.systems.lighting import LightingSystem
 from client_2d.testing.command_processor import CommandProcessor
-from client_2d.testing.state_renderer import StateRenderer
+from client_2d.testing.state_renderer import Entity, StateRenderer
 from client_2d.testing.test_harness import GameState, create_demo_game_state
 
 # Initialize MCP server
@@ -40,6 +43,135 @@ mcp = FastMCP("dnd-game")
 _game_state: GameState | None = None
 _renderer: StateRenderer | None = None
 _processor: CommandProcessor | None = None
+_current_room_id: str | None = None
+_layout_loader: LayoutLoader | None = None
+
+
+def _get_layout_loader() -> LayoutLoader:
+    """Get or create the layout loader."""
+    global _layout_loader
+    if _layout_loader is None:
+        _layout_loader = LayoutLoader()
+    return _layout_loader
+
+
+def _create_game_from_layout(
+    campaign_id: str,
+    dungeon_name: str,
+    room_id: str,
+) -> GameState | None:
+    """Create a GameState from a real campaign room layout.
+
+    Args:
+        campaign_id: Campaign containing the dungeon
+        dungeon_name: Dungeon file name (without .json)
+        room_id: Room ID within the dungeon
+
+    Returns:
+        GameState or None if room/layout not found
+    """
+    loader = _get_layout_loader()
+
+    # Get room data for metadata
+    room_data = loader.get_room_data(dungeon_name, room_id, campaign_id)
+    if not room_data:
+        return None
+
+    # Get layout (from file or generated)
+    exits = room_data.get("exits", {})
+    # Normalize exits to just direction -> destination strings
+    exit_map = {}
+    for direction, dest in exits.items():
+        if isinstance(dest, dict):
+            exit_map[direction] = dest.get("destination", "")
+        else:
+            exit_map[direction] = dest
+
+    layout = loader.load_room_with_fallback(
+        dungeon_name,
+        room_id,
+        campaign_id,
+        default_width=25,
+        default_height=18,
+        exits=exit_map,
+    )
+
+    # Convert layout tiles to room format (list of lists of ints)
+    room = layout.tiles
+
+    # Initialize systems
+    fog = FogOfWarSystem(width=layout.width, height=layout.height)
+    lighting = LightingSystem(map_width=layout.width, map_height=layout.height)
+
+    # Set walls as obstacles for lighting
+    for y in range(layout.height):
+        for x in range(layout.width):
+            if layout.is_blocking(x, y):
+                lighting.add_obstacle(x, y)
+
+    # Get player spawn position
+    player_x, player_y = layout.spawn_points.player
+
+    # Create entities from room data
+    entities: list[Entity] = []
+
+    # Add enemies from room data
+    room_enemies = room_data.get("enemies", [])
+    enemy_positions = layout.entity_positions.enemies
+    for i, enemy_type in enumerate(room_enemies):
+        if i < len(enemy_positions):
+            ex, ey = enemy_positions[i]
+        else:
+            # Place remaining enemies near center
+            ex = layout.width // 2 + i
+            ey = layout.height // 2
+        entities.append(Entity(
+            x=ex,
+            y=ey,
+            entity_type="monster",
+            entity_id=f"{enemy_type}_{i + 1}",
+        ))
+
+    # Add items from room data
+    room_items = room_data.get("items", [])
+    item_positions = layout.entity_positions.items
+    for i, item_data in enumerate(room_items):
+        if not item_data.get("visible", True):
+            continue  # Skip hidden items
+        item_id = item_data.get("id", f"item_{i + 1}")
+        if i < len(item_positions):
+            ix, iy = item_positions[i]
+        else:
+            # Place remaining items scattered
+            ix = 3 + (i * 2) % (layout.width - 6)
+            iy = 3 + (i * 3) % (layout.height - 6)
+        entities.append(Entity(
+            x=ix,
+            y=iy,
+            entity_type="item",
+            entity_id=item_id,
+        ))
+
+    # Create game state
+    state = GameState(
+        room=room,
+        player_x=player_x,
+        player_y=player_y,
+        entities=entities,
+        fog=fog,
+        lighting=lighting,
+        turn=0,
+        player_hp=30,
+        player_max_hp=30,
+        light_source="torch",
+    )
+
+    # Initialize lighting from player position
+    lighting.update_party_lights([(player_x, player_y)], "torch")
+    lit_tiles = lighting.calculate_lighting()
+    fog.apply_lighting(lit_tiles)
+
+    return state
 
 
 def _ensure_game() -> tuple[GameState, StateRenderer, CommandProcessor]:
@@ -108,22 +240,48 @@ def _format_state_response(state_dict: dict) -> str:
 
 
 @mcp.tool()
-def game_new() -> str:
+def game_new(
+    room_id: str = "",
+    campaign_id: str = "poisoned_laboratory",
+    dungeon_name: str = "laboratory",
+) -> str:
     """Start a new game session.
 
-    Resets the game to initial state with player in the center of the dungeon.
-    Returns the initial game state.
-    """
-    global _game_state, _renderer, _processor
+    Args:
+        room_id: Room ID to start in (e.g., 'laboratory.entrance').
+                 If empty, starts in demo mode.
+        campaign_id: Campaign containing the dungeon (default: poisoned_laboratory)
+        dungeon_name: Dungeon file name without .json (default: laboratory)
 
-    _game_state = create_demo_game_state()
+    Returns:
+        Initial game state with ASCII map and available actions.
+
+    Examples:
+        game_new()  # Demo mode
+        game_new(room_id="laboratory.entrance")  # Real room from campaign
+    """
+    global _game_state, _renderer, _processor, _current_room_id
+
+    if room_id:
+        # Load from real campaign room
+        _game_state = _create_game_from_layout(campaign_id, dungeon_name, room_id)
+        if _game_state is None:
+            return f"Failed to load room '{room_id}' from {campaign_id}/{dungeon_name}"
+        _current_room_id = room_id
+        mode_msg = f"Loaded room: {room_id}"
+    else:
+        # Demo mode
+        _game_state = create_demo_game_state()
+        _current_room_id = "demo"
+        mode_msg = "Demo mode"
+
     width = len(_game_state.room[0])
     height = len(_game_state.room)
     _renderer = StateRenderer(width=width, height=height)
     _processor = CommandProcessor()
 
     state = _get_current_state()
-    return "New game started!\n\n" + _format_state_response(state)
+    return f"New game started! ({mode_msg})\n\n" + _format_state_response(state)
 
 
 @mcp.tool()
