@@ -518,6 +518,31 @@ class EngineAdapter:
             return False
         return current["is_player"]
 
+    def is_current_combatant_unconscious(self) -> bool:
+        """Check if the current combatant is an unconscious party member.
+
+        Returns:
+            True if it's a player's turn and they are unconscious (0 HP).
+        """
+        current = self.get_current_combatant()
+        if current is None or not current["is_player"]:
+            return False
+        creature = current["creature"]
+        return hasattr(creature, "is_unconscious") and creature.is_unconscious
+
+    def process_unconscious_turn(self):
+        """Process an unconscious character's death saving throw turn.
+
+        Delegates to GameState.process_unconscious_turn() which handles the
+        D&D 5E death save mechanics.
+
+        Returns:
+            DeathSaveTurnResult with the outcome, or None if not applicable.
+        """
+        if self._game_state is None:
+            return None
+        return self._game_state.process_unconscious_turn()
+
     def get_current_turn_state(self):
         """Get the TurnState for the current combatant.
 

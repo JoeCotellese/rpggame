@@ -166,8 +166,12 @@ class GameWindow(arcade.Window):
             current = self.engine.get_current_combatant()
             if current:
                 self._add_combat_log(f"{current['name']}'s turn first!")
-            # If enemy goes first, start enemy turn processing
+            # If enemy goes first or player is unconscious, start auto-turn processing
             if not self.engine.is_player_turn():
+                self.processing_enemy_turn = True
+                self.enemy_turn_timer = ENEMY_TURN_DELAY
+            elif self.engine.is_current_combatant_unconscious():
+                # Unconscious player goes first - process their death save
                 self.processing_enemy_turn = True
                 self.enemy_turn_timer = ENEMY_TURN_DELAY
         else:
@@ -1100,6 +1104,10 @@ class GameWindow(arcade.Window):
             current = self.engine.get_current_combatant()
             if current:
                 status += f" - {current['name']}'s turn"
+                # Add movement remaining for player turns
+                turn_state = self.engine.get_current_turn_state()
+                if turn_state:
+                    status += f" ({turn_state.movement_remaining} ft)"
 
         arcade.draw_text(
             status,
@@ -1128,7 +1136,7 @@ class GameWindow(arcade.Window):
 
         # Controls hint
         arcade.draw_text(
-            "1-9: Select  |  A: Attack  |  Space: Wait",
+            "1-9: Select  |  A: Attack  |  WASD/Arrows: Move  |  Space: Wait",
             x + w // 2,
             y + UI_PADDING,
             UIColors.TEXT_DIM,
@@ -1344,11 +1352,18 @@ class GameWindow(arcade.Window):
         if not self.engine.in_combat:
             return
 
-        # Handle enemy turn timing
+        # Handle auto-turn processing (enemy turns and unconscious player turns)
         if self.processing_enemy_turn:
             self.enemy_turn_timer -= delta_time
             if self.enemy_turn_timer <= 0:
-                self._process_enemy_turn()
+                # Check what kind of turn to process
+                if self.engine.is_current_combatant_unconscious():
+                    self._process_unconscious_turn()
+                elif not self.engine.is_player_turn():
+                    self._process_enemy_turn()
+                else:
+                    # Conscious player's turn - stop auto-processing
+                    self.processing_enemy_turn = False
 
     def _process_enemy_turn(self) -> None:
         """Process the current enemy's turn."""
@@ -1380,8 +1395,61 @@ class GameWindow(arcade.Window):
             # Another enemy's turn - continue timer
             self.enemy_turn_timer = ENEMY_TURN_DELAY
         else:
-            # Player's turn
+            # Player's turn - check if unconscious
+            if self.engine.is_current_combatant_unconscious():
+                self._process_unconscious_turn()
+            else:
+                self.processing_enemy_turn = False
+
+    def _process_unconscious_turn(self) -> None:
+        """Process an unconscious character's death saving throw turn."""
+        result = self.engine.process_unconscious_turn()
+
+        if result is None:
+            # Not an unconscious turn - shouldn't happen but handle gracefully
             self.processing_enemy_turn = False
+            return
+
+        # Log the death save result
+        if result.already_stabilized:
+            self._add_combat_log(
+                f"{result.character_name} is stabilized (no death save needed)"
+            )
+        elif result.natural_20:
+            self._add_combat_log(
+                f"{result.character_name} rolls NAT 20! Regains consciousness with 1 HP!"
+            )
+        elif result.natural_1:
+            self._add_combat_log(
+                f"{result.character_name} rolls NAT 1! Two failures! ({result.failures}/3)"
+            )
+        elif result.success:
+            self._add_combat_log(
+                f"{result.character_name} death save: {result.roll} - Success! ({result.successes}/3)"
+            )
+        else:
+            self._add_combat_log(
+                f"{result.character_name} death save: {result.roll} - Failure! ({result.failures}/3)"
+            )
+
+        # Check outcomes
+        if result.conscious:
+            self._add_combat_log(f"{result.character_name} is back on their feet!")
+        elif result.stabilized and not result.already_stabilized:
+            self._add_combat_log(f"{result.character_name} is stabilized!")
+        elif result.dead:
+            self._add_combat_log(f"{result.character_name} has died...")
+
+        # Sync entity state
+        self.entity_manager.sync_from_engine(self.engine)
+
+        # Check if combat ended (party wiped)
+        if not self.engine.in_combat:
+            self._handle_combat_end()
+            return
+
+        # Continue to next turn (still in auto-processing mode)
+        self.enemy_turn_timer = ENEMY_TURN_DELAY
 
     def _handle_combat_end(self) -> None:
         """Handle end of combat."""
@@ -1417,6 +1485,10 @@ class GameWindow(arcade.Window):
     def _handle_combat_input(self, key: int) -> None:
         """Handle combat-mode input."""
         if not self.engine.is_player_turn():
+            # Provide feedback instead of silently ignoring
+            current = self.engine.get_current_combatant()
+            if current:
+                self._add_combat_log(f"Wait - it's {current['name']}'s turn!")
             return
 
         # Number keys to select enemy
@@ -1434,6 +1506,16 @@ class GameWindow(arcade.Window):
         # Space to wait/pass
         elif key == arcade.key.SPACE:
             self._pass_turn()
+
+        # WASD/Arrow movement during combat (uses action economy)
+        elif key in (arcade.key.W, arcade.key.UP):
+            self._handle_combat_movement("north")
+        elif key in (arcade.key.S, arcade.key.DOWN):
+            self._handle_combat_movement("south")
+        elif key in (arcade.key.D, arcade.key.RIGHT):
+            self._handle_combat_movement("east")
+        elif key == arcade.key.LEFT:  # A is attack, so only LEFT arrow for west
+            self._handle_combat_movement("west")
 
     def _handle_exploration_input(self, key: int) -> None:
         """Handle exploration-mode input."""
@@ -1499,6 +1581,16 @@ class GameWindow(arcade.Window):
         elif not turn_result.get("is_player_turn"):
             self.processing_enemy_turn = True
             self.enemy_turn_timer = ENEMY_TURN_DELAY
+
+    def _handle_combat_movement(self, direction: str) -> None:
+        """Handle keyboard-triggered combat movement with feedback."""
+        result = self._mcp_combat_move(direction)
+
+        # Extract first line for combat log (MCP returns full state after newline)
+        feedback = result.split("\n")[0]
+
+        # Always show feedback in combat log
+        self._add_combat_log(feedback)
 
 
 def run_2d_client(
