@@ -294,12 +294,18 @@ class GameWindow(arcade.Window):
             else:
                 type_str = "decoration"
 
+            # Use unique entity_id to ensure each entity has its own symbol
+            # Include sub_type in the ID for readable display (e.g., "giant_rat" not "monster_0")
+            display_id = entity.sub_type or entity.entity_id
+            unique_suffix = entity.entity_id.split("_")[-1]  # Extract index like "0", "1"
+            unique_id = f"{display_id}_{unique_suffix}" if entity.sub_type else entity.entity_id
+
             entities.append(
                 StateEntity(
                     x=entity.grid_x,
                     y=entity.grid_y,
                     entity_type=type_str,
-                    entity_id=entity.sub_type or entity.entity_id,
+                    entity_id=unique_id,
                 )
             )
 
