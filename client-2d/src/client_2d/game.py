@@ -458,8 +458,16 @@ class GameWindow(arcade.Window):
         target = monsters[target_index]
         from dnd_engine.core.distance import chebyshev_distance
 
+        # Get current combatant's position (not player token position)
+        combatant_pos = self.entity_manager.get_current_turn_position(self.engine)
+        if combatant_pos is None:
+            # Fallback to player position if combatant not found
+            combatant_x, combatant_y = self.player_x, self.player_y
+        else:
+            combatant_x, combatant_y = combatant_pos
+
         distance = chebyshev_distance(
-            self.player_x, self.player_y, target.grid_x, target.grid_y
+            combatant_x, combatant_y, target.grid_x, target.grid_y
         )
         if distance > 1:
             turn_state = self.engine.get_current_turn_state()
@@ -474,7 +482,8 @@ class GameWindow(arcade.Window):
             )
 
         # Set selected enemy and execute attack
-        self.selected_enemy = target_index
+        # Use target.enemy_index (engine index) not target_index (display index)
+        self.selected_enemy = target.enemy_index
         self._execute_attack()
 
         # Check if attack actually succeeded by seeing if turn advanced

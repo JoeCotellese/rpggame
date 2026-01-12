@@ -310,6 +310,36 @@ class EntityManager:
                 and party_member._creature_ref is current_creature
             )
 
+    def get_current_turn_position(
+        self, engine: EngineAdapter
+    ) -> tuple[int, int] | None:
+        """Get the grid position of the current turn character.
+
+        Used during MCP combat to check attack range from the correct position.
+
+        Args:
+            engine: EngineAdapter to identify current combatant.
+
+        Returns:
+            Tuple of (grid_x, grid_y) for the current combatant, or None if not found.
+        """
+        current = engine.get_current_combatant()
+        if not current or not current.get("is_player"):
+            return None
+
+        current_creature = current.get("creature")
+        if not current_creature:
+            return None
+
+        for party_member in self._party_members.values():
+            if (
+                party_member._creature_ref is not None
+                and party_member._creature_ref is current_creature
+            ):
+                return (party_member.grid_x, party_member.grid_y)
+
+        return None
+
     def update_current_turn_position(
         self, engine: EngineAdapter, new_x: int, new_y: int
     ) -> bool:
