@@ -125,25 +125,27 @@ class EmbeddedMCPServer:
             return bridge.submit_command(request, timeout=5.0)
 
         @mcp.tool()
-        def game_attack(target_index: int) -> str:
+        def game_attack(target: int | str) -> str:
             """Attack an enemy in combat using real D&D 5E combat rules.
 
-            Only works during combat when it's a player's turn. Target index
-            corresponds to visible enemies listed in game_state output.
+            Only works during combat when it's a player's turn. Target can be
+            specified by index or entity ID.
 
             Examples:
-                game_attack(0)  # Attack first enemy (e.g., "A rat")
-                game_attack(1)  # Attack second enemy (e.g., "B goblin")
+                game_attack(0)            # Attack first enemy by index
+                game_attack("goblin_0")   # Attack by entity ID
+                game_attack("giant_rat_1") # Attack specific enemy by ID
 
             Args:
-                target_index: 0-based index of enemy to attack (see Visible Entities)
+                target: Either 0-based index (int) or entity ID string
+                       (see Visible Entities in game_state output)
 
             Returns:
                 Attack result (hit/miss, damage) and updated game state.
             """
             request = CommandRequest(
                 command_type=CommandType.ATTACK,
-                args={"target_index": target_index},
+                args={"target": target},
             )
             return bridge.submit_command(request, timeout=10.0)
 
