@@ -338,6 +338,29 @@ class EnemyTurnResult:
 
 
 @dataclass
+class DeathSaveTurnResult:
+    """
+    Result of processing an unconscious character's death saving throw turn.
+
+    Contains all information needed for UI display when a character at 0 HP
+    makes their death saving throw on their turn.
+    """
+
+    character_name: str
+    roll: int
+    success: bool
+    natural_20: bool = False
+    natural_1: bool = False
+    successes: int = 0
+    failures: int = 0
+    stabilized: bool = False
+    dead: bool = False
+    conscious: bool = False  # True if nat 20 restored consciousness
+    already_stabilized: bool = False  # True if no roll needed (was stabilized)
+    turn_advanced: bool = True
+
+
+@dataclass
 class CharacterRestResult:
     """Result of a single character's rest."""
 
@@ -4081,6 +4104,77 @@ class GameState:
             narrative_context=narrative_context,
             turn_advanced=True,
             combat_ended=combat_ended,
+        )
+
+    def process_unconscious_turn(self) -> DeathSaveTurnResult | None:
+        """
+        Process an unconscious character's turn by making a death saving throw.
+
+        Per D&D 5E rules, unconscious characters (at 0 HP) make death saving
+        throws on their turn instead of taking normal actions. Stabilized
+        characters skip their turn without rolling.
+
+        Returns:
+            DeathSaveTurnResult with the death save outcome,
+            or None if current turn is not an unconscious player's turn.
+        """
+        if not self.in_combat or not self.initiative_tracker:
+            return None
+
+        current = self.initiative_tracker.get_current_combatant()
+        if not current:
+            return None
+
+        # Check if it's a party member's turn
+        character = None
+        for char in self.party.characters:
+            if current.creature == char:
+                character = char
+                break
+
+        if character is None:
+            return None  # Not a party member's turn
+
+        # Check if character is unconscious (0 HP but not dead)
+        if not character.is_unconscious:
+            return None  # Character is conscious, normal turn
+
+        # Check if already stabilized (no roll needed)
+        if character.stabilized:
+            self.initiative_tracker.next_turn()
+            return DeathSaveTurnResult(
+                character_name=character.name,
+                roll=0,
+                success=True,
+                already_stabilized=True,
+                successes=character.death_save_successes,
+                failures=character.death_save_failures,
+                stabilized=True,
+                turn_advanced=True,
+            )
+
+        # Character is unconscious and not stabilized - make death saving throw
+        death_save_result = character.make_death_save(self.event_bus)
+
+        # Advance turn
+        self.initiative_tracker.next_turn()
+
+        # Check if character died and combat should end
+        if character.is_dead:
+            self._check_combat_end()
+
+        return DeathSaveTurnResult(
+            character_name=character.name,
+            roll=death_save_result["roll"],
+            success=death_save_result["success"],
+            natural_20=death_save_result["natural_20"],
+            natural_1=death_save_result["natural_1"],
+            successes=death_save_result["successes"],
+            failures=death_save_result["failures"],
+            stabilized=death_save_result["stabilized"],
+            dead=death_save_result["dead"],
+            conscious=death_save_result["conscious"],
+            turn_advanced=True,
         )
 
     def flee_combat(self) -> dict[str, Any]:
