@@ -7,6 +7,7 @@ This module provides the entry point for the 2D client, which can be
 launched via `dnd-game --mode 2d`.
 """
 
+import math
 from datetime import datetime
 from pathlib import Path
 
@@ -19,12 +20,14 @@ from client_2d.core.constants import (
     FONT_SIZE_SMALL,
     FONT_SIZE_TITLE,
     NARRATIVE_HEIGHT_PCT,
+    PULSE_CYCLE_DURATION,
     TILE_SIZE,
     UI_BORDER_WIDTH,
     UI_PADDING,
     VIEWPORT_WIDTH_PCT,
     GameMode,
     LightingState,
+    TargetingColors,
     UIColors,
 )
 from client_2d.entities import Entity, EntityManager, EntityType
@@ -134,6 +137,7 @@ class GameWindow(arcade.Window):
         self.mouse_y: int = 0
         self.hovered_entity: Entity | None = None
         self.selected_target: Entity | None = None
+        self.pulse_timer: float = 0.0
 
         # Initialize the game
         self._initialize_game()
@@ -680,6 +684,16 @@ class GameWindow(arcade.Window):
             color=color,
         )
 
+    def _multiply_tints(
+        self, tint1: tuple[int, int, int], tint2: tuple[int, int, int]
+    ) -> tuple[int, int, int]:
+        """Combine two RGB tints via multiplication (for fog + targeting)."""
+        return (
+            tint1[0] * tint2[0] // 255,
+            tint1[1] * tint2[1] // 255,
+            tint1[2] * tint2[2] // 255,
+        )
+
     def _update_lighting(self) -> None:
         """Recalculate lighting based on player/party positions."""
         if self.fog is None or self.lighting is None:
@@ -1079,33 +1093,22 @@ class GameWindow(arcade.Window):
 
             if self.fog:
                 state = self.fog.get_visibility(entity.grid_x, entity.grid_y)
-                tint = LIGHTING_TINTS.get(state)
+                fog_tint = LIGHTING_TINTS.get(state)
             else:
-                tint = (255, 255, 255)
+                fog_tint = (255, 255, 255)
 
             # Only draw visible entities
-            if tint is None:
+            if fog_tint is None:
                 continue
 
             screen_x = offset_x + entity.grid_x * tile_size
             screen_y = offset_y + (self.room_layout.height - 1 - entity.grid_y) * tile_size
 
-            if entity.texture:
-                self._draw_texture(entity.texture, screen_x, screen_y, tint)
-            else:
-                # Fallback: colored squares based on entity type
-                if entity.entity_type == EntityType.MONSTER:
-                    fallback_color = (180, 50, 50)  # Red for monsters
-                elif entity.entity_type == EntityType.ITEM:
-                    fallback_color = (50, 180, 50)  # Green for items
-                else:
-                    fallback_color = (180, 140, 50)  # Gold for decorations
-                tile_rect = arcade.LBWH(
-                    screen_x + 4, screen_y + 4, tile_size - 8, tile_size - 8
-                )
-                arcade.draw_rect_filled(tile_rect, fallback_color)
+            # Calculate final tint (fog + targeting)
+            final_tint = fog_tint
+            in_range = False
 
-            # Draw targeting visual feedback for monsters during combat
+            # Apply targeting tint for monsters during combat
             if (
                 self.current_mode == GameMode.COMBAT
                 and entity.entity_type == EntityType.MONSTER
@@ -1125,25 +1128,67 @@ class GameWindow(arcade.Window):
                 )
                 in_range = distance <= 1  # Melee range
 
+                # Apply targeting tint (green = in range, red = out of range)
+                if in_range:
+                    targeting_tint = TargetingColors.IN_RANGE_TINT
+                else:
+                    targeting_tint = TargetingColors.OUT_OF_RANGE_TINT
+                final_tint = self._multiply_tints(fog_tint, targeting_tint)
+
+            if entity.texture:
+                self._draw_texture(entity.texture, screen_x, screen_y, final_tint)
+            else:
+                # Fallback: colored squares based on entity type
+                if entity.entity_type == EntityType.MONSTER:
+                    fallback_color = (180, 50, 50)  # Red for monsters
+                elif entity.entity_type == EntityType.ITEM:
+                    fallback_color = (50, 180, 50)  # Green for items
+                else:
+                    fallback_color = (180, 140, 50)  # Gold for decorations
+                tile_rect = arcade.LBWH(
+                    screen_x + 4, screen_y + 4, tile_size - 8, tile_size - 8
+                )
+                arcade.draw_rect_filled(tile_rect, fallback_color)
+
+            # Draw targeting overlays for monsters during combat
+            if (
+                self.current_mode == GameMode.COMBAT
+                and entity.entity_type == EntityType.MONSTER
+                and entity.is_alive
+            ):
                 center_x = screen_x + tile_size // 2
                 center_y = screen_y + tile_size // 2
 
-                # Draw range indicator (green = in range, red = out of range)
-                if in_range:
-                    indicator_color = (50, 200, 50, 80)  # Semi-transparent green
-                else:
-                    indicator_color = (200, 50, 50, 80)  # Semi-transparent red
-                arcade.draw_circle_filled(center_x, center_y, tile_size // 2 - 2, indicator_color)
-
-                # Draw selection ring for selected target
+                # Draw pulsing selection ring for selected target
                 if entity == self.selected_target:
+                    # Calculate pulse value (0.0 to 1.0)
+                    pulse = (
+                        math.sin(self.pulse_timer * 2 * math.pi / PULSE_CYCLE_DURATION)
+                        + 1
+                    ) / 2
+
+                    # Pulsing glow
+                    glow_radius = tile_size // 2 + 2 + int(pulse * 6)
+                    glow_alpha = int(60 + pulse * 60)
+                    arcade.draw_circle_filled(
+                        center_x,
+                        center_y,
+                        glow_radius,
+                        (*TargetingColors.SELECTED_RING, glow_alpha),
+                    )
+
+                    # Pulsing ring thickness
+                    ring_thickness = 2 + int(pulse * 2)
                     arcade.draw_circle_outline(
-                        center_x, center_y, tile_size // 2 + 4,
-                        arcade.color.YELLOW, 3
+                        center_x,
+                        center_y,
+                        tile_size // 2 + 4,
+                        TargetingColors.SELECTED_RING,
+                        ring_thickness,
                     )
 
                 # Draw hover highlight
-                if entity == self.hovered_entity and entity != self.selected_target:
+                elif entity == self.hovered_entity:
                     arcade.draw_circle_outline(
                         center_x, center_y, tile_size // 2 + 2,
                         arcade.color.WHITE, 2
@@ -1536,6 +1581,10 @@ class GameWindow(arcade.Window):
             if self.screenshot_message_timer <= 0:
                 self.screenshot_message = ""
 
+        # Update pulse timer for targeting animation
+        if self.current_mode == GameMode.COMBAT:
+            self.pulse_timer += delta_time
+
         if not self.engine.in_combat:
             return
 
@@ -1716,6 +1765,7 @@ class GameWindow(arcade.Window):
         if button == arcade.MOUSE_BUTTON_LEFT:
             if entity and entity.entity_type == EntityType.MONSTER and entity.is_alive:
                 self.selected_target = entity
+                self.pulse_timer = 0.0  # Reset pulse animation
                 # Also update selected_enemy for compatibility with existing attack system
                 self.selected_enemy = entity.enemy_index
                 self._add_combat_log(f"Selected: {entity.sub_type or entity.entity_id}")
@@ -1787,6 +1837,7 @@ class GameWindow(arcade.Window):
         # Update selection
         self.selected_target = sorted_monsters[next_idx]
         self.selected_enemy = self.selected_target.enemy_index
+        self.pulse_timer = 0.0  # Reset pulse animation
 
         name = self.selected_target.sub_type or self.selected_target.entity_id
         self._add_combat_log(f"Target: {name}")

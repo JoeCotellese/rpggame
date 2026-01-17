@@ -394,3 +394,123 @@ class TestInRangeDetection:
 
         distance = chebyshev_distance(combatant_x, combatant_y, target_x, target_y)
         assert distance > 1
+
+
+class TestMultiplyTints:
+    """Tests for _multiply_tints method used for fog + targeting tint combination."""
+
+    def test_white_preserves_color(self):
+        """Multiplying by white (255,255,255) should preserve the original color."""
+        from client_2d.game import GameWindow
+
+        mock_window = create_mock_game_window()
+
+        result = GameWindow._multiply_tints(mock_window, (255, 255, 255), (128, 64, 32))
+        assert result == (128, 64, 32)
+
+    def test_black_produces_black(self):
+        """Multiplying by black (0,0,0) should produce black."""
+        from client_2d.game import GameWindow
+
+        mock_window = create_mock_game_window()
+
+        result = GameWindow._multiply_tints(mock_window, (128, 128, 128), (0, 0, 0))
+        assert result == (0, 0, 0)
+
+    def test_fog_plus_green_tint(self):
+        """Fog tint combined with green targeting should produce muted green."""
+        from client_2d.core.constants import TargetingColors
+        from client_2d.game import GameWindow
+
+        mock_window = create_mock_game_window()
+
+        # Dim fog (160, 160, 180) + green targeting (128, 255, 128)
+        fog_tint = (160, 160, 180)
+        result = GameWindow._multiply_tints(
+            mock_window, fog_tint, TargetingColors.IN_RANGE_TINT
+        )
+
+        # Verify green channel is boosted relative to red
+        assert result[1] > result[0], "Green should be brighter than red"
+
+    def test_fog_plus_red_tint(self):
+        """Fog tint combined with red targeting should produce muted red."""
+        from client_2d.core.constants import TargetingColors
+        from client_2d.game import GameWindow
+
+        mock_window = create_mock_game_window()
+
+        # Dim fog (160, 160, 180) + red targeting (255, 128, 128)
+        fog_tint = (160, 160, 180)
+        result = GameWindow._multiply_tints(
+            mock_window, fog_tint, TargetingColors.OUT_OF_RANGE_TINT
+        )
+
+        # Verify red channel is boosted relative to green
+        assert result[0] > result[1], "Red should be brighter than green"
+
+    def test_multiplication_math(self):
+        """Verify the multiplication formula: (a * b) // 255."""
+        from client_2d.game import GameWindow
+
+        mock_window = create_mock_game_window()
+
+        # 128 * 128 / 255 = 64.25 -> 64
+        result = GameWindow._multiply_tints(mock_window, (128, 128, 128), (128, 128, 128))
+        assert result == (64, 64, 64)
+
+
+class TestPulseAnimation:
+    """Tests for pulse animation timing (AC14: ~0.5s cycle)."""
+
+    def test_pulse_cycle_duration_constant(self):
+        """PULSE_CYCLE_DURATION should be 0.5 seconds."""
+        from client_2d.core.constants import PULSE_CYCLE_DURATION
+
+        assert PULSE_CYCLE_DURATION == 0.5
+
+    def test_pulse_range_0_to_1(self):
+        """Pulse value should oscillate between 0 and 1."""
+        import math
+
+        from client_2d.core.constants import PULSE_CYCLE_DURATION
+
+        # Test various points in the cycle
+        test_times = [0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0]
+
+        for t in test_times:
+            pulse = (math.sin(t * 2 * math.pi / PULSE_CYCLE_DURATION) + 1) / 2
+            assert 0.0 <= pulse <= 1.0, f"Pulse at t={t} is {pulse}, should be 0-1"
+
+    def test_pulse_at_zero_is_half(self):
+        """At t=0, sin(0)=0, so pulse should be 0.5."""
+        import math
+
+        from client_2d.core.constants import PULSE_CYCLE_DURATION
+
+        pulse = (math.sin(0 * 2 * math.pi / PULSE_CYCLE_DURATION) + 1) / 2
+        assert pulse == 0.5
+
+    def test_pulse_at_quarter_cycle_is_max(self):
+        """At t=0.125 (quarter of 0.5s), sin should be 1, pulse should be 1.0."""
+        import math
+
+        from client_2d.core.constants import PULSE_CYCLE_DURATION
+
+        t = PULSE_CYCLE_DURATION / 4  # 0.125
+        pulse = (math.sin(t * 2 * math.pi / PULSE_CYCLE_DURATION) + 1) / 2
+        assert abs(pulse - 1.0) < 0.001, f"Pulse should be 1.0 at quarter cycle, got {pulse}"
+
+    def test_pulse_completes_cycle_at_duration(self):
+        """Pulse should complete one full cycle at PULSE_CYCLE_DURATION."""
+        import math
+
+        from client_2d.core.constants import PULSE_CYCLE_DURATION
+
+        # At t=PULSE_CYCLE_DURATION, we should be back to the starting value
+        pulse_start = (math.sin(0 * 2 * math.pi / PULSE_CYCLE_DURATION) + 1) / 2
+        pulse_end = (
+            math.sin(PULSE_CYCLE_DURATION * 2 * math.pi / PULSE_CYCLE_DURATION) + 1
+        ) / 2
+
+        assert abs(pulse_start - pulse_end) < 0.001, "Pulse should complete cycle"

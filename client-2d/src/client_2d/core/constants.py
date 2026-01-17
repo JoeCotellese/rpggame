@@ -178,3 +178,15 @@ class UIColors:
     FOG_UNEXPLORED = (0, 0, 0)       # Pure black
     FOG_DARK = (60, 55, 50)          # Dark memory tint
     FOG_DIM = (140, 135, 125)        # Dim light tint
+
+
+class TargetingColors:
+    """Colors for combat targeting visual feedback."""
+
+    IN_RANGE_TINT = (128, 255, 128)      # Green sprite tint
+    OUT_OF_RANGE_TINT = (255, 128, 128)  # Red sprite tint
+    SELECTED_RING = (255, 255, 0)        # Yellow ring
+
+
+# Animation timing
+PULSE_CYCLE_DURATION = 0.5  # Seconds for one complete pulse cycle
