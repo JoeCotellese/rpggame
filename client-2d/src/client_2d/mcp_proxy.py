@@ -251,18 +251,19 @@ def create_proxy_server() -> FastMCP:
         return await proxy.call_tool_async("game_move", direction=direction)
 
     @mcp.tool()
-    async def game_attack(target_index: int) -> str:
+    async def game_attack(target: int | str) -> str:
         """Attack an enemy in combat.
 
         Args:
-            target_index: 0-based index of enemy to attack
+            target: Either 0-based index (int) or entity ID string
+                   (e.g., "giant_rat_0", "goblin_1")
 
         Returns:
             Attack result and updated game state.
         """
         if not game_manager.is_running:
             return "Game not running. Use game_start() first."
-        return await proxy.call_tool_async("game_attack", target_index=target_index)
+        return await proxy.call_tool_async("game_attack", target=target)
 
     @mcp.tool()
     async def game_wait() -> str:

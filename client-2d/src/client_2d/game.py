@@ -7,6 +7,7 @@ This module provides the entry point for the 2D client, which can be
 launched via `dnd-game --mode 2d`.
 """
 
+import math
 from datetime import datetime
 from pathlib import Path
 
@@ -19,15 +20,17 @@ from client_2d.core.constants import (
     FONT_SIZE_SMALL,
     FONT_SIZE_TITLE,
     NARRATIVE_HEIGHT_PCT,
+    PULSE_CYCLE_DURATION,
     TILE_SIZE,
     UI_BORDER_WIDTH,
     UI_PADDING,
     VIEWPORT_WIDTH_PCT,
     GameMode,
     LightingState,
+    TargetingColors,
     UIColors,
 )
-from client_2d.entities import EntityManager, EntityType
+from client_2d.entities import Entity, EntityManager, EntityType
 from client_2d.integration.engine_adapter import EngineAdapter
 from client_2d.integration.layout_loader import LayoutLoader
 from client_2d.systems.fog_of_war import FogOfWarSystem
@@ -128,6 +131,13 @@ class GameWindow(arcade.Window):
         # Screenshot feedback state
         self.screenshot_message: str = ""
         self.screenshot_message_timer: float = 0.0
+
+        # Mouse targeting state (for #355 unified targeting)
+        self.mouse_x: int = 0
+        self.mouse_y: int = 0
+        self.hovered_entity: Entity | None = None
+        self.selected_target: Entity | None = None
+        self.pulse_timer: float = 0.0
 
         # Initialize the game
         self._initialize_game()
@@ -231,7 +241,9 @@ class GameWindow(arcade.Window):
             elif request.command_type == CommandType.MOVE:
                 result = self._mcp_move(request.args.get("direction", ""))
             elif request.command_type == CommandType.ATTACK:
-                result = self._mcp_attack(request.args.get("target_index", 0))
+                # Support both int index and str entity_id
+                target = request.args.get("target", request.args.get("target_index", 0))
+                result = self._mcp_attack(target)
             elif request.command_type == CommandType.WAIT:
                 result = self._mcp_wait()
             else:
@@ -451,21 +463,45 @@ class GameWindow(arcade.Window):
         remaining = turn_state.movement_remaining
         return f"Moved {direction}. Movement remaining: {remaining} ft.\n" + self._mcp_get_state()
 
-    def _mcp_attack(self, target_index: int) -> str:
-        """Handle MCP attack command."""
+    def _mcp_attack(self, target: int | str) -> str:
+        """Handle MCP attack command.
+
+        Args:
+            target: Either a display index (int, 0-based) or an entity ID string
+                   (e.g., "goblin_0", "giant_rat_1").
+        """
         if not self.engine.in_combat:
             return "Not in combat! Use game_move() to explore."
 
         if not self.engine.is_player_turn():
             return "Not your turn! Wait for enemies to act."
 
-        # Validate target index
         monsters = self.entity_manager.get_monsters()
-        if target_index < 0 or target_index >= len(monsters):
-            return f"Invalid target index {target_index}. Valid: 0-{len(monsters)-1}"
+
+        # Resolve target to entity
+        if isinstance(target, int):
+            # Validate target index
+            if target < 0 or target >= len(monsters):
+                return f"Invalid target index {target}. Valid: 0-{len(monsters)-1}"
+            target_entity = monsters[target]
+        else:
+            # Find by entity_id string
+            target_entity = next(
+                (m for m in monsters if (
+                    m.entity_id == target or
+                    f"{m.sub_type}_{m.entity_id.split('_')[-1]}" == target
+                )),
+                None,
+            )
+            if target_entity is None:
+                valid_ids = [
+                    f"{m.sub_type}_{m.entity_id.split('_')[-1]}" if m.sub_type else m.entity_id
+                    for m in monsters
+                ]
+                return f"Unknown target: {target}. Valid targets: {', '.join(valid_ids)}"
 
         # Check melee range (must be adjacent for melee attack)
-        target = monsters[target_index]
+        target = target_entity
         from dnd_engine.core.distance import chebyshev_distance
 
         # Get current combatant's position (not player token position)
@@ -646,6 +682,16 @@ class GameWindow(arcade.Window):
             texture,
             arcade.XYWH(x + TILE_SIZE / 2, y + TILE_SIZE / 2, TILE_SIZE, TILE_SIZE),
             color=color,
+        )
+
+    def _multiply_tints(
+        self, tint1: tuple[int, int, int], tint2: tuple[int, int, int]
+    ) -> tuple[int, int, int]:
+        """Combine two RGB tints via multiplication (for fog + targeting)."""
+        return (
+            tint1[0] * tint2[0] // 255,
+            tint1[1] * tint2[1] // 255,
+            tint1[2] * tint2[2] // 255,
         )
 
     def _update_lighting(self) -> None:
@@ -869,6 +915,65 @@ class GameWindow(arcade.Window):
         if self.screenshot_message:
             self._draw_screenshot_feedback()
 
+        # Draw entity tooltip (must be last to appear on top)
+        if self.hovered_entity and self.current_mode == GameMode.COMBAT:
+            self._draw_entity_tooltip()
+
+    def _draw_entity_tooltip(self) -> None:
+        """Draw tooltip for hovered entity near the cursor."""
+        entity = self.hovered_entity
+        if entity is None:
+            return
+
+        from dnd_engine.core.distance import chebyshev_distance
+
+        # Get combatant position for distance calculation
+        combatant_pos = self.entity_manager.get_current_turn_position(self.engine)
+        if combatant_pos is None:
+            combatant_x, combatant_y = self.player_x, self.player_y
+        else:
+            combatant_x, combatant_y = combatant_pos
+
+        distance = chebyshev_distance(
+            combatant_x, combatant_y, entity.grid_x, entity.grid_y
+        )
+
+        # Build tooltip text
+        name = entity.sub_type.replace("_", " ").title() if entity.sub_type else entity.entity_id
+        hp_text = f"{entity.hp}/{entity.max_hp} HP"
+        distance_text = f"{distance} tile{'s' if distance != 1 else ''}"
+
+        if distance <= 1:
+            range_text = "(in range)"
+        else:
+            range_text = "(out of range)"
+
+        text = f"{name} - {hp_text} - {distance_text} {range_text}"
+
+        # Calculate tooltip position (16px above-right of cursor, clamped to screen)
+        tooltip_width = len(text) * 8 + 20
+        tooltip_height = 28
+        tip_x = min(self.mouse_x + 16, self.width - tooltip_width - 10)
+        tip_y = min(self.mouse_y + 16, self.height - tooltip_height - 10)
+
+        # Ensure tooltip doesn't go below screen
+        tip_y = max(tip_y, 10)
+        tip_x = max(tip_x, 10)
+
+        # Draw background
+        bg_rect = arcade.LBWH(tip_x, tip_y, tooltip_width, tooltip_height)
+        arcade.draw_rect_filled(bg_rect, (0, 0, 0, 220))
+        arcade.draw_rect_outline(bg_rect, UIColors.BORDER, 1)
+
+        # Draw text
+        arcade.draw_text(
+            text,
+            tip_x + 10,
+            tip_y + 6,
+            arcade.color.WHITE,
+            FONT_SIZE_BODY,
+        )
+
     def _draw_game_viewport(self, x: float, y: float, w: float, h: float) -> None:
         """Draw the main game viewport with dungeon tiles."""
         # Background
@@ -988,19 +1093,50 @@ class GameWindow(arcade.Window):
 
             if self.fog:
                 state = self.fog.get_visibility(entity.grid_x, entity.grid_y)
-                tint = LIGHTING_TINTS.get(state)
+                fog_tint = LIGHTING_TINTS.get(state)
             else:
-                tint = (255, 255, 255)
+                fog_tint = (255, 255, 255)
 
             # Only draw visible entities
-            if tint is None:
+            if fog_tint is None:
                 continue
 
             screen_x = offset_x + entity.grid_x * tile_size
             screen_y = offset_y + (self.room_layout.height - 1 - entity.grid_y) * tile_size
 
+            # Calculate final tint (fog + targeting)
+            final_tint = fog_tint
+            in_range = False
+
+            # Apply targeting tint for monsters during combat
+            if (
+                self.current_mode == GameMode.COMBAT
+                and entity.entity_type == EntityType.MONSTER
+                and entity.is_alive
+            ):
+                from dnd_engine.core.distance import chebyshev_distance
+
+                # Get current combatant position for range check
+                combatant_pos = self.entity_manager.get_current_turn_position(self.engine)
+                if combatant_pos is None:
+                    combatant_x, combatant_y = self.player_x, self.player_y
+                else:
+                    combatant_x, combatant_y = combatant_pos
+
+                distance = chebyshev_distance(
+                    combatant_x, combatant_y, entity.grid_x, entity.grid_y
+                )
+                in_range = distance <= 1  # Melee range
+
+                # Apply targeting tint (green = in range, red = out of range)
+                if in_range:
+                    targeting_tint = TargetingColors.IN_RANGE_TINT
+                else:
+                    targeting_tint = TargetingColors.OUT_OF_RANGE_TINT
+                final_tint = self._multiply_tints(fog_tint, targeting_tint)
+
             if entity.texture:
-                self._draw_texture(entity.texture, screen_x, screen_y, tint)
+                self._draw_texture(entity.texture, screen_x, screen_y, final_tint)
             else:
                 # Fallback: colored squares based on entity type
                 if entity.entity_type == EntityType.MONSTER:
@@ -1013,6 +1149,50 @@ class GameWindow(arcade.Window):
                     screen_x + 4, screen_y + 4, tile_size - 8, tile_size - 8
                 )
                 arcade.draw_rect_filled(tile_rect, fallback_color)
+
+            # Draw targeting overlays for monsters during combat
+            if (
+                self.current_mode == GameMode.COMBAT
+                and entity.entity_type == EntityType.MONSTER
+                and entity.is_alive
+            ):
+                center_x = screen_x + tile_size // 2
+                center_y = screen_y + tile_size // 2
+
+                # Draw pulsing selection ring for selected target
+                if entity == self.selected_target:
+                    # Calculate pulse value (0.0 to 1.0)
+                    pulse = (
+                        math.sin(self.pulse_timer * 2 * math.pi / PULSE_CYCLE_DURATION)
+                        + 1
+                    ) / 2
+
+                    # Pulsing glow
+                    glow_radius = tile_size // 2 + 2 + int(pulse * 6)
+                    glow_alpha = int(60 + pulse * 60)
+                    arcade.draw_circle_filled(
+                        center_x,
+                        center_y,
+                        glow_radius,
+                        (*TargetingColors.SELECTED_RING, glow_alpha),
+                    )
+
+                    # Pulsing ring thickness
+                    ring_thickness = 2 + int(pulse * 2)
+                    arcade.draw_circle_outline(
+                        center_x,
+                        center_y,
+                        tile_size // 2 + 4,
+                        TargetingColors.SELECTED_RING,
+                        ring_thickness,
+                    )
+
+                # Draw hover highlight
+                elif entity == self.hovered_entity:
+                    arcade.draw_circle_outline(
+                        center_x, center_y, tile_size // 2 + 2,
+                        arcade.color.WHITE, 2
+                    )
 
         # Draw party/player
         if self.party_spread and self.party_positions:
@@ -1336,6 +1516,58 @@ class GameWindow(arcade.Window):
             bold=True,
         )
 
+    # ========== Targeting Helpers ==========
+
+    def _get_map_render_params(self) -> tuple[float, float, float] | None:
+        """Calculate map rendering parameters (offset_x, offset_y, tile_size).
+
+        Returns None if room layout is not available.
+        """
+        if not self.room_layout:
+            return None
+
+        # Must match the calculation in _draw_dungeon_tiles exactly
+        viewport_w = int(self.width * VIEWPORT_WIDTH_PCT)
+        narrative_h = int(self.height * NARRATIVE_HEIGHT_PCT)
+        main_h = self.height - narrative_h
+
+        margin = 50
+        available_h = main_h - margin * 2
+        available_w = viewport_w - UI_PADDING * 2
+
+        tile_size = min(
+            available_w // self.room_layout.width,
+            available_h // self.room_layout.height,
+            TILE_SIZE,
+        )
+
+        map_w = self.room_layout.width * tile_size
+        map_h = self.room_layout.height * tile_size
+        offset_x = (viewport_w - map_w) // 2
+        offset_y = narrative_h + margin + (available_h - map_h) // 2
+
+        return (offset_x, offset_y, tile_size)
+
+    def _screen_to_grid(self, screen_x: int, screen_y: int) -> tuple[int, int] | None:
+        """Convert screen coordinates to grid position.
+
+        Returns None if position is outside the map bounds.
+        """
+        params = self._get_map_render_params()
+        if params is None or self.room_layout is None:
+            return None
+
+        offset_x, offset_y, tile_size = params
+
+        # Convert screen coords to grid (accounting for Y-flip)
+        grid_x = int((screen_x - offset_x) // tile_size)
+        grid_y = self.room_layout.height - 1 - int((screen_y - offset_y) // tile_size)
+
+        # Bounds check
+        if 0 <= grid_x < self.room_layout.width and 0 <= grid_y < self.room_layout.height:
+            return (grid_x, grid_y)
+        return None
+
     # ========== Update Loop ==========
 
     def on_update(self, delta_time: float) -> None:
@@ -1348,6 +1580,10 @@ class GameWindow(arcade.Window):
             self.screenshot_message_timer -= delta_time
             if self.screenshot_message_timer <= 0:
                 self.screenshot_message = ""
+
+        # Update pulse timer for targeting animation
+        if self.current_mode == GameMode.COMBAT:
+            self.pulse_timer += delta_time
 
         if not self.engine.in_combat:
             return
@@ -1467,8 +1703,14 @@ class GameWindow(arcade.Window):
 
     def on_key_press(self, key: int, modifiers: int) -> None:
         """Handle key presses."""
-        # ESC to quit
+        # ESC behavior depends on context
         if key == arcade.key.ESCAPE:
+            # In combat with selected target: deselect first
+            if self.current_mode == GameMode.COMBAT and self.selected_target:
+                self.selected_target = None
+                self._add_combat_log("Target deselected")
+                return
+            # Otherwise: close window
             self.close()
             return
 
@@ -1478,11 +1720,129 @@ class GameWindow(arcade.Window):
             return
 
         if self.engine.in_combat and not self.processing_enemy_turn:
-            self._handle_combat_input(key)
+            self._handle_combat_input(key, modifiers)
         else:
             self._handle_exploration_input(key)
 
-    def _handle_combat_input(self, key: int) -> None:
+    def on_mouse_motion(self, x: int, y: int, dx: int, dy: int) -> None:
+        """Track mouse position and update hovered entity."""
+        self.mouse_x = x
+        self.mouse_y = y
+
+        # Only track hovered entities during combat
+        if self.current_mode != GameMode.COMBAT:
+            self.hovered_entity = None
+            return
+
+        # Convert screen position to grid and find entity
+        grid_pos = self._screen_to_grid(x, y)
+        if grid_pos:
+            self.hovered_entity = self.entity_manager.get_at_position(*grid_pos)
+        else:
+            self.hovered_entity = None
+
+    def on_mouse_press(self, x: int, y: int, button: int, modifiers: int) -> None:
+        """Handle mouse clicks for targeting."""
+        # Only handle targeting during combat and on player's turn
+        if self.current_mode != GameMode.COMBAT:
+            return
+        if self.processing_enemy_turn:
+            return
+        if not self.engine.is_player_turn():
+            current = self.engine.get_current_combatant()
+            if current:
+                self._add_combat_log(f"Wait - it's {current['name']}'s turn!")
+            return
+
+        # Get entity at click position
+        grid_pos = self._screen_to_grid(x, y)
+        if not grid_pos:
+            return
+
+        entity = self.entity_manager.get_at_position(*grid_pos)
+
+        # Left-click: select target
+        if button == arcade.MOUSE_BUTTON_LEFT:
+            if entity and entity.entity_type == EntityType.MONSTER and entity.is_alive:
+                self.selected_target = entity
+                self.pulse_timer = 0.0  # Reset pulse animation
+                # Also update selected_enemy for compatibility with existing attack system
+                self.selected_enemy = entity.enemy_index
+                self._add_combat_log(f"Selected: {entity.sub_type or entity.entity_id}")
+
+        # Right-click: direct attack (no confirmation)
+        elif button == arcade.MOUSE_BUTTON_RIGHT:
+            if entity and entity.entity_type == EntityType.MONSTER and entity.is_alive:
+                self._attack_entity(entity)
+
+    def _attack_entity(self, target: Entity) -> None:
+        """Execute attack on a specific entity."""
+        from dnd_engine.core.distance import chebyshev_distance
+
+        # Get current combatant position for range check
+        combatant_pos = self.entity_manager.get_current_turn_position(self.engine)
+        if combatant_pos is None:
+            combatant_x, combatant_y = self.player_x, self.player_y
+        else:
+            combatant_x, combatant_y = combatant_pos
+
+        # Check melee range
+        distance = chebyshev_distance(
+            combatant_x, combatant_y, target.grid_x, target.grid_y
+        )
+        if distance > 1:
+            self._add_combat_log(f"Out of range! ({distance} tiles away)")
+            return
+
+        # Set selected enemy and execute attack
+        self.selected_enemy = target.enemy_index
+        self.selected_target = target
+        self._execute_attack()
+
+    def _cycle_target(self, reverse: bool = False) -> None:
+        """Cycle through targets sorted by distance (nearest first)."""
+        from dnd_engine.core.distance import chebyshev_distance
+
+        monsters = self.entity_manager.get_monsters()
+        if not monsters:
+            self._add_combat_log("No targets available")
+            return
+
+        # Get combatant position
+        combatant_pos = self.entity_manager.get_current_turn_position(self.engine)
+        if combatant_pos is None:
+            combatant_x, combatant_y = self.player_x, self.player_y
+        else:
+            combatant_x, combatant_y = combatant_pos
+
+        # Sort by distance (nearest first)
+        sorted_monsters = sorted(
+            monsters,
+            key=lambda m: chebyshev_distance(
+                combatant_x, combatant_y, m.grid_x, m.grid_y
+            ),
+        )
+
+        # Find current index in sorted list
+        current_idx = -1
+        if self.selected_target in sorted_monsters:
+            current_idx = sorted_monsters.index(self.selected_target)
+
+        # Calculate next index
+        if reverse:
+            next_idx = (current_idx - 1) % len(sorted_monsters)
+        else:
+            next_idx = (current_idx + 1) % len(sorted_monsters)
+
+        # Update selection
+        self.selected_target = sorted_monsters[next_idx]
+        self.selected_enemy = self.selected_target.enemy_index
+        self.pulse_timer = 0.0  # Reset pulse animation
+
+        name = self.selected_target.sub_type or self.selected_target.entity_id
+        self._add_combat_log(f"Target: {name}")
+
+    def _handle_combat_input(self, key: int, modifiers: int = 0) -> None:
         """Handle combat-mode input."""
         if not self.engine.is_player_turn():
             # Provide feedback instead of silently ignoring
@@ -1491,17 +1851,34 @@ class GameWindow(arcade.Window):
                 self._add_combat_log(f"Wait - it's {current['name']}'s turn!")
             return
 
+        # Tab to cycle targets (Shift+Tab for reverse)
+        if key == arcade.key.TAB:
+            self._cycle_target(reverse=bool(modifiers & arcade.key.MOD_SHIFT))
+            return
+
+        # Escape to deselect target
+        if key == arcade.key.ESCAPE:
+            if self.selected_target:
+                self.selected_target = None
+                self._add_combat_log("Target deselected")
+            return
+
         # Number keys to select enemy
         if arcade.key.KEY_1 <= key <= arcade.key.KEY_9:
             display_index = key - arcade.key.KEY_1
-            enemies = self.engine.get_enemies()
-            if display_index < len(enemies):
-                # Use actual enemy index from engine, not display position
-                self.selected_enemy = enemies[display_index]["index"]
+            monsters = self.entity_manager.get_monsters()
+            if display_index < len(monsters):
+                self.selected_target = monsters[display_index]
+                self.selected_enemy = self.selected_target.enemy_index
+                name = self.selected_target.sub_type or self.selected_target.entity_id
+                self._add_combat_log(f"Selected: {name}")
 
-        # A to attack
-        elif key == arcade.key.A:
-            self._execute_attack()
+        # A or Enter to attack selected target
+        elif key in (arcade.key.A, arcade.key.ENTER):
+            if self.selected_target:
+                self._attack_entity(self.selected_target)
+            else:
+                self._add_combat_log("No target selected! Press Tab or 1-9 to select.")
 
         # Space to wait/pass
         elif key == arcade.key.SPACE:
