@@ -65,6 +65,60 @@ LIGHTING_TINTS = {
 }
 
 
+# ========== Range Utilities for Ranged Attacks ==========
+
+
+def parse_weapon_range(range_str: str | None) -> tuple[int, int]:
+    """Parse weapon range string like "150/600" into (normal_feet, max_feet).
+
+    Args:
+        range_str: Range string in format "normal/max" (feet), or None for melee.
+
+    Returns:
+        Tuple of (normal_range_feet, max_range_feet). Returns (5, 5) for melee.
+    """
+    if not range_str:
+        return (5, 5)  # Melee: adjacent only (5 ft)
+    parts = range_str.split("/")
+    if len(parts) == 2:
+        return (int(parts[0]), int(parts[1]))
+    # Single value means same normal and max
+    return (int(parts[0]), int(parts[0]))
+
+
+def get_attack_range(weapon_data: dict | None) -> tuple[int, int]:
+    """Get (normal_range, max_range) in feet for a weapon.
+
+    Handles melee, ranged, and thrown weapons per D&D 5E rules:
+    - Melee weapons (no range property): 5 ft only
+    - Ranged weapons: use range property
+    - Thrown weapons (melee with "thrown" property + range): can use at range
+
+    Args:
+        weapon_data: Weapon dict from items.json, or None for unarmed.
+
+    Returns:
+        Tuple of (normal_range_feet, max_range_feet).
+    """
+    if not weapon_data:
+        return (5, 5)  # Unarmed: melee only
+
+    range_str = weapon_data.get("range")
+    properties = weapon_data.get("properties", [])
+    category = weapon_data.get("category", "melee")
+
+    # Ranged weapons always use their range
+    if category == "ranged":
+        return parse_weapon_range(range_str)
+
+    # Thrown melee weapons can be used at range
+    if "thrown" in properties and range_str:
+        return parse_weapon_range(range_str)
+
+    # Regular melee weapons: adjacent only
+    return (5, 5)
+
+
 class GameWindow(arcade.Window):
     """Main game window with real engine integration."""
 
@@ -347,6 +401,31 @@ class GameWindow(arcade.Window):
                 current = self.engine.get_current_combatant()
                 if current:
                     lines.append(f"Current Turn: {current['name']}")
+                    # Show equipped weapon and range for player characters
+                    if current["is_player"]:
+                        from dnd_engine.systems.inventory import EquipmentSlot
+
+                        creature = current["creature"]
+                        weapon_name = "Unarmed"
+                        range_text = "5 ft (melee)"
+                        if hasattr(creature, "inventory"):
+                            weapon_id = creature.inventory.get_equipped_item(
+                                EquipmentSlot.WEAPON
+                            )
+                            if weapon_id and self.engine.game_state:
+                                items_data = self.engine.game_state.data_loader.load_items(
+                                    self.engine.game_state.campaign_id
+                                )
+                                weapon_data = items_data.get("weapons", {}).get(weapon_id, {})
+                                weapon_name = weapon_data.get(
+                                    "name", weapon_id.replace("_", " ").title()
+                                )
+                                normal_range, max_range = get_attack_range(weapon_data)
+                                if max_range > 5:
+                                    range_text = f"{normal_range}/{max_range} ft"
+                                else:
+                                    range_text = "5 ft (melee)"
+                        lines.append(f"Equipped: {weapon_name} (range: {range_text})")
 
         lines.extend([
             "",
@@ -389,7 +468,7 @@ class GameWindow(arcade.Window):
             if turn_state:
                 lines.append(f"  Movement: {turn_state.movement_remaining} ft remaining")
             lines.append("  - game_move(direction) - Move north/south/east/west")
-            lines.append("  - game_attack(target_index) - Attack adjacent enemy")
+            lines.append("  - game_attack(target) - Attack enemy in weapon range")
             lines.append("  - game_wait() - Pass turn")
         else:
             lines.append("  - game_move(direction) - Move north/south/east/west")
@@ -500,9 +579,10 @@ class GameWindow(arcade.Window):
                 ]
                 return f"Unknown target: {target}. Valid targets: {', '.join(valid_ids)}"
 
-        # Check melee range (must be adjacent for melee attack)
+        # Check attack range based on equipped weapon
         target = target_entity
-        from dnd_engine.core.distance import chebyshev_distance
+        from dnd_engine.core.distance import distance_in_feet
+        from dnd_engine.systems.inventory import EquipmentSlot
 
         # Get current combatant's position (not player token position)
         combatant_pos = self.entity_manager.get_current_turn_position(self.engine)
@@ -512,10 +592,30 @@ class GameWindow(arcade.Window):
         else:
             combatant_x, combatant_y = combatant_pos
 
-        distance = chebyshev_distance(
+        # Calculate distance in feet (each square = 5 ft)
+        distance_ft = distance_in_feet(
             combatant_x, combatant_y, target.grid_x, target.grid_y
         )
-        if distance > 1:
+
+        # Get attacker's equipped weapon and its range
+        current = self.engine.get_current_combatant()
+        weapon_data = None
+        weapon_name = "Unarmed"
+        if current and current["is_player"]:
+            creature = current["creature"]
+            if hasattr(creature, "inventory"):
+                weapon_id = creature.inventory.get_equipped_item(EquipmentSlot.WEAPON)
+                if weapon_id:
+                    items_data = self.engine.game_state.data_loader.load_items(
+                        self.engine.game_state.campaign_id
+                    )
+                    weapon_data = items_data.get("weapons", {}).get(weapon_id, {})
+                    weapon_name = weapon_data.get("name", weapon_id.replace("_", " ").title())
+
+        normal_range, max_range = get_attack_range(weapon_data)
+
+        # Check if target is in range
+        if distance_ft > max_range:
             turn_state = self.engine.get_current_turn_state()
             movement_info = (
                 f" Movement remaining: {turn_state.movement_remaining} ft."
@@ -523,21 +623,37 @@ class GameWindow(arcade.Window):
                 else ""
             )
             return (
-                f"Target not in melee range (distance: {distance} squares). "
+                f"Out of range! ({distance_ft} ft away, {weapon_name} max range: {max_range} ft). "
                 f"Move closer first.{movement_info}"
             )
+
+        # Log range info (long range = disadvantage in future)
+        in_long_range = distance_ft > normal_range
+        if in_long_range:
+            # Track for future disadvantage implementation
+            self._add_combat_log(
+                f"{weapon_name} attack at {distance_ft} ft (long range - disadvantage)"
+            )
+
+        # Track current combatant before attack to detect if turn advanced
+        pre_attack_combatant = current["name"] if current else None
 
         # Set selected enemy and execute attack
         # Use target.enemy_index (engine index) not target_index (display index)
         self.selected_enemy = target.enemy_index
         self._execute_attack()
 
-        # Check if attack actually succeeded by seeing if turn advanced
-        # If still same player's turn and not processing enemies, attack failed
-        if self.engine.is_player_turn() and not self.processing_enemy_turn:
-            current = self.engine.get_current_combatant()
-            name = current["name"] if current else "Character"
-            return f"Attack failed! {name} cannot reach the target. Use game_wait() to pass."
+        # Check if attack succeeded by comparing combatant before/after
+        # Turn advances on success, so different combatant = attack worked
+        post_attack_combatant = self.engine.get_current_combatant()
+        post_name = post_attack_combatant["name"] if post_attack_combatant else None
+
+        # If same combatant and not processing enemies, attack didn't execute
+        if pre_attack_combatant == post_name and not self.processing_enemy_turn:
+            return (
+                f"Attack failed! {pre_attack_combatant} cannot reach the target. "
+                f"Use game_wait() to pass."
+            )
 
         # Process enemy turns synchronously for MCP
         while self.processing_enemy_turn:
@@ -925,7 +1041,8 @@ class GameWindow(arcade.Window):
         if entity is None:
             return
 
-        from dnd_engine.core.distance import chebyshev_distance
+        from dnd_engine.core.distance import distance_in_feet
+        from dnd_engine.systems.inventory import EquipmentSlot
 
         # Get combatant position for distance calculation
         combatant_pos = self.entity_manager.get_current_turn_position(self.engine)
@@ -934,17 +1051,34 @@ class GameWindow(arcade.Window):
         else:
             combatant_x, combatant_y = combatant_pos
 
-        distance = chebyshev_distance(
+        distance_ft = distance_in_feet(
             combatant_x, combatant_y, entity.grid_x, entity.grid_y
         )
+
+        # Get attacker's equipped weapon range
+        current = self.engine.get_current_combatant()
+        weapon_data = None
+        if current and current["is_player"]:
+            creature = current["creature"]
+            if hasattr(creature, "inventory"):
+                weapon_id = creature.inventory.get_equipped_item(EquipmentSlot.WEAPON)
+                if weapon_id:
+                    items_data = self.engine.game_state.data_loader.load_items(
+                        self.engine.game_state.campaign_id
+                    )
+                    weapon_data = items_data.get("weapons", {}).get(weapon_id, {})
+
+        normal_range, max_range = get_attack_range(weapon_data)
 
         # Build tooltip text
         name = entity.sub_type.replace("_", " ").title() if entity.sub_type else entity.entity_id
         hp_text = f"{entity.hp}/{entity.max_hp} HP"
-        distance_text = f"{distance} tile{'s' if distance != 1 else ''}"
+        distance_text = f"{distance_ft} ft"
 
-        if distance <= 1:
+        if distance_ft <= normal_range:
             range_text = "(in range)"
+        elif distance_ft <= max_range:
+            range_text = "(long range)"
         else:
             range_text = "(out of range)"
 
@@ -1114,7 +1248,8 @@ class GameWindow(arcade.Window):
                 and entity.entity_type == EntityType.MONSTER
                 and entity.is_alive
             ):
-                from dnd_engine.core.distance import chebyshev_distance
+                from dnd_engine.core.distance import distance_in_feet
+                from dnd_engine.systems.inventory import EquipmentSlot
 
                 # Get current combatant position for range check
                 combatant_pos = self.entity_manager.get_current_turn_position(self.engine)
@@ -1123,10 +1258,25 @@ class GameWindow(arcade.Window):
                 else:
                     combatant_x, combatant_y = combatant_pos
 
-                distance = chebyshev_distance(
+                distance_ft = distance_in_feet(
                     combatant_x, combatant_y, entity.grid_x, entity.grid_y
                 )
-                in_range = distance <= 1  # Melee range
+
+                # Get attacker's equipped weapon range
+                current = self.engine.get_current_combatant()
+                weapon_data = None
+                if current and current["is_player"]:
+                    creature = current["creature"]
+                    if hasattr(creature, "inventory"):
+                        weapon_id = creature.inventory.get_equipped_item(EquipmentSlot.WEAPON)
+                        if weapon_id and self.engine.game_state:
+                            items_data = self.engine.game_state.data_loader.load_items(
+                                self.engine.game_state.campaign_id
+                            )
+                            weapon_data = items_data.get("weapons", {}).get(weapon_id, {})
+
+                _normal_range, max_range = get_attack_range(weapon_data)
+                in_range = distance_ft <= max_range
 
                 # Apply targeting tint (green = in range, red = out of range)
                 if in_range:
@@ -1777,7 +1927,8 @@ class GameWindow(arcade.Window):
 
     def _attack_entity(self, target: Entity) -> None:
         """Execute attack on a specific entity."""
-        from dnd_engine.core.distance import chebyshev_distance
+        from dnd_engine.core.distance import distance_in_feet
+        from dnd_engine.systems.inventory import EquipmentSlot
 
         # Get current combatant position for range check
         combatant_pos = self.entity_manager.get_current_turn_position(self.engine)
@@ -1786,13 +1937,41 @@ class GameWindow(arcade.Window):
         else:
             combatant_x, combatant_y = combatant_pos
 
-        # Check melee range
-        distance = chebyshev_distance(
+        # Calculate distance in feet (each square = 5 ft)
+        distance_ft = distance_in_feet(
             combatant_x, combatant_y, target.grid_x, target.grid_y
         )
-        if distance > 1:
-            self._add_combat_log(f"Out of range! ({distance} tiles away)")
+
+        # Get attacker's equipped weapon and its range
+        current = self.engine.get_current_combatant()
+        weapon_data = None
+        weapon_name = "Unarmed"
+        if current and current["is_player"]:
+            creature = current["creature"]
+            if hasattr(creature, "inventory"):
+                weapon_id = creature.inventory.get_equipped_item(EquipmentSlot.WEAPON)
+                if weapon_id:
+                    items_data = self.engine.game_state.data_loader.load_items(
+                        self.engine.game_state.campaign_id
+                    )
+                    weapon_data = items_data.get("weapons", {}).get(weapon_id, {})
+                    weapon_name = weapon_data.get("name", weapon_id.replace("_", " ").title())
+
+        normal_range, max_range = get_attack_range(weapon_data)
+
+        # Check if target is in range
+        if distance_ft > max_range:
+            self._add_combat_log(
+                f"Out of range! ({distance_ft} ft away, {weapon_name} max: {max_range} ft)"
+            )
             return
+
+        # Log long range (disadvantage in future)
+        in_long_range = distance_ft > normal_range
+        if in_long_range:
+            self._add_combat_log(
+                f"{weapon_name} at {distance_ft} ft (long range - disadvantage)"
+            )
 
         # Set selected enemy and execute attack
         self.selected_enemy = target.enemy_index

@@ -47,10 +47,29 @@ class GameProcessManager:
 
     @property
     def is_running(self) -> bool:
-        """Check if game process is running."""
-        if self._process is None:
+        """Check if game process is running.
+
+        Returns True if either:
+        - We started the process and it's still alive, OR
+        - The game's MCP server is responding (game started externally)
+        """
+        # Check subprocess we started
+        if self._process is not None and self._process.poll() is None:
+            return True
+
+        # Check if MCP server is responding (game may have been started externally)
+        return self._is_mcp_responding()
+
+    def _is_mcp_responding(self) -> bool:
+        """Check if the game's MCP server is responding."""
+        try:
+            with httpx.Client(timeout=1.0) as client:
+                # Check root endpoint - returns 404 but proves server is up
+                client.get(GAME_MCP_URL)
+                # Any response (even 404) means server is running
+                return True
+        except (httpx.ConnectError, httpx.TimeoutException, httpx.ReadTimeout):
             return False
-        return self._process.poll() is None
 
     def start(self) -> str:
         """Start the game process.
@@ -216,8 +235,10 @@ def create_proxy_server() -> FastMCP:
         Returns:
             Status message with process info.
         """
-        if game_manager.is_running:
-            return f"Game is running (PID: {game_manager._process.pid})."
+        if game_manager._process is not None and game_manager._process.poll() is None:
+            return f"Game is running (PID: {game_manager._process.pid}, started by proxy)."
+        if game_manager._is_mcp_responding():
+            return "Game is running (started externally, MCP server responding)."
         return "Game is not running. Use game_start() to launch."
 
     # === Forwarded Game Tools ===
