@@ -153,3 +153,77 @@ class TestSpawnMonster:
 
         with pytest.raises(ValueError, match="initialize_game"):
             EngineAdapter().spawn_monster("goblin", 0, 0)
+
+
+class TestSpawnCharacter:
+    """EngineAdapter.spawn_character creates a PC, equips weapons, joins party."""
+
+    def test_adds_to_party(self, initialized_adapter) -> None:
+        """New character appears in party.characters."""
+        adapter = initialized_adapter
+        before = len(adapter.party.characters)
+
+        result = adapter.spawn_character(
+            "fighter", "high_elf", ["shortbow"], 5, 7, name="Robyn",
+        )
+
+        assert len(adapter.party.characters) == before + 1
+        assert result["name"] == "Robyn"
+        assert result["position"] == [5, 7]
+        assert result["entity_id"].startswith("pc_")
+
+    def test_equips_first_weapon_in_list(self, initialized_adapter) -> None:
+        """First weapon in the list is moved to the WEAPON slot."""
+        from dnd_engine.systems.inventory import EquipmentSlot
+
+        adapter = initialized_adapter
+        adapter.spawn_character(
+            "fighter", "high_elf", ["shortbow", "dagger"], 5, 7, name="Robyn",
+        )
+
+        # Find the newly added character
+        new_char = adapter.party.characters[-1]
+        equipped = new_char.inventory.get_equipped_item(EquipmentSlot.WEAPON)
+        assert equipped == "shortbow"
+        # Second weapon is in the pack, not equipped
+        assert new_char.inventory.has_item("dagger")
+
+    def test_adds_to_initiative_when_in_combat(self, initialized_adapter) -> None:
+        """Spawning during combat appends to existing initiative."""
+        adapter = initialized_adapter
+        adapter.spawn_monster("goblin", 12, 7)  # triggers combat
+        before = len(adapter.game_state.initiative_tracker.get_all_combatants())
+
+        adapter.spawn_character(
+            "fighter", "high_elf", ["shortbow"], 5, 7, name="LateJoiner",
+        )
+
+        after = len(adapter.game_state.initiative_tracker.get_all_combatants())
+        assert after == before + 1
+
+    def test_invalid_class_raises(self, initialized_adapter) -> None:
+        """CharacterFactory's ValueError surfaces unchanged."""
+        with pytest.raises(ValueError, match="Invalid class"):
+            initialized_adapter.spawn_character(
+                "not_a_class", "high_elf", ["dagger"], 0, 0, name="Bad",
+            )
+
+    def test_empty_weapons_list_is_allowed(self, initialized_adapter) -> None:
+        """No weapons → no WEAPON slot filled, character still spawns."""
+        from dnd_engine.systems.inventory import EquipmentSlot
+
+        adapter = initialized_adapter
+        adapter.spawn_character("wizard", "high_elf", [], 5, 7, name="Spellslinger")
+
+        new_char = adapter.party.characters[-1]
+        # CharacterFactory may equip a default weapon; we only assert no
+        # weapon from our (empty) list overrode that — spawn doesn't crash
+        # and the character is present.
+        assert new_char.name == "Spellslinger"
+        _ = new_char.inventory.get_equipped_item(EquipmentSlot.WEAPON)
+
+    def test_raises_when_not_initialized(self) -> None:
+        from client_2d.integration.engine_adapter import EngineAdapter
+
+        with pytest.raises(ValueError, match="initialize_game"):
+            EngineAdapter().spawn_character("fighter", "human", [], 0, 0)

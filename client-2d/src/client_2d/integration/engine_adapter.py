@@ -741,6 +741,76 @@ class EngineAdapter:
     # Backing implementations for the --dev MCP tools (issue #360).
     # All raise ValueError if the game has not been initialized yet.
 
+    def spawn_character(
+        self,
+        class_name: str,
+        race: str,
+        weapons: list[str],
+        x: int,
+        y: int,
+        name: str | None = None,
+        level: int = 1,
+    ) -> dict[str, Any]:
+        """Create a player character, equip weapons, add to the party.
+
+        Builds the PC via ``CharacterFactory.create_character`` (which sets
+        up proficiencies, default equipment, and resource pools). Each
+        weapon in ``weapons`` is added to the inventory; the first is moved
+        to the WEAPON slot, the rest stay in the pack. If combat is active,
+        the character joins the initiative tracker.
+
+        Args:
+            class_name: Class ID (e.g. ``"ranger"``).
+            race: Race ID (e.g. ``"elf"``).
+            weapons: Ordered list of item IDs from items.json. The first is
+                equipped; the rest go to the pack.
+            x: Map tile X (applied by the GameWindow handler — engine has
+                no PC position).
+            y: Map tile Y.
+            name: Optional name; CharacterFactory generates one if omitted.
+            level: Starting level (default 1).
+
+        Returns:
+            ``{"entity_id": "pc_<name>", "name": str, "hp": int,
+            "position": [x, y]}``.
+
+        Raises:
+            ValueError: If initialize_game() has not been called, or if the
+                class/race is unknown (surfaced from CharacterFactory).
+        """
+        if self._game_state is None:
+            raise ValueError("Must call initialize_game() first")
+
+        from dnd_engine.core.character_factory import CharacterFactory
+        from dnd_engine.systems.inventory import EquipmentSlot
+
+        factory = CharacterFactory()
+        character = factory.create_character(
+            class_name=class_name,
+            race_name=race,
+            data_loader=self._game_state.data_loader,
+            level=level,
+            name=name,
+        )
+
+        for i, weapon_id in enumerate(weapons):
+            character.inventory.add_item(weapon_id, category="weapons")
+            if i == 0:
+                character.inventory.equip_item(weapon_id, EquipmentSlot.WEAPON)
+
+        self._party.add_character(character)
+
+        if self._game_state.in_combat and self._game_state.initiative_tracker is not None:
+            self._game_state.initiative_tracker.add_combatant(character)
+
+        entity_id = f"pc_{character.name.lower().replace(' ', '_')}"
+        return {
+            "entity_id": entity_id,
+            "name": character.name,
+            "hp": character.current_hp,
+            "position": [x, y],
+        }
+
     def spawn_monster(self, monster_id: str, x: int, y: int) -> dict[str, Any]:
         """Create a monster and place it on the map.
 
