@@ -21,6 +21,7 @@ Usage:
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import time
@@ -31,8 +32,16 @@ from fastmcp import Client
 from fastmcp.client.transports import SSETransport
 from mcp.server.fastmcp import FastMCP
 
+# Dev-mode flag is read from the proxy's environment at import time. When the
+# proxy is launched with DND_DEBUG=1, it both (a) advertises the spawn/setup
+# tools to Claude and (b) launches the game with --dev so the upstream MCP
+# server actually registers them.
+DEV_MODE = os.environ.get("DND_DEBUG") == "1"
+
 # Game configuration
 GAME_COMMAND = [sys.executable, "-m", "client_2d.main", "--mcp"]
+if DEV_MODE:
+    GAME_COMMAND.append("--dev")
 GAME_MCP_URL = "http://127.0.0.1:8765"
 GAME_STARTUP_TIMEOUT = 10.0  # seconds to wait for game to start
 GAME_HEALTH_CHECK_INTERVAL = 0.5  # seconds between health checks
@@ -296,6 +305,93 @@ def create_proxy_server() -> FastMCP:
         if not game_manager.is_running:
             return "Game not running. Use game_start() first."
         return await proxy.call_tool_async("game_wait")
+
+    # === Dev-Mode Tools (only registered when DND_DEBUG=1) ===
+    # Forward to the matching tools on the game's embedded MCP server, which
+    # itself only registers them when launched with --dev / DND_DEBUG=1.
+
+    if DEV_MODE:
+
+        @mcp.tool()
+        async def spawn_monster(monster_id: str, x: int, y: int) -> str:
+            """Spawn a monster at (x, y). Starts combat if not already in combat.
+
+            Args:
+                monster_id: SRD monster ID (e.g. 'goblin', 'giant_rat').
+                x: Tile X coordinate.
+                y: Tile Y coordinate.
+            """
+            if not game_manager.is_running:
+                return "Game not running. Use game_start() first."
+            return await proxy.call_tool_async("spawn_monster", monster_id=monster_id, x=x, y=y)
+
+        @mcp.tool()
+        async def spawn_character(
+            class_name: str,
+            race: str,
+            weapons: list[str],
+            x: int,
+            y: int,
+            name: str | None = None,
+            level: int = 1,
+        ) -> str:
+            """Spawn a player character, equip first weapon, add to party.
+
+            Available classes: fighter, rogue, wizard.
+            Available races: halfling, high_elf, human, mountain_dwarf.
+
+            Args:
+                class_name: Class ID.
+                race: Race ID.
+                weapons: Ordered weapon IDs; first equipped, rest in pack.
+                x: Tile X.
+                y: Tile Y.
+                name: Optional name (random if omitted).
+                level: Starting level (default 1).
+            """
+            if not game_manager.is_running:
+                return "Game not running. Use game_start() first."
+            return await proxy.call_tool_async(
+                "spawn_character",
+                class_name=class_name,
+                race=race,
+                weapons=weapons,
+                x=x,
+                y=y,
+                name=name,
+                level=level,
+            )
+
+        @mcp.tool()
+        async def set_position(entity_id: str, x: int, y: int) -> str:
+            """Move an entity to (x, y) on the visual map.
+
+            Args:
+                entity_id: Entity ID as shown on the ASCII map.
+                x: New tile X.
+                y: New tile Y.
+            """
+            if not game_manager.is_running:
+                return "Game not running. Use game_start() first."
+            return await proxy.call_tool_async("set_position", entity_id=entity_id, x=x, y=y)
+
+        @mcp.tool()
+        async def clear_enemies() -> str:
+            """Remove all active enemies and end combat."""
+            if not game_manager.is_running:
+                return "Game not running. Use game_start() first."
+            return await proxy.call_tool_async("clear_enemies")
+
+        @mcp.tool()
+        async def set_seed(seed: int) -> str:
+            """Reseed the dice roller for reproducible rolls.
+
+            Args:
+                seed: Integer seed.
+            """
+            if not game_manager.is_running:
+                return "Game not running. Use game_start() first."
+            return await proxy.call_tool_async("set_seed", seed=seed)
 
     return mcp
 
