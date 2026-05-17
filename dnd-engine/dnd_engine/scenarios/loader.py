@@ -98,16 +98,97 @@ class ScenarioLoader:
         data = self._parse_yaml(scenario_path)
         self._validate(data)
 
-        # GameState construction lands in Chunk 2; for now the loader is
-        # validation-only. Returning a partial LoadedScenario lets the
-        # schema tests run in isolation without needing the engine wired.
+        from dnd_engine.core.character_factory import CharacterFactory
+        from dnd_engine.core.dice import DiceRoller
+        from dnd_engine.core.game_state import GameState
+        from dnd_engine.core.party import Party
+        from dnd_engine.rules.loader import DataLoader
+        from dnd_engine.systems.inventory import EquipmentSlot
+        from dnd_engine.utils.events import EventBus
+
+        seed = int(data["seed"])
+        map_cfg = data["map"]
+        dungeon = str(map_cfg["dungeon"])
+        campaign = str(map_cfg["campaign"])
+        start_room = map_cfg.get("start_room")
+
+        data_loader = DataLoader()
+        dice_roller = DiceRoller(seed=seed)
+
+        # Build party first — GameState requires it at construction.
+        factory = CharacterFactory()
+        characters: list[Any] = []
+        party_positions: dict[str, tuple[int, int]] = {}
+        for i, member in enumerate(data["party"]):
+            try:
+                character = factory.create_character(
+                    class_name=str(member["class"]),
+                    race_name=str(member["race"]),
+                    data_loader=data_loader,
+                    level=int(member.get("level", 1)),
+                    name=member.get("name"),
+                )
+            except ValueError as exc:
+                # CharacterFactory raises ValueError for unknown class/race;
+                # surface as ScenarioValidationError so callers don't have
+                # to special-case engine exception types.
+                raise ScenarioValidationError(
+                    f"party[{i}]: {exc}"
+                ) from exc
+
+            for j, weapon_id in enumerate(member["weapons"]):
+                character.inventory.add_item(weapon_id, category="weapons")
+                if j == 0:
+                    character.inventory.equip_item(weapon_id, EquipmentSlot.WEAPON)
+
+            characters.append(character)
+            entity_id = f"pc_{character.name.lower().replace(' ', '_')}"
+            x, y = member["position"]
+            party_positions[entity_id] = (int(x), int(y))
+
+        party = Party(characters)
+
+        event_bus = EventBus()
+        game_state = GameState(
+            party=party,
+            dungeon_name=dungeon,
+            event_bus=event_bus,
+            data_loader=data_loader,
+            dice_roller=dice_roller,
+            campaign_id=campaign,
+        )
+        if start_room:
+            game_state.current_room_id = str(start_room)
+
+        # Push scenario enemies. Mirrors the path used by
+        # EngineAdapter.spawn_monster so behaviour stays consistent
+        # whether enemies arrive via spawn tool or via scenario load.
+        enemy_positions: dict[str, tuple[int, int]] = {}
+        for i, enemy in enumerate(data["enemies"]):
+            monster_id = str(enemy["monster_id"])
+            try:
+                creature = data_loader.create_monster(monster_id)
+            except KeyError as exc:
+                raise ScenarioValidationError(
+                    f"enemies[{i}]: unknown monster_id '{monster_id}'"
+                ) from exc
+            game_state.active_enemies.append(creature)
+            entity_id = f"{monster_id}_{i}"
+            x, y = enemy["position"]
+            enemy_positions[entity_id] = (int(x), int(y))
+
+        if game_state.active_enemies:
+            game_state._start_combat()
+
         return LoadedScenario(
             name=str(data["name"]),
-            seed=int(data["seed"]),
-            game_state=None,
-            map_config=dict(data["map"]),
+            seed=seed,
+            game_state=game_state,
+            party_positions=party_positions,
+            enemy_positions=enemy_positions,
             script=list(data.get("script") or []),
             assertions=list(data.get("assertions") or []),
+            map_config=dict(map_cfg),
         )
 
     @staticmethod
