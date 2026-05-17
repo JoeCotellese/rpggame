@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from client_2d.game import GameWindow
+    from client_2d.session import GameSession
 
 
 class CommandType(Enum):
@@ -78,6 +79,7 @@ class MCPBridge:
         """
         self._command_queue: Queue[CommandRequest] = Queue(maxsize=max_queue_size)
         self._game_window: GameWindow | None = None
+        self._session: GameSession | None = None
 
     def set_game_window(self, window: GameWindow) -> None:
         """Set reference to GameWindow (called from main thread).
@@ -87,10 +89,24 @@ class MCPBridge:
         """
         self._game_window = window
 
+    def set_session(self, session: GameSession) -> None:
+        """Set reference to the owning GameSession.
+
+        The session is the authoritative reference now that headless
+        mode can run without a window. ``set_game_window`` is kept for
+        backwards compatibility with windowed-only code paths.
+        """
+        self._session = session
+
     @property
     def game_window(self) -> GameWindow | None:
-        """Get the connected GameWindow."""
+        """Get the connected GameWindow (windowed mode only)."""
         return self._game_window
+
+    @property
+    def session(self) -> GameSession | None:
+        """Get the connected GameSession (both modes)."""
+        return self._session
 
     def submit_command(self, cmd: CommandRequest, timeout: float = 5.0) -> str:
         """Submit command and wait for result (called from HTTP thread).
