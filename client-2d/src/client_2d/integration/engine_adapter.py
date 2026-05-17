@@ -741,6 +741,48 @@ class EngineAdapter:
     # Backing implementations for the --dev MCP tools (issue #360).
     # All raise ValueError if the game has not been initialized yet.
 
+    def spawn_monster(self, monster_id: str, x: int, y: int) -> dict[str, Any]:
+        """Create a monster and place it on the map.
+
+        Appends to ``GameState.active_enemies`` and, if the party is not
+        already in combat, starts combat (matching the room-entry flow at
+        ``game_state.py:_check_for_enemies``). If combat is active, adds the
+        new creature to the existing initiative tracker.
+
+        Args:
+            monster_id: SRD monster ID (e.g. ``"goblin"``). Surfaces a
+                ``KeyError`` from DataLoader for unknown IDs.
+            x: Map tile X coordinate (validated/applied by the caller in the
+                GameWindow handler — engine has no creature position).
+            y: Map tile Y coordinate.
+
+        Returns:
+            ``{"entity_id": "<monster_id>_<index>", "name": str, "hp": int,
+            "position": [x, y]}``.
+
+        Raises:
+            ValueError: If initialize_game() has not been called.
+            KeyError: If ``monster_id`` is not in the SRD monster list.
+        """
+        if self._game_state is None:
+            raise ValueError("Must call initialize_game() first")
+
+        creature = self._game_state.data_loader.create_monster(monster_id)
+        index = len(self._game_state.active_enemies)
+        self._game_state.active_enemies.append(creature)
+
+        if self._game_state.in_combat and self._game_state.initiative_tracker is not None:
+            self._game_state.initiative_tracker.add_combatant(creature)
+        else:
+            self._game_state._start_combat()
+
+        return {
+            "entity_id": f"{monster_id}_{index}",
+            "name": creature.name,
+            "hp": creature.current_hp,
+            "position": [x, y],
+        }
+
     def set_seed(self, seed: int) -> dict[str, Any]:
         """Reseed the live DiceRoller in place.
 

@@ -92,3 +92,64 @@ class TestSetSeed:
         adapter = EngineAdapter()
         with pytest.raises(ValueError, match="initialize_game"):
             adapter.set_seed(1)
+
+
+class TestSpawnMonster:
+    """EngineAdapter.spawn_monster places a monster and updates combat state."""
+
+    def test_appends_to_active_enemies_and_returns_entity_id(
+        self, initialized_adapter
+    ) -> None:
+        """Spawning adds the creature and returns its ASCII-map entity_id."""
+        adapter = initialized_adapter
+        before = len(adapter.game_state.active_enemies)
+
+        result = adapter.spawn_monster("goblin", 12, 7)
+
+        assert len(adapter.game_state.active_enemies) == before + 1
+        assert result["entity_id"] == f"goblin_{before}"
+        assert result["position"] == [12, 7]
+        assert result["hp"] > 0
+        assert result["name"]
+
+    def test_starts_combat_when_not_in_combat(self, initialized_adapter) -> None:
+        """First spawn outside combat triggers _start_combat."""
+        adapter = initialized_adapter
+        assert not adapter.in_combat
+
+        adapter.spawn_monster("goblin", 12, 7)
+
+        assert adapter.in_combat
+        assert adapter.game_state.initiative_tracker is not None
+
+    def test_adds_to_initiative_when_in_combat(self, initialized_adapter) -> None:
+        """Second spawn during combat appends to existing initiative."""
+        adapter = initialized_adapter
+        adapter.spawn_monster("goblin", 12, 7)
+        tracker = adapter.game_state.initiative_tracker
+        before = len(tracker.get_all_combatants())
+
+        adapter.spawn_monster("goblin", 14, 7)
+
+        after = len(tracker.get_all_combatants())
+        assert after == before + 1
+
+    def test_unknown_monster_raises(self, initialized_adapter) -> None:
+        """Unknown monster_id surfaces the DataLoader KeyError."""
+        with pytest.raises(KeyError):
+            initialized_adapter.spawn_monster("not_a_real_monster", 0, 0)
+
+    def test_entity_id_uses_running_index(self, initialized_adapter) -> None:
+        """Second goblin gets index 1, not a name collision."""
+        adapter = initialized_adapter
+        first = adapter.spawn_monster("goblin", 10, 7)
+        second = adapter.spawn_monster("goblin", 11, 7)
+
+        assert first["entity_id"] == "goblin_0"
+        assert second["entity_id"] == "goblin_1"
+
+    def test_raises_when_not_initialized(self) -> None:
+        from client_2d.integration.engine_adapter import EngineAdapter
+
+        with pytest.raises(ValueError, match="initialize_game"):
+            EngineAdapter().spawn_monster("goblin", 0, 0)
