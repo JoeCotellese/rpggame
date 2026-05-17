@@ -9,9 +9,12 @@ Usage:
     dnd-2d --fullscreen       # Fullscreen mode
     dnd-2d --mcp              # Enable embedded MCP server
     dnd-2d --mcp-port 9000    # Custom MCP port
+    dnd-2d --dev --mcp        # Expose dev spawn tools via MCP (issue #360)
+    DND_DEBUG=1 dnd-2d --mcp  # Env-var alias for --dev
 """
 
 import argparse
+import os
 import sys
 
 from client_2d.game import run_2d_client
@@ -59,7 +62,19 @@ Examples:
         help="Port for MCP server (default: 8765)",
     )
 
+    parser.add_argument(
+        "--dev",
+        action="store_true",
+        help=(
+            "Enable dev-mode MCP tools (spawn_monster, spawn_character, "
+            "set_position, clear_enemies, set_seed). Also enabled by "
+            "setting DND_DEBUG=1 in the environment."
+        ),
+    )
+
     args = parser.parse_args()
+
+    dev_mode = args.dev or os.environ.get("DND_DEBUG") == "1"
 
     try:
         run_2d_client(
@@ -67,6 +82,7 @@ Examples:
             fullscreen=args.fullscreen,
             enable_mcp=args.mcp,
             mcp_port=args.mcp_port,
+            dev_mode=dev_mode,
         )
     except PartyLoadError as err:
         print("\nERROR: Cannot start the 2D client.", file=sys.stderr)

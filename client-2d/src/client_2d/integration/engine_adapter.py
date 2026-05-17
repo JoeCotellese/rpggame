@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -735,6 +736,191 @@ class EngineAdapter:
             "is_player_turn": current["is_player"] if current else False,
             "combat_ended": not self._game_state.in_combat,
         }
+
+    # ========== Dev-Mode Spawn / Setup Methods ==========
+    # Backing implementations for the --dev MCP tools (issue #360).
+    # All raise ValueError if the game has not been initialized yet.
+
+    def spawn_character(
+        self,
+        class_name: str,
+        race: str,
+        weapons: list[str],
+        x: int,
+        y: int,
+        name: str | None = None,
+        level: int = 1,
+    ) -> dict[str, Any]:
+        """Create a player character, equip weapons, add to the party.
+
+        Builds the PC via ``CharacterFactory.create_character`` (which sets
+        up proficiencies, default equipment, and resource pools). Each
+        weapon in ``weapons`` is added to the inventory; the first is moved
+        to the WEAPON slot, the rest stay in the pack. If combat is active,
+        the character joins the initiative tracker.
+
+        Args:
+            class_name: Class ID (e.g. ``"ranger"``).
+            race: Race ID (e.g. ``"elf"``).
+            weapons: Ordered list of item IDs from items.json. The first is
+                equipped; the rest go to the pack.
+            x: Map tile X (applied by the GameWindow handler — engine has
+                no PC position).
+            y: Map tile Y.
+            name: Optional name; CharacterFactory generates one if omitted.
+            level: Starting level (default 1).
+
+        Returns:
+            ``{"entity_id": "pc_<name>", "name": str, "hp": int,
+            "position": [x, y]}``.
+
+        Raises:
+            ValueError: If initialize_game() has not been called, or if the
+                class/race is unknown (surfaced from CharacterFactory).
+        """
+        if self._game_state is None:
+            raise ValueError("Must call initialize_game() first")
+
+        from dnd_engine.core.character_factory import CharacterFactory
+        from dnd_engine.systems.inventory import EquipmentSlot
+
+        factory = CharacterFactory()
+        character = factory.create_character(
+            class_name=class_name,
+            race_name=race,
+            data_loader=self._game_state.data_loader,
+            level=level,
+            name=name,
+        )
+
+        for i, weapon_id in enumerate(weapons):
+            character.inventory.add_item(weapon_id, category="weapons")
+            if i == 0:
+                character.inventory.equip_item(weapon_id, EquipmentSlot.WEAPON)
+
+        self._party.add_character(character)
+
+        if self._game_state.in_combat and self._game_state.initiative_tracker is not None:
+            self._game_state.initiative_tracker.add_combatant(character)
+
+        entity_id = f"pc_{character.name.lower().replace(' ', '_')}"
+        return {
+            "entity_id": entity_id,
+            "name": character.name,
+            "hp": character.current_hp,
+            "position": [x, y],
+        }
+
+    def spawn_monster(self, monster_id: str, x: int, y: int) -> dict[str, Any]:
+        """Create a monster and place it on the map.
+
+        Appends to ``GameState.active_enemies`` and, if the party is not
+        already in combat, starts combat (matching the room-entry flow at
+        ``game_state.py:_check_for_enemies``). If combat is active, adds the
+        new creature to the existing initiative tracker.
+
+        Args:
+            monster_id: SRD monster ID (e.g. ``"goblin"``). Surfaces a
+                ``KeyError`` from DataLoader for unknown IDs.
+            x: Map tile X coordinate (validated/applied by the caller in the
+                GameWindow handler — engine has no creature position).
+            y: Map tile Y coordinate.
+
+        Returns:
+            ``{"entity_id": "<monster_id>_<index>", "name": str, "hp": int,
+            "position": [x, y]}``.
+
+        Raises:
+            ValueError: If initialize_game() has not been called.
+            KeyError: If ``monster_id`` is not in the SRD monster list.
+        """
+        if self._game_state is None:
+            raise ValueError("Must call initialize_game() first")
+
+        creature = self._game_state.data_loader.create_monster(monster_id)
+        index = len(self._game_state.active_enemies)
+        self._game_state.active_enemies.append(creature)
+
+        if self._game_state.in_combat and self._game_state.initiative_tracker is not None:
+            self._game_state.initiative_tracker.add_combatant(creature)
+        else:
+            self._game_state._start_combat()
+
+        return {
+            "entity_id": f"{monster_id}_{index}",
+            "name": creature.name,
+            "hp": creature.current_hp,
+            "position": [x, y],
+        }
+
+    def set_position(self, entity_id: str, x: int, y: int) -> dict[str, Any]:
+        """Return a placement directive for the GameWindow handler to apply.
+
+        Engine-side creature coordinates are not tracked today; the visual
+        EntityManager owns ``grid_x``/``grid_y``. The adapter validates
+        inputs and returns a structured dict that the dispatch layer
+        translates into ``entity_manager.get_by_id(entity_id)`` + assign.
+
+        Args:
+            entity_id: ID of the entity to move (as it appears in
+                EntityManager / on the ASCII map).
+            x: New tile X.
+            y: New tile Y.
+
+        Returns:
+            ``{"entity_id": entity_id, "position": [x, y]}``.
+
+        Raises:
+            ValueError: If initialize_game() has not been called.
+            TypeError: If ``x`` or ``y`` is not an int.
+        """
+        if self._game_state is None:
+            raise ValueError("Must call initialize_game() first")
+        if not isinstance(x, int) or not isinstance(y, int):
+            raise TypeError("x and y must be integers")
+        return {"entity_id": entity_id, "position": [x, y]}
+
+    def clear_enemies(self) -> dict[str, Any]:
+        """Remove all active enemies and end combat.
+
+        Useful between test scenarios. Wipes ``active_enemies``, ends
+        combat, and discards the initiative tracker so the next spawn
+        starts a fresh encounter.
+
+        Returns:
+            ``{"success": True, "cleared": <count of removed enemies>}``.
+
+        Raises:
+            ValueError: If initialize_game() has not been called.
+        """
+        if self._game_state is None:
+            raise ValueError("Must call initialize_game() first")
+        cleared = len(self._game_state.active_enemies)
+        self._game_state.active_enemies = []
+        self._game_state.in_combat = False
+        self._game_state.initiative_tracker = None
+        return {"success": True, "cleared": cleared}
+
+    def set_seed(self, seed: int) -> dict[str, Any]:
+        """Reseed the live DiceRoller in place.
+
+        All combat / initiative / damage rolls share GameState.dice_roller,
+        so swapping its underlying random.Random gives reproducible rolls
+        without re-wiring CombatEngine or InitiativeTracker.
+
+        Args:
+            seed: New RNG seed.
+
+        Returns:
+            {"success": True, "seed": seed}
+
+        Raises:
+            ValueError: If initialize_game() has not been called yet.
+        """
+        if self._game_state is None:
+            raise ValueError("Must call initialize_game() first")
+        self._game_state.dice_roller.random = random.Random(seed)
+        return {"success": True, "seed": seed}
 
     def end_combat_check(self) -> dict[str, Any]:
         """Check if combat should end and handle cleanup.

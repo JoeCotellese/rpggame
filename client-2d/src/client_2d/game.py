@@ -129,6 +129,7 @@ class GameWindow(arcade.Window):
         fullscreen: bool = False,
         enable_mcp: bool = False,
         mcp_port: int = 8765,
+        dev_mode: bool = False,
     ):
         """Initialize the game window.
 
@@ -138,6 +139,7 @@ class GameWindow(arcade.Window):
             fullscreen: Whether to run in fullscreen mode.
             enable_mcp: Whether to start embedded MCP server.
             mcp_port: Port for MCP HTTP server.
+            dev_mode: Whether to register --dev spawn/setup MCP tools.
         """
         super().__init__(width, height, WINDOW_TITLE, fullscreen=fullscreen)
         arcade.set_background_color(UIColors.PANEL_BG_DARK)
@@ -148,6 +150,7 @@ class GameWindow(arcade.Window):
         self._state_renderer: StateRenderer | None = None
         self._enable_mcp = enable_mcp
         self._mcp_port = mcp_port
+        self._dev_mode = dev_mode
 
         # Engine adapter
         self.engine = EngineAdapter()
@@ -267,6 +270,7 @@ class GameWindow(arcade.Window):
         self._mcp_server = EmbeddedMCPServer(
             bridge=self._mcp_bridge,
             port=self._mcp_port,
+            dev_mode=self._dev_mode,
         )
         self._mcp_server.start()
 
@@ -300,6 +304,32 @@ class GameWindow(arcade.Window):
                 result = self._mcp_attack(target)
             elif request.command_type == CommandType.WAIT:
                 result = self._mcp_wait()
+            elif request.command_type == CommandType.SPAWN_MONSTER:
+                result = self._mcp_spawn_monster(
+                    request.args.get("monster_id", ""),
+                    request.args.get("x", 0),
+                    request.args.get("y", 0),
+                )
+            elif request.command_type == CommandType.SPAWN_CHARACTER:
+                result = self._mcp_spawn_character(
+                    request.args.get("class_name", ""),
+                    request.args.get("race", ""),
+                    request.args.get("weapons", []),
+                    request.args.get("x", 0),
+                    request.args.get("y", 0),
+                    name=request.args.get("name"),
+                    level=request.args.get("level", 1),
+                )
+            elif request.command_type == CommandType.SET_POSITION:
+                result = self._mcp_set_position(
+                    request.args.get("entity_id", ""),
+                    request.args.get("x", 0),
+                    request.args.get("y", 0),
+                )
+            elif request.command_type == CommandType.CLEAR_ENEMIES:
+                result = self._mcp_clear_enemies()
+            elif request.command_type == CommandType.SET_SEED:
+                result = self._mcp_set_seed(request.args.get("seed", 0))
             else:
                 result = f"Unknown command: {request.command_type}"
             request.response_future.set_result(result)
@@ -673,6 +703,105 @@ class GameWindow(arcade.Window):
             self._process_enemy_turn()
 
         return self._mcp_get_state()
+
+    # ========== Dev-mode MCP handlers (issue #360) ==========
+    # Only invoked when EmbeddedMCPServer was started with dev_mode=True
+    # (gated upstream by --dev or DND_DEBUG=1).
+
+    def _mcp_spawn_monster(self, monster_id: str, x: int, y: int) -> str:
+        """Spawn a monster via the engine, register it with the visual EntityManager."""
+        from client_2d.entities.entity import MonsterEntity
+
+        result = self.engine.spawn_monster(monster_id, x, y)
+        enemy_index = len(self.engine.game_state.active_enemies) - 1
+        creature_ref = self.engine.game_state.active_enemies[enemy_index]
+
+        entity = MonsterEntity(
+            entity_id=result["entity_id"],
+            grid_x=x,
+            grid_y=y,
+            entity_type=EntityType.MONSTER,
+            sub_type=monster_id,
+            enemy_index=enemy_index,
+            texture=None,
+        )
+        entity.creature = creature_ref
+        self.entity_manager._add_entity(entity)
+
+        if self.current_mode != GameMode.COMBAT:
+            self.current_mode = GameMode.COMBAT
+            self._spread_party_for_combat()
+
+        return (
+            f"Spawned {result['name']} at ({x},{y}) as {result['entity_id']}. "
+            + self._mcp_get_state()
+        )
+
+    def _mcp_spawn_character(
+        self,
+        class_name: str,
+        race: str,
+        weapons: list[str],
+        x: int,
+        y: int,
+        name: str | None = None,
+        level: int = 1,
+    ) -> str:
+        """Spawn a PC via the engine, register a party-member entity for visuals."""
+        from client_2d.entities.entity import PartyMemberEntity
+
+        result = self.engine.spawn_character(
+            class_name, race, weapons, x, y, name=name, level=level
+        )
+        party_index = len(self.engine.party.characters) - 1
+        creature_ref = self.engine.party.characters[party_index]
+
+        entity = PartyMemberEntity(
+            entity_id=result["entity_id"],
+            grid_x=x,
+            grid_y=y,
+            entity_type=EntityType.PARTY_MEMBER,
+            sub_type=class_name.lower(),
+            party_index=party_index,
+            character_class=class_name.lower(),
+            texture=None,
+        )
+        entity.creature = creature_ref
+        self.entity_manager._add_entity(entity)
+
+        return (
+            f"Spawned {result['name']} ({class_name}/{race}) at ({x},{y}) "
+            f"as {result['entity_id']}. " + self._mcp_get_state()
+        )
+
+    def _mcp_set_position(self, entity_id: str, x: int, y: int) -> str:
+        """Move an existing entity on the visual map."""
+        result = self.engine.set_position(entity_id, x, y)
+        target = self.entity_manager.get_by_id(entity_id)
+        if target is None:
+            return f"Entity '{entity_id}' not found on the map."
+        target.grid_x = x
+        target.grid_y = y
+        return (
+            f"Moved {entity_id} to {tuple(result['position'])}. " + self._mcp_get_state()
+        )
+
+    def _mcp_clear_enemies(self) -> str:
+        """Wipe enemies from engine and visual layer."""
+        result = self.engine.clear_enemies()
+        # Mark visual monsters dead so the standard removal path drops them.
+        for entity in list(self.entity_manager.get_all()):
+            if entity.entity_type == EntityType.MONSTER:
+                entity.is_alive = False
+        self.entity_manager.remove_dead_entities()
+        if self.current_mode == GameMode.COMBAT:
+            self.current_mode = GameMode.EXPLORATION
+        return f"Cleared {result['cleared']} enemies. " + self._mcp_get_state()
+
+    def _mcp_set_seed(self, seed: int) -> str:
+        """Reseed the engine dice roller."""
+        result = self.engine.set_seed(seed)
+        return f"Dice roller reseeded with {result['seed']}."
 
     # ========== End MCP Server Integration ==========
 
@@ -2154,6 +2283,7 @@ def run_2d_client(
     fullscreen: bool = False,
     enable_mcp: bool = False,
     mcp_port: int = 8765,
+    dev_mode: bool = False,
 ) -> None:
     """Entry point for the 2D client.
 
@@ -2162,6 +2292,7 @@ def run_2d_client(
         fullscreen: Whether to run in fullscreen mode.
         enable_mcp: Whether to start embedded MCP HTTP server.
         mcp_port: Port for MCP server (default 8765).
+        dev_mode: Whether to register --dev spawn/setup MCP tools.
     """
     width, height = WINDOW_SIZES.get(size, WINDOW_SIZES["medium"])
 
@@ -2178,6 +2309,8 @@ def run_2d_client(
         print(f"Window: {width}x{height} ({size})")
     if enable_mcp:
         print(f"MCP Server: http://127.0.0.1:{mcp_port}/sse")
+    if dev_mode:
+        print("Dev mode: ENABLED (spawn_monster/spawn_character/... available)")
     print()
 
     GameWindow(
@@ -2186,6 +2319,7 @@ def run_2d_client(
         fullscreen=fullscreen,
         enable_mcp=enable_mcp,
         mcp_port=mcp_port,
+        dev_mode=dev_mode,
     )
     arcade.run()
 

@@ -29,6 +29,14 @@ class CommandType(Enum):
     ATTACK = auto()
     WAIT = auto()
 
+    # Dev-mode commands (only dispatched when EmbeddedMCPServer was started
+    # with dev_mode=True, gated upstream by --dev or DND_DEBUG=1).
+    SPAWN_MONSTER = auto()
+    SPAWN_CHARACTER = auto()
+    SET_POSITION = auto()
+    CLEAR_ENEMIES = auto()
+    SET_SEED = auto()
+
 
 @dataclass
 class CommandRequest:

@@ -2,7 +2,10 @@
   "mcpServers": {
     "dnd-game": {
       "type": "stdio",
-      "command": "/Users/joec/git/rpggame/client-2d/scripts/run_mcp_proxy.sh"
+      "command": "/Users/joec/git-dnd/rpggame/client-2d/scripts/run_mcp_proxy.sh",
+      "env": {
+        "DND_DEBUG": "1"
+      }
     }
   }
 }
