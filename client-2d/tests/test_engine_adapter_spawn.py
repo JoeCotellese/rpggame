@@ -227,3 +227,54 @@ class TestSpawnCharacter:
 
         with pytest.raises(ValueError, match="initialize_game"):
             EngineAdapter().spawn_character("fighter", "human", [], 0, 0)
+
+
+class TestSetPosition:
+    """EngineAdapter.set_position validates and returns a placement directive.
+
+    Engine-side creature position is not tracked today; the GameWindow handler
+    is responsible for applying the result to EntityManager.
+    """
+
+    def test_returns_position_dict(self, initialized_adapter) -> None:
+        result = initialized_adapter.set_position("goblin_0", 4, 9)
+        assert result == {"entity_id": "goblin_0", "position": [4, 9]}
+
+    def test_rejects_non_integer_coordinates(self, initialized_adapter) -> None:
+        with pytest.raises(TypeError):
+            initialized_adapter.set_position("goblin_0", "four", 9)
+
+    def test_raises_when_not_initialized(self) -> None:
+        from client_2d.integration.engine_adapter import EngineAdapter
+
+        with pytest.raises(ValueError, match="initialize_game"):
+            EngineAdapter().set_position("goblin_0", 0, 0)
+
+
+class TestClearEnemies:
+    """EngineAdapter.clear_enemies wipes active_enemies and ends combat."""
+
+    def test_clears_active_enemies_and_ends_combat(self, initialized_adapter) -> None:
+        adapter = initialized_adapter
+        adapter.spawn_monster("goblin", 12, 7)
+        adapter.spawn_monster("goblin", 14, 7)
+        assert adapter.in_combat
+        assert len(adapter.game_state.active_enemies) == 2
+
+        result = adapter.clear_enemies()
+
+        assert result == {"success": True, "cleared": 2}
+        assert adapter.game_state.active_enemies == []
+        assert not adapter.in_combat
+        assert adapter.game_state.initiative_tracker is None
+
+    def test_noop_when_no_enemies(self, initialized_adapter) -> None:
+        result = initialized_adapter.clear_enemies()
+        assert result == {"success": True, "cleared": 0}
+        assert not initialized_adapter.in_combat
+
+    def test_raises_when_not_initialized(self) -> None:
+        from client_2d.integration.engine_adapter import EngineAdapter
+
+        with pytest.raises(ValueError, match="initialize_game"):
+            EngineAdapter().clear_enemies()

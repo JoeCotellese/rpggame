@@ -853,6 +853,54 @@ class EngineAdapter:
             "position": [x, y],
         }
 
+    def set_position(self, entity_id: str, x: int, y: int) -> dict[str, Any]:
+        """Return a placement directive for the GameWindow handler to apply.
+
+        Engine-side creature coordinates are not tracked today; the visual
+        EntityManager owns ``grid_x``/``grid_y``. The adapter validates
+        inputs and returns a structured dict that the dispatch layer
+        translates into ``entity_manager.get_by_id(entity_id)`` + assign.
+
+        Args:
+            entity_id: ID of the entity to move (as it appears in
+                EntityManager / on the ASCII map).
+            x: New tile X.
+            y: New tile Y.
+
+        Returns:
+            ``{"entity_id": entity_id, "position": [x, y]}``.
+
+        Raises:
+            ValueError: If initialize_game() has not been called.
+            TypeError: If ``x`` or ``y`` is not an int.
+        """
+        if self._game_state is None:
+            raise ValueError("Must call initialize_game() first")
+        if not isinstance(x, int) or not isinstance(y, int):
+            raise TypeError("x and y must be integers")
+        return {"entity_id": entity_id, "position": [x, y]}
+
+    def clear_enemies(self) -> dict[str, Any]:
+        """Remove all active enemies and end combat.
+
+        Useful between test scenarios. Wipes ``active_enemies``, ends
+        combat, and discards the initiative tracker so the next spawn
+        starts a fresh encounter.
+
+        Returns:
+            ``{"success": True, "cleared": <count of removed enemies>}``.
+
+        Raises:
+            ValueError: If initialize_game() has not been called.
+        """
+        if self._game_state is None:
+            raise ValueError("Must call initialize_game() first")
+        cleared = len(self._game_state.active_enemies)
+        self._game_state.active_enemies = []
+        self._game_state.in_combat = False
+        self._game_state.initiative_tracker = None
+        return {"success": True, "cleared": cleared}
+
     def set_seed(self, seed: int) -> dict[str, Any]:
         """Reseed the live DiceRoller in place.
 
