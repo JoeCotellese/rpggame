@@ -112,11 +112,17 @@ class ScenarioLoader:
         campaign = str(map_cfg["campaign"])
         start_room = map_cfg.get("start_room")
 
-        data_loader = DataLoader()
         dice_roller = DiceRoller(seed=seed)
+        data_loader = DataLoader()
+        # DataLoader rolls monster HP via its own roller (see
+        # ``create_monster``); swap in the seeded one so enemy stats
+        # honour the scenario seed alongside party rolls.
+        data_loader.dice_roller = dice_roller
 
         # Build party first — GameState requires it at construction.
-        factory = CharacterFactory()
+        # Share the seeded dice_roller so character HP / ability rolls
+        # honour the scenario seed (the schema promises determinism).
+        factory = CharacterFactory(dice_roller=dice_roller)
         characters: list[Any] = []
         party_positions: dict[str, tuple[int, int]] = {}
         for i, member in enumerate(data["party"]):

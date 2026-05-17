@@ -72,3 +72,26 @@ def test_every_starter_scenario_loads(scenario_file: str) -> None:
     # in the per-scenario tests above.
     result = ScenarioLoader().load(SCENARIO_DIR / scenario_file)
     assert result.game_state is not None
+
+
+def test_load_is_deterministic_across_reloads() -> None:
+    # The schema documents `seed` as driving "all dice rolls
+    # deterministically", which includes character creation HP / ability
+    # rolls. Two loads of the same YAML must produce identical character
+    # max_hp and ability scores.
+    first = ScenarioLoader().load(SCENARIO_DIR / "ranged_attack_basic.yaml")
+    second = ScenarioLoader().load(SCENARIO_DIR / "ranged_attack_basic.yaml")
+
+    first_pc = first.game_state.party.characters[0]
+    second_pc = second.game_state.party.characters[0]
+
+    assert first_pc.max_hp == second_pc.max_hp, (
+        f"max_hp drifted across reloads: {first_pc.max_hp} vs {second_pc.max_hp}"
+    )
+    assert first_pc.abilities.strength == second_pc.abilities.strength
+    assert first_pc.abilities.dexterity == second_pc.abilities.dexterity
+    assert first_pc.abilities.constitution == second_pc.abilities.constitution
+
+    first_enemy = first.game_state.active_enemies[0]
+    second_enemy = second.game_state.active_enemies[0]
+    assert first_enemy.max_hp == second_enemy.max_hp
