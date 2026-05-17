@@ -283,6 +283,28 @@ class EmbeddedMCPServer:
             )
             return bridge.submit_command(request, timeout=5.0)
 
+        @mcp.tool()
+        def load_scenario(path: str) -> str:
+            """Load a YAML scenario file: map, party, enemies, and seed.
+
+            Replaces the current game state with the one described in
+            the scenario. Useful for reproducible playtests — see
+            ``dnd-engine/tests/scenarios/yaml/_schema.md`` for the
+            expected format.
+
+            Args:
+                path: Filesystem path to the scenario YAML.
+
+            Returns:
+                Dict string with the scenario name, seed, and the new
+                game state.
+            """
+            request = CommandRequest(
+                command_type=CommandType.LOAD_SCENARIO,
+                args={"path": path},
+            )
+            return bridge.submit_command(request, timeout=15.0)
+
     def start(self) -> None:
         """Start HTTP server in background thread."""
         self._shutdown_event.clear()

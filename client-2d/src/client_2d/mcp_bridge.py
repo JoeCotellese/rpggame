@@ -36,6 +36,7 @@ class CommandType(Enum):
     SET_POSITION = auto()
     CLEAR_ENEMIES = auto()
     SET_SEED = auto()
+    LOAD_SCENARIO = auto()
 
 
 @dataclass
