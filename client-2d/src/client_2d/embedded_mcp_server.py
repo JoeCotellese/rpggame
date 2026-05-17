@@ -60,6 +60,7 @@ class EmbeddedMCPServer:
         bridge: MCPBridge,
         host: str = "127.0.0.1",
         port: int = 8765,
+        dev_mode: bool = False,
     ) -> None:
         """Initialize the embedded MCP server.
 
@@ -67,10 +68,15 @@ class EmbeddedMCPServer:
             bridge: MCPBridge for communication with GameWindow.
             host: Host to bind to (default localhost only).
             port: Port to listen on.
+            dev_mode: When True, additionally register the --dev spawn/setup
+                tools (spawn_monster, spawn_character, set_position,
+                clear_enemies, set_seed). Gated upstream by the --dev CLI
+                flag or DND_DEBUG=1 so these never leak into normal play.
         """
         self._bridge = bridge
         self._host = host
         self._port = port
+        self._dev_mode = dev_mode
         self._server_thread: threading.Thread | None = None
         self._shutdown_event = threading.Event()
         self._mcp = self._create_mcp_server()
@@ -167,7 +173,115 @@ class EmbeddedMCPServer:
             request = CommandRequest(command_type=CommandType.WAIT)
             return bridge.submit_command(request, timeout=10.0)
 
+        if self._dev_mode:
+            self._register_dev_tools(mcp, bridge)
+
         return mcp
+
+    def _register_dev_tools(self, mcp: FastMCP, bridge: MCPBridge) -> None:
+        """Register the --dev spawn/setup tools on the FastMCP instance.
+
+        Only invoked when dev_mode=True. These tools let a developer (or
+        Claude playtesting via MCP) stand up exact entity layouts for
+        feature testing — e.g. spawn a ranged-weapon-equipped fighter and
+        a goblin at chosen tiles to exercise ranged-attack rules.
+        """
+
+        @mcp.tool()
+        def spawn_monster(monster_id: str, x: int, y: int) -> str:
+            """Spawn a monster at (x, y). Starts combat if not already in combat.
+
+            Args:
+                monster_id: SRD monster ID (e.g. 'goblin', 'giant_rat').
+                x: Tile X coordinate.
+                y: Tile Y coordinate.
+
+            Returns:
+                JSON-ish dict string with entity_id, name, hp, position.
+            """
+            request = CommandRequest(
+                command_type=CommandType.SPAWN_MONSTER,
+                args={"monster_id": monster_id, "x": x, "y": y},
+            )
+            return bridge.submit_command(request, timeout=5.0)
+
+        @mcp.tool()
+        def spawn_character(
+            class_name: str,
+            race: str,
+            weapons: list[str],
+            x: int,
+            y: int,
+            name: str | None = None,
+            level: int = 1,
+        ) -> str:
+            """Spawn a player character, equip first weapon, add to party.
+
+            Available classes: fighter, rogue, wizard.
+            Available races: halfling, high_elf, human, mountain_dwarf.
+
+            Args:
+                class_name: Class ID.
+                race: Race ID.
+                weapons: Ordered weapon IDs; first equipped, rest in pack.
+                x: Tile X.
+                y: Tile Y.
+                name: Optional name (random if omitted).
+                level: Starting level (default 1).
+
+            Returns:
+                Dict string with entity_id, name, hp, position.
+            """
+            request = CommandRequest(
+                command_type=CommandType.SPAWN_CHARACTER,
+                args={
+                    "class_name": class_name,
+                    "race": race,
+                    "weapons": weapons,
+                    "x": x,
+                    "y": y,
+                    "name": name,
+                    "level": level,
+                },
+            )
+            return bridge.submit_command(request, timeout=10.0)
+
+        @mcp.tool()
+        def set_position(entity_id: str, x: int, y: int) -> str:
+            """Move an entity to (x, y) on the visual map.
+
+            Useful for tweaking distance between an attacker and a target
+            without re-spawning either.
+
+            Args:
+                entity_id: Entity ID as shown on the ASCII map.
+                x: New tile X.
+                y: New tile Y.
+            """
+            request = CommandRequest(
+                command_type=CommandType.SET_POSITION,
+                args={"entity_id": entity_id, "x": x, "y": y},
+            )
+            return bridge.submit_command(request, timeout=5.0)
+
+        @mcp.tool()
+        def clear_enemies() -> str:
+            """Remove all active enemies and end combat. Useful between tests."""
+            request = CommandRequest(command_type=CommandType.CLEAR_ENEMIES)
+            return bridge.submit_command(request, timeout=5.0)
+
+        @mcp.tool()
+        def set_seed(seed: int) -> str:
+            """Reseed the dice roller for reproducible rolls from this point.
+
+            Args:
+                seed: Integer seed.
+            """
+            request = CommandRequest(
+                command_type=CommandType.SET_SEED,
+                args={"seed": seed},
+            )
+            return bridge.submit_command(request, timeout=5.0)
 
     def start(self) -> None:
         """Start HTTP server in background thread."""
