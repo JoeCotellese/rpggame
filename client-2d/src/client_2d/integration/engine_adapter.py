@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -735,6 +736,31 @@ class EngineAdapter:
             "is_player_turn": current["is_player"] if current else False,
             "combat_ended": not self._game_state.in_combat,
         }
+
+    # ========== Dev-Mode Spawn / Setup Methods ==========
+    # Backing implementations for the --dev MCP tools (issue #360).
+    # All raise ValueError if the game has not been initialized yet.
+
+    def set_seed(self, seed: int) -> dict[str, Any]:
+        """Reseed the live DiceRoller in place.
+
+        All combat / initiative / damage rolls share GameState.dice_roller,
+        so swapping its underlying random.Random gives reproducible rolls
+        without re-wiring CombatEngine or InitiativeTracker.
+
+        Args:
+            seed: New RNG seed.
+
+        Returns:
+            {"success": True, "seed": seed}
+
+        Raises:
+            ValueError: If initialize_game() has not been called yet.
+        """
+        if self._game_state is None:
+            raise ValueError("Must call initialize_game() first")
+        self._game_state.dice_roller.random = random.Random(seed)
+        return {"success": True, "seed": seed}
 
     def end_combat_check(self) -> dict[str, Any]:
         """Check if combat should end and handle cleanup.
