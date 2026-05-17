@@ -20,6 +20,7 @@ DEV_TOOL_NAMES = {
     "set_position",
     "clear_enemies",
     "set_seed",
+    "load_scenario",
 }
 
 PLAY_TOOL_NAMES = {"game_state", "game_move", "game_attack", "game_wait"}
