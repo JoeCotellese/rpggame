@@ -5,19 +5,54 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from dnd_engine.core.character import Character
 
-# Default party - hardcoded character IDs from vault
-DEFAULT_PARTY_IDS = [
-    "a16c59f0-3818-45be-ba89-a26f5b9db472",  # Bob (Fighter)
-    "4b351815-e063-407f-b071-3d93290a675e",  # Larry (Rogue)
-    "ebcff030-e5e8-41d2-813a-829d0b6f83dd",  # Thim (Wizard)
-    "09bde739-8bbc-4691-ad09-fe804578b0c1",  # Vesataus (Fighter)
-]
+# Default party size cap. When no explicit character_ids are passed to
+# load_party_from_vault(), the first MAX_PARTY_SIZE characters from the vault
+# are loaded in insertion order.
+MAX_PARTY_SIZE = 4
+
+
+@dataclass
+class PartyLoadError(Exception):
+    """Raised when load_party_from_vault cannot find one or more characters.
+
+    Carries enough context for the CLI (or any caller) to print an actionable
+    message: which vault was inspected, which IDs were missing, and which
+    characters are actually available so the user can pick alternatives.
+    """
+
+    vault_path: Path
+    missing_ids: list[str]
+    vault_character_count: int
+    available_characters: list[tuple[str, str]] = field(default_factory=list)
+
+    def __str__(self) -> str:
+        lines = [f"Could not load party from vault at {self.vault_path}."]
+        if self.missing_ids:
+            lines.append(
+                f"Vault contains {self.vault_character_count} character(s); "
+                f"{len(self.missing_ids)} requested character(s) missing:"
+            )
+            lines.extend(f"  - {char_id}" for char_id in self.missing_ids)
+        else:
+            lines.append(
+                f"Vault contains {self.vault_character_count} character(s); "
+                "none available to load."
+            )
+        if self.available_characters:
+            lines.append("Available in vault:")
+            lines.extend(
+                f"  - {name} ({char_id})" for char_id, name in self.available_characters
+            )
+        else:
+            lines.append("Vault has no characters yet.")
+        return "\n".join(lines)
 
 
 @dataclass
@@ -68,27 +103,57 @@ class EngineAdapter:
         """Load characters from the vault into a party.
 
         Args:
-            character_ids: List of character UUIDs to load.
-                          Uses DEFAULT_PARTY_IDS if not provided.
+            character_ids: List of character UUIDs to load. If not provided,
+                          loads the first MAX_PARTY_SIZE characters present in
+                          the vault, in insertion order.
 
         Returns:
             List of character info dicts for UI display.
 
         Raises:
-            FileNotFoundError: If a character ID doesn't exist in vault.
+            PartyLoadError: If the vault is empty (when relying on the default),
+                            or one or more requested IDs are missing.
         """
         from dnd_engine.core.character_vault_v2 import CharacterVaultV2
         from dnd_engine.core.party import Party
 
-        if character_ids is None:
-            character_ids = DEFAULT_PARTY_IDS
-
         self._vault = CharacterVaultV2()
+        vault_data = self._vault._load_vault()
+        present = vault_data.get("characters", {})
+        available = [
+            (cid, entry.get("character", {}).get("name", "?"))
+            for cid, entry in present.items()
+        ]
+
+        if character_ids is None:
+            character_ids = list(present.keys())[:MAX_PARTY_SIZE]
+
+        if not character_ids:
+            raise PartyLoadError(
+                vault_path=self._vault.vault_path,
+                missing_ids=[],
+                vault_character_count=0,
+                available_characters=[],
+            )
+
         characters: list[Character] = []
+        missing_ids: list[str] = []
 
         for char_id in character_ids:
-            character = self._vault.get_character(char_id)
+            try:
+                character = self._vault.get_character(char_id)
+            except FileNotFoundError:
+                missing_ids.append(char_id)
+                continue
             characters.append(character)
+
+        if missing_ids:
+            raise PartyLoadError(
+                vault_path=self._vault.vault_path,
+                missing_ids=missing_ids,
+                vault_character_count=len(present),
+                available_characters=available,
+            )
 
         self._party = Party(characters)
 

@@ -12,8 +12,10 @@ Usage:
 """
 
 import argparse
+import sys
 
 from client_2d.game import run_2d_client
+from client_2d.integration.engine_adapter import PartyLoadError
 
 
 def main() -> None:
@@ -59,12 +61,22 @@ Examples:
 
     args = parser.parse_args()
 
-    run_2d_client(
-        size=args.size,
-        fullscreen=args.fullscreen,
-        enable_mcp=args.mcp,
-        mcp_port=args.mcp_port,
-    )
+    try:
+        run_2d_client(
+            size=args.size,
+            fullscreen=args.fullscreen,
+            enable_mcp=args.mcp,
+            mcp_port=args.mcp_port,
+        )
+    except PartyLoadError as err:
+        print("\nERROR: Cannot start the 2D client.", file=sys.stderr)
+        print(err, file=sys.stderr)
+        print(
+            "\nTo fix: create characters in the vault via `uv run dnd-game` "
+            "and then re-run the 2D client.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
 
 if __name__ == "__main__":
