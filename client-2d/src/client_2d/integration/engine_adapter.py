@@ -922,6 +922,45 @@ class EngineAdapter:
         self._game_state.dice_roller.random = random.Random(seed)
         return {"success": True, "seed": seed}
 
+    def load_scenario(self, path: str | Path) -> dict[str, Any]:
+        """Load a YAML scenario, replacing the adapter's party / state.
+
+        Thin wrapper around :class:`dnd_engine.scenarios.ScenarioLoader`
+        for the client side. Engine work happens in the loader; the
+        adapter swaps in the new ``Party`` / ``GameState`` / ``EventBus``
+        and returns the scenario's positions so the GameWindow handler
+        can rebuild the visual entity layer.
+
+        Args:
+            path: Path to a scenario YAML file.
+
+        Returns:
+            ``{"name": str, "seed": int,
+            "party_positions": {entity_id: (x, y)},
+            "enemy_positions": {entity_id: (x, y)}}``.
+
+        Raises:
+            ScenarioValidationError: For any schema, parse, or content
+                error in the scenario file (propagated unchanged from
+                the loader).
+        """
+        from dnd_engine.scenarios import ScenarioLoader
+
+        loaded = ScenarioLoader().load(path)
+
+        self._party = loaded.game_state.party
+        self._game_state = loaded.game_state
+        self._event_bus = loaded.game_state.event_bus
+        self._initialized = True
+
+        return {
+            "name": loaded.name,
+            "seed": loaded.seed,
+            "party_positions": dict(loaded.party_positions),
+            "enemy_positions": dict(loaded.enemy_positions),
+            "map_config": dict(loaded.map_config),
+        }
+
     def end_combat_check(self) -> dict[str, Any]:
         """Check if combat should end and handle cleanup.
 
