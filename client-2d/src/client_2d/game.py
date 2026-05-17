@@ -330,6 +330,8 @@ class GameWindow(arcade.Window):
                 result = self._mcp_clear_enemies()
             elif request.command_type == CommandType.SET_SEED:
                 result = self._mcp_set_seed(request.args.get("seed", 0))
+            elif request.command_type == CommandType.LOAD_SCENARIO:
+                result = self._mcp_load_scenario(request.args.get("path", ""))
             else:
                 result = f"Unknown command: {request.command_type}"
             request.response_future.set_result(result)
@@ -802,6 +804,91 @@ class GameWindow(arcade.Window):
         """Reseed the engine dice roller."""
         result = self.engine.set_seed(seed)
         return f"Dice roller reseeded with {result['seed']}."
+
+    def _mcp_load_scenario(self, path: str) -> str:
+        """Load a YAML scenario: swap engine state and rebuild the visual layer.
+
+        Mirrors the spawn-handler pattern (#360): the adapter does the
+        engine work, then this method rebuilds the entity_manager and
+        room layout so the visuals match the scenario's setup. After
+        load the game is in COMBAT mode with the scenario's enemies.
+        """
+        from client_2d.entities.entity import MonsterEntity, PartyMemberEntity
+
+        result = self.engine.load_scenario(path)
+
+        # New engine state means a new (possibly different) dungeon and
+        # room. Reload the layout, fog, and lighting before placing
+        # entities so coordinate math has the right dimensions.
+        self._load_room_layout()
+
+        # Wipe whatever entities the room layout pre-populated; the
+        # scenario is the source of truth for who is present and where.
+        self.entity_manager.clear()
+
+        game_state = self.engine.game_state
+        for entity_id, (x, y) in result["party_positions"].items():
+            # Entity IDs follow Phase 1's convention: pc_<name lowercased,
+            # spaces as underscores>. Match back to the live character
+            # the loader pushed into the party.
+            expected = entity_id.removeprefix("pc_")
+            character = next(
+                (
+                    c
+                    for c in game_state.party.characters
+                    if c.name.lower().replace(" ", "_") == expected
+                ),
+                None,
+            )
+            if character is None:
+                continue
+            entity = PartyMemberEntity(
+                entity_id=entity_id,
+                grid_x=x,
+                grid_y=y,
+                entity_type=EntityType.PARTY_MEMBER,
+                sub_type=character.character_class.value.lower(),
+                party_index=game_state.party.characters.index(character),
+                character_class=character.character_class.value.lower(),
+                texture=None,
+            )
+            entity.creature = character
+            self.entity_manager._add_entity(entity)
+
+        for entity_id, (x, y) in result["enemy_positions"].items():
+            # Entity IDs encode the active_enemies index as the trailing
+            # underscore-separated integer (e.g. "goblin_0", "giant_rat_1").
+            monster_id, _, index_str = entity_id.rpartition("_")
+            try:
+                enemy_index = int(index_str)
+            except ValueError:
+                continue
+            if enemy_index >= len(game_state.active_enemies):
+                continue
+            creature = game_state.active_enemies[enemy_index]
+            entity = MonsterEntity(
+                entity_id=entity_id,
+                grid_x=x,
+                grid_y=y,
+                entity_type=EntityType.MONSTER,
+                sub_type=monster_id,
+                enemy_index=enemy_index,
+                texture=None,
+            )
+            entity.creature = creature
+            self.entity_manager._add_entity(entity)
+
+        # Scenarios with enemies always boot into combat (the loader has
+        # already called _start_combat on the engine).
+        if game_state.in_combat:
+            self.current_mode = GameMode.COMBAT
+        else:
+            self.current_mode = GameMode.EXPLORATION
+
+        return (
+            f"Loaded scenario '{result['name']}' (seed={result['seed']}). "
+            + self._mcp_get_state()
+        )
 
     # ========== End MCP Server Integration ==========
 

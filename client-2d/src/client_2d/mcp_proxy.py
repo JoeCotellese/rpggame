@@ -393,6 +393,21 @@ def create_proxy_server() -> FastMCP:
                 return "Game not running. Use game_start() first."
             return await proxy.call_tool_async("set_seed", seed=seed)
 
+        @mcp.tool()
+        async def load_scenario(path: str) -> str:
+            """Load a YAML scenario file (map, party, enemies, seed).
+
+            See dnd-engine/tests/scenarios/yaml/_schema.md for the
+            expected format. Replaces the current game state with the
+            scenario's state and boots into combat.
+
+            Args:
+                path: Filesystem path to the scenario YAML.
+            """
+            if not game_manager.is_running:
+                return "Game not running. Use game_start() first."
+            return await proxy.call_tool_async("load_scenario", path=path)
+
     return mcp
 
 
