@@ -1,0 +1,27 @@
+# Scenario: ranged_out_of_range
+#
+# Verifies the range-rejection path. A fighter throws a dagger
+# (thrown range 20/60 ft) at a goblin 17 tiles away (85 ft) — past the
+# weapon's long range. The attack must be rejected with a clear
+# out-of-range error, not silently resolve.
+#
+# A dagger is used instead of the shortbow because the laboratory's
+# 25x18 tile layout can't hold a position past the shortbow's 320 ft
+# long range. The dagger's tighter envelope keeps the out-of-range case
+# expressible on the existing map.
+
+name: ranged_out_of_range
+seed: 42
+map:
+  dungeon: laboratory
+  campaign: poisoned_laboratory
+  start_room: laboratory.entrance
+party:
+  - class: fighter
+    race: high_elf
+    weapons: [dagger]
+    position: [3, 5]
+    name: Archy
+enemies:
+  - monster_id: goblin
+    position: [20, 5]
