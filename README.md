@@ -249,8 +249,10 @@ rpggame/
 | Document | Description |
 |----------|-------------|
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture and implementation details |
-| [ROADMAP.md](docs/ROADMAP.md) | Development roadmap and planned features |
-| [DEBUG_LLM.md](docs/DEBUG_LLM.md) | Debug LLM provider documentation |
+| [DESIGN_PATTERNS.md](docs/DESIGN_PATTERNS.md) | Architectural and design patterns audit |
+| [CAMPAIGN_AUTHORING.md](docs/CAMPAIGN_AUTHORING.md) | Guide for authoring campaigns (locations, quests, NPCs) |
+| [CLIENT_2D_ARCHITECTURE.md](docs/CLIENT_2D_ARCHITECTURE.md) | 2D graphical client architecture |
+| [srd/](docs/srd/) | D&D 5.2.1 SRD split into citable Markdown sections |
 | [CLAUDE.md](CLAUDE.md) | Development standards and coding practices |
 
 ## Contributing

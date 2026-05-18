@@ -1,5 +1,9 @@
 # World System Implementation Roadmap
 
+> **⚠️ ARCHIVED — historical reference only.** Phase 1 (Room GUIDs + Campaign Progression)
+> shipped as PR #198. Phases 2–7 were never started in the form described here.
+> Last accurate 2025-11. Preserved for context, not as a current roadmap.
+
 ## Overview
 
 Incremental build-out from single dungeon to full open world. Each phase ends with a **playable game** - just with more features unlocked.

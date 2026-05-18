@@ -1,5 +1,9 @@
 # D&D 5E to Computer RPG Implementation - Comprehensive Gap Analysis
 
+> **⚠️ ARCHIVED — historical reference only.** Specific counts (class/spell totals,
+> "reactions missing", etc.) are out of date. The framework remains useful; re-run
+> the analysis rather than relying on these numbers. Last accurate 2025-11.
+
 **Last Updated**: 2025-11-29
 
 ## Executive Summary
