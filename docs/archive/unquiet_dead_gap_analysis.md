@@ -1,5 +1,9 @@
 # "The Unquiet Dead" Adventure - Gap Analysis
 
+> **⚠️ ARCHIVED — historical reference only.** This document tracked feature gaps for shipping
+> the Unquiet Dead adventure. Last accurate 2025-11. The adventure has shipped; preserved
+> for context, not as a current roadmap.
+
 **Last Updated**: 2025-11-23
 **Adventure Playability**: 100% COMPLETE! 🎉🎯✨
 
