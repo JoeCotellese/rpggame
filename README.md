@@ -248,8 +248,7 @@ rpggame/
 
 | Document | Description |
 |----------|-------------|
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture and implementation details |
-| [DESIGN_PATTERNS.md](docs/DESIGN_PATTERNS.md) | Architectural and design patterns audit |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture, design patterns index, and implementation details |
 | [CAMPAIGN_AUTHORING.md](docs/CAMPAIGN_AUTHORING.md) | Guide for authoring campaigns (locations, quests, NPCs) |
 | [CLIENT_2D_ARCHITECTURE.md](docs/CLIENT_2D_ARCHITECTURE.md) | 2D graphical client architecture |
 | [srd/](docs/srd/) | D&D 5.2.1 SRD split into citable Markdown sections |
