@@ -172,11 +172,9 @@ class GameWindow(arcade.Window):
         # Boot the session: load party, room, optionally start MCP server.
         self.session.initialize()
         if enable_mcp:
-            self.session.initialize_mcp_server()
-            # Keep set_game_window for code paths that still consult the
-            # bridge's window reference.
-            if self.session._mcp_bridge is not None:
-                self.session._mcp_bridge.set_game_window(self)
+            # Pass self so the bridge can resolve back to this window for
+            # code paths that still consult its window reference.
+            self.session.initialize_mcp_server(window=self)
 
     # ========== Property delegators to GameSession ==========
     # GameWindow holds a GameSession; these proxies let the existing

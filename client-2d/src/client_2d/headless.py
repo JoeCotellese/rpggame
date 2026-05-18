@@ -84,8 +84,8 @@ def run_headless(
             time.sleep(TICK_INTERVAL_SECONDS)
     finally:
         # Daemon-thread MCP server will tear down with the process; we
-        # call stop() to flip the shutdown event for the server thread.
-        if session._mcp_server is not None:
-            session._mcp_server.stop()
+        # call session.shutdown() to flip the shutdown event for the
+        # server thread.
+        session.shutdown()
         print("Headless session stopped.")
         sys.stdout.flush()

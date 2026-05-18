@@ -199,13 +199,20 @@ class GameSession:
         else:
             self._add_combat_log("Use WASD to move.")
 
-    def initialize_mcp_server(self, start_http: bool = True) -> None:
+    def initialize_mcp_server(
+        self,
+        start_http: bool = True,
+        window: Any | None = None,
+    ) -> None:
         """Create the MCP bridge + embedded server.
 
         Args:
             start_http: When True (default), start the HTTP server in a
                 background thread. Tests can pass False to inspect the
                 wiring without binding a port.
+            window: Optional ``GameWindow`` to register on the bridge for
+                code paths that still consult the bridge's window
+                reference (windowed mode only).
         """
         # Local imports to keep the heavy MCP / uvicorn stack out of the
         # session's module-load path until it's actually requested.
@@ -214,6 +221,8 @@ class GameSession:
 
         self._mcp_bridge = MCPBridge()
         self._mcp_bridge.set_session(self)
+        if window is not None:
+            self._mcp_bridge.set_game_window(window)
 
         width = self.room_layout.width if self.room_layout else 25
         height = self.room_layout.height if self.room_layout else 18
@@ -226,6 +235,17 @@ class GameSession:
         )
         if start_http:
             self._mcp_server.start()
+
+    def shutdown(self) -> None:
+        """Tear down session-owned resources.
+
+        Currently stops the embedded MCP server if one is running. Safe
+        to call multiple times and safe to call when no MCP server was
+        ever started.
+        """
+        if self._mcp_server is not None:
+            self._mcp_server.stop()
+            self._mcp_server = None
 
     # ========== Tick (called from GameWindow.on_update or headless loop) ==========
 
