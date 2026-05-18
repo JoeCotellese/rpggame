@@ -30,13 +30,8 @@ from client_2d.core.constants import (
     TargetingColors,
     UIColors,
 )
-from client_2d.entities import Entity, EntityManager, EntityType
-from client_2d.integration.engine_adapter import EngineAdapter
-from client_2d.integration.layout_loader import LayoutLoader
-from client_2d.systems.fog_of_war import FogOfWarSystem
-from client_2d.systems.lighting import LightingSystem
-from client_2d.testing.state_renderer import Entity as StateEntity
-from client_2d.testing.state_renderer import StateRenderer
+from client_2d.entities import Entity, EntityType
+from client_2d.session import GameSession
 
 # Window settings
 WINDOW_TITLE = "D&D 5E - 2D Client"
@@ -144,753 +139,176 @@ class GameWindow(arcade.Window):
         super().__init__(width, height, WINDOW_TITLE, fullscreen=fullscreen)
         arcade.set_background_color(UIColors.PANEL_BG_DARK)
 
-        # MCP server integration (initialized later if enabled)
-        self._mcp_bridge = None
-        self._mcp_server = None
-        self._state_renderer: StateRenderer | None = None
-        self._enable_mcp = enable_mcp
-        self._mcp_port = mcp_port
-        self._dev_mode = dev_mode
+        # Session owns the non-graphical state: engine adapter, entity
+        # manager, MCP plumbing, room layout, combat state machine.
+        # GameWindow accesses these via property delegators below.
+        self.session = GameSession(
+            enable_mcp=enable_mcp,
+            mcp_port=mcp_port,
+            dev_mode=dev_mode,
+        )
 
-        # Engine adapter
-        self.engine = EngineAdapter()
-        self.layout_loader = LayoutLoader()
-
-        # Asset manager and textures
+        # Asset manager and textures (rendering-only state).
         self.assets = AssetManager(assets_path=ASSETS_DIR)
         self._load_textures()
 
-        # Room/map state
-        self.room_layout = None
-        self.room_tiles: list[list[int]] = []
-        self.player_x = 0
-        self.player_y = 0
+        # Hand off the loaded textures so the session's spawn / load
+        # paths can apply sprites when registering entities.
+        self.session.monster_textures = self.monster_textures
+        self.session.character_textures = self.character_textures
+        self.session.item_textures = self.item_textures
 
-        # Party position tracking for combat (spread formation)
-        self.party_spread = False
-        self.party_positions: list[tuple[int, int]] = []
-
-        # Fog of war and lighting systems (initialized per-room)
-        self.fog: FogOfWarSystem | None = None
-        self.lighting: LightingSystem | None = None
-
-        # Entity manager for live-synced entities with engine references
-        self.entity_manager = EntityManager()
-
-        # Game state
-        self.running = True
-        self.current_mode = GameMode.EXPLORATION
-        self.selected_enemy = 0
-        self.enemy_turn_timer = 0.0
-        self.processing_enemy_turn = False
-        self.combat_log: list[str] = []
-
-        # Screenshot feedback state
+        # Screenshot feedback state (UI-only).
         self.screenshot_message: str = ""
         self.screenshot_message_timer: float = 0.0
 
-        # Mouse targeting state (for #355 unified targeting)
+        # Mouse targeting state (for #355 unified targeting) - input/UI only.
         self.mouse_x: int = 0
         self.mouse_y: int = 0
         self.hovered_entity: Entity | None = None
         self.selected_target: Entity | None = None
         self.pulse_timer: float = 0.0
 
-        # Initialize the game
-        self._initialize_game()
+        # Boot the session: load party, room, optionally start MCP server.
+        self.session.initialize()
+        if enable_mcp:
+            # Pass self so the bridge can resolve back to this window for
+            # code paths that still consult its window reference.
+            self.session.initialize_mcp_server(window=self)
 
-        # Initialize MCP server if enabled
-        if self._enable_mcp:
-            self._initialize_mcp_server()
+    # ========== Property delegators to GameSession ==========
+    # GameWindow holds a GameSession; these proxies let the existing
+    # drawing / input code read session-owned state through the
+    # familiar self.X names without per-call updates.
 
-    def _initialize_game(self) -> None:
-        """Initialize game with party and dungeon."""
-        print("Loading party from vault...")
-        party_info = self.engine.load_party_from_vault()
-        for char in party_info:
-            print(f"  - {char['name']} ({char['class']} L{char['level']})")
+    @property
+    def engine(self):
+        return self.session.engine
 
-        print("\nInitializing game in cellar dungeon...")
-        game_info = self.engine.initialize_game(
-            dungeon_name="cellar",
-            campaign_id="poisoned_laboratory",
-            start_room="cellar.stairs",  # Start in safe room, rats are north
-        )
-        print(f"  Starting room: {game_info['room_name']}")
-        print("  Hint: Go NORTH to find the rats!")
+    @property
+    def entity_manager(self):
+        return self.session.entity_manager
 
-        # Load room layout for rendering
-        self._load_room_layout()
+    @property
+    def layout_loader(self):
+        return self.session.layout_loader
 
-        print("\nStarting game...")
-        start_info = self.engine.start_game()
-        if start_info["in_combat"]:
-            print(f"  Combat started! Enemies: {', '.join(start_info['enemies'])}")
-            self.current_mode = GameMode.COMBAT
-            self._spread_party_for_combat()
-            self._add_combat_log(f"Combat begins! {len(start_info['enemies'])} enemies!")
-            # Show whose turn it is
-            current = self.engine.get_current_combatant()
-            if current:
-                self._add_combat_log(f"{current['name']}'s turn first!")
-            # If enemy goes first or player is unconscious, start auto-turn processing
-            if not self.engine.is_player_turn():
-                self.processing_enemy_turn = True
-                self.enemy_turn_timer = ENEMY_TURN_DELAY
-            elif self.engine.is_current_combatant_unconscious():
-                # Unconscious player goes first - process their death save
-                self.processing_enemy_turn = True
-                self.enemy_turn_timer = ENEMY_TURN_DELAY
-        else:
-            print("  No enemies in starting room. Explore with WASD!")
-            self._add_combat_log("Use WASD to move. Go NORTH to find the rats!")
+    @property
+    def room_layout(self):
+        return self.session.room_layout
+
+    @property
+    def room_tiles(self):
+        return self.session.room_tiles
+
+    @property
+    def player_x(self) -> int:
+        return self.session.player_x
+
+    @player_x.setter
+    def player_x(self, value: int) -> None:
+        self.session.player_x = value
+
+    @property
+    def player_y(self) -> int:
+        return self.session.player_y
+
+    @player_y.setter
+    def player_y(self, value: int) -> None:
+        self.session.player_y = value
+
+    @property
+    def party_spread(self) -> bool:
+        return self.session.party_spread
+
+    @property
+    def party_positions(self) -> list[tuple[int, int]]:
+        return self.session.party_positions
+
+    @property
+    def fog(self):
+        return self.session.fog
+
+    @property
+    def lighting(self):
+        return self.session.lighting
+
+    @property
+    def current_mode(self):
+        return self.session.current_mode
+
+    @current_mode.setter
+    def current_mode(self, value) -> None:
+        self.session.current_mode = value
+
+    @property
+    def selected_enemy(self) -> int:
+        return self.session.selected_enemy
+
+    @selected_enemy.setter
+    def selected_enemy(self, value: int) -> None:
+        self.session.selected_enemy = value
+
+    @property
+    def combat_log(self) -> list[str]:
+        return self.session.combat_log
+
+    @property
+    def processing_enemy_turn(self) -> bool:
+        return self.session.processing_enemy_turn
+
+    @property
+    def enemy_turn_timer(self) -> float:
+        return self.session.enemy_turn_timer
+
+    # ========== Method delegators to GameSession ==========
+    # Thin wrappers for the methods that GameWindow's input handlers,
+    # drawing code, and mouse handlers still call directly. The real
+    # logic lives in GameSession; these keep the call sites unchanged.
 
     def _add_combat_log(self, message: str) -> None:
-        """Add a message to the combat log."""
-        self.combat_log.append(message)
-        # Keep only last 10 messages
-        if len(self.combat_log) > 10:
-            self.combat_log = self.combat_log[-10:]
+        self.session._add_combat_log(message)
 
-    # ========== MCP Server Integration ==========
+    def _update_lighting(self) -> None:
+        self.session._update_lighting()
 
-    def _initialize_mcp_server(self) -> None:
-        """Initialize embedded MCP server with HTTP transport."""
-        from client_2d.embedded_mcp_server import EmbeddedMCPServer
-        from client_2d.mcp_bridge import MCPBridge
+    def _spread_party_for_combat(self) -> None:
+        self.session._spread_party_for_combat()
 
-        self._mcp_bridge = MCPBridge()
-        self._mcp_bridge.set_game_window(self)
+    def _collapse_party_after_combat(self) -> None:
+        self.session._collapse_party_after_combat()
 
-        # Create StateRenderer for ASCII map generation
-        width = self.room_layout.width if self.room_layout else 25
-        height = self.room_layout.height if self.room_layout else 18
-        self._state_renderer = StateRenderer(width=width, height=height)
+    def _load_room_layout(self) -> None:
+        self.session._load_room_layout()
 
-        self._mcp_server = EmbeddedMCPServer(
-            bridge=self._mcp_bridge,
-            port=self._mcp_port,
-            dev_mode=self._dev_mode,
-        )
-        self._mcp_server.start()
+    def _get_available_exits(self) -> dict[str, str]:
+        return self.session._get_available_exits()
 
-    def _process_mcp_commands(self) -> None:
-        """Process pending MCP commands from the HTTP server thread.
+    def _move_player(self, direction: str) -> None:
+        self.session._move_player(direction)
 
-        Called from on_update() to process commands in the main thread.
-        Only processes one command per frame to avoid blocking rendering.
-        """
-        if self._mcp_bridge is None:
-            return
+    def _transition_room(self, direction: str) -> None:
+        self.session._transition_room(direction)
 
-        # Skip if enemy turn is being processed (avoid inconsistent state)
-        if self.processing_enemy_turn:
-            return
+    def _process_enemy_turn(self) -> None:
+        self.session._process_enemy_turn()
 
-        request = self._mcp_bridge.poll_commands()
-        if request is None:
-            return
+    def _process_unconscious_turn(self) -> None:
+        self.session._process_unconscious_turn()
 
-        from client_2d.mcp_bridge import CommandType
+    def _handle_combat_end(self) -> None:
+        self.session._handle_combat_end()
 
-        try:
-            if request.command_type == CommandType.GET_STATE:
-                result = self._mcp_get_state()
-            elif request.command_type == CommandType.MOVE:
-                result = self._mcp_move(request.args.get("direction", ""))
-            elif request.command_type == CommandType.ATTACK:
-                # Support both int index and str entity_id
-                target = request.args.get("target", request.args.get("target_index", 0))
-                result = self._mcp_attack(target)
-            elif request.command_type == CommandType.WAIT:
-                result = self._mcp_wait()
-            elif request.command_type == CommandType.SPAWN_MONSTER:
-                result = self._mcp_spawn_monster(
-                    request.args.get("monster_id", ""),
-                    request.args.get("x", 0),
-                    request.args.get("y", 0),
-                )
-            elif request.command_type == CommandType.SPAWN_CHARACTER:
-                result = self._mcp_spawn_character(
-                    request.args.get("class_name", ""),
-                    request.args.get("race", ""),
-                    request.args.get("weapons", []),
-                    request.args.get("x", 0),
-                    request.args.get("y", 0),
-                    name=request.args.get("name"),
-                    level=request.args.get("level", 1),
-                )
-            elif request.command_type == CommandType.SET_POSITION:
-                result = self._mcp_set_position(
-                    request.args.get("entity_id", ""),
-                    request.args.get("x", 0),
-                    request.args.get("y", 0),
-                )
-            elif request.command_type == CommandType.CLEAR_ENEMIES:
-                result = self._mcp_clear_enemies()
-            elif request.command_type == CommandType.SET_SEED:
-                result = self._mcp_set_seed(request.args.get("seed", 0))
-            elif request.command_type == CommandType.LOAD_SCENARIO:
-                result = self._mcp_load_scenario(request.args.get("path", ""))
-            else:
-                result = f"Unknown command: {request.command_type}"
-            request.response_future.set_result(result)
-        except Exception as e:
-            request.response_future.set_exception(e)
+    def _execute_attack(self) -> None:
+        self.session.execute_attack()
 
-    def _mcp_get_state(self) -> str:
-        """Generate state response using StateRenderer."""
-        if self._state_renderer is None or self.room_layout is None or self.fog is None:
-            return "Game not initialized"
-
-        entities = self._build_state_entities()
-
-        # Get turn info
-        turn = 0
-        if self.engine.game_state:
-            tracker = self.engine.game_state.initiative_tracker
-            if tracker:
-                turn = tracker.round_number
-
-        # Get party HP
-        player_hp = 30
-        player_max_hp = 30
-        party_data = self.engine.get_party_data()
-        if party_data:
-            player_hp = sum(c["hp"] for c in party_data)
-            player_max_hp = sum(c["max_hp"] for c in party_data)
-
-        state = self._state_renderer.render_state(
-            room=self.room_tiles,
-            player_x=self.player_x,
-            player_y=self.player_y,
-            entities=entities,
-            fog=self.fog,
-            turn=turn,
-            player_hp=player_hp,
-            player_max_hp=player_max_hp,
-            light_source="torch",
-        )
-
-        return self._format_mcp_state_response(state)
-
-    def _build_state_entities(self) -> list[StateEntity]:
-        """Build entity list for StateRenderer from EntityManager."""
-        entities: list[StateEntity] = []
-
-        # Sync from engine and remove dead entities before rendering
-        self.entity_manager.sync_from_engine(self.engine)
-        self.entity_manager.remove_dead_entities()
-
-        for entity in self.entity_manager.get_all():
-            if not entity.is_alive:
-                continue
-
-            # Map EntityType to string type for StateRenderer
-            if entity.entity_type == EntityType.MONSTER:
-                type_str = "monster"
-            elif entity.entity_type == EntityType.ITEM:
-                type_str = "item"
-            elif entity.entity_type == EntityType.PARTY_MEMBER:
-                type_str = "party"
-            else:
-                type_str = "decoration"
-
-            # Use unique entity_id to ensure each entity has its own symbol
-            # Include sub_type in the ID for readable display (e.g., "giant_rat" not "monster_0")
-            display_id = entity.sub_type or entity.entity_id
-            unique_suffix = entity.entity_id.split("_")[-1]  # Extract index like "0", "1"
-            unique_id = f"{display_id}_{unique_suffix}" if entity.sub_type else entity.entity_id
-
-            entities.append(
-                StateEntity(
-                    x=entity.grid_x,
-                    y=entity.grid_y,
-                    entity_type=type_str,
-                    entity_id=unique_id,
-                )
-            )
-
-        return entities
-
-    def _format_mcp_state_response(self, state_dict: dict) -> str:
-        """Format state dict as readable MCP response."""
-        if "error" in state_dict:
-            return f"Error: {state_dict['error']}"
-
-        lines = [
-            f"Turn: {state_dict['turn']}",
-            f"Party HP: {state_dict['player']['hp']}/{state_dict['player']['max_hp']} "
-            f"Light: {state_dict['player']['light_source']}",
-            f"Explored: {state_dict['explored_tiles']}/{state_dict['total_tiles']}",
-        ]
-
-        # Add combat info if in combat
-        if self.engine.in_combat:
-            combat_data = self.engine.get_combat_data()
-            if combat_data:
-                lines.append(f"Combat Round: {combat_data['round']}")
-                current = self.engine.get_current_combatant()
-                if current:
-                    lines.append(f"Current Turn: {current['name']}")
-                    # Show equipped weapon and range for player characters
-                    if current["is_player"]:
-                        from dnd_engine.systems.inventory import EquipmentSlot
-
-                        creature = current["creature"]
-                        weapon_name = "Unarmed"
-                        range_text = "5 ft (melee)"
-                        if hasattr(creature, "inventory"):
-                            weapon_id = creature.inventory.get_equipped_item(
-                                EquipmentSlot.WEAPON
-                            )
-                            if weapon_id and self.engine.game_state:
-                                items_data = self.engine.game_state.data_loader.load_items(
-                                    self.engine.game_state.campaign_id
-                                )
-                                weapon_data = items_data.get("weapons", {}).get(weapon_id, {})
-                                weapon_name = weapon_data.get(
-                                    "name", weapon_id.replace("_", " ").title()
-                                )
-                                normal_range, max_range = get_attack_range(weapon_data)
-                                if max_range > 5:
-                                    range_text = f"{normal_range}/{max_range} ft"
-                                else:
-                                    range_text = "5 ft (melee)"
-                        lines.append(f"Equipped: {weapon_name} (range: {range_text})")
-
-        lines.extend([
-            "",
-            "Map:",
-            state_dict["map"],
-            "",
-            "Legend:",
-        ])
-
-        for symbol, entity in state_dict["legend"].items():
-            lines.append(f"  {symbol} = {entity}")
-
-        if state_dict["visible_entities"]:
-            lines.append("")
-            lines.append("Visible Entities:")
-            for entity_id, info in state_dict["visible_entities"].items():
-                lines.append(
-                    f"  {info['symbol']} {info['type']}:{entity_id} "
-                    f"at {info['position']} ({info['distance']} squares {info['direction']})"
-                )
-
-        # Add party status
-        party_data = self.engine.get_party_data()
-        if party_data:
-            lines.append("")
-            lines.append("Party:")
-            for member in party_data:
-                conditions = ", ".join(member.get("conditions", [])) or "healthy"
-                lines.append(
-                    f"  {member['name']} ({member['class']}): "
-                    f"{member['hp']}/{member['max_hp']} HP - {conditions}"
-                )
-
-        # Add available actions
-        lines.append("")
-        lines.append("Available Actions:")
-        if self.engine.in_combat:
-            # Show movement remaining during combat
-            turn_state = self.engine.get_current_turn_state()
-            if turn_state:
-                lines.append(f"  Movement: {turn_state.movement_remaining} ft remaining")
-            lines.append("  - game_move(direction) - Move north/south/east/west")
-            lines.append("  - game_attack(target) - Attack enemy in weapon range")
-            lines.append("  - game_wait() - Pass turn")
-        else:
-            lines.append("  - game_move(direction) - Move north/south/east/west")
-
-        return "\n".join(lines)
-
-    def _mcp_move(self, direction: str) -> str:
-        """Handle MCP move command - works in exploration AND combat."""
-        direction = direction.lower()
-        if direction not in ("north", "south", "east", "west"):
-            return f"Invalid direction: {direction}. Use north/south/east/west."
-
-        if self.engine.in_combat:
-            return self._mcp_combat_move(direction)
-        else:
-            self._move_player(direction)
-            return self._mcp_get_state()
+    def _pass_turn(self) -> None:
+        self.session.pass_turn()
 
     def _mcp_combat_move(self, direction: str) -> str:
-        """Handle movement during combat with action economy."""
-        # Check if it's player's turn
-        if not self.engine.is_player_turn():
-            return "Not your turn! Wait for enemies to act."
+        return self.session.combat_move(direction)
 
-        # Get turn state for movement tracking
-        turn_state = self.engine.get_current_turn_state()
-        if turn_state is None:
-            return "Error: Could not get turn state."
-
-        # Check movement remaining (5 ft per grid square)
-        if turn_state.movement_remaining < 5:
-            current = self.engine.get_current_combatant()
-            speed = current["creature"].speed if current else 30
-            return f"No movement remaining (0/{speed} ft). Use game_attack() or game_wait()."
-
-        # Calculate new position
-        dx, dy = {"north": (0, -1), "south": (0, 1), "east": (1, 0), "west": (-1, 0)}[direction]
-        new_x = self.player_x + dx
-        new_y = self.player_y + dy
-
-        # Check bounds
-        if not self.room_layout or not (
-            0 <= new_x < self.room_layout.width and 0 <= new_y < self.room_layout.height
-        ):
-            return "Path blocked! Cannot move outside room."
-
-        # Check wall
-        if self.room_layout.is_blocking(new_x, new_y):
-            return "Path blocked! Wall in the way."
-
-        # Check entity collision (can't move through monsters)
-        entity_at_dest = self.entity_manager.get_at_position(new_x, new_y)
-        if entity_at_dest is not None and entity_at_dest in self.entity_manager.get_monsters():
-            # Get display name from creature reference or format sub_type
-            if entity_at_dest._creature_ref:
-                name = entity_at_dest._creature_ref.name
-            else:
-                name = entity_at_dest.sub_type.replace("_", " ").title()
-            return f"Path blocked! {name} is in the way."
-
-        # Execute movement
-        self.player_x = new_x
-        self.player_y = new_y
-        turn_state.consume_movement(5)
-        self._update_lighting()
-
-        # Sync visual position of current turn character
-        self.entity_manager.update_current_turn_position(self.engine, new_x, new_y)
-
-        # Return state with movement info
-        remaining = turn_state.movement_remaining
-        return f"Moved {direction}. Movement remaining: {remaining} ft.\n" + self._mcp_get_state()
-
-    def _mcp_attack(self, target: int | str) -> str:
-        """Handle MCP attack command.
-
-        Args:
-            target: Either a display index (int, 0-based) or an entity ID string
-                   (e.g., "goblin_0", "giant_rat_1").
-        """
-        if not self.engine.in_combat:
-            return "Not in combat! Use game_move() to explore."
-
-        if not self.engine.is_player_turn():
-            return "Not your turn! Wait for enemies to act."
-
-        monsters = self.entity_manager.get_monsters()
-
-        # Resolve target to entity
-        if isinstance(target, int):
-            # Validate target index
-            if target < 0 or target >= len(monsters):
-                return f"Invalid target index {target}. Valid: 0-{len(monsters)-1}"
-            target_entity = monsters[target]
-        else:
-            # Find by entity_id string
-            target_entity = next(
-                (m for m in monsters if (
-                    m.entity_id == target or
-                    f"{m.sub_type}_{m.entity_id.split('_')[-1]}" == target
-                )),
-                None,
-            )
-            if target_entity is None:
-                valid_ids = [
-                    f"{m.sub_type}_{m.entity_id.split('_')[-1]}" if m.sub_type else m.entity_id
-                    for m in monsters
-                ]
-                return f"Unknown target: {target}. Valid targets: {', '.join(valid_ids)}"
-
-        # Check attack range based on equipped weapon
-        target = target_entity
-        from dnd_engine.core.distance import distance_in_feet
-        from dnd_engine.systems.inventory import EquipmentSlot
-
-        # Get current combatant's position (not player token position)
-        combatant_pos = self.entity_manager.get_current_turn_position(self.engine)
-        if combatant_pos is None:
-            # Fallback to player position if combatant not found
-            combatant_x, combatant_y = self.player_x, self.player_y
-        else:
-            combatant_x, combatant_y = combatant_pos
-
-        # Calculate distance in feet (each square = 5 ft)
-        distance_ft = distance_in_feet(
-            combatant_x, combatant_y, target.grid_x, target.grid_y
-        )
-
-        # Get attacker's equipped weapon and its range
-        current = self.engine.get_current_combatant()
-        weapon_data = None
-        weapon_name = "Unarmed"
-        if current and current["is_player"]:
-            creature = current["creature"]
-            if hasattr(creature, "inventory"):
-                weapon_id = creature.inventory.get_equipped_item(EquipmentSlot.WEAPON)
-                if weapon_id:
-                    items_data = self.engine.game_state.data_loader.load_items(
-                        self.engine.game_state.campaign_id
-                    )
-                    weapon_data = items_data.get("weapons", {}).get(weapon_id, {})
-                    weapon_name = weapon_data.get("name", weapon_id.replace("_", " ").title())
-
-        normal_range, max_range = get_attack_range(weapon_data)
-
-        # Check if target is in range
-        if distance_ft > max_range:
-            turn_state = self.engine.get_current_turn_state()
-            movement_info = (
-                f" Movement remaining: {turn_state.movement_remaining} ft."
-                if turn_state
-                else ""
-            )
-            return (
-                f"Out of range! ({distance_ft} ft away, {weapon_name} max range: {max_range} ft). "
-                f"Move closer first.{movement_info}"
-            )
-
-        # Log range info (long range = disadvantage in future)
-        in_long_range = distance_ft > normal_range
-        if in_long_range:
-            # Track for future disadvantage implementation
-            self._add_combat_log(
-                f"{weapon_name} attack at {distance_ft} ft (long range - disadvantage)"
-            )
-
-        # Track current combatant before attack to detect if turn advanced
-        pre_attack_combatant = current["name"] if current else None
-
-        # Set selected enemy and execute attack
-        # Use target.enemy_index (engine index) not target_index (display index)
-        self.selected_enemy = target.enemy_index
-        self._execute_attack()
-
-        # Check if attack succeeded by comparing combatant before/after
-        # Turn advances on success, so different combatant = attack worked
-        post_attack_combatant = self.engine.get_current_combatant()
-        post_name = post_attack_combatant["name"] if post_attack_combatant else None
-
-        # If same combatant and not processing enemies, attack didn't execute
-        if pre_attack_combatant == post_name and not self.processing_enemy_turn:
-            return (
-                f"Attack failed! {pre_attack_combatant} cannot reach the target. "
-                f"Use game_wait() to pass."
-            )
-
-        # Process enemy turns synchronously for MCP
-        while self.processing_enemy_turn:
-            self._process_enemy_turn()
-
-        return self._mcp_get_state()
-
-    def _mcp_wait(self) -> str:
-        """Handle MCP wait command."""
-        if not self.engine.in_combat:
-            return "Not in combat! Use game_move() to explore."
-
-        self._pass_turn()
-
-        # Process enemy turns synchronously for MCP
-        while self.processing_enemy_turn:
-            self._process_enemy_turn()
-
-        return self._mcp_get_state()
-
-    # ========== Dev-mode MCP handlers (issue #360) ==========
-    # Only invoked when EmbeddedMCPServer was started with dev_mode=True
-    # (gated upstream by --dev or DND_DEBUG=1).
-
-    def _mcp_spawn_monster(self, monster_id: str, x: int, y: int) -> str:
-        """Spawn a monster via the engine, register it with the visual EntityManager."""
-        from client_2d.entities.entity import MonsterEntity
-
-        result = self.engine.spawn_monster(monster_id, x, y)
-        enemy_index = len(self.engine.game_state.active_enemies) - 1
-        creature_ref = self.engine.game_state.active_enemies[enemy_index]
-
-        entity = MonsterEntity(
-            entity_id=result["entity_id"],
-            grid_x=x,
-            grid_y=y,
-            entity_type=EntityType.MONSTER,
-            sub_type=monster_id,
-            enemy_index=enemy_index,
-            texture=None,
-        )
-        entity.creature = creature_ref
-        self.entity_manager._add_entity(entity)
-
-        if self.current_mode != GameMode.COMBAT:
-            self.current_mode = GameMode.COMBAT
-            self._spread_party_for_combat()
-
-        return (
-            f"Spawned {result['name']} at ({x},{y}) as {result['entity_id']}. "
-            + self._mcp_get_state()
-        )
-
-    def _mcp_spawn_character(
-        self,
-        class_name: str,
-        race: str,
-        weapons: list[str],
-        x: int,
-        y: int,
-        name: str | None = None,
-        level: int = 1,
-    ) -> str:
-        """Spawn a PC via the engine, register a party-member entity for visuals."""
-        from client_2d.entities.entity import PartyMemberEntity
-
-        result = self.engine.spawn_character(
-            class_name, race, weapons, x, y, name=name, level=level
-        )
-        party_index = len(self.engine.party.characters) - 1
-        creature_ref = self.engine.party.characters[party_index]
-
-        entity = PartyMemberEntity(
-            entity_id=result["entity_id"],
-            grid_x=x,
-            grid_y=y,
-            entity_type=EntityType.PARTY_MEMBER,
-            sub_type=class_name.lower(),
-            party_index=party_index,
-            character_class=class_name.lower(),
-            texture=None,
-        )
-        entity.creature = creature_ref
-        self.entity_manager._add_entity(entity)
-
-        return (
-            f"Spawned {result['name']} ({class_name}/{race}) at ({x},{y}) "
-            f"as {result['entity_id']}. " + self._mcp_get_state()
-        )
-
-    def _mcp_set_position(self, entity_id: str, x: int, y: int) -> str:
-        """Move an existing entity on the visual map."""
-        result = self.engine.set_position(entity_id, x, y)
-        target = self.entity_manager.get_by_id(entity_id)
-        if target is None:
-            return f"Entity '{entity_id}' not found on the map."
-        target.grid_x = x
-        target.grid_y = y
-        return (
-            f"Moved {entity_id} to {tuple(result['position'])}. " + self._mcp_get_state()
-        )
-
-    def _mcp_clear_enemies(self) -> str:
-        """Wipe enemies from engine and visual layer."""
-        result = self.engine.clear_enemies()
-        # Mark visual monsters dead so the standard removal path drops them.
-        for entity in list(self.entity_manager.get_all()):
-            if entity.entity_type == EntityType.MONSTER:
-                entity.is_alive = False
-        self.entity_manager.remove_dead_entities()
-        if self.current_mode == GameMode.COMBAT:
-            self.current_mode = GameMode.EXPLORATION
-        return f"Cleared {result['cleared']} enemies. " + self._mcp_get_state()
-
-    def _mcp_set_seed(self, seed: int) -> str:
-        """Reseed the engine dice roller."""
-        result = self.engine.set_seed(seed)
-        return f"Dice roller reseeded with {result['seed']}."
-
-    def _mcp_load_scenario(self, path: str) -> str:
-        """Load a YAML scenario: swap engine state and rebuild the visual layer.
-
-        Mirrors the spawn-handler pattern (#360): the adapter does the
-        engine work, then this method rebuilds the entity_manager and
-        room layout so the visuals match the scenario's setup. After
-        load the game is in COMBAT mode with the scenario's enemies.
-        """
-        from client_2d.entities.entity import MonsterEntity, PartyMemberEntity
-
-        result = self.engine.load_scenario(path)
-
-        # New engine state means a new (possibly different) dungeon and
-        # room. Reload the layout, fog, and lighting before placing
-        # entities so coordinate math has the right dimensions.
-        self._load_room_layout()
-
-        # Wipe whatever entities the room layout pre-populated; the
-        # scenario is the source of truth for who is present and where.
-        self.entity_manager.clear()
-
-        game_state = self.engine.game_state
-        for entity_id, (x, y) in result["party_positions"].items():
-            # Entity IDs follow Phase 1's convention: pc_<name lowercased,
-            # spaces as underscores>. Match back to the live character
-            # the loader pushed into the party.
-            expected = entity_id.removeprefix("pc_")
-            character = next(
-                (
-                    c
-                    for c in game_state.party.characters
-                    if c.name.lower().replace(" ", "_") == expected
-                ),
-                None,
-            )
-            if character is None:
-                continue
-            entity = PartyMemberEntity(
-                entity_id=entity_id,
-                grid_x=x,
-                grid_y=y,
-                entity_type=EntityType.PARTY_MEMBER,
-                sub_type=character.character_class.value.lower(),
-                party_index=game_state.party.characters.index(character),
-                character_class=character.character_class.value.lower(),
-                texture=None,
-            )
-            entity.creature = character
-            self.entity_manager._add_entity(entity)
-
-        for entity_id, (x, y) in result["enemy_positions"].items():
-            # Entity IDs encode the active_enemies index as the trailing
-            # underscore-separated integer (e.g. "goblin_0", "giant_rat_1").
-            monster_id, _, index_str = entity_id.rpartition("_")
-            try:
-                enemy_index = int(index_str)
-            except ValueError:
-                continue
-            if enemy_index >= len(game_state.active_enemies):
-                continue
-            creature = game_state.active_enemies[enemy_index]
-            entity = MonsterEntity(
-                entity_id=entity_id,
-                grid_x=x,
-                grid_y=y,
-                entity_type=EntityType.MONSTER,
-                sub_type=monster_id,
-                enemy_index=enemy_index,
-                texture=None,
-            )
-            entity.creature = creature
-            self.entity_manager._add_entity(entity)
-
-        # Scenarios with enemies always boot into combat (the loader has
-        # already called _start_combat on the engine).
-        if game_state.in_combat:
-            self.current_mode = GameMode.COMBAT
-        else:
-            self.current_mode = GameMode.EXPLORATION
-
-        return (
-            f"Loaded scenario '{result['name']}' (seed={result['seed']}). "
-            + self._mcp_get_state()
-        )
-
-    # ========== End MCP Server Integration ==========
+    # ========== End delegators ==========
 
     def save_screenshot(self) -> Path | None:
         """Save a screenshot of the current game window.
@@ -1025,208 +443,6 @@ class GameWindow(arcade.Window):
             tint1[1] * tint2[1] // 255,
             tint1[2] * tint2[2] // 255,
         )
-
-    def _update_lighting(self) -> None:
-        """Recalculate lighting based on player/party positions."""
-        if self.fog is None or self.lighting is None:
-            return
-
-        # Reset fog to dark for explored tiles
-        self.fog.reset_to_dark()
-
-        # Use party positions if spread, otherwise single player position
-        if self.party_spread and self.party_positions:
-            light_positions = self.party_positions
-        else:
-            light_positions = [(self.player_x, self.player_y)]
-
-        self.lighting.update_party_lights(light_positions, "torch")
-        lit_tiles = self.lighting.calculate_lighting()
-        self.fog.apply_lighting(lit_tiles)
-
-    def _spread_party_for_combat(self) -> None:
-        """Spread party into formation around current position for combat.
-
-        Formation (assuming enemies to the north):
-            Back row:  [2] [3]  (wizard, rogue)
-            Front row: [0] [1]  (fighters)
-        """
-        if not self.room_layout:
-            return
-
-        cx, cy = self.player_x, self.player_y
-
-        # Use EntityManager to create party member entities in formation
-        self.party_positions = self.entity_manager.spread_party_for_combat(
-            engine=self.engine,
-            center_x=cx,
-            center_y=cy,
-            layout=self.room_layout,
-            character_textures=self.character_textures,
-        )
-
-        self.party_spread = True
-        self._update_lighting()
-
-    def _collapse_party_after_combat(self) -> None:
-        """Collapse party back to single unit after combat ends."""
-        # Set player position to center of formation
-        if self.party_positions:
-            avg_x = sum(p[0] for p in self.party_positions) // len(self.party_positions)
-            avg_y = sum(p[1] for p in self.party_positions) // len(self.party_positions)
-            self.player_x = avg_x
-            self.player_y = avg_y
-
-        # Remove party member entities
-        self.entity_manager.collapse_party()
-
-        self.party_spread = False
-        self.party_positions = []
-        self._update_lighting()
-
-    def _load_room_layout(self) -> None:
-        """Load the current room's layout for rendering."""
-        game_state = self.engine.game_state
-        if game_state is None:
-            return
-
-        room_id = game_state.current_room_id
-        dungeon_name = game_state.dungeon_name
-        campaign_id = game_state.campaign_id
-
-        # Get room data for exits and entities
-        room_data = self.layout_loader.get_room_data(dungeon_name, room_id, campaign_id)
-        exits = {}
-        if room_data:
-            raw_exits = room_data.get("exits", {})
-            for direction, dest in raw_exits.items():
-                if isinstance(dest, dict):
-                    exits[direction] = dest.get("destination", "")
-                else:
-                    exits[direction] = dest
-
-        # Load layout with fallback generation
-        self.room_layout = self.layout_loader.load_room_with_fallback(
-            dungeon_name=dungeon_name,
-            room_id=room_id,
-            campaign_id=campaign_id,
-            default_width=20,
-            default_height=15,
-            exits=exits,
-        )
-
-        self.room_tiles = self.room_layout.tiles
-        self.player_x, self.player_y = self.room_layout.spawn_points.player
-
-        # Initialize fog of war and lighting systems
-        self.fog = FogOfWarSystem(
-            width=self.room_layout.width,
-            height=self.room_layout.height,
-        )
-        self.lighting = LightingSystem(
-            map_width=self.room_layout.width,
-            map_height=self.room_layout.height,
-        )
-
-        # Set walls as obstacles for lighting
-        for y in range(self.room_layout.height):
-            for x in range(self.room_layout.width):
-                if self.room_layout.is_blocking(x, y):
-                    self.lighting.add_obstacle(x, y)
-
-        # Load entities from engine state using EntityManager
-        self.entity_manager.load_from_room(
-            engine=self.engine,
-            layout=self.room_layout,
-            room_data=room_data,
-            monster_textures=self.monster_textures,
-            item_textures=self.item_textures,
-        )
-
-        # Initial lighting update
-        self._update_lighting()
-
-    def _get_available_exits(self) -> dict[str, str]:
-        """Get available exits from current room."""
-        game_state = self.engine.game_state
-        if game_state is None:
-            return {}
-
-        room = game_state.get_current_room()
-        exits = {}
-        raw_exits = room.get("exits", {})
-        for direction, dest in raw_exits.items():
-            if isinstance(dest, dict):
-                if not dest.get("hidden", False):  # Skip hidden exits
-                    exits[direction] = dest.get("destination", "")
-            else:
-                exits[direction] = dest
-        return exits
-
-    def _move_player(self, direction: str) -> None:
-        """Attempt to move the player in a direction."""
-        if self.engine.in_combat:
-            self._add_combat_log("Can't move during combat!")
-            return
-
-        # Check if this direction leads to an exit
-        exits = self._get_available_exits()
-        if direction in exits:
-            # Room transition!
-            self._add_combat_log(f"Moving {direction}...")
-            self._transition_room(direction)
-            return
-
-        # Otherwise, try to move within the room
-        dx, dy = {"north": (0, -1), "south": (0, 1), "east": (1, 0), "west": (-1, 0)}.get(
-            direction, (0, 0)
-        )
-        new_x = self.player_x + dx
-        new_y = self.player_y + dy
-
-        # Check bounds and walls
-        if self.room_layout and 0 <= new_x < self.room_layout.width and 0 <= new_y < self.room_layout.height:
-            if not self.room_layout.is_blocking(new_x, new_y):
-                self.player_x = new_x
-                self.player_y = new_y
-                self._update_lighting()
-
-    def _transition_room(self, direction: str) -> None:
-        """Transition to a new room via an exit."""
-        game_state = self.engine.game_state
-        if game_state is None:
-            return
-
-        # Use engine's move to transition rooms
-        result = game_state.move(direction)
-
-        if result:
-            # Reload room layout
-            self._load_room_layout()
-
-            room = game_state.get_current_room()
-            room_name = room.get("name", "Unknown")
-            self._add_combat_log(f"Entered: {room_name}")
-
-            # Check for combat
-            if game_state.in_combat:
-                enemies = [e.name for e in game_state.active_enemies]
-                self.current_mode = GameMode.COMBAT
-                self._spread_party_for_combat()
-                self._add_combat_log(f"Combat! {len(enemies)} enemies: {', '.join(enemies)}")
-                # Show whose turn it is
-                current = self.engine.get_current_combatant()
-                if current:
-                    if current["is_player"]:
-                        self._add_combat_log(f"{current['name']}'s turn - press 1-9 then A to attack!")
-                    else:
-                        self._add_combat_log(f"{current['name']} attacks first...")
-                # If enemy goes first, start enemy turn processing
-                if not self.engine.is_player_turn():
-                    self.processing_enemy_turn = True
-                    self.enemy_turn_timer = ENEMY_TURN_DELAY
-
-    # ========== Drawing Methods ==========
 
     def on_draw(self) -> None:
         """Render the game."""
@@ -1938,134 +1154,18 @@ class GameWindow(arcade.Window):
 
     def on_update(self, delta_time: float) -> None:
         """Update game state."""
-        # Process any pending MCP commands (thread-safe)
-        self._process_mcp_commands()
+        # Advance non-rendering state (MCP commands + combat state machine).
+        self.session.tick(delta_time)
 
-        # Update screenshot feedback timer
+        # Update screenshot feedback timer (rendering-only).
         if self.screenshot_message_timer > 0:
             self.screenshot_message_timer -= delta_time
             if self.screenshot_message_timer <= 0:
                 self.screenshot_message = ""
 
-        # Update pulse timer for targeting animation
+        # Update pulse timer for targeting animation (rendering-only).
         if self.current_mode == GameMode.COMBAT:
             self.pulse_timer += delta_time
-
-        if not self.engine.in_combat:
-            return
-
-        # Handle auto-turn processing (enemy turns and unconscious player turns)
-        if self.processing_enemy_turn:
-            self.enemy_turn_timer -= delta_time
-            if self.enemy_turn_timer <= 0:
-                # Check what kind of turn to process
-                if self.engine.is_current_combatant_unconscious():
-                    self._process_unconscious_turn()
-                elif not self.engine.is_player_turn():
-                    self._process_enemy_turn()
-                else:
-                    # Conscious player's turn - stop auto-processing
-                    self.processing_enemy_turn = False
-
-    def _process_enemy_turn(self) -> None:
-        """Process the current enemy's turn."""
-        result = self.engine.process_enemy_turn()
-
-        if result["success"]:
-            if result.get("hit") is not None:
-                if result["hit"]:
-                    self._add_combat_log(
-                        f"{result['enemy_name']} hits {result['target_name']} for {result['damage']} damage!"
-                    )
-                    if result.get("target_killed"):
-                        self._add_combat_log(f"{result['target_name']} is down!")
-                else:
-                    self._add_combat_log(f"{result['enemy_name']} misses {result['target_name']}!")
-            else:
-                self._add_combat_log(f"{result['enemy_name']} takes no action.")
-
-        # Sync entity state from engine after enemy action
-        self.entity_manager.sync_from_engine(self.engine)
-        self.entity_manager.update_party_turn_status(self.engine)
-
-        # Advance turn
-        turn_result = self.engine.advance_turn()
-
-        if turn_result.get("combat_ended"):
-            self._handle_combat_end()
-        elif not turn_result.get("is_player_turn"):
-            # Another enemy's turn - continue timer
-            self.enemy_turn_timer = ENEMY_TURN_DELAY
-        else:
-            # Player's turn - check if unconscious
-            if self.engine.is_current_combatant_unconscious():
-                self._process_unconscious_turn()
-            else:
-                self.processing_enemy_turn = False
-
-    def _process_unconscious_turn(self) -> None:
-        """Process an unconscious character's death saving throw turn."""
-        result = self.engine.process_unconscious_turn()
-
-        if result is None:
-            # Not an unconscious turn - shouldn't happen but handle gracefully
-            self.processing_enemy_turn = False
-            return
-
-        # Log the death save result
-        if result.already_stabilized:
-            self._add_combat_log(
-                f"{result.character_name} is stabilized (no death save needed)"
-            )
-        elif result.natural_20:
-            self._add_combat_log(
-                f"{result.character_name} rolls NAT 20! Regains consciousness with 1 HP!"
-            )
-        elif result.natural_1:
-            self._add_combat_log(
-                f"{result.character_name} rolls NAT 1! Two failures! ({result.failures}/3)"
-            )
-        elif result.success:
-            self._add_combat_log(
-                f"{result.character_name} death save: {result.roll} - Success! ({result.successes}/3)"
-            )
-        else:
-            self._add_combat_log(
-                f"{result.character_name} death save: {result.roll} - Failure! ({result.failures}/3)"
-            )
-
-        # Check outcomes
-        if result.conscious:
-            self._add_combat_log(f"{result.character_name} is back on their feet!")
-        elif result.stabilized and not result.already_stabilized:
-            self._add_combat_log(f"{result.character_name} is stabilized!")
-        elif result.dead:
-            self._add_combat_log(f"{result.character_name} has died...")
-
-        # Sync entity state
-        self.entity_manager.sync_from_engine(self.engine)
-
-        # Check if combat ended (party wiped)
-        if not self.engine.in_combat:
-            self._handle_combat_end()
-            return
-
-        # Continue to next turn (still in auto-processing mode)
-        self.enemy_turn_timer = ENEMY_TURN_DELAY
-
-    def _handle_combat_end(self) -> None:
-        """Handle end of combat."""
-        self.processing_enemy_turn = False
-        self.current_mode = GameMode.EXPLORATION
-        self._collapse_party_after_combat()
-
-        check = self.engine.end_combat_check()
-        if check.get("victory"):
-            self._add_combat_log("Victory! All enemies defeated!")
-        elif check.get("party_wiped"):
-            self._add_combat_log("Defeat! Your party has fallen...")
-
-    # ========== Input Handling ==========
 
     def on_key_press(self, key: int, modifiers: int) -> None:
         """Handle key presses."""
@@ -2300,59 +1400,6 @@ class GameWindow(arcade.Window):
             self._move_player("west")
         elif key == arcade.key.D or key == arcade.key.RIGHT:
             self._move_player("east")
-
-    def _execute_attack(self) -> None:
-        """Execute attack on selected enemy."""
-        result = self.engine.execute_attack(target_index=self.selected_enemy)
-
-        if result["success"]:
-            if result["hit"]:
-                crit = " CRITICAL!" if result.get("critical") else ""
-                self._add_combat_log(
-                    f"{result['attacker_name']} hits {result['target_name']} "
-                    f"for {result['damage']} damage!{crit}"
-                )
-                if result.get("target_killed"):
-                    self._add_combat_log(f"{result['target_name']} is defeated!")
-            else:
-                self._add_combat_log(
-                    f"{result['attacker_name']} misses {result['target_name']}! "
-                    f"(rolled {result['attack_roll']} vs AC {result['target_ac']})"
-                )
-
-            # Sync entity state from engine and remove dead enemies
-            self.entity_manager.sync_from_engine(self.engine)
-            self.entity_manager.remove_dead_entities()
-            self.entity_manager.update_party_turn_status(self.engine)
-
-            # Advance turn
-            turn_result = self.engine.advance_turn()
-
-            if turn_result.get("combat_ended"):
-                self._handle_combat_end()
-            elif not turn_result.get("is_player_turn"):
-                # Start enemy turn timer
-                self.processing_enemy_turn = True
-                self.enemy_turn_timer = ENEMY_TURN_DELAY
-        else:
-            self._add_combat_log(f"Attack failed: {result.get('error', 'Unknown error')}")
-
-    def _pass_turn(self) -> None:
-        """Pass the current turn."""
-        current = self.engine.get_current_combatant()
-        if current:
-            self._add_combat_log(f"{current['name']} waits...")
-
-        # Update turn status after passing
-        self.entity_manager.update_party_turn_status(self.engine)
-
-        turn_result = self.engine.advance_turn()
-
-        if turn_result.get("combat_ended"):
-            self._handle_combat_end()
-        elif not turn_result.get("is_player_turn"):
-            self.processing_enemy_turn = True
-            self.enemy_turn_timer = ENEMY_TURN_DELAY
 
     def _handle_combat_movement(self, direction: str) -> None:
         """Handle keyboard-triggered combat movement with feedback."""

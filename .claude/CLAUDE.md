@@ -289,13 +289,30 @@ New areas revealed, entities come into view...
 Attacked goblin_1! Enemy defeated.
 ```
 
+### Headless Mode (issue #362)
+
+The 2D client can run **without an arcade window** — engine + entity manager + MCP HTTP server only. Faster to launch, lower resource use, no window stealing focus, CI-friendly.
+
+```bash
+# Headless + dev tools + MCP (preferred for automated playtesting)
+uv run dnd-2d --headless --dev --mcp [--mcp-port 8765]
+```
+
+`--headless` implies `--mcp`. SIGINT / SIGTERM exit the tick loop cleanly. Combat state machine ticks at ~30 Hz so MCP commands drain promptly.
+
+**Architecture:** A `GameSession` class (`client-2d/src/client_2d/session.py`) owns the non-graphical state — engine adapter, entity manager, MCP plumbing, combat state machine, fog/lighting, room layout. Both `GameWindow` (windowed mode) and `run_headless()` instantiate one; the windowed mode adds rendering on top. All MCP tools behave identically in both modes because they route through `GameSession`.
+
 ### Playtester Skill
 
 Use the `/playtester` skill (or say "let's playtest", "test our fix", "qa the game") to have Claude QA the game through the embedded MCP server.
 
 **What it does:**
-- Starts game with `uv run dnd-2d --mcp`
+- Starts game with `uv run dnd-2d --headless --dev --mcp` (or `--mcp` only when visual inspection is needed)
 - Plays the game using MCP tools as a human would
 - If working on a ticket, focuses testing on that functionality
 - Creates GitHub issues for bugs found
 - Stops on blocking bugs, continues logging non-blocking issues
+
+**When to use headless vs windowed:**
+- **Headless (default):** scripted scenario runs, regression checks, anything driven by MCP only. Faster, doesn't steal focus.
+- **Windowed:** when you need to see fog-of-war, sprites, or any visual rendering to diagnose a bug.

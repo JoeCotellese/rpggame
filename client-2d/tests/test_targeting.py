@@ -229,7 +229,7 @@ class TestMCPAttackEntityID:
 
     def test_mcp_attack_by_index(self):
         """Should accept integer index."""
-        from client_2d.game import GameWindow
+        from client_2d.session import GameSession
 
         mock_window = create_mock_game_window()
         mock_window.player_x = 5
@@ -266,14 +266,14 @@ class TestMCPAttackEntityID:
         mock_window.party_positions = []
         mock_window._state_renderer = None
 
-        result = GameWindow._mcp_attack(mock_window, 0)
+        result = GameSession.attack(mock_window, 0)
         # Should not return an error message
         assert "Invalid" not in result
         assert "Unknown" not in result
 
     def test_mcp_attack_by_entity_id(self):
         """Should accept entity ID string."""
-        from client_2d.game import GameWindow
+        from client_2d.session import GameSession
 
         mock_window = create_mock_game_window()
         mock_window.player_x = 5
@@ -310,12 +310,12 @@ class TestMCPAttackEntityID:
         mock_window._state_renderer = None
 
         # Test with full entity ID format
-        result = GameWindow._mcp_attack(mock_window, "goblin_0")
+        result = GameSession.attack(mock_window, "goblin_0")
         assert "Unknown target" not in result
 
     def test_mcp_attack_invalid_entity_id(self):
         """Should return error for invalid entity ID."""
-        from client_2d.game import GameWindow
+        from client_2d.session import GameSession
 
         mock_window = create_mock_game_window()
 
@@ -329,13 +329,13 @@ class TestMCPAttackEntityID:
         mock_window.entity_manager = MagicMock()
         mock_window.entity_manager.get_monsters.return_value = [monster]
 
-        result = GameWindow._mcp_attack(mock_window, "nonexistent_enemy")
+        result = GameSession.attack(mock_window, "nonexistent_enemy")
         assert "Unknown target" in result
         assert "Valid targets" in result
 
     def test_mcp_attack_out_of_range(self):
         """Should return error when target is out of weapon range."""
-        from client_2d.game import GameWindow
+        from client_2d.session import GameSession
 
         mock_window = create_mock_game_window()
         mock_window.player_x = 5
@@ -375,7 +375,7 @@ class TestMCPAttackEntityID:
         mock_window.entity_manager.get_monsters.return_value = [monster]
         mock_window.entity_manager.get_current_turn_position.return_value = (5, 5)
 
-        result = GameWindow._mcp_attack(mock_window, 0)
+        result = GameSession.attack(mock_window, 0)
         assert "Out of range!" in result
         assert "25 ft" in result  # Distance shown
         assert "5 ft" in result  # Max melee range shown
