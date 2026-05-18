@@ -13,15 +13,13 @@
 3. [Project Structure](#project-structure)
 4. [Core Components](#core-components)
 5. [Data Flow](#data-flow)
-6. [Key Design Decisions](#key-design-decisions)
-7. [External Dependencies](#external-dependencies)
-8. [Configuration & Environment](#configuration--environment)
-9. [Testing Strategy](#testing-strategy)
-10. [Extension Points](#extension-points)
-11. [Future Considerations](#future-considerations)
-
-**📚 Related Documentation**:
-- **[DESIGN_PATTERNS.md](./DESIGN_PATTERNS.md)**: Comprehensive audit of architectural and design patterns (Factory, Builder, Strategy, Observer, Middleware, etc.)
+6. [Design Patterns at a Glance](#design-patterns-at-a-glance)
+7. [Key Design Decisions](#key-design-decisions)
+8. [External Dependencies](#external-dependencies)
+9. [Configuration & Environment](#configuration--environment)
+10. [Testing Strategy](#testing-strategy)
+11. [Extension Points](#extension-points)
+12. [Future Considerations](#future-considerations)
 
 ---
 
@@ -737,6 +735,39 @@ All content in JSON for easy modification.
 │     - Return to exploration     │
 └─────────────────────────────────┘
 ```
+
+---
+
+## Design Patterns at a Glance
+
+Index of the standard design patterns used in the codebase and where to find them.
+The class names are deliberately suffixed (`*Factory`, `*Builder`, `*Strategy`,
+`*Middleware`) so the patterns are discoverable directly from the source — this
+table is an orientation aid, not a substitute for reading the code.
+
+| Category | Pattern | Location | Purpose |
+|----------|---------|----------|---------|
+| Creational | Factory (Character) | `dnd-engine/dnd_engine/core/character_factory.py` | Encapsulate complex character creation |
+| Creational | Factory (LLM Provider) | `dnd-engine/dnd_engine/llm/factory.py` | Create provider based on config |
+| Creational | Builder (Combat Context) | `dnd-engine/dnd_engine/systems/combat_context/builder.py` | Assemble combat context from scattered data |
+| Creational | Builder (Turn State) | `dnd-engine/dnd_engine/systems/action_economy.py` | Build action-economy state per turn |
+| Creational | Registry (Data Loader) | `dnd-engine/dnd_engine/rules/loader.py` | Single point of SRD/content access |
+| Creational | Repository (Save Manager) | `dnd-engine/dnd_engine/core/save_slot_manager.py` | Manage save/load with slots |
+| Behavioral | Observer (Event Bus) | `dnd-engine/dnd_engine/utils/events.py` | Pub/Sub for loose coupling |
+| Behavioral | Strategy (Targeting) | `dnd-engine/dnd_engine/systems/ai/targeting.py` | Pluggable AI targeting (`LowestHPStrategy`, `RandomStrategy`, `SmartTargetingStrategy`) |
+| Behavioral | Middleware / Chain of Responsibility | `dnd-engine/dnd_engine/systems/combat_middleware.py` | Validation pipeline for combat actions |
+| Behavioral | State Machine | `dnd-engine/dnd_engine/systems/action_economy.py` | Track valid turn-state transitions |
+| Dependency | Constructor Injection | Multiple modules | Explicit dependencies |
+| Dependency | IoC via Event Bus | `dnd-engine/dnd_engine/utils/events.py` | Control flow via events, not direct calls |
+| Async | Background Thread Loop | `dnd-engine/dnd_engine/llm/enhancer.py` | Non-blocking LLM calls |
+| System | Time-Based Effects | `dnd-engine/dnd_engine/systems/time_manager.py` | Generic duration tracking |
+| System | Resource Pools | `dnd-engine/dnd_engine/systems/resources.py` | Generic ability resources |
+| System | Conditions | `dnd-engine/dnd_engine/systems/condition_manager.py` | Data-driven status effects |
+| System | Capabilities | `dnd-engine/dnd_engine/systems/capabilities.py` | What an entity can do, resolved from many sources |
+| System | Inventory | `dnd-engine/dnd_engine/systems/inventory.py` | Item and equipment management |
+
+CLI entry point: `client-terminal/terminal_client/main.py` (registered as
+`dnd-game` in `client-terminal/pyproject.toml`).
 
 ---
 

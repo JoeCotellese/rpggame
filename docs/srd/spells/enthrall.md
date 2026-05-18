@@ -1,0 +1,25 @@
+---
+source: SRD_CC_v5.2.1.txt
+source_lines: 26696-26710
+source_pages: 107
+srd_chapter: spells
+srd_section: Enthrall
+parent: Spell Descriptions
+license: CC-BY-4.0
+---
+
+# Enthrall
+
+Level 2 Enchantment (Bard, Warlock)
+
+Casting Time: Action
+Range: 60 feet
+Components: V, S
+Duration: Concentration, up to 1 minute
+
+You weave a distracting string of words, causing
+creatures of your choice that you can see within
+range to make a Wisdom saving throw. Any creature you or your companions are fighting automatically succeeds on this save. On a failed save, a target
+has a −10 penalty to Wisdom (Perception) checks
+and Passive Perception until the spell ends.
+
