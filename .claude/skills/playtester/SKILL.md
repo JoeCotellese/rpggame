@@ -9,19 +9,41 @@ QA the D&D 5E game by playing it as a human player would, using the embedded MCP
 
 ## Setup
 
-Start the game with MCP enabled:
+**Prefer headless mode by default** (issue #362) — faster to launch, no window stealing focus, identical MCP behavior:
 ```bash
-uv run dnd-2d --mcp
+uv run dnd-2d --headless --dev --mcp
 ```
 
+`--headless` implies `--mcp`. Add `--dev` so the `spawn_monster`, `spawn_character`, `set_position`, `clear_enemies`, `set_seed`, and `load_scenario` tools are available for reproducible setup. SIGINT / SIGTERM stops it cleanly.
+
+**Use windowed mode only when you genuinely need to see the rendering:**
+```bash
+uv run dnd-2d --mcp --dev   # visual inspection of fog of war, sprites, layout
+```
+
+Both modes route MCP commands through the same `GameSession` so behavior is identical.
+
 ## MCP Tools
+
+Core play tools (always available):
 
 | Tool | Usage |
 |------|-------|
 | `game_state()` | Get ASCII map + JSON state |
 | `game_move(direction)` | Move "north"/"south"/"east"/"west" |
-| `game_attack(target_index)` | Attack enemy by 0-based index (0=A, 1=B, etc.) |
+| `game_attack(target)` | Attack enemy by index or entity ID (e.g., `"goblin_0"`) |
 | `game_wait()` | Wait/pass turn in combat |
+
+Dev tools (only available with `--dev`):
+
+| Tool | Usage |
+|------|-------|
+| `spawn_monster(monster_id, x, y)` | Place a monster on the map and start combat |
+| `spawn_character(class, race, weapons, x, y, ...)` | Add a PC to the party |
+| `set_position(entity_id, x, y)` | Move any entity to a tile |
+| `clear_enemies()` | Wipe enemies, end combat |
+| `set_seed(seed)` | Reseed the dice roller for reproducible rolls |
+| `load_scenario(path)` | Load a YAML scenario (party + enemies + seed + map) |
 
 ## Playtest Workflow
 
