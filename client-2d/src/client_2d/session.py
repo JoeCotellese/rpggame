@@ -569,12 +569,16 @@ class GameSession:
         elif check.get("party_wiped"):
             self._add_combat_log("Defeat! Your party has fallen...")
 
-    def execute_attack(self) -> None:
+    def execute_attack(self) -> dict[str, Any] | None:
         """Execute an attack on the currently-selected enemy.
 
         Reads ``self.selected_enemy`` (the engine's enemy index) and
         delegates to the engine adapter. Called by both GameWindow's
         input handler and the MCP attack path.
+
+        Returns the engine adapter's attack-result dict on success so callers
+        (notably the MCP attack handler) can render hit/miss/damage details.
+        Returns ``None`` if the engine rejected the attack outright.
         """
         result = self.engine.execute_attack(target_index=self.selected_enemy)
 
@@ -604,10 +608,13 @@ class GameSession:
             elif not turn_result.get("is_player_turn"):
                 self.processing_enemy_turn = True
                 self.enemy_turn_timer = ENEMY_TURN_DELAY
-        else:
-            self._add_combat_log(
-                f"Attack failed: {result.get('error', 'Unknown error')}"
-            )
+
+            return result
+
+        self._add_combat_log(
+            f"Attack failed: {result.get('error', 'Unknown error')}"
+        )
+        return None
 
     def pass_turn(self) -> None:
         """Pass the current turn."""
@@ -1038,7 +1045,7 @@ class GameSession:
         pre_attack_combatant = current["name"] if current else None
 
         self.selected_enemy = target_entity.enemy_index
-        self.execute_attack()
+        attack_result = self.execute_attack()
 
         post_attack_combatant = self.engine.get_current_combatant()
         post_name = post_attack_combatant["name"] if post_attack_combatant else None
@@ -1049,12 +1056,76 @@ class GameSession:
                 f"Use game_wait() to pass."
             )
 
+        report = self._format_attack_report(
+            attack_result,
+            target_entity,
+            weapon_name=weapon_name,
+            in_long_range=in_long_range,
+        )
+
         # Drain enemy turns synchronously so the MCP caller sees the
         # post-enemy-action state.
         while self.processing_enemy_turn:
             self._process_enemy_turn()
 
-        return self.get_state()
+        state = self.get_state()
+        return f"{report}\n\n{state}" if report else state
+
+    def _format_attack_report(
+        self,
+        result: dict[str, Any] | None,
+        target_entity: Any,
+        *,
+        weapon_name: str,
+        in_long_range: bool,
+    ) -> str:
+        """Format a hit/miss/damage block for a player's attack.
+
+        Returns an empty string if no result is available — preserves the
+        existing state-only response in that case.
+        """
+        if not result:
+            return ""
+
+        attacker = result.get("attacker_name", "Attacker")
+        target_name = result.get("target_name", "target")
+        attack_roll = result.get("attack_roll", 0)
+        attack_bonus = result.get("attack_bonus", 0)
+        target_ac = result.get("target_ac", 0)
+        total = attack_roll + attack_bonus
+        bonus_text = f"+{attack_bonus}" if attack_bonus >= 0 else str(attack_bonus)
+
+        if result.get("critical"):
+            outcome = "CRITICAL HIT"
+        elif result.get("hit"):
+            outcome = "HIT"
+        else:
+            outcome = "MISS"
+
+        suffix = ""
+        if in_long_range:
+            suffix = " (long range - disadvantage)"
+
+        lines = [
+            f"{attacker} attacks {target_name} with {weapon_name}: "
+            f"roll {attack_roll}{bonus_text} = {total} vs AC {target_ac} -> "
+            f"{outcome}{suffix}"
+        ]
+
+        if result.get("hit"):
+            lines[0] += f" for {result.get('damage', 0)} damage"
+
+        if result.get("target_killed"):
+            lines.append(f"{target_name} is defeated!")
+        else:
+            # Cached hp/max_hp on the entity is updated by sync_from_engine
+            # inside execute_attack, so this reflects post-attack HP.
+            hp = getattr(target_entity, "hp", None)
+            max_hp = getattr(target_entity, "max_hp", None)
+            if hp is not None and max_hp:
+                lines.append(f"{target_name}: {hp}/{max_hp} HP")
+
+        return "\n".join(lines)
 
     def wait(self) -> str:
         """Pass the current turn."""

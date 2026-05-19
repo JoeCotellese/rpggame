@@ -669,6 +669,7 @@ class EngineAdapter:
                 "target_killed": not target.is_alive,
                 "attacker_name": attacker.name,
                 "attack_roll": result.attack_result.attack_roll if result.attack_result else 0,
+                "attack_bonus": result.attack_result.attack_bonus if result.attack_result else 0,
                 "target_ac": result.attack_result.target_ac if result.attack_result else 0,
             }
         except Exception as e:
