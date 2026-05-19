@@ -143,22 +143,29 @@ class TestSessionSpawn:
         assert monsters[0].entity_id == "goblin_0"
         assert (monsters[0].grid_x, monsters[0].grid_y) == (12, 5)
 
-    def test_spawn_monster_appears_in_state_output(self, session) -> None:
-        """The spawned monster's tile must be revealed so it shows in get_state().
+    def test_spawn_monster_in_torch_light_shows_in_state(self, session) -> None:
+        """When a monster is spawned inside the @'s natural torch radius,
+        get_state() lists it as a monster (legend + visible entities).
 
-        Regression for #371: spawned monsters used to be invisible because
-        their tile sat in UNEXPLORED fog, which the state renderer skips for
-        legend and visible_entities.
+        Pre-#371, the user's repro placed the goblin at the @'s exact tile,
+        so the @ glyph shadowed it in the rendered map and the renderer
+        also misattributed the spawn under the (clobbered) party formation.
+        With the spread guard in place, a goblin spawned within the @'s
+        bright torch radius (4 tiles) renders correctly with no fog
+        bypass — this exercises the normal lighting flow set up by
+        _load_room_layout -> _update_lighting.
         """
         session.clear_enemies()
-        session.spawn_monster("goblin", 12, 5)
+        # Two tiles east of the @ is well within TORCH_BRIGHT_RADIUS (4).
+        gx, gy = session.player_x + 2, session.player_y
+        session.spawn_monster("goblin", gx, gy)
 
         state = session.get_state()
 
         # Legend entry from build_legend.
         assert "monster:goblin_0" in state
         # Visible-entities entry from render_state.
-        assert "goblin_0 at [12, 5]" in state
+        assert f"goblin_0 at [{gx}, {gy}]" in state
 
     def test_spawn_monster_in_combat_preserves_party_positions(
         self, session
