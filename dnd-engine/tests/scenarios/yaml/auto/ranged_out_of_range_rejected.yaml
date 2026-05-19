@@ -1,0 +1,36 @@
+# Auto-play scenario: attacking past max range is rejected outright.
+#
+# Dagger thrown range is 20/60. At 85 ft (17 tiles) the target is past
+# the dagger's max range and the harness rejects the attack without
+# invoking the engine — the goblin takes no damage and the player's
+# turn is not consumed. This guards the rejection path so a future
+# regression can't silently turn an illegal attack into a missed one.
+
+name: ranged_out_of_range_rejected
+seed: 42
+map:
+  dungeon: laboratory
+  campaign: poisoned_laboratory
+  start_room: laboratory.entrance
+party:
+  - class: fighter
+    race: high_elf
+    weapons: [dagger]
+    position: [3, 5]
+    name: Archy
+enemies:
+  - monster_id: goblin
+    position: [20, 5]
+script:
+  - action: attack
+    target: goblin_0
+assertions:
+  - type: turn_count
+    op: '=='
+    value: 0
+  - type: entity_present
+    entity_id: goblin_0
+  - type: entity_hp
+    entity_id: goblin_0
+    op: '=='
+    value: 7

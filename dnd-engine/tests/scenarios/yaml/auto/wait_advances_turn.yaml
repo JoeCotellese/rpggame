@@ -1,0 +1,30 @@
+# Auto-play scenario: wait passes the turn cleanly.
+#
+# Fighter is far enough from the goblin that no attack is in play; the
+# script just `wait`s. After execution, turn_count must be 1 and combat
+# must remain active. Guards the turn-pass plumbing so a regression that
+# stalls the initiative tracker surfaces immediately.
+
+name: wait_advances_turn
+seed: 1
+map:
+  dungeon: laboratory
+  campaign: poisoned_laboratory
+  start_room: laboratory.entrance
+party:
+  - class: fighter
+    race: human
+    weapons: [shortsword]
+    position: [3, 5]
+    name: Brick
+enemies:
+  - monster_id: goblin
+    position: [15, 15]
+script:
+  - action: wait
+assertions:
+  - type: turn_count
+    op: '=='
+    value: 1
+  - type: combat_active
+    value: true

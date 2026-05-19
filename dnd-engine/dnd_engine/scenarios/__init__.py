@@ -13,14 +13,28 @@ Usage::
     loaded.enemy_positions     # {entity_id: (x, y)} for visual placement
 """
 
+from dnd_engine.scenarios.assertions import (
+    ScenarioAssertionError,
+    run_assertion,
+)
 from dnd_engine.scenarios.loader import (
     LoadedScenario,
     ScenarioLoader,
     ScenarioValidationError,
 )
+from dnd_engine.scenarios.script_executor import (
+    ScriptContext,
+    ScriptExecutionError,
+    ScriptExecutor,
+)
 
 __all__ = [
     "LoadedScenario",
+    "ScenarioAssertionError",
     "ScenarioLoader",
     "ScenarioValidationError",
+    "ScriptContext",
+    "ScriptExecutionError",
+    "ScriptExecutor",
+    "run_assertion",
 ]
