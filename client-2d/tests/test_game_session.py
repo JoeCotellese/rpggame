@@ -109,6 +109,87 @@ class TestSessionSpawn:
         assert after == before + 1
         assert session.engine.party.characters[-1].name == "Probe"
 
+    def test_spawn_monster_from_exploration_keeps_party_positions(
+        self, session
+    ) -> None:
+        """Re-entering combat via spawn_monster must not stomp PartyMemberEntity positions.
+
+        Regression for #371: when current_mode was EXPLORATION, spawn_monster
+        used to call _spread_party_for_combat which clears _party_members and
+        rebuilds them at fixed offsets around the player tile — clobbering
+        positions the dev had placed via load_scenario / spawn_character.
+        """
+        # Drop back to EXPLORATION while leaving the party in entity_manager.
+        session.clear_enemies()
+        assert session.engine.in_combat is False
+        before = {
+            e.entity_id: (e.grid_x, e.grid_y)
+            for e in session.entity_manager.get_party_members()
+        }
+        assert before, "fixture should have at least one party member"
+
+        session.spawn_monster("goblin", 12, 5)
+
+        # Same ids, same positions — no spread.
+        after = {
+            e.entity_id: (e.grid_x, e.grid_y)
+            for e in session.entity_manager.get_party_members()
+        }
+        assert after == before
+
+        # And the spawned monster is the only one, at the requested tile.
+        monsters = session.entity_manager.get_monsters()
+        assert len(monsters) == 1
+        assert monsters[0].entity_id == "goblin_0"
+        assert (monsters[0].grid_x, monsters[0].grid_y) == (12, 5)
+
+    def test_spawn_monster_appears_in_state_output(self, session) -> None:
+        """The spawned monster's tile must be revealed so it shows in get_state().
+
+        Regression for #371: spawned monsters used to be invisible because
+        their tile sat in UNEXPLORED fog, which the state renderer skips for
+        legend and visible_entities.
+        """
+        session.clear_enemies()
+        session.spawn_monster("goblin", 12, 5)
+
+        state = session.get_state()
+
+        # Legend entry from build_legend.
+        assert "monster:goblin_0" in state
+        # Visible-entities entry from render_state.
+        assert "goblin_0 at [12, 5]" in state
+
+    def test_spawn_monster_in_combat_preserves_party_positions(
+        self, session
+    ) -> None:
+        """Spawning a second enemy while already in combat must not respread.
+
+        Pins the existing in-combat path: party positions stay put, second
+        monster gets entity_id <monster_id>_1 at the requested tile.
+        """
+        before = {
+            e.entity_id: (e.grid_x, e.grid_y)
+            for e in session.entity_manager.get_party_members()
+        }
+        assert session.engine.in_combat is True
+
+        session.spawn_monster("goblin", 8, 6)
+
+        after = {
+            e.entity_id: (e.grid_x, e.grid_y)
+            for e in session.entity_manager.get_party_members()
+        }
+        assert after == before
+
+        monsters = {
+            e.entity_id: (e.grid_x, e.grid_y)
+            for e in session.entity_manager.get_monsters()
+        }
+        # Scenario fixture starts with goblin_0; second spawn is goblin_1.
+        assert "goblin_1" in monsters
+        assert monsters["goblin_1"] == (8, 6)
+
 
 class TestSessionMCPState:
     def test_get_state_returns_renderable_string(self, session) -> None:

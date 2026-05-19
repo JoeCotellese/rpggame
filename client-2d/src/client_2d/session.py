@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from client_2d.core.constants import GameMode
+from client_2d.core.constants import GameMode, LightingState
 from client_2d.entities import EntityManager, EntityType
 from client_2d.entities.entity import MonsterEntity, PartyMemberEntity
 from client_2d.integration.engine_adapter import EngineAdapter
@@ -1090,7 +1090,22 @@ class GameSession:
 
         if self.current_mode != GameMode.COMBAT:
             self.current_mode = GameMode.COMBAT
-            self._spread_party_for_combat()
+            # Spreading rebuilds party_members at formation offsets around
+            # the @ tile, which is correct for the room-entry combat-start
+            # flow but wrong for dev spawns where the dev has already
+            # placed PCs via spawn_character / load_scenario.
+            if not self.entity_manager.get_party_members():
+                self._spread_party_for_combat()
+
+        # Dev tool: reveal the spawn tile and its 3x3 neighborhood so the
+        # caller can actually see what they just placed. Normal gameplay
+        # fog is owned by update_party_lights / apply_lighting; this is a
+        # one-shot reveal that the next lighting pass can leave untouched
+        # (bright is the brightest state, so apply_lighting won't downgrade).
+        if self.fog is not None:
+            for dy in (-1, 0, 1):
+                for dx in (-1, 0, 1):
+                    self.fog.set_visibility(x + dx, y + dy, LightingState.BRIGHT)
 
         return (
             f"Spawned {result['name']} at ({x},{y}) as {result['entity_id']}. "
