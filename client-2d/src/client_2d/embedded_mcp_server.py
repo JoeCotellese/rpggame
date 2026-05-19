@@ -129,7 +129,8 @@ class EmbeddedMCPServer:
             """Attack an enemy in combat using real D&D 5E combat rules.
 
             Only works during combat when it's a player's turn. Target can be
-            specified by index or entity ID.
+            specified by index or entity ID. Range is determined by equipped
+            weapon (melee = 5 ft, ranged = weapon range like 150/600 ft).
 
             Examples:
                 game_attack(0)            # Attack first enemy by index
@@ -142,6 +143,7 @@ class EmbeddedMCPServer:
 
             Returns:
                 Attack result (hit/miss, damage) and updated game state.
+                Returns error if target is out of equipped weapon's range.
             """
             request = CommandRequest(
                 command_type=CommandType.ATTACK,

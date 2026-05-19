@@ -334,7 +334,7 @@ class TestMCPAttackEntityID:
         assert "Valid targets" in result
 
     def test_mcp_attack_out_of_range(self):
-        """Should return error when target is out of melee range."""
+        """Should return error when target is out of weapon range."""
         from client_2d.game import GameWindow
 
         mock_window = create_mock_game_window()
@@ -348,8 +348,27 @@ class TestMCPAttackEntityID:
             movement_remaining=30
         )
 
+        # Mock current combatant as a player with a melee weapon
+        mock_creature = MagicMock()
+        mock_creature.inventory.get_equipped_item.return_value = "longsword"
+        mock_window.engine.get_current_combatant.return_value = {
+            "is_player": True,
+            "creature": mock_creature,
+            "name": "Test Fighter",
+        }
+        mock_window.engine.game_state.data_loader.load_items.return_value = {
+            "weapons": {
+                "longsword": {
+                    "name": "Longsword",
+                    "category": "melee",
+                    "damage": "1d8",
+                    "properties": ["versatile"],
+                }
+            }
+        }
+
         monster = MagicMock()
-        monster.grid_x = 10  # 5 tiles away
+        monster.grid_x = 10  # 5 tiles away = 25 ft
         monster.grid_y = 5
         monster.enemy_index = 0
         mock_window.entity_manager = MagicMock()
@@ -357,7 +376,9 @@ class TestMCPAttackEntityID:
         mock_window.entity_manager.get_current_turn_position.return_value = (5, 5)
 
         result = GameWindow._mcp_attack(mock_window, 0)
-        assert "not in melee range" in result
+        assert "Out of range!" in result
+        assert "25 ft" in result  # Distance shown
+        assert "5 ft" in result  # Max melee range shown
 
 
 class TestInRangeDetection:
