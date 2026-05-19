@@ -70,6 +70,30 @@ class LoadedScenario:
     assertions: list[dict[str, Any]] = field(default_factory=list)
     map_config: dict[str, Any] = field(default_factory=dict)
 
+    def run(self) -> Any:
+        """Execute the YAML's ``script`` then check its ``assertions``.
+
+        Convenience for the pytest auto-play harness (issue #363): one
+        call drives the scenario from loaded state through every action
+        and every assertion. Returns the populated ``ScriptContext`` so
+        callers can inspect anything beyond what the assertions checked.
+
+        Raises:
+            ScriptExecutionError: If the script references an unknown
+                entity, action, or state.
+            ScenarioAssertionError: If any declared assertion fails.
+        """
+        # Imports are local to avoid circulars: the assertion + executor
+        # modules already import ``LoadedScenario`` for typing.
+        from dnd_engine.scenarios.assertions import run_assertion
+        from dnd_engine.scenarios.script_executor import ScriptExecutor
+
+        executor = ScriptExecutor(self)
+        ctx = executor.run(self.script)
+        for spec in self.assertions:
+            run_assertion(ctx, spec)
+        return ctx
+
 
 class ScenarioLoader:
     """Loads a YAML scenario file and constructs a fully wired ``GameState``.
