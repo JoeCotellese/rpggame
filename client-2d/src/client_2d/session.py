@@ -1090,7 +1090,12 @@ class GameSession:
 
         if self.current_mode != GameMode.COMBAT:
             self.current_mode = GameMode.COMBAT
-            self._spread_party_for_combat()
+            # Spreading rebuilds party_members at formation offsets around
+            # the @ tile, which is correct for the room-entry combat-start
+            # flow but wrong for dev spawns where the dev has already
+            # placed PCs via spawn_character / load_scenario.
+            if not self.entity_manager.get_party_members():
+                self._spread_party_for_combat()
 
         return (
             f"Spawned {result['name']} at ({x},{y}) as {result['entity_id']}. "
