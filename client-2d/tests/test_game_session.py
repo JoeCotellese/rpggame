@@ -85,6 +85,20 @@ class TestSessionLoadScenario:
         assert (monsters[0].grid_x, monsters[0].grid_y) == (10, 5)
         assert (party[0].grid_x, party[0].grid_y) == (3, 5)
 
+    def test_load_scenario_enemies_appear_in_state_output(self, session) -> None:
+        """Regression for #372: scenario enemies must render in
+        ``game_state`` after ``load_scenario``. Before the fix the fog
+        was lit around the room spawn point, not the scenario party
+        positions, so the renderer's BRIGHT/DIM filter hid every
+        scenario enemy.
+
+        Goblin at [10, 5] is 7 tiles from Archy at [3, 5] — inside the
+        torch dim range (bright=4 + dim=4 = 8) so natural lighting is
+        sufficient once the lighting is anchored on the party.
+        """
+        state = session.get_state()
+        assert "goblin_0" in state
+
 
 class TestSessionSpawn:
     def test_spawn_monster_adds_to_engine_and_entity_manager(self, session) -> None:

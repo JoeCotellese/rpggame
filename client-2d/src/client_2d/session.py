@@ -1227,6 +1227,20 @@ class GameSession:
             entity.creature = creature
             self.entity_manager._add_entity(entity)
 
+        # Re-anchor fog/lighting on the scenario party positions. Without
+        # this the renderer filters every scenario entity out of bright/
+        # dim view because _load_room_layout lit the fog around the room
+        # spawn point, not the scenario's PC positions. #372.
+        scenario_party_positions = [
+            (e.grid_x, e.grid_y)
+            for e in self.entity_manager.get_party_members()
+        ]
+        if scenario_party_positions:
+            self.player_x, self.player_y = scenario_party_positions[0]
+            self.party_positions = scenario_party_positions
+            self.party_spread = True
+            self._update_lighting()
+
         if game_state.in_combat:
             self.current_mode = GameMode.COMBAT
         else:
