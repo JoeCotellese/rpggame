@@ -1,0 +1,25 @@
+# Scenario: ranged_attack_basic
+#
+# Exercises the happy path for ranged combat: a high-elf fighter armed
+# with a shortbow facing a goblin at 35 ft (7 tiles), well within
+# shortbow short-range (80 ft). The attack should resolve with a normal
+# d20 roll and apply damage on hit.
+#
+# Use with `load_scenario("...ranged_attack_basic.yaml")` then attack
+# `goblin_0` to verify ranged-attack rules end-to-end.
+
+name: ranged_attack_basic
+seed: 42
+map:
+  dungeon: laboratory
+  campaign: poisoned_laboratory
+  start_room: laboratory.entrance
+party:
+  - class: fighter
+    race: high_elf
+    weapons: [shortbow]
+    position: [3, 5]
+    name: Archy
+enemies:
+  - monster_id: goblin
+    position: [10, 5]

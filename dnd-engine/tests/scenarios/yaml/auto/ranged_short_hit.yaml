@@ -1,0 +1,36 @@
+# Auto-play scenario: ranged attack at short range hits and applies damage.
+#
+# A high-elf fighter with shortbow + arrows attacks a goblin at 35 ft
+# (7 tiles), well inside shortbow's normal range (80 ft). With seed=7
+# the d20 rolls a 19 → hit, 7 damage, goblin (3 HP) drops. Asserts the
+# happy path end-to-end: hit, damage, turn advanced, target absent.
+
+name: ranged_short_hit
+seed: 7
+map:
+  dungeon: laboratory
+  campaign: poisoned_laboratory
+  start_room: laboratory.entrance
+party:
+  - class: fighter
+    race: high_elf
+    weapons: [shortbow, arrows]
+    position: [3, 5]
+    name: Archy
+enemies:
+  - monster_id: goblin
+    position: [10, 5]
+script:
+  - action: attack
+    target: goblin_0
+assertions:
+  - type: last_attack_hit
+    value: true
+  - type: last_attack_damage_in_range
+    min: 1
+    max: 20
+  - type: turn_count
+    op: '=='
+    value: 1
+  - type: entity_absent
+    entity_id: goblin_0

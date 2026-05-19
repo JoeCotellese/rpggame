@@ -5,19 +5,55 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import random
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from dnd_engine.core.character import Character
 
-# Default party - hardcoded character IDs from vault
-DEFAULT_PARTY_IDS = [
-    "a16c59f0-3818-45be-ba89-a26f5b9db472",  # Bob (Fighter)
-    "4b351815-e063-407f-b071-3d93290a675e",  # Larry (Rogue)
-    "ebcff030-e5e8-41d2-813a-829d0b6f83dd",  # Thim (Wizard)
-    "09bde739-8bbc-4691-ad09-fe804578b0c1",  # Vesataus (Fighter)
-]
+# Default party size cap. When no explicit character_ids are passed to
+# load_party_from_vault(), the first MAX_PARTY_SIZE characters from the vault
+# are loaded in insertion order.
+MAX_PARTY_SIZE = 4
+
+
+@dataclass
+class PartyLoadError(Exception):
+    """Raised when load_party_from_vault cannot find one or more characters.
+
+    Carries enough context for the CLI (or any caller) to print an actionable
+    message: which vault was inspected, which IDs were missing, and which
+    characters are actually available so the user can pick alternatives.
+    """
+
+    vault_path: Path
+    missing_ids: list[str]
+    vault_character_count: int
+    available_characters: list[tuple[str, str]] = field(default_factory=list)
+
+    def __str__(self) -> str:
+        lines = [f"Could not load party from vault at {self.vault_path}."]
+        if self.missing_ids:
+            lines.append(
+                f"Vault contains {self.vault_character_count} character(s); "
+                f"{len(self.missing_ids)} requested character(s) missing:"
+            )
+            lines.extend(f"  - {char_id}" for char_id in self.missing_ids)
+        else:
+            lines.append(
+                f"Vault contains {self.vault_character_count} character(s); "
+                "none available to load."
+            )
+        if self.available_characters:
+            lines.append("Available in vault:")
+            lines.extend(
+                f"  - {name} ({char_id})" for char_id, name in self.available_characters
+            )
+        else:
+            lines.append("Vault has no characters yet.")
+        return "\n".join(lines)
 
 
 @dataclass
@@ -68,27 +104,57 @@ class EngineAdapter:
         """Load characters from the vault into a party.
 
         Args:
-            character_ids: List of character UUIDs to load.
-                          Uses DEFAULT_PARTY_IDS if not provided.
+            character_ids: List of character UUIDs to load. If not provided,
+                          loads the first MAX_PARTY_SIZE characters present in
+                          the vault, in insertion order.
 
         Returns:
             List of character info dicts for UI display.
 
         Raises:
-            FileNotFoundError: If a character ID doesn't exist in vault.
+            PartyLoadError: If the vault is empty (when relying on the default),
+                            or one or more requested IDs are missing.
         """
         from dnd_engine.core.character_vault_v2 import CharacterVaultV2
         from dnd_engine.core.party import Party
 
-        if character_ids is None:
-            character_ids = DEFAULT_PARTY_IDS
-
         self._vault = CharacterVaultV2()
+        vault_data = self._vault._load_vault()
+        present = vault_data.get("characters", {})
+        available = [
+            (cid, entry.get("character", {}).get("name", "?"))
+            for cid, entry in present.items()
+        ]
+
+        if character_ids is None:
+            character_ids = list(present.keys())[:MAX_PARTY_SIZE]
+
+        if not character_ids:
+            raise PartyLoadError(
+                vault_path=self._vault.vault_path,
+                missing_ids=[],
+                vault_character_count=0,
+                available_characters=[],
+            )
+
         characters: list[Character] = []
+        missing_ids: list[str] = []
 
         for char_id in character_ids:
-            character = self._vault.get_character(char_id)
+            try:
+                character = self._vault.get_character(char_id)
+            except FileNotFoundError:
+                missing_ids.append(char_id)
+                continue
             characters.append(character)
+
+        if missing_ids:
+            raise PartyLoadError(
+                vault_path=self._vault.vault_path,
+                missing_ids=missing_ids,
+                vault_character_count=len(present),
+                available_characters=available,
+            )
 
         self._party = Party(characters)
 
@@ -603,6 +669,7 @@ class EngineAdapter:
                 "target_killed": not target.is_alive,
                 "attacker_name": attacker.name,
                 "attack_roll": result.attack_result.attack_roll if result.attack_result else 0,
+                "attack_bonus": result.attack_result.attack_bonus if result.attack_result else 0,
                 "target_ac": result.attack_result.target_ac if result.attack_result else 0,
             }
         except Exception as e:
@@ -669,6 +736,230 @@ class EngineAdapter:
             "current_turn": current["name"] if current else None,
             "is_player_turn": current["is_player"] if current else False,
             "combat_ended": not self._game_state.in_combat,
+        }
+
+    # ========== Dev-Mode Spawn / Setup Methods ==========
+    # Backing implementations for the --dev MCP tools (issue #360).
+    # All raise ValueError if the game has not been initialized yet.
+
+    def spawn_character(
+        self,
+        class_name: str,
+        race: str,
+        weapons: list[str],
+        x: int,
+        y: int,
+        name: str | None = None,
+        level: int = 1,
+    ) -> dict[str, Any]:
+        """Create a player character, equip weapons, add to the party.
+
+        Builds the PC via ``CharacterFactory.create_character`` (which sets
+        up proficiencies, default equipment, and resource pools). Each
+        weapon in ``weapons`` is added to the inventory; the first is moved
+        to the WEAPON slot, the rest stay in the pack. If combat is active,
+        the character joins the initiative tracker.
+
+        Args:
+            class_name: Class ID (e.g. ``"ranger"``).
+            race: Race ID (e.g. ``"elf"``).
+            weapons: Ordered list of item IDs from items.json. The first is
+                equipped; the rest go to the pack.
+            x: Map tile X (applied by the GameWindow handler — engine has
+                no PC position).
+            y: Map tile Y.
+            name: Optional name; CharacterFactory generates one if omitted.
+            level: Starting level (default 1).
+
+        Returns:
+            ``{"entity_id": "pc_<name>", "name": str, "hp": int,
+            "position": [x, y]}``.
+
+        Raises:
+            ValueError: If initialize_game() has not been called, or if the
+                class/race is unknown (surfaced from CharacterFactory).
+        """
+        if self._game_state is None:
+            raise ValueError("Must call initialize_game() first")
+
+        from dnd_engine.core.character_factory import CharacterFactory
+        from dnd_engine.systems.inventory import EquipmentSlot
+
+        factory = CharacterFactory()
+        character = factory.create_character(
+            class_name=class_name,
+            race_name=race,
+            data_loader=self._game_state.data_loader,
+            level=level,
+            name=name,
+        )
+
+        for i, weapon_id in enumerate(weapons):
+            character.inventory.add_item(weapon_id, category="weapons")
+            if i == 0:
+                character.inventory.equip_item(weapon_id, EquipmentSlot.WEAPON)
+
+        self._party.add_character(character)
+
+        if self._game_state.in_combat and self._game_state.initiative_tracker is not None:
+            self._game_state.initiative_tracker.add_combatant(character)
+
+        entity_id = f"pc_{character.name.lower().replace(' ', '_')}"
+        return {
+            "entity_id": entity_id,
+            "name": character.name,
+            "hp": character.current_hp,
+            "position": [x, y],
+        }
+
+    def spawn_monster(self, monster_id: str, x: int, y: int) -> dict[str, Any]:
+        """Create a monster and place it on the map.
+
+        Appends to ``GameState.active_enemies`` and, if the party is not
+        already in combat, starts combat (matching the room-entry flow at
+        ``game_state.py:_check_for_enemies``). If combat is active, adds the
+        new creature to the existing initiative tracker.
+
+        Args:
+            monster_id: SRD monster ID (e.g. ``"goblin"``). Surfaces a
+                ``KeyError`` from DataLoader for unknown IDs.
+            x: Map tile X coordinate (validated/applied by the caller in the
+                GameWindow handler — engine has no creature position).
+            y: Map tile Y coordinate.
+
+        Returns:
+            ``{"entity_id": "<monster_id>_<index>", "name": str, "hp": int,
+            "position": [x, y]}``.
+
+        Raises:
+            ValueError: If initialize_game() has not been called.
+            KeyError: If ``monster_id`` is not in the SRD monster list.
+        """
+        if self._game_state is None:
+            raise ValueError("Must call initialize_game() first")
+
+        creature = self._game_state.data_loader.create_monster(monster_id)
+        index = len(self._game_state.active_enemies)
+        self._game_state.active_enemies.append(creature)
+
+        if self._game_state.in_combat and self._game_state.initiative_tracker is not None:
+            self._game_state.initiative_tracker.add_combatant(creature)
+        else:
+            self._game_state._start_combat()
+
+        return {
+            "entity_id": f"{monster_id}_{index}",
+            "name": creature.name,
+            "hp": creature.current_hp,
+            "position": [x, y],
+        }
+
+    def set_position(self, entity_id: str, x: int, y: int) -> dict[str, Any]:
+        """Return a placement directive for the GameWindow handler to apply.
+
+        Engine-side creature coordinates are not tracked today; the visual
+        EntityManager owns ``grid_x``/``grid_y``. The adapter validates
+        inputs and returns a structured dict that the dispatch layer
+        translates into ``entity_manager.get_by_id(entity_id)`` + assign.
+
+        Args:
+            entity_id: ID of the entity to move (as it appears in
+                EntityManager / on the ASCII map).
+            x: New tile X.
+            y: New tile Y.
+
+        Returns:
+            ``{"entity_id": entity_id, "position": [x, y]}``.
+
+        Raises:
+            ValueError: If initialize_game() has not been called.
+            TypeError: If ``x`` or ``y`` is not an int.
+        """
+        if self._game_state is None:
+            raise ValueError("Must call initialize_game() first")
+        if not isinstance(x, int) or not isinstance(y, int):
+            raise TypeError("x and y must be integers")
+        return {"entity_id": entity_id, "position": [x, y]}
+
+    def clear_enemies(self) -> dict[str, Any]:
+        """Remove all active enemies and end combat.
+
+        Useful between test scenarios. Wipes ``active_enemies``, ends
+        combat, and discards the initiative tracker so the next spawn
+        starts a fresh encounter.
+
+        Returns:
+            ``{"success": True, "cleared": <count of removed enemies>}``.
+
+        Raises:
+            ValueError: If initialize_game() has not been called.
+        """
+        if self._game_state is None:
+            raise ValueError("Must call initialize_game() first")
+        cleared = len(self._game_state.active_enemies)
+        self._game_state.active_enemies = []
+        self._game_state.in_combat = False
+        self._game_state.initiative_tracker = None
+        return {"success": True, "cleared": cleared}
+
+    def set_seed(self, seed: int) -> dict[str, Any]:
+        """Reseed the live DiceRoller in place.
+
+        All combat / initiative / damage rolls share GameState.dice_roller,
+        so swapping its underlying random.Random gives reproducible rolls
+        without re-wiring CombatEngine or InitiativeTracker.
+
+        Args:
+            seed: New RNG seed.
+
+        Returns:
+            {"success": True, "seed": seed}
+
+        Raises:
+            ValueError: If initialize_game() has not been called yet.
+        """
+        if self._game_state is None:
+            raise ValueError("Must call initialize_game() first")
+        self._game_state.dice_roller.random = random.Random(seed)
+        return {"success": True, "seed": seed}
+
+    def load_scenario(self, path: str | Path) -> dict[str, Any]:
+        """Load a YAML scenario, replacing the adapter's party / state.
+
+        Thin wrapper around :class:`dnd_engine.scenarios.ScenarioLoader`
+        for the client side. Engine work happens in the loader; the
+        adapter swaps in the new ``Party`` / ``GameState`` / ``EventBus``
+        and returns the scenario's positions so the GameWindow handler
+        can rebuild the visual entity layer.
+
+        Args:
+            path: Path to a scenario YAML file.
+
+        Returns:
+            ``{"name": str, "seed": int,
+            "party_positions": {entity_id: (x, y)},
+            "enemy_positions": {entity_id: (x, y)}}``.
+
+        Raises:
+            ScenarioValidationError: For any schema, parse, or content
+                error in the scenario file (propagated unchanged from
+                the loader).
+        """
+        from dnd_engine.scenarios import ScenarioLoader
+
+        loaded = ScenarioLoader().load(path)
+
+        self._party = loaded.game_state.party
+        self._game_state = loaded.game_state
+        self._event_bus = loaded.game_state.event_bus
+        self._initialized = True
+
+        return {
+            "name": loaded.name,
+            "seed": loaded.seed,
+            "party_positions": dict(loaded.party_positions),
+            "enemy_positions": dict(loaded.enemy_positions),
+            "map_config": dict(loaded.map_config),
         }
 
     def end_combat_check(self) -> dict[str, Any]:

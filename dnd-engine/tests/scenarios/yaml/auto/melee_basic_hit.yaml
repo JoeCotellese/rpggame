@@ -1,0 +1,35 @@
+# Auto-play scenario: melee swing at an adjacent goblin hits + kills it.
+#
+# Shortsword vs goblin at 5 ft (1 tile). Seed=7 → d20 rolls 19 with
+# +5 attack bonus, hits for 7 damage; goblin starts at 3 HP and goes
+# to 0. Asserts the basic melee mechanics end-to-end.
+
+name: melee_basic_hit
+seed: 7
+map:
+  dungeon: laboratory
+  campaign: poisoned_laboratory
+  start_room: laboratory.entrance
+party:
+  - class: fighter
+    race: human
+    weapons: [shortsword]
+    position: [3, 5]
+    name: Brick
+enemies:
+  - monster_id: goblin
+    position: [4, 5]
+script:
+  - action: attack
+    target: goblin_0
+assertions:
+  - type: last_attack_hit
+    value: true
+  - type: last_attack_damage_in_range
+    min: 1
+    max: 20
+  - type: turn_count
+    op: '=='
+    value: 1
+  - type: entity_absent
+    entity_id: goblin_0

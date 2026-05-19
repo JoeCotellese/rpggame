@@ -17,12 +17,19 @@ class DataLoader:
     from the data directory and converting them into usable game objects.
     """
 
-    def __init__(self, data_path: Path | None = None):
+    def __init__(
+        self,
+        data_path: Path | None = None,
+        dice_roller: DiceRoller | None = None,
+    ):
         """
         Initialize the data loader.
 
         Args:
             data_path: Path to the data directory (defaults to dnd_engine/data)
+            dice_roller: DiceRoller to use for content rolls such as monster
+                HP. Defaults to a fresh DiceRoller. Pass a seeded instance to
+                make content generation deterministic (e.g. scenario load).
         """
         if data_path is None:
             # Default to the data directory in the package
@@ -30,7 +37,7 @@ class DataLoader:
         else:
             self.data_path = Path(data_path)
 
-        self.dice_roller = DiceRoller()
+        self.dice_roller = dice_roller if dice_roller is not None else DiceRoller()
 
     def load_monsters(self) -> dict[str, Any]:
         """

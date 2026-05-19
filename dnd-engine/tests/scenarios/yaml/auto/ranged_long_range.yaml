@@ -1,0 +1,36 @@
+# Auto-play scenario: thrown dagger at long range still resolves.
+#
+# Dagger thrown range is 20/60 — at 25 ft (5 tiles) the attack sits in
+# long range (above normal, below max). The harness raises its
+# `last_attack_disadvantage` flag for the long-range case; the engine
+# itself does not yet honor disadvantage on long shots (separate
+# ticket), so we don't assert the roll was disadvantaged — only that
+# the attack resolved.
+
+name: ranged_long_range
+seed: 7
+map:
+  dungeon: laboratory
+  campaign: poisoned_laboratory
+  start_room: laboratory.entrance
+party:
+  - class: fighter
+    race: high_elf
+    weapons: [dagger]
+    position: [3, 5]
+    name: Archy
+enemies:
+  - monster_id: goblin
+    position: [8, 5]
+script:
+  - action: attack
+    target: goblin_0
+assertions:
+  - type: last_attack_hit
+    value: true
+  - type: last_attack_damage_in_range
+    min: 1
+    max: 20
+  - type: turn_count
+    op: '=='
+    value: 1
