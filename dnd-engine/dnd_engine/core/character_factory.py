@@ -522,6 +522,7 @@ class CharacterFactory:
         abilities: dict[str, int] | None = None,
         skill_proficiencies: list[str] | None = None,
         expertise_skills: list[str] | None = None,
+        option_index: int = 0,
     ) -> Character:
         """
         Create a character with all proficiencies and equipment - no UI dependencies.
@@ -539,6 +540,9 @@ class CharacterFactory:
             abilities: Pre-rolled abilities dict (rolls new if not provided)
             skill_proficiencies: Skill proficiencies (auto-selects if not provided)
             expertise_skills: Expertise skills (auto-selects for rogues if not provided)
+            option_index: Which starting_equipment_options entry to grant
+                (default 0). Ignored when the class only declares the legacy
+                starting_equipment field.
 
         Returns:
             Fully initialized Character with all proficiencies, equipment, and resources
@@ -613,10 +617,12 @@ class CharacterFactory:
         con_modifier = self.calculate_ability_modifier(abilities["constitution"])
         hp = self.calculate_hp(class_data, con_modifier, level=1)
 
-        # Calculate AC based on starting armor
-        starting_equipment = class_data.get("starting_equipment", [])
+        # Calculate AC based on the armor in the selected starting option
+        resolved_starting = self._resolve_starting_items(
+            class_data, items_data, option_index=option_index
+        )
         armor_id = None
-        for item_id in starting_equipment:
+        for item_id, _qty in resolved_starting:
             if item_id in items_data.get("armor", {}):
                 armor_id = item_id
                 break
@@ -681,7 +687,9 @@ class CharacterFactory:
         self.initialize_spellcasting(character, class_data, spells_data)
 
         # Apply starting equipment
-        self.apply_starting_equipment(character, class_data, items_data)
+        self.apply_starting_equipment(
+            character, class_data, items_data, option_index=option_index
+        )
 
         return character
 
