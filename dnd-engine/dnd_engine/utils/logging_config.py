@@ -2,15 +2,19 @@
 # ABOUTME: Manages log file rotation, timestamps, and Rich console integration
 
 import logging
-import sys
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import TextIO
+from typing import Any, TextIO
 
 from rich.console import Console
 
 # Maximum console width for readable output
 MAX_CONSOLE_WIDTH = 100
+
+# A console factory is given the active log-file handle (or None when debug is
+# off) and returns whatever console object the UI client wants to use.
+ConsoleFactory = Callable[[TextIO | None], Any]
 
 
 class TeeFile:
@@ -73,14 +77,24 @@ class LoggingConfig:
     - Create dual-output Rich console
     """
 
-    def __init__(self, debug_enabled: bool = False):
+    def __init__(
+        self,
+        debug_enabled: bool = False,
+        console_factory: ConsoleFactory | None = None,
+    ):
         """
         Initialize logging configuration.
 
         Args:
             debug_enabled: Whether debug mode is enabled
+            console_factory: Optional callable that builds a UI console. It is
+                invoked by ``create_console()`` and receives the active log
+                file handle when debug mode is on, ``None`` otherwise. Keeps
+                this module free of any UI-toolkit dependency; clients (e.g.
+                the Rich-based terminal UI) inject their own factory.
         """
         self.debug_enabled = debug_enabled
+        self.console_factory = console_factory
         self.log_file_path: Path | None = None
         self.log_file: TextIO | None = None
         self.tee_console: Console | None = None
@@ -150,30 +164,22 @@ class LoggingConfig:
             # Add handler to logger
             logger.addHandler(file_handler)
 
-    def create_console(self) -> Console:
+    def create_console(self) -> Any:
         """
-        Create a Rich console that optionally writes to log file.
+        Build a UI console via the injected factory.
+
+        The active log file is passed to the factory when debug mode is on
+        (so the factory can wrap it for dual stdout/file output), and ``None``
+        otherwise. When no factory was injected the engine has no UI to build,
+        and this returns ``None`` — appropriate for headless callers.
 
         Returns:
-            Rich Console instance
+            Whatever the factory returns, or ``None`` if no factory was given.
         """
-        if self.debug_enabled and self.log_file:
-            # Create TeeFile that writes to both stdout and log file
-            tee_file = TeeFile(self.log_file, sys.stdout)
-
-            # Create console with dual output
-            # force_terminal=False strips ANSI codes from file output
-            self.tee_console = Console(
-                file=tee_file,
-                force_terminal=True,  # Keep colors for terminal
-                legacy_windows=False,
-                width=MAX_CONSOLE_WIDTH,
-            )
-
-            return self.tee_console
-        else:
-            # Normal console without file logging
-            return Console(width=MAX_CONSOLE_WIDTH)
+        if self.console_factory is None:
+            return None
+        log_file = self.log_file if self.debug_enabled else None
+        return self.console_factory(log_file)
 
     def log_event(self, event_type: str, data: dict) -> None:
         """
@@ -302,18 +308,22 @@ class LoggingConfig:
 _logging_config: LoggingConfig | None = None
 
 
-def init_logging(debug_enabled: bool = False) -> LoggingConfig:
+def init_logging(
+    debug_enabled: bool = False,
+    console_factory: ConsoleFactory | None = None,
+) -> LoggingConfig:
     """
     Initialize global logging configuration.
 
     Args:
         debug_enabled: Whether debug mode is enabled
+        console_factory: Optional UI console factory; see ``LoggingConfig``.
 
     Returns:
         LoggingConfig instance
     """
     global _logging_config
-    _logging_config = LoggingConfig(debug_enabled)
+    _logging_config = LoggingConfig(debug_enabled, console_factory=console_factory)
     return _logging_config
 
 

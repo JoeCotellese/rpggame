@@ -89,32 +89,50 @@ class TestLoggingConfig:
         finally:
             os.chdir(original_cwd)
 
-    def test_create_console_without_debug(self):
-        """Test console creation without debug mode."""
-        config = LoggingConfig(debug_enabled=False)
-        console = config.create_console()
+    def test_create_console_invokes_factory_without_debug(self):
+        """Factory is called with None when debug is disabled."""
+        calls = []
 
-        assert console is not None
-        assert config.tee_console is None  # No dual output
+        def factory(log_file):
+            calls.append(log_file)
+            return ("made", log_file)
 
-    def test_create_console_with_debug(self, tmp_path):
-        """Test console creation with debug mode (dual output)."""
+        config = LoggingConfig(debug_enabled=False, console_factory=factory)
+        result = config.create_console()
+
+        assert calls == [None]
+        assert result == ("made", None)
+
+    def test_create_console_invokes_factory_with_debug(self, tmp_path):
+        """Factory is called with the open log file when debug is enabled."""
         import os
 
         original_cwd = os.getcwd()
         os.chdir(tmp_path)
 
         try:
-            config = LoggingConfig(debug_enabled=True)
-            console = config.create_console()
+            calls = []
 
-            assert console is not None
-            assert config.tee_console is not None
+            def factory(log_file):
+                calls.append(log_file)
+                return "sentinel-console"
 
-            # Clean up
+            config = LoggingConfig(debug_enabled=True, console_factory=factory)
+            result = config.create_console()
+
+            assert len(calls) == 1
+            assert calls[0] is config.log_file
+            assert calls[0] is not None
+            assert result == "sentinel-console"
+
             config.close()
         finally:
             os.chdir(original_cwd)
+
+    def test_create_console_returns_none_without_factory(self):
+        """create_console() returns None when no factory was injected."""
+        config = LoggingConfig(debug_enabled=False)
+        assert config.create_console() is None
 
     def test_log_event(self, tmp_path):
         """Test event logging."""
