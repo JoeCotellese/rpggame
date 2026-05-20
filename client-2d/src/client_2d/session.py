@@ -1192,10 +1192,8 @@ class GameSession:
         self.entity_manager.remove_dead_entities()
 
         # remove_dead_entities intentionally preserves party members for
-        # resurrection flows; reset_game wipes them explicitly.
-        for party_member in list(self.entity_manager.get_party_members()):
-            self.entity_manager._entities.pop(party_member.entity_id, None)
-            self.entity_manager._party_members.pop(party_member.entity_id, None)
+        # resurrection flows; collapse_party drops them unconditionally.
+        self.entity_manager.collapse_party()
 
         if self.current_mode == GameMode.COMBAT:
             self.current_mode = GameMode.EXPLORATION

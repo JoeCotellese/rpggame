@@ -911,6 +911,11 @@ class EngineAdapter:
         zero state. The dungeon / map is left intact — callers swap maps
         via ``load_scenario`` when they need to.
 
+        Mutates engine objects (``Party.characters``, ``GameState.active_enemies``,
+        ``in_combat``, ``initiative_tracker``) directly. This is the
+        established dev-mutation pattern for the adapter's test-harness
+        surface — see ``clear_enemies`` and ``set_seed`` for siblings.
+
         Returns:
             ``{"success": True, "cleared_party": <int>,
             "cleared_enemies": <int>}``.
