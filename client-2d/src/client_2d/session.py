@@ -184,9 +184,7 @@ class GameSession:
             print(f"  Combat started! Enemies: {', '.join(start_info['enemies'])}")
             self.current_mode = GameMode.COMBAT
             self._spread_party_for_combat()
-            self._add_combat_log(
-                f"Combat begins! {len(start_info['enemies'])} enemies!"
-            )
+            self._add_combat_log(f"Combat begins! {len(start_info['enemies'])} enemies!")
             current = self.engine.get_current_combatant()
             if current:
                 self._add_combat_log(f"{current['name']}'s turn first!")
@@ -342,9 +340,7 @@ class GameSession:
         dungeon_name = game_state.dungeon_name
         campaign_id = game_state.campaign_id
 
-        room_data = self.layout_loader.get_room_data(
-            dungeon_name, room_id, campaign_id
-        )
+        room_data = self.layout_loader.get_room_data(dungeon_name, room_id, campaign_id)
         exits = {}
         if room_data:
             raw_exits = room_data.get("exits", {})
@@ -431,8 +427,7 @@ class GameSession:
         new_y = self.player_y + dy
 
         if self.room_layout and (
-            0 <= new_x < self.room_layout.width
-            and 0 <= new_y < self.room_layout.height
+            0 <= new_x < self.room_layout.width and 0 <= new_y < self.room_layout.height
         ):
             if not self.room_layout.is_blocking(new_x, new_y):
                 self.player_x = new_x
@@ -458,9 +453,7 @@ class GameSession:
                 enemies = [e.name for e in game_state.active_enemies]
                 self.current_mode = GameMode.COMBAT
                 self._spread_party_for_combat()
-                self._add_combat_log(
-                    f"Combat! {len(enemies)} enemies: {', '.join(enemies)}"
-                )
+                self._add_combat_log(f"Combat! {len(enemies)} enemies: {', '.join(enemies)}")
                 current = self.engine.get_current_combatant()
                 if current:
                     if current["is_player"]:
@@ -489,9 +482,7 @@ class GameSession:
                     if result.get("target_killed"):
                         self._add_combat_log(f"{result['target_name']} is down!")
                 else:
-                    self._add_combat_log(
-                        f"{result['enemy_name']} misses {result['target_name']}!"
-                    )
+                    self._add_combat_log(f"{result['enemy_name']} misses {result['target_name']}!")
             else:
                 self._add_combat_log(f"{result['enemy_name']} takes no action.")
 
@@ -519,17 +510,14 @@ class GameSession:
             return
 
         if result.already_stabilized:
-            self._add_combat_log(
-                f"{result.character_name} is stabilized (no death save needed)"
-            )
+            self._add_combat_log(f"{result.character_name} is stabilized (no death save needed)")
         elif result.natural_20:
             self._add_combat_log(
                 f"{result.character_name} rolls NAT 20! Regains consciousness with 1 HP!"
             )
         elif result.natural_1:
             self._add_combat_log(
-                f"{result.character_name} rolls NAT 1! Two failures! "
-                f"({result.failures}/3)"
+                f"{result.character_name} rolls NAT 1! Two failures! ({result.failures}/3)"
             )
         elif result.success:
             self._add_combat_log(
@@ -611,9 +599,7 @@ class GameSession:
 
             return result
 
-        self._add_combat_log(
-            f"Attack failed: {result.get('error', 'Unknown error')}"
-        )
+        self._add_combat_log(f"Attack failed: {result.get('error', 'Unknown error')}")
         return None
 
     def pass_turn(self) -> None:
@@ -655,9 +641,7 @@ class GameSession:
             elif request.command_type == CommandType.MOVE:
                 result = self.move(request.args.get("direction", ""))
             elif request.command_type == CommandType.ATTACK:
-                target = request.args.get(
-                    "target", request.args.get("target_index", 0)
-                )
+                target = request.args.get("target", request.args.get("target_index", 0))
                 result = self.attack(target)
             elif request.command_type == CommandType.WAIT:
                 result = self.wait()
@@ -699,11 +683,7 @@ class GameSession:
 
     def get_state(self) -> str:
         """Generate the ASCII state string used by MCP and headless reporting."""
-        if (
-            self._state_renderer is None
-            or self.room_layout is None
-            or self.fog is None
-        ):
+        if self._state_renderer is None or self.room_layout is None or self.fog is None:
             # Lazy-init the state renderer so headless mode and tests can
             # call get_state() before initialize_mcp_server() is invoked.
             if self.room_layout is not None and self._state_renderer is None:
@@ -711,11 +691,7 @@ class GameSession:
                     width=self.room_layout.width,
                     height=self.room_layout.height,
                 )
-            if (
-                self._state_renderer is None
-                or self.room_layout is None
-                or self.fog is None
-            ):
+            if self._state_renderer is None or self.room_layout is None or self.fog is None:
                 return "Game not initialized"
 
         entities = self._build_state_entities()
@@ -769,11 +745,7 @@ class GameSession:
 
             display_id = entity.sub_type or entity.entity_id
             unique_suffix = entity.entity_id.split("_")[-1]
-            unique_id = (
-                f"{display_id}_{unique_suffix}"
-                if entity.sub_type
-                else entity.entity_id
-            )
+            unique_id = f"{display_id}_{unique_suffix}" if entity.sub_type else entity.entity_id
 
             entities.append(
                 StateEntity(
@@ -812,18 +784,12 @@ class GameSession:
                         weapon_name = "Unarmed"
                         range_text = "5 ft (melee)"
                         if hasattr(creature, "inventory"):
-                            weapon_id = creature.inventory.get_equipped_item(
-                                EquipmentSlot.WEAPON
-                            )
+                            weapon_id = creature.inventory.get_equipped_item(EquipmentSlot.WEAPON)
                             if weapon_id and self.engine.game_state:
-                                items_data = (
-                                    self.engine.game_state.data_loader.load_items(
-                                        self.engine.game_state.campaign_id
-                                    )
+                                items_data = self.engine.game_state.data_loader.load_items(
+                                    self.engine.game_state.campaign_id
                                 )
-                                weapon_data = items_data.get("weapons", {}).get(
-                                    weapon_id, {}
-                                )
+                                weapon_data = items_data.get("weapons", {}).get(weapon_id, {})
                                 weapon_name = weapon_data.get(
                                     "name", weapon_id.replace("_", " ").title()
                                 )
@@ -834,13 +800,15 @@ class GameSession:
                                     range_text = "5 ft (melee)"
                         lines.append(f"Equipped: {weapon_name} (range: {range_text})")
 
-        lines.extend([
-            "",
-            "Map:",
-            state_dict["map"],
-            "",
-            "Legend:",
-        ])
+        lines.extend(
+            [
+                "",
+                "Map:",
+                state_dict["map"],
+                "",
+                "Legend:",
+            ]
+        )
 
         for symbol, entity in state_dict["legend"].items():
             lines.append(f"  {symbol} = {entity}")
@@ -871,9 +839,7 @@ class GameSession:
         if self.engine.in_combat:
             turn_state = self.engine.get_current_turn_state()
             if turn_state:
-                lines.append(
-                    f"  Movement: {turn_state.movement_remaining} ft remaining"
-                )
+                lines.append(f"  Movement: {turn_state.movement_remaining} ft remaining")
             lines.append("  - game_move(direction) - Move north/south/east/west")
             lines.append("  - game_attack(target) - Attack enemy in weapon range")
             lines.append("  - game_wait() - Pass turn")
@@ -906,10 +872,7 @@ class GameSession:
         if turn_state.movement_remaining < 5:
             current = self.engine.get_current_combatant()
             speed = current["creature"].speed if current else 30
-            return (
-                f"No movement remaining (0/{speed} ft). "
-                f"Use game_attack() or game_wait()."
-            )
+            return f"No movement remaining (0/{speed} ft). Use game_attack() or game_wait()."
 
         dx, dy = {
             "north": (0, -1),
@@ -921,8 +884,7 @@ class GameSession:
         new_y = self.player_y + dy
 
         if not self.room_layout or not (
-            0 <= new_x < self.room_layout.width
-            and 0 <= new_y < self.room_layout.height
+            0 <= new_x < self.room_layout.width and 0 <= new_y < self.room_layout.height
         ):
             return "Path blocked! Cannot move outside room."
 
@@ -930,10 +892,7 @@ class GameSession:
             return "Path blocked! Wall in the way."
 
         entity_at_dest = self.entity_manager.get_at_position(new_x, new_y)
-        if (
-            entity_at_dest is not None
-            and entity_at_dest in self.entity_manager.get_monsters()
-        ):
+        if entity_at_dest is not None and entity_at_dest in self.entity_manager.get_monsters():
             if entity_at_dest._creature_ref:
                 name = entity_at_dest._creature_ref.name
             else:
@@ -945,15 +904,10 @@ class GameSession:
         turn_state.consume_movement(5)
         self._update_lighting()
 
-        self.entity_manager.update_current_turn_position(
-            self.engine, new_x, new_y
-        )
+        self.entity_manager.update_current_turn_position(self.engine, new_x, new_y)
 
         remaining = turn_state.movement_remaining
-        return (
-            f"Moved {direction}. Movement remaining: {remaining} ft.\n"
-            + self.get_state()
-        )
+        return f"Moved {direction}. Movement remaining: {remaining} ft.\n" + self.get_state()
 
     def attack(self, target: int | str) -> str:
         """Attack a target enemy by index or entity ID."""
@@ -983,14 +937,10 @@ class GameSession:
             )
             if target_entity is None:
                 valid_ids = [
-                    f"{m.sub_type}_{m.entity_id.split('_')[-1]}"
-                    if m.sub_type
-                    else m.entity_id
+                    f"{m.sub_type}_{m.entity_id.split('_')[-1]}" if m.sub_type else m.entity_id
                     for m in monsters
                 ]
-                return (
-                    f"Unknown target: {target}. Valid targets: {', '.join(valid_ids)}"
-                )
+                return f"Unknown target: {target}. Valid targets: {', '.join(valid_ids)}"
 
         from dnd_engine.core.distance import distance_in_feet
         from dnd_engine.systems.inventory import EquipmentSlot
@@ -1017,18 +967,14 @@ class GameSession:
                         self.engine.game_state.campaign_id
                     )
                     weapon_data = items_data.get("weapons", {}).get(weapon_id, {})
-                    weapon_name = weapon_data.get(
-                        "name", weapon_id.replace("_", " ").title()
-                    )
+                    weapon_name = weapon_data.get("name", weapon_id.replace("_", " ").title())
 
         normal_range, max_range = get_attack_range(weapon_data)
 
         if distance_ft > max_range:
             turn_state = self.engine.get_current_turn_state()
             movement_info = (
-                f" Movement remaining: {turn_state.movement_remaining} ft."
-                if turn_state
-                else ""
+                f" Movement remaining: {turn_state.movement_remaining} ft." if turn_state else ""
             )
             return (
                 f"Out of range! ({distance_ft} ft away, "
@@ -1169,8 +1115,7 @@ class GameSession:
                 self._spread_party_for_combat()
 
         return (
-            f"Spawned {result['name']} at ({x},{y}) as {result['entity_id']}. "
-            + self.get_state()
+            f"Spawned {result['name']} at ({x},{y}) as {result['entity_id']}. " + self.get_state()
         )
 
     def spawn_character(
@@ -1216,10 +1161,7 @@ class GameSession:
             return f"Entity '{entity_id}' not found on the map."
         target.grid_x = x
         target.grid_y = y
-        return (
-            f"Moved {entity_id} to {tuple(result['position'])}. "
-            + self.get_state()
-        )
+        return f"Moved {entity_id} to {tuple(result['position'])}. " + self.get_state()
 
     def clear_enemies(self) -> str:
         """Wipe enemies from engine and visual layer."""
@@ -1231,6 +1173,39 @@ class GameSession:
         if self.current_mode == GameMode.COMBAT:
             self.current_mode = GameMode.EXPLORATION
         return f"Cleared {result['cleared']} enemies. " + self.get_state()
+
+    def reset_game(self) -> str:
+        """Wipe party + enemies + combat state for clean scenario reuse.
+
+        Test-harness teardown primitive (#373). Goes one step beyond
+        ``clear_enemies`` by also dropping party-member entities so the
+        next ``load_scenario`` or ``spawn_character`` composes against a
+        known zero state. The room layout / fog / lighting stay intact.
+        """
+        result = self.engine.reset_game()
+
+        # Drop monsters via the existing dead-removal path.
+        for monster in self.entity_manager.get_monsters():
+            monster.is_alive = False
+        self.entity_manager.remove_dead_entities()
+
+        # remove_dead_entities intentionally preserves party members for
+        # resurrection flows; reset_game wipes them explicitly.
+        for party_member in list(self.entity_manager.get_party_members()):
+            self.entity_manager._entities.pop(party_member.entity_id, None)
+            self.entity_manager._party_members.pop(party_member.entity_id, None)
+
+        if self.current_mode == GameMode.COMBAT:
+            self.current_mode = GameMode.EXPLORATION
+        self.processing_enemy_turn = False
+        self.enemy_turn_timer = 0.0
+        self.party_spread = False
+        self.party_positions = []
+
+        return (
+            f"Reset game ({result['cleared_party']} party, "
+            f"{result['cleared_enemies']} enemies cleared). " + self.get_state()
+        )
 
     def set_seed(self, seed: int) -> str:
         """Reseed the engine dice roller."""
@@ -1270,9 +1245,7 @@ class GameSession:
                 sub_type=character.character_class.value.lower(),
                 party_index=game_state.party.characters.index(character),
                 character_class=character.character_class.value.lower(),
-                texture=self.character_textures.get(
-                    character.character_class.value.lower()
-                ),
+                texture=self.character_textures.get(character.character_class.value.lower()),
             )
             entity.creature = character
             self.entity_manager._add_entity(entity)
@@ -1303,8 +1276,7 @@ class GameSession:
         # dim view because _load_room_layout lit the fog around the room
         # spawn point, not the scenario's PC positions. #372.
         scenario_party_positions = [
-            (e.grid_x, e.grid_y)
-            for e in self.entity_manager.get_party_members()
+            (e.grid_x, e.grid_y) for e in self.entity_manager.get_party_members()
         ]
         if scenario_party_positions:
             self.player_x, self.player_y = scenario_party_positions[0]
@@ -1317,7 +1289,4 @@ class GameSession:
         else:
             self.current_mode = GameMode.EXPLORATION
 
-        return (
-            f"Loaded scenario '{result['name']}' (seed={result['seed']}). "
-            + self.get_state()
-        )
+        return f"Loaded scenario '{result['name']}' (seed={result['seed']}). " + self.get_state()

@@ -17,13 +17,7 @@ import pytest
 # Path to the starter scenarios shipped with the engine. The session
 # accepts any filesystem path; we use the ranged-attack basic scenario
 # as a deterministic fixture.
-SCENARIO_DIR = (
-    Path(__file__).parent.parent.parent
-    / "dnd-engine"
-    / "tests"
-    / "scenarios"
-    / "yaml"
-)
+SCENARIO_DIR = Path(__file__).parent.parent.parent / "dnd-engine" / "tests" / "scenarios" / "yaml"
 
 
 @pytest.fixture
@@ -71,9 +65,7 @@ class TestSessionLoadScenario:
         assert session.engine.party is not None
         assert session.engine.party.characters[0].name == "Archy"
         assert len(session.engine.game_state.active_enemies) == 1
-        assert session.engine.game_state.active_enemies[0].name.lower().startswith(
-            "goblin"
-        )
+        assert session.engine.game_state.active_enemies[0].name.lower().startswith("goblin")
 
     def test_load_scenario_populates_entity_manager(self, session) -> None:
         """The entity manager mirrors the scenario's party and enemies."""
@@ -116,16 +108,12 @@ class TestSessionSpawn:
     def test_spawn_character_adds_party_member(self, session) -> None:
         """spawn_character extends the party via the engine adapter."""
         before = len(session.engine.party.characters)
-        session.spawn_character(
-            "fighter", "human", ["longsword"], 4, 5, name="Probe"
-        )
+        session.spawn_character("fighter", "human", ["longsword"], 4, 5, name="Probe")
         after = len(session.engine.party.characters)
         assert after == before + 1
         assert session.engine.party.characters[-1].name == "Probe"
 
-    def test_spawn_monster_from_exploration_keeps_party_positions(
-        self, session
-    ) -> None:
+    def test_spawn_monster_from_exploration_keeps_party_positions(self, session) -> None:
         """Re-entering combat via spawn_monster must not stomp PartyMemberEntity positions.
 
         Regression for #371: when current_mode was EXPLORATION, spawn_monster
@@ -137,8 +125,7 @@ class TestSessionSpawn:
         session.clear_enemies()
         assert session.engine.in_combat is False
         before = {
-            e.entity_id: (e.grid_x, e.grid_y)
-            for e in session.entity_manager.get_party_members()
+            e.entity_id: (e.grid_x, e.grid_y) for e in session.entity_manager.get_party_members()
         }
         assert before, "fixture should have at least one party member"
 
@@ -146,8 +133,7 @@ class TestSessionSpawn:
 
         # Same ids, same positions — no spread.
         after = {
-            e.entity_id: (e.grid_x, e.grid_y)
-            for e in session.entity_manager.get_party_members()
+            e.entity_id: (e.grid_x, e.grid_y) for e in session.entity_manager.get_party_members()
         }
         assert after == before
 
@@ -181,31 +167,26 @@ class TestSessionSpawn:
         # Visible-entities entry from render_state.
         assert f"goblin_0 at [{gx}, {gy}]" in state
 
-    def test_spawn_monster_in_combat_preserves_party_positions(
-        self, session
-    ) -> None:
+    def test_spawn_monster_in_combat_preserves_party_positions(self, session) -> None:
         """Spawning a second enemy while already in combat must not respread.
 
         Pins the existing in-combat path: party positions stay put, second
         monster gets entity_id <monster_id>_1 at the requested tile.
         """
         before = {
-            e.entity_id: (e.grid_x, e.grid_y)
-            for e in session.entity_manager.get_party_members()
+            e.entity_id: (e.grid_x, e.grid_y) for e in session.entity_manager.get_party_members()
         }
         assert session.engine.in_combat is True
 
         session.spawn_monster("goblin", 8, 6)
 
         after = {
-            e.entity_id: (e.grid_x, e.grid_y)
-            for e in session.entity_manager.get_party_members()
+            e.entity_id: (e.grid_x, e.grid_y) for e in session.entity_manager.get_party_members()
         }
         assert after == before
 
         monsters = {
-            e.entity_id: (e.grid_x, e.grid_y)
-            for e in session.entity_manager.get_monsters()
+            e.entity_id: (e.grid_x, e.grid_y) for e in session.entity_manager.get_monsters()
         }
         # Scenario fixture starts with goblin_0; second spawn is goblin_1.
         assert "goblin_1" in monsters
@@ -257,3 +238,86 @@ class TestMCPServerWiring:
         s.initialize_mcp_server(start_http=False)
         assert s._mcp_bridge is not None
         assert s._mcp_server is not None
+
+
+class TestSessionResetGame:
+    """Tests for the session-layer reset_game primitive (#373).
+
+    reset_game must wipe both the engine layer (party + active_enemies +
+    combat) AND the visual entity manager (party members + monsters), so
+    a subsequent load_scenario or spawn_character composes against a
+    clean slate. The room layout / fog / lighting stay intact - callers
+    swap maps via load_scenario when they need a different room.
+    """
+
+    def test_reset_game_clears_engine_party_and_enemies(self, session) -> None:
+        """Engine state must be empty of party + enemies after reset."""
+        # Fixture loaded a scenario with at least one PC and one goblin.
+        assert len(session.engine.party.characters) >= 1
+        assert len(session.engine.game_state.active_enemies) >= 1
+
+        session.reset_game()
+
+        assert session.engine.party.characters == []
+        assert session.engine.game_state.active_enemies == []
+
+    def test_reset_game_clears_entity_manager_party_and_monsters(self, session) -> None:
+        """Visual entities for party + monsters must be dropped."""
+        assert session.entity_manager.get_party_members(), "fixture should populate party members"
+        assert session.entity_manager.get_monsters(), "fixture should populate monsters"
+
+        session.reset_game()
+
+        assert session.entity_manager.get_party_members() == []
+        assert session.entity_manager.get_monsters() == []
+
+    def test_reset_game_exits_combat_mode(self, session) -> None:
+        """Combat flag + mode flip out of combat after reset."""
+        from client_2d.core.constants import GameMode
+
+        assert session.engine.in_combat is True
+        session.current_mode = GameMode.COMBAT
+        session.processing_enemy_turn = True
+
+        session.reset_game()
+
+        assert session.engine.in_combat is False
+        assert session.current_mode == GameMode.EXPLORATION
+        assert session.processing_enemy_turn is False
+
+    def test_reset_game_preserves_room_layout(self, session) -> None:
+        """Room layout / tiles stay intact - reset wipes entities, not the map."""
+        room_layout_before = session.room_layout
+        room_tiles_before = session.room_tiles
+
+        session.reset_game()
+
+        assert session.room_layout is room_layout_before
+        assert session.room_tiles is room_tiles_before
+
+    def test_reset_game_returns_status_string(self, session) -> None:
+        """Returns a string suitable for surfacing through MCP."""
+        result = session.reset_game()
+        assert isinstance(result, str)
+        # Mentions both counts so the caller can verify what was cleared.
+        assert "party" in result.lower()
+        assert "enemies" in result.lower()
+
+    def test_reset_game_idempotent(self, session) -> None:
+        """Calling reset twice in a row must not raise."""
+        session.reset_game()
+        # Second call against the already-empty state should be a no-op.
+        session.reset_game()
+        assert session.engine.party.characters == []
+        assert session.engine.game_state.active_enemies == []
+
+    def test_reset_game_then_load_scenario_composes(self, session) -> None:
+        """After reset, load_scenario rebuilds party + enemies cleanly."""
+        session.reset_game()
+        session.load_scenario(SCENARIO_DIR / "ranged_attack_basic.yaml")
+
+        # Scenario has 1 party member + 1 goblin; no leftover duplicates.
+        assert len(session.engine.party.characters) == 1
+        assert len(session.engine.game_state.active_enemies) == 1
+        assert len(session.entity_manager.get_party_members()) == 1
+        assert len(session.entity_manager.get_monsters()) == 1
