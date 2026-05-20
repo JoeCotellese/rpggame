@@ -14,6 +14,26 @@
     },
     "starting_equipment": ["longsword", "chain_mail", "potion_of_healing", "potion_of_healing", "potion_of_healing", "potion_of_healing", "potion_of_healing"],
     "starting_gold": 10,
+    "starting_equipment_options": [
+      {
+        "name": "Standard Loadout",
+        "description": "Longsword, chain mail, and five potions of healing.",
+        "items": ["longsword", "chain_mail", "potion_of_healing", "potion_of_healing", "potion_of_healing", "potion_of_healing", "potion_of_healing"],
+        "gold": 10
+      },
+      {
+        "name": "Skirmisher",
+        "description": "Studded leather, longbow with arrows and quiver, and a Dungeoneer's Pack.",
+        "items": ["studded_leather", "longbow", "arrows", "quiver", "dungeoneers_pack"],
+        "gold": 11
+      },
+      {
+        "name": "Mercenary",
+        "description": "Buy your own gear with 155 GP.",
+        "items": [],
+        "gold": 155
+      }
+    ],
     "features_by_level": {
       "1": [
         {
@@ -65,6 +85,26 @@
     },
     "starting_equipment": ["rapier", "shortbow", "leather_armor", "thieves_tools", "potion_of_healing", "potion_of_healing"],
     "starting_gold": 15,
+    "starting_equipment_options": [
+      {
+        "name": "Standard Loadout",
+        "description": "Rapier, shortbow, leather armor, thieves' tools, and two potions of healing.",
+        "items": ["rapier", "shortbow", "leather_armor", "thieves_tools", "potion_of_healing", "potion_of_healing"],
+        "gold": 15
+      },
+      {
+        "name": "Cutthroat",
+        "description": "Shortsword, shortbow with arrows and quiver, leather armor, thieves' tools, and a Burglar's Pack.",
+        "items": ["shortsword", "shortbow", "arrows", "quiver", "leather_armor", "thieves_tools", "burglars_pack"],
+        "gold": 0
+      },
+      {
+        "name": "Freelancer",
+        "description": "Buy your own gear with 100 GP.",
+        "items": [],
+        "gold": 100
+      }
+    ],
     "features_by_level": {
       "1": [
         {
@@ -110,6 +150,26 @@
     },
     "starting_equipment": ["quarterstaff", "dagger", "potion_of_healing"],
     "starting_gold": 5,
+    "starting_equipment_options": [
+      {
+        "name": "Standard Loadout",
+        "description": "Quarterstaff, dagger, and a potion of healing.",
+        "items": ["quarterstaff", "dagger", "potion_of_healing"],
+        "gold": 5
+      },
+      {
+        "name": "Scholar",
+        "description": "Quarterstaff, component pouch, spellbook, and a Scholar's Pack.",
+        "items": ["quarterstaff", "component_pouch", "spellbook", "scholars_pack"],
+        "gold": 0
+      },
+      {
+        "name": "Independent Practitioner",
+        "description": "Buy your own gear with 50 GP.",
+        "items": [],
+        "gold": 50
+      }
+    ],
     "spellcasting": {
       "ability": "int",
       "cantrips_known": {
