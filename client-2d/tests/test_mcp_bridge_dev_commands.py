@@ -18,6 +18,7 @@ DEV_COMMAND_NAMES = (
     "CLEAR_ENEMIES",
     "SET_SEED",
     "LOAD_SCENARIO",
+    "RESET_GAME",
 )
 
 

@@ -1,5 +1,5 @@
-# ABOUTME: Tests for EngineAdapter dev-mode spawn/setup methods (#360).
-# ABOUTME: Covers set_seed, spawn_monster, spawn_character, set_position, clear_enemies.
+# ABOUTME: Tests for EngineAdapter dev-mode spawn/setup methods (#360, #373).
+# ABOUTME: Covers set_seed, spawn_monster, spawn_character, set_position, clear_enemies, reset_game.
 
 """Tests for the engine adapter's dev-mode spawn primitives.
 
@@ -278,3 +278,44 @@ class TestClearEnemies:
 
         with pytest.raises(ValueError, match="initialize_game"):
             EngineAdapter().clear_enemies()
+
+
+class TestResetGame:
+    """EngineAdapter.reset_game wipes party + enemies + combat state (#373)."""
+
+    def test_clears_party_enemies_and_combat(self, initialized_adapter) -> None:
+        """Reset returns a fully empty engine state and ends combat."""
+        adapter = initialized_adapter
+        adapter.spawn_character(
+            "fighter", "human", ["longsword"], 5, 5, name="Extra",
+        )
+        adapter.spawn_monster("goblin", 12, 7)
+        adapter.spawn_monster("goblin", 14, 7)
+        assert len(adapter.party.characters) == 2
+        assert len(adapter.game_state.active_enemies) == 2
+        assert adapter.in_combat
+
+        result = adapter.reset_game()
+
+        assert result == {"success": True, "cleared_party": 2, "cleared_enemies": 2}
+        assert adapter.party.characters == []
+        assert adapter.game_state.active_enemies == []
+        assert not adapter.in_combat
+        assert adapter.game_state.initiative_tracker is None
+
+    def test_noop_when_already_empty(self, initialized_adapter) -> None:
+        """Calling reset after another reset returns zero counts."""
+        adapter = initialized_adapter
+        adapter.reset_game()
+
+        result = adapter.reset_game()
+
+        assert result == {"success": True, "cleared_party": 0, "cleared_enemies": 0}
+        assert adapter.party.characters == []
+        assert not adapter.in_combat
+
+    def test_raises_when_not_initialized(self) -> None:
+        from client_2d.integration.engine_adapter import EngineAdapter
+
+        with pytest.raises(ValueError, match="initialize_game"):
+            EngineAdapter().reset_game()

@@ -902,6 +902,41 @@ class EngineAdapter:
         self._game_state.initiative_tracker = None
         return {"success": True, "cleared": cleared}
 
+    def reset_game(self) -> dict[str, Any]:
+        """Wipe party + enemies + combat state to a clean engine slate.
+
+        Test-harness teardown primitive (#373). Goes one step beyond
+        ``clear_enemies`` by also emptying the party so the next
+        ``load_scenario`` or ``spawn_character`` composes against a known
+        zero state. The dungeon / map is left intact — callers swap maps
+        via ``load_scenario`` when they need to.
+
+        Mutates engine objects (``Party.characters``, ``GameState.active_enemies``,
+        ``in_combat``, ``initiative_tracker``) directly. This is the
+        established dev-mutation pattern for the adapter's test-harness
+        surface — see ``clear_enemies`` and ``set_seed`` for siblings.
+
+        Returns:
+            ``{"success": True, "cleared_party": <int>,
+            "cleared_enemies": <int>}``.
+
+        Raises:
+            ValueError: If initialize_game() has not been called.
+        """
+        if self._game_state is None:
+            raise ValueError("Must call initialize_game() first")
+        cleared_party = len(self._party.characters)
+        cleared_enemies = len(self._game_state.active_enemies)
+        self._party.characters = []
+        self._game_state.active_enemies = []
+        self._game_state.in_combat = False
+        self._game_state.initiative_tracker = None
+        return {
+            "success": True,
+            "cleared_party": cleared_party,
+            "cleared_enemies": cleared_enemies,
+        }
+
     def set_seed(self, seed: int) -> dict[str, Any]:
         """Reseed the live DiceRoller in place.
 

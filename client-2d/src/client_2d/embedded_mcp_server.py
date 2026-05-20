@@ -305,6 +305,25 @@ class EmbeddedMCPServer:
             )
             return bridge.submit_command(request, timeout=15.0)
 
+        @mcp.tool()
+        def reset_game() -> str:
+            """Wipe party + enemies + combat state for a clean test slate.
+
+            Drops every PC and active enemy from the engine and visual
+            layers, ends combat, and resets the combat FSM. The dungeon
+            and current room are left intact so callers compose with
+            ``load_scenario`` (swap maps) and ``spawn_character`` /
+            ``spawn_monster`` (rebuild entities) afterward.
+
+            Useful between sequential scenarios in an auto-play harness.
+
+            Returns:
+                Status string with the number of party members and
+                enemies cleared, followed by the post-reset game state.
+            """
+            request = CommandRequest(command_type=CommandType.RESET_GAME)
+            return bridge.submit_command(request, timeout=5.0)
+
     def start(self) -> None:
         """Start HTTP server in background thread."""
         self._shutdown_event.clear()

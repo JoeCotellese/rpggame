@@ -286,10 +286,12 @@ class EntityManager:
         return positions
 
     def collapse_party(self) -> None:
-        """Remove party member entities after combat ends.
+        """Remove all party member entities from the manager.
 
-        Called when combat ends to remove the spread party members.
-        The player returns to single-unit representation.
+        Called when combat ends (the spread formation collapses back to
+        a single-unit player representation) and by the reset_game
+        teardown primitive (#373) which wipes the party between
+        scenarios. Monsters and items are left untouched.
         """
         for entity_id in list(self._party_members.keys()):
             self._entities.pop(entity_id, None)

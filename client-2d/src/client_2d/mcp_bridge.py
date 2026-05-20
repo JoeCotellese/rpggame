@@ -38,6 +38,7 @@ class CommandType(Enum):
     CLEAR_ENEMIES = auto()
     SET_SEED = auto()
     LOAD_SCENARIO = auto()
+    RESET_GAME = auto()
 
 
 @dataclass
