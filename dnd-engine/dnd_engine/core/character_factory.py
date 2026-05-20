@@ -221,6 +221,55 @@ class CharacterFactory:
             return base_ac
 
     @staticmethod
+    def _resolve_starting_items(
+        class_data: dict[str, Any],
+        items_data: dict[str, Any],
+        option_index: int = 0,
+    ) -> list[tuple[str, int]]:
+        """
+        Resolve a class's starting items into a flat list of (item_id, quantity) tuples.
+
+        When `starting_equipment_options` is present, the option at `option_index` is
+        selected and its `items` list is resolved. When only the legacy
+        `starting_equipment` field is present, that flat list is used and
+        `option_index` is ignored.
+
+        Items whose id matches a pack in `items_data["packs"]` are expanded into the
+        pack's `contents` map; the pack id itself is not included in the output.
+        Non-pack items appear with quantity 1 unless an option provides explicit
+        per-item quantities in the future.
+
+        Args:
+            class_data: Class definition (may include starting_equipment_options
+                or legacy starting_equipment)
+            items_data: Full items.json data
+            option_index: Index into starting_equipment_options (default 0)
+
+        Returns:
+            List of (item_id, quantity) tuples after pack expansion.
+        """
+        options = class_data.get("starting_equipment_options")
+        if options:
+            if option_index < 0 or option_index >= len(options):
+                raise ValueError(
+                    f"option_index {option_index} out of range for "
+                    f"{len(options)} options"
+                )
+            raw_items: list[str] = list(options[option_index].get("items", []))
+        else:
+            raw_items = list(class_data.get("starting_equipment", []))
+
+        packs = items_data.get("packs", {})
+        resolved: list[tuple[str, int]] = []
+        for item_id in raw_items:
+            if item_id in packs:
+                for contained_id, qty in packs[item_id].get("contents", {}).items():
+                    resolved.append((contained_id, qty))
+            else:
+                resolved.append((item_id, 1))
+        return resolved
+
+    @staticmethod
     def apply_starting_equipment(
         character: Character, class_data: dict[str, Any], items_data: dict[str, Any]
     ) -> None:
