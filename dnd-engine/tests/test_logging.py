@@ -23,7 +23,6 @@ class TestLoggingConfig:
         assert config.debug_enabled is False
         assert config.log_file_path is None
         assert config.log_file is None
-        assert config.tee_console is None
 
     def test_init_with_debug(self, tmp_path):
         """Test initialization with debug mode."""
@@ -424,3 +423,34 @@ class TestGlobalLoggingFunctions:
         get_logging_config()
         # Actually, it will return the previously set config, so let's just check it's callable
         assert True  # This test just verifies the function doesn't crash
+
+
+class TestEnginePackageIsUiFree:
+    """Guard the monorepo boundary: engine code must not import UI libs."""
+
+    def test_engine_has_no_rich_imports(self):
+        """
+        Walk every .py file under dnd_engine/ and assert that none of them
+        import from the Rich library. This is the testable form of the
+        ``rg 'from rich' dnd-engine/`` acceptance check on #316.
+        """
+        import ast
+        from pathlib import Path
+
+        import dnd_engine
+
+        engine_root = Path(dnd_engine.__file__).parent
+        offenders: list[str] = []
+
+        for path in engine_root.rglob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom):
+                    if node.module and node.module.split(".")[0] == "rich":
+                        offenders.append(f"{path}: from {node.module} import ...")
+                elif isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if alias.name.split(".")[0] == "rich":
+                            offenders.append(f"{path}: import {alias.name}")
+
+        assert offenders == [], "Rich imports must not exist in engine: " + "; ".join(offenders)

@@ -7,9 +7,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, TextIO
 
-from rich.console import Console
-
-# Maximum console width for readable output
+# Maximum console width for readable output. Kept here for backwards
+# compatibility with UI clients that import it; the engine itself no longer
+# builds consoles.
 MAX_CONSOLE_WIDTH = 100
 
 # A console factory is given the active log-file handle (or None when debug is
@@ -97,7 +97,6 @@ class LoggingConfig:
         self.console_factory = console_factory
         self.log_file_path: Path | None = None
         self.log_file: TextIO | None = None
-        self.tee_console: Console | None = None
         self._event_counter = 0
 
         if debug_enabled:
