@@ -1,7 +1,8 @@
 # ABOUTME: Rich UI utilities for enhanced terminal display
 # ABOUTME: Provides reusable rich components for formatting game output
 
-from typing import Any
+import sys
+from typing import Any, TextIO
 
 from rich import box
 from rich.align import Align
@@ -10,10 +11,33 @@ from rich.panel import Panel
 from rich.style import Style
 from rich.table import Table
 
-from dnd_engine.utils.logging_config import MAX_CONSOLE_WIDTH, init_logging
+from dnd_engine.utils.logging_config import MAX_CONSOLE_WIDTH, TeeFile, init_logging
 
 # Global console instance - initialized via init_console()
 console = Console(width=MAX_CONSOLE_WIDTH)
+
+
+def _rich_console_factory(log_file: TextIO | None) -> Console:
+    """
+    Build the terminal client's Rich console.
+
+    Injected into ``LoggingConfig`` so the engine never has to import
+    Rich. When debug mode is on, the engine hands us the open log file
+    and we wrap it in a ``TeeFile`` so console output is mirrored to
+    disk.
+
+    Args:
+        log_file: Live log file handle when debug mode is on, else None.
+    """
+    if log_file is not None:
+        tee_file = TeeFile(log_file, sys.stdout)
+        return Console(
+            file=tee_file,
+            force_terminal=True,
+            legacy_windows=False,
+            width=MAX_CONSOLE_WIDTH,
+        )
+    return Console(width=MAX_CONSOLE_WIDTH)
 
 
 def init_console(debug_mode: bool = False) -> None:
@@ -28,10 +52,7 @@ def init_console(debug_mode: bool = False) -> None:
     """
     global console
 
-    # Initialize logging config
-    logging_config = init_logging(debug_mode)
-
-    # Create console (will be dual-output if debug enabled)
+    logging_config = init_logging(debug_mode, console_factory=_rich_console_factory)
     console = logging_config.create_console()
 
 
