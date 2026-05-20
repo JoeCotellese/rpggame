@@ -291,8 +291,12 @@ class TestCreateCharacterWithOptionIndex:
             level=1,
             name="Default Fighter",
             abilities={
-                "strength": 15, "dexterity": 12, "constitution": 14,
-                "intelligence": 10, "wisdom": 10, "charisma": 10,
+                "strength": 15,
+                "dexterity": 12,
+                "constitution": 14,
+                "intelligence": 10,
+                "wisdom": 10,
+                "charisma": 10,
             },
         )
 
@@ -312,8 +316,12 @@ class TestCreateCharacterWithOptionIndex:
             level=1,
             name="Mercenary",
             abilities={
-                "strength": 15, "dexterity": 14, "constitution": 14,
-                "intelligence": 10, "wisdom": 10, "charisma": 10,
+                "strength": 15,
+                "dexterity": 14,
+                "constitution": 14,
+                "intelligence": 10,
+                "wisdom": 10,
+                "charisma": 10,
             },
             option_index=2,
         )

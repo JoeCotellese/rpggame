@@ -252,8 +252,7 @@ class CharacterFactory:
         if options:
             if option_index < 0 or option_index >= len(options):
                 raise ValueError(
-                    f"option_index {option_index} out of range for "
-                    f"{len(options)} options"
+                    f"option_index {option_index} out of range for {len(options)} options"
                 )
             raw_items: list[str] = list(options[option_index].get("items", []))
         else:
@@ -687,9 +686,6 @@ class CharacterFactory:
         self.initialize_spellcasting(character, class_data, spells_data)
 
         # Apply starting equipment
-        self.apply_starting_equipment(
-            character, class_data, items_data, option_index=option_index
-        )
+        self.apply_starting_equipment(character, class_data, items_data, option_index=option_index)
 
         return character
-
