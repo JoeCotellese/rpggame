@@ -271,28 +271,41 @@ class CharacterFactory:
 
     @staticmethod
     def apply_starting_equipment(
-        character: Character, class_data: dict[str, Any], items_data: dict[str, Any]
+        character: Character,
+        class_data: dict[str, Any],
+        items_data: dict[str, Any],
+        option_index: int = 0,
     ) -> None:
         """
         Add starting equipment to character inventory and equip.
 
-        Automatically includes appropriate ammunition for ranged weapons
-        that have the "ammunition" property.
+        When the class defines `starting_equipment_options`, the option at
+        `option_index` is selected (default 0) and its `items` are granted, along
+        with the option's `gold`. Otherwise the legacy `starting_equipment` /
+        `starting_gold` fields are used and `option_index` is ignored.
+
+        Pack item ids in the selected loadout are expanded into their contents
+        via `_resolve_starting_items`. Ammunition for ranged weapons is added
+        automatically.
 
         Args:
             character: Character object
-            class_data: Class definition with starting_equipment
+            class_data: Class definition (with starting_equipment_options or
+                legacy starting_equipment)
             items_data: Full items.json data
+            option_index: Index into starting_equipment_options (default 0)
 
         Side Effects:
             - Adds items to character.inventory
             - Equips weapon and armor automatically
             - Adds ammunition for ranged weapons
         """
-        starting_equipment = class_data.get("starting_equipment", [])
+        resolved = CharacterFactory._resolve_starting_items(
+            class_data, items_data, option_index=option_index
+        )
         weapons_needing_ammo: list[str] = []
 
-        for item_id in starting_equipment:
+        for item_id, base_quantity in resolved:
             # Determine category
             category = None
             if item_id in items_data.get("weapons", {}):
@@ -305,11 +318,13 @@ class CharacterFactory:
                 category = "tools"
             elif item_id in items_data.get("ammunition", {}):
                 category = "ammunition"
+            elif item_id in items_data.get("equipment", {}):
+                category = "equipment"
 
             if category:
-                # Get default quantity for ammunition items
-                quantity = 1
-                if category == "ammunition":
+                # Ammunition has a standard "quantity per stack" default
+                quantity = base_quantity
+                if category == "ammunition" and base_quantity == 1:
                     ammo_data = items_data.get("ammunition", {}).get(item_id, {})
                     quantity = ammo_data.get("quantity", 20)
 
@@ -332,8 +347,13 @@ class CharacterFactory:
         # Auto-add ammunition for weapons that require it
         CharacterFactory._add_starting_ammunition(character, weapons_needing_ammo, items_data)
 
-        # Add starting gold
-        starting_gold = class_data.get("starting_gold", 0)
+        # Add starting gold: prefer per-option gold when options are defined,
+        # otherwise fall back to the legacy class-level field.
+        options = class_data.get("starting_equipment_options")
+        if options:
+            starting_gold = options[option_index].get("gold", 0)
+        else:
+            starting_gold = class_data.get("starting_gold", 0)
         if starting_gold > 0:
             character.inventory.add_gold(starting_gold)
 
