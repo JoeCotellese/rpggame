@@ -164,6 +164,63 @@
       "properties": ["finesse"],
       "value": 25
     },
+    "greatsword": {
+      "name": "Greatsword",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "weapon",
+      "weapon_type": "martial",
+      "category": "melee",
+      "damage": "2d6",
+      "damage_type": "slashing",
+      "properties": ["heavy", "two-handed"],
+      "value": 50
+    },
+    "scimitar": {
+      "name": "Scimitar",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "weapon",
+      "weapon_type": "martial",
+      "category": "melee",
+      "damage": "1d6",
+      "damage_type": "slashing",
+      "properties": ["finesse", "light"],
+      "value": 25
+    },
+    "javelin": {
+      "name": "Javelin",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "weapon",
+      "weapon_type": "simple",
+      "category": "melee",
+      "damage": "1d6",
+      "damage_type": "piercing",
+      "properties": ["thrown"],
+      "range": "30/120",
+      "value": 0.5
+    },
+    "light_hammer": {
+      "name": "Light Hammer",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "weapon",
+      "weapon_type": "simple",
+      "category": "melee",
+      "damage": "1d4",
+      "damage_type": "bludgeoning",
+      "properties": ["light", "thrown"],
+      "range": "20/60",
+      "value": 2
+    },
+    "flail": {
+      "name": "Flail",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "weapon",
+      "weapon_type": "martial",
+      "category": "melee",
+      "damage": "1d8",
+      "damage_type": "bludgeoning",
+      "properties": [],
+      "value": 10
+    },
     "longsword_plus_1": {
       "name": "Longsword +1",
       "source": "The Unquiet Dead (Adventures Await Studios, OGL)",
@@ -1214,6 +1271,14 @@
       "description": "Objects viewed through a spyglass are magnified to twice their size.",
       "value": 1000,
       "weight": 1
+    },
+    "spellbook": {
+      "name": "Spellbook",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "equipment",
+      "description": "Essential for wizards, a spellbook is a leather-bound tome with 100 blank vellum pages suitable for recording spells.",
+      "value": 50,
+      "weight": 3
     },
     "tent": {
       "name": "Tent, Two-Person",
