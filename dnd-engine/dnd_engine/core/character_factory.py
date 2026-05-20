@@ -321,7 +321,10 @@ class CharacterFactory:
                 category = "equipment"
 
             if category:
-                # Ammunition has a standard "quantity per stack" default
+                # Ammunition entries from a flat starting list (quantity 1) get the
+                # default stack size from the item definition. Packs that include
+                # ammunition are expected to specify explicit quantities and bypass
+                # this override.
                 quantity = base_quantity
                 if category == "ammunition" and base_quantity == 1:
                     ammo_data = items_data.get("ammunition", {}).get(item_id, {})
