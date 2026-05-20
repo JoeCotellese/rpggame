@@ -21,6 +21,7 @@ DEV_TOOL_NAMES = {
     "clear_enemies",
     "set_seed",
     "load_scenario",
+    "reset_game",
 }
 
 PLAY_TOOL_NAMES = {"game_state", "game_move", "game_attack", "game_wait"}
