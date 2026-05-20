@@ -23,7 +23,6 @@ class TestLoggingConfig:
         assert config.debug_enabled is False
         assert config.log_file_path is None
         assert config.log_file is None
-        assert config.tee_console is None
 
     def test_init_with_debug(self, tmp_path):
         """Test initialization with debug mode."""
@@ -89,32 +88,50 @@ class TestLoggingConfig:
         finally:
             os.chdir(original_cwd)
 
-    def test_create_console_without_debug(self):
-        """Test console creation without debug mode."""
-        config = LoggingConfig(debug_enabled=False)
-        console = config.create_console()
+    def test_create_console_invokes_factory_without_debug(self):
+        """Factory is called with None when debug is disabled."""
+        calls = []
 
-        assert console is not None
-        assert config.tee_console is None  # No dual output
+        def factory(log_file):
+            calls.append(log_file)
+            return ("made", log_file)
 
-    def test_create_console_with_debug(self, tmp_path):
-        """Test console creation with debug mode (dual output)."""
+        config = LoggingConfig(debug_enabled=False, console_factory=factory)
+        result = config.create_console()
+
+        assert calls == [None]
+        assert result == ("made", None)
+
+    def test_create_console_invokes_factory_with_debug(self, tmp_path):
+        """Factory is called with the open log file when debug is enabled."""
         import os
 
         original_cwd = os.getcwd()
         os.chdir(tmp_path)
 
         try:
-            config = LoggingConfig(debug_enabled=True)
-            console = config.create_console()
+            calls = []
 
-            assert console is not None
-            assert config.tee_console is not None
+            def factory(log_file):
+                calls.append(log_file)
+                return "sentinel-console"
 
-            # Clean up
+            config = LoggingConfig(debug_enabled=True, console_factory=factory)
+            result = config.create_console()
+
+            assert len(calls) == 1
+            assert calls[0] is config.log_file
+            assert calls[0] is not None
+            assert result == "sentinel-console"
+
             config.close()
         finally:
             os.chdir(original_cwd)
+
+    def test_create_console_returns_none_without_factory(self):
+        """create_console() returns None when no factory was injected."""
+        config = LoggingConfig(debug_enabled=False)
+        assert config.create_console() is None
 
     def test_log_event(self, tmp_path):
         """Test event logging."""
@@ -406,3 +423,34 @@ class TestGlobalLoggingFunctions:
         get_logging_config()
         # Actually, it will return the previously set config, so let's just check it's callable
         assert True  # This test just verifies the function doesn't crash
+
+
+class TestEnginePackageIsUiFree:
+    """Guard the monorepo boundary: engine code must not import UI libs."""
+
+    def test_engine_has_no_rich_imports(self):
+        """
+        Walk every .py file under dnd_engine/ and assert that none of them
+        import from the Rich library. This is the testable form of the
+        ``rg 'from rich' dnd-engine/`` acceptance check on #316.
+        """
+        import ast
+        from pathlib import Path
+
+        import dnd_engine
+
+        engine_root = Path(dnd_engine.__file__).parent
+        offenders: list[str] = []
+
+        for path in engine_root.rglob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom):
+                    if node.module and node.module.split(".")[0] == "rich":
+                        offenders.append(f"{path}: from {node.module} import ...")
+                elif isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if alias.name.split(".")[0] == "rich":
+                            offenders.append(f"{path}: import {alias.name}")
+
+        assert offenders == [], "Rich imports must not exist in engine: " + "; ".join(offenders)
