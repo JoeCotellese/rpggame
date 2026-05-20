@@ -1,5 +1,6 @@
 # ABOUTME: Debug logging configuration for dual console/file output
-# ABOUTME: Manages log file rotation, timestamps, and Rich console integration
+# ABOUTME: Manages log file rotation, timestamps, and a UI-toolkit-agnostic
+# ABOUTME: console factory hook so clients can plug in their own renderer.
 
 import logging
 from collections.abc import Callable
@@ -21,8 +22,8 @@ class TeeFile:
     """
     File-like object that writes to both stdout and a log file.
 
-    This allows Rich console output to be simultaneously displayed
-    in the terminal and captured to a log file.
+    Lets a UI client mirror terminal output into a log file by passing
+    a ``TeeFile`` wherever a writable stream is expected.
     """
 
     def __init__(self, file: TextIO, stdout: TextIO):
@@ -49,8 +50,8 @@ class TeeFile:
         # Write to stdout
         self.stdout.write(text)
 
-        # Write to file (will be plain text without ANSI codes
-        # because the console was created with force_terminal=False)
+        # Write to file. Any ANSI / styling decisions are the caller's
+        # responsibility — this class is a plain stream tee.
         self.file.write(text)
 
         return len(text)
@@ -74,7 +75,8 @@ class LoggingConfig:
     - Generate timestamped log files
     - Rotate old log files (keep last 10)
     - Set up Python logging
-    - Create dual-output Rich console
+    - Dispatch console creation to an injected UI factory so the engine
+      itself stays UI-toolkit agnostic
     """
 
     def __init__(
