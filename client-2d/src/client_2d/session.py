@@ -673,6 +673,8 @@ class GameSession:
                 result = self.set_seed(request.args.get("seed", 0))
             elif request.command_type == CommandType.LOAD_SCENARIO:
                 result = self.load_scenario(request.args.get("path", ""))
+            elif request.command_type == CommandType.RESET_GAME:
+                result = self.reset_game()
             else:
                 result = f"Unknown command: {request.command_type}"
             request.response_future.set_result(result)

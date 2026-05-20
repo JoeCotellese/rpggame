@@ -321,3 +321,38 @@ class TestSessionResetGame:
         assert len(session.engine.game_state.active_enemies) == 1
         assert len(session.entity_manager.get_party_members()) == 1
         assert len(session.entity_manager.get_monsters()) == 1
+
+
+class TestSessionResetGameMCPDispatch:
+    """Tests for the MCP bridge dispatch path of reset_game (#373).
+
+    Exercises the same path the HTTP MCP server uses: queue a
+    CommandRequest with CommandType.RESET_GAME and let _process_mcp_commands
+    drain it. The session must invoke its reset_game() and resolve the
+    response future with the returned status string.
+    """
+
+    def test_process_mcp_command_routes_reset_game(self, session) -> None:
+        """Submitting RESET_GAME via the bridge wipes engine + entity state."""
+        from client_2d.mcp_bridge import CommandRequest, CommandType, MCPBridge
+
+        bridge = MCPBridge()
+        bridge.set_session(session)
+        session._mcp_bridge = bridge
+
+        request = CommandRequest(command_type=CommandType.RESET_GAME)
+        bridge._command_queue.put(request)
+
+        session._process_mcp_commands()
+
+        # Future resolved with the session's status string.
+        result = request.response_future.result(timeout=0.1)
+        assert isinstance(result, str)
+        assert "party" in result.lower()
+        assert "enemies" in result.lower()
+
+        # And the state was actually wiped.
+        assert session.engine.party.characters == []
+        assert session.engine.game_state.active_enemies == []
+        assert session.entity_manager.get_party_members() == []
+        assert session.entity_manager.get_monsters() == []
