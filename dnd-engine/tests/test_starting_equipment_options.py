@@ -42,6 +42,42 @@ class TestPacksData:
         assert contents.get("parchment") == 10
         assert contents.get("ink") == 1
 
+    def test_burglars_pack_contents(self):
+        """Burglar's Pack contents must match the SRD description (issue #384)."""
+        pack = DataLoader().load_items()["packs"]["burglars_pack"]
+        contents = pack["contents"]
+        assert contents.get("backpack") == 1
+        assert contents.get("ball_bearings") == 1
+        assert contents.get("string") == 1
+        assert contents.get("bell") == 1
+        assert contents.get("candle") == 5
+        assert contents.get("crowbar") == 1
+        assert contents.get("hammer") == 1
+        assert contents.get("piton") == 10
+        assert contents.get("lantern_hooded") == 1
+        assert contents.get("oil_flask") == 2
+        assert contents.get("rations") == 5
+        assert contents.get("tinderbox") == 1
+        assert contents.get("waterskin") == 1
+        assert contents.get("rope_hempen") == 1
+        # Torch is NOT in the SRD Burglar's Pack — was a copy-paste from Dungeoneer's Pack
+        assert "torch" not in contents
+
+    def test_all_pack_referenced_items_exist(self):
+        """All items referenced by any pack.contents must exist in items.json."""
+        items = DataLoader().load_items()
+        # Flatten all non-pack categories into a single ID set
+        all_item_ids: set[str] = set()
+        for category, entries in items.items():
+            if category == "packs":
+                continue
+            all_item_ids.update(entries.keys())
+        for pack_id, pack in items["packs"].items():
+            for item_id in pack["contents"]:
+                assert item_id in all_item_ids, (
+                    f"{pack_id} references missing item: {item_id}"
+                )
+
 
 class TestResolveStartingItems:
     """Verify _resolve_starting_items resolves options, expands packs, and falls back to legacy."""
