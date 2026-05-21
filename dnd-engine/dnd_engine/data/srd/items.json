@@ -164,6 +164,63 @@
       "properties": ["finesse"],
       "value": 25
     },
+    "greatsword": {
+      "name": "Greatsword",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "weapon",
+      "weapon_type": "martial",
+      "category": "melee",
+      "damage": "2d6",
+      "damage_type": "slashing",
+      "properties": ["heavy", "two-handed"],
+      "value": 50
+    },
+    "scimitar": {
+      "name": "Scimitar",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "weapon",
+      "weapon_type": "martial",
+      "category": "melee",
+      "damage": "1d6",
+      "damage_type": "slashing",
+      "properties": ["finesse", "light"],
+      "value": 25
+    },
+    "javelin": {
+      "name": "Javelin",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "weapon",
+      "weapon_type": "simple",
+      "category": "melee",
+      "damage": "1d6",
+      "damage_type": "piercing",
+      "properties": ["thrown"],
+      "range": "30/120",
+      "value": 0.5
+    },
+    "light_hammer": {
+      "name": "Light Hammer",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "weapon",
+      "weapon_type": "simple",
+      "category": "melee",
+      "damage": "1d4",
+      "damage_type": "bludgeoning",
+      "properties": ["light", "thrown"],
+      "range": "20/60",
+      "value": 2
+    },
+    "flail": {
+      "name": "Flail",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "weapon",
+      "weapon_type": "martial",
+      "category": "melee",
+      "damage": "1d8",
+      "damage_type": "bludgeoning",
+      "properties": [],
+      "value": 10
+    },
     "longsword_plus_1": {
       "name": "Longsword +1",
       "source": "The Unquiet Dead (Adventures Await Studios, OGL)",
@@ -1215,6 +1272,14 @@
       "value": 1000,
       "weight": 1
     },
+    "spellbook": {
+      "name": "Spellbook",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "equipment",
+      "description": "Essential for wizards, a spellbook is a leather-bound tome with 100 blank vellum pages suitable for recording spells.",
+      "value": 50,
+      "weight": 3
+    },
     "tent": {
       "name": "Tent, Two-Person",
       "source": "D&D 5E SRD (CC BY 4.0)",
@@ -1254,6 +1319,76 @@
       "description": "A stone for sharpening blades.",
       "value": 0.01,
       "weight": 1
+    }
+  },
+  "packs": {
+    "dungeoneers_pack": {
+      "name": "Dungeoneer's Pack",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "pack",
+      "description": "Includes a backpack, a crowbar, a hammer, 10 pitons, 10 torches, a tinderbox, 10 days of rations, a waterskin, and 50 feet of hempen rope.",
+      "value": 12,
+      "contents": {
+        "backpack": 1,
+        "crowbar": 1,
+        "hammer": 1,
+        "piton": 10,
+        "torch": 10,
+        "tinderbox": 1,
+        "rations": 10,
+        "waterskin": 1,
+        "rope_hempen": 1
+      }
+    },
+    "explorers_pack": {
+      "name": "Explorer's Pack",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "pack",
+      "description": "Includes a backpack, a bedroll, a mess kit, a tinderbox, 10 torches, 10 days of rations, a waterskin, and 50 feet of hempen rope.",
+      "value": 10,
+      "contents": {
+        "backpack": 1,
+        "bedroll": 1,
+        "mess_kit": 1,
+        "tinderbox": 1,
+        "torch": 10,
+        "rations": 10,
+        "waterskin": 1,
+        "rope_hempen": 1
+      }
+    },
+    "burglars_pack": {
+      "name": "Burglar's Pack",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "pack",
+      "description": "Includes a backpack, a bag of 1,000 ball bearings, 10 feet of string, a bell, 5 candles, a crowbar, a hammer, 10 pitons, a hooded lantern, 2 flasks of oil, 5 days of rations, a tinderbox, a waterskin, and 50 feet of hempen rope.",
+      "value": 16,
+      "contents": {
+        "backpack": 1,
+        "ball_bearings": 1,
+        "piton": 10,
+        "torch": 5,
+        "tinderbox": 1,
+        "candle": 5,
+        "rations": 5,
+        "waterskin": 1,
+        "rope_hempen": 1
+      }
+    },
+    "scholars_pack": {
+      "name": "Scholar's Pack",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "pack",
+      "description": "Includes a backpack, a book of lore, a bottle of ink, an ink pen, 10 sheets of parchment, a little bag of sand, and a small knife.",
+      "value": 40,
+      "contents": {
+        "backpack": 1,
+        "book": 1,
+        "ink": 1,
+        "ink_pen": 1,
+        "parchment": 10,
+        "sack": 1
+      }
     }
   }
 }

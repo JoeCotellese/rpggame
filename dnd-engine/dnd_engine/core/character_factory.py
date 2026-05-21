@@ -221,29 +221,90 @@ class CharacterFactory:
             return base_ac
 
     @staticmethod
+    def _resolve_starting_items(
+        class_data: dict[str, Any],
+        items_data: dict[str, Any],
+        option_index: int = 0,
+    ) -> list[tuple[str, int]]:
+        """
+        Resolve a class's starting items into a flat list of (item_id, quantity) tuples.
+
+        When `starting_equipment_options` is present, the option at `option_index` is
+        selected and its `items` list is resolved. When only the legacy
+        `starting_equipment` field is present, that flat list is used and
+        `option_index` is ignored.
+
+        Items whose id matches a pack in `items_data["packs"]` are expanded into the
+        pack's `contents` map; the pack id itself is not included in the output.
+        Non-pack items appear with quantity 1 unless an option provides explicit
+        per-item quantities in the future.
+
+        Args:
+            class_data: Class definition (may include starting_equipment_options
+                or legacy starting_equipment)
+            items_data: Full items.json data
+            option_index: Index into starting_equipment_options (default 0)
+
+        Returns:
+            List of (item_id, quantity) tuples after pack expansion.
+        """
+        options = class_data.get("starting_equipment_options")
+        if options:
+            if option_index < 0 or option_index >= len(options):
+                raise ValueError(
+                    f"option_index {option_index} out of range for {len(options)} options"
+                )
+            raw_items: list[str] = list(options[option_index].get("items", []))
+        else:
+            raw_items = list(class_data.get("starting_equipment", []))
+
+        packs = items_data.get("packs", {})
+        resolved: list[tuple[str, int]] = []
+        for item_id in raw_items:
+            if item_id in packs:
+                for contained_id, qty in packs[item_id].get("contents", {}).items():
+                    resolved.append((contained_id, qty))
+            else:
+                resolved.append((item_id, 1))
+        return resolved
+
+    @staticmethod
     def apply_starting_equipment(
-        character: Character, class_data: dict[str, Any], items_data: dict[str, Any]
+        character: Character,
+        class_data: dict[str, Any],
+        items_data: dict[str, Any],
+        option_index: int = 0,
     ) -> None:
         """
         Add starting equipment to character inventory and equip.
 
-        Automatically includes appropriate ammunition for ranged weapons
-        that have the "ammunition" property.
+        When the class defines `starting_equipment_options`, the option at
+        `option_index` is selected (default 0) and its `items` are granted, along
+        with the option's `gold`. Otherwise the legacy `starting_equipment` /
+        `starting_gold` fields are used and `option_index` is ignored.
+
+        Pack item ids in the selected loadout are expanded into their contents
+        via `_resolve_starting_items`. Ammunition for ranged weapons is added
+        automatically.
 
         Args:
             character: Character object
-            class_data: Class definition with starting_equipment
+            class_data: Class definition (with starting_equipment_options or
+                legacy starting_equipment)
             items_data: Full items.json data
+            option_index: Index into starting_equipment_options (default 0)
 
         Side Effects:
             - Adds items to character.inventory
             - Equips weapon and armor automatically
             - Adds ammunition for ranged weapons
         """
-        starting_equipment = class_data.get("starting_equipment", [])
+        resolved = CharacterFactory._resolve_starting_items(
+            class_data, items_data, option_index=option_index
+        )
         weapons_needing_ammo: list[str] = []
 
-        for item_id in starting_equipment:
+        for item_id, base_quantity in resolved:
             # Determine category
             category = None
             if item_id in items_data.get("weapons", {}):
@@ -256,11 +317,16 @@ class CharacterFactory:
                 category = "tools"
             elif item_id in items_data.get("ammunition", {}):
                 category = "ammunition"
+            elif item_id in items_data.get("equipment", {}):
+                category = "equipment"
 
             if category:
-                # Get default quantity for ammunition items
-                quantity = 1
-                if category == "ammunition":
+                # Ammunition entries from a flat starting list (quantity 1) get the
+                # default stack size from the item definition. Packs that include
+                # ammunition are expected to specify explicit quantities and bypass
+                # this override.
+                quantity = base_quantity
+                if category == "ammunition" and base_quantity == 1:
                     ammo_data = items_data.get("ammunition", {}).get(item_id, {})
                     quantity = ammo_data.get("quantity", 20)
 
@@ -283,8 +349,13 @@ class CharacterFactory:
         # Auto-add ammunition for weapons that require it
         CharacterFactory._add_starting_ammunition(character, weapons_needing_ammo, items_data)
 
-        # Add starting gold
-        starting_gold = class_data.get("starting_gold", 0)
+        # Add starting gold: prefer per-option gold when options are defined,
+        # otherwise fall back to the legacy class-level field.
+        options = class_data.get("starting_equipment_options")
+        if options:
+            starting_gold = options[option_index].get("gold", 0)
+        else:
+            starting_gold = class_data.get("starting_gold", 0)
         if starting_gold > 0:
             character.inventory.add_gold(starting_gold)
 
@@ -453,6 +524,7 @@ class CharacterFactory:
         abilities: dict[str, int] | None = None,
         skill_proficiencies: list[str] | None = None,
         expertise_skills: list[str] | None = None,
+        option_index: int = 0,
     ) -> Character:
         """
         Create a character with all proficiencies and equipment - no UI dependencies.
@@ -470,6 +542,9 @@ class CharacterFactory:
             abilities: Pre-rolled abilities dict (rolls new if not provided)
             skill_proficiencies: Skill proficiencies (auto-selects if not provided)
             expertise_skills: Expertise skills (auto-selects for rogues if not provided)
+            option_index: Which starting_equipment_options entry to grant
+                (default 0). Ignored when the class only declares the legacy
+                starting_equipment field.
 
         Returns:
             Fully initialized Character with all proficiencies, equipment, and resources
@@ -544,10 +619,12 @@ class CharacterFactory:
         con_modifier = self.calculate_ability_modifier(abilities["constitution"])
         hp = self.calculate_hp(class_data, con_modifier, level=1)
 
-        # Calculate AC based on starting armor
-        starting_equipment = class_data.get("starting_equipment", [])
+        # Calculate AC based on the armor in the selected starting option
+        resolved_starting = self._resolve_starting_items(
+            class_data, items_data, option_index=option_index
+        )
         armor_id = None
-        for item_id in starting_equipment:
+        for item_id, _qty in resolved_starting:
             if item_id in items_data.get("armor", {}):
                 armor_id = item_id
                 break
@@ -612,7 +689,6 @@ class CharacterFactory:
         self.initialize_spellcasting(character, class_data, spells_data)
 
         # Apply starting equipment
-        self.apply_starting_equipment(character, class_data, items_data)
+        self.apply_starting_equipment(character, class_data, items_data, option_index=option_index)
 
         return character
-
