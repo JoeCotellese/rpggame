@@ -1285,7 +1285,7 @@
       "source": "D&D 5E SRD (CC BY 4.0)",
       "type": "equipment",
       "description": "Ten feet of common string.",
-      "value": 0,
+      "value": 0.01,
       "weight": 0
     },
     "tent": {

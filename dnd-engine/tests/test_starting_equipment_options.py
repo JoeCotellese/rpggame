@@ -63,18 +63,20 @@ class TestPacksData:
         # Torch is NOT in the SRD Burglar's Pack — was a copy-paste from Dungeoneer's Pack
         assert "torch" not in contents
 
-    def test_burglars_pack_referenced_items_exist(self):
-        """All items referenced by burglars_pack.contents must exist in items.json."""
+    def test_all_pack_referenced_items_exist(self):
+        """All items referenced by any pack.contents must exist in items.json."""
         items = DataLoader().load_items()
-        pack = items["packs"]["burglars_pack"]
         # Flatten all non-pack categories into a single ID set
         all_item_ids: set[str] = set()
         for category, entries in items.items():
             if category == "packs":
                 continue
             all_item_ids.update(entries.keys())
-        for item_id in pack["contents"]:
-            assert item_id in all_item_ids, f"burglars_pack references missing item: {item_id}"
+        for pack_id, pack in items["packs"].items():
+            for item_id in pack["contents"]:
+                assert item_id in all_item_ids, (
+                    f"{pack_id} references missing item: {item_id}"
+                )
 
 
 class TestResolveStartingItems:
