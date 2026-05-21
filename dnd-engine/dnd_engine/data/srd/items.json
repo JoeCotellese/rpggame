@@ -1280,6 +1280,14 @@
       "value": 50,
       "weight": 3
     },
+    "string": {
+      "name": "String (10 feet)",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "equipment",
+      "description": "Ten feet of common string.",
+      "value": 0,
+      "weight": 0
+    },
     "tent": {
       "name": "Tent, Two-Person",
       "source": "D&D 5E SRD (CC BY 4.0)",
@@ -1366,11 +1374,16 @@
       "contents": {
         "backpack": 1,
         "ball_bearings": 1,
-        "piton": 10,
-        "torch": 5,
-        "tinderbox": 1,
+        "string": 1,
+        "bell": 1,
         "candle": 5,
+        "crowbar": 1,
+        "hammer": 1,
+        "piton": 10,
+        "lantern_hooded": 1,
+        "oil_flask": 2,
         "rations": 5,
+        "tinderbox": 1,
         "waterskin": 1,
         "rope_hempen": 1
       }
