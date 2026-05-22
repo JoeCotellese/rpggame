@@ -323,6 +323,92 @@ class TestSessionResetGame:
         assert len(session.entity_manager.get_monsters()) == 1
 
 
+def _force_player_turn(session) -> None:
+    """Point the engine's initiative tracker at the first PC.
+
+    The ranged_attack_basic scenario rolls a surprise round on load, and
+    spawning extra enemies can shuffle initiative further. ``combat_move``
+    short-circuits with "Not your turn!" unless the current combatant is
+    a player, so tests targeting the move-collision path force the index
+    onto the party member directly.
+    """
+    party = session.engine.party.characters
+    assert party, "scenario fixture must populate the party"
+    pc = party[0]
+    tracker = session.engine._game_state.initiative_tracker
+    for idx, entry in enumerate(tracker.combatants):
+        if entry.creature is pc:
+            tracker.current_turn_index = idx
+            # Reset turn state so movement_remaining starts at full speed.
+            tracker.turn_states[pc].reset(speed=pc.speed)
+            return
+    raise AssertionError("party member missing from initiative tracker")
+
+
+class TestSessionCombatMoveBlockedByMonster:
+    """Regression tests for #339.
+
+    Combat movement into a tile occupied by a monster used to crash
+    with ``AttributeError: 'MonsterEntity' object has no attribute
+    'display_name'``. MonsterEntity exposes ``sub_type`` plus an
+    optional ``_creature_ref`` to the engine creature; the block-path
+    message must use one of those - never a non-existent ``display_name``.
+    """
+
+    def test_combat_move_into_monster_returns_blocked_message_without_crash(self, session) -> None:
+        """Moving into a monster-occupied tile must return the blocked
+        message instead of raising AttributeError."""
+        # Place a fresh goblin one tile east of the player so combat_move
+        # east immediately collides with it.
+        target_x = session.player_x + 1
+        target_y = session.player_y
+        session.spawn_monster("goblin", target_x, target_y)
+        _force_player_turn(session)
+
+        # Must not raise. Pre-fix this crashed on ``entity_at_dest.display_name``.
+        result = session.combat_move("east")
+
+        assert "Path blocked!" in result
+        assert "is in the way" in result
+        # Player must not have moved.
+        assert (session.player_x, session.player_y) != (target_x, target_y)
+
+    def test_combat_move_into_monster_uses_creature_ref_name(self, session) -> None:
+        """When the monster has a creature reference, its name surfaces
+        in the blocked message."""
+        target_x = session.player_x + 1
+        target_y = session.player_y
+        session.spawn_monster("goblin", target_x, target_y)
+        _force_player_turn(session)
+
+        blocker = session.entity_manager.get_at_position(target_x, target_y)
+        assert blocker is not None
+        assert blocker._creature_ref is not None
+        expected_name = blocker._creature_ref.name
+
+        result = session.combat_move("east")
+
+        assert expected_name in result
+
+    def test_combat_move_into_monster_falls_back_to_sub_type(self, session) -> None:
+        """If the monster has no creature reference, the message falls
+        back to a titled, space-separated ``sub_type``. Pins both fix
+        branches from #339 so a refactor cannot regress the AttributeError."""
+        target_x = session.player_x + 1
+        target_y = session.player_y
+        session.spawn_monster("giant_rat", target_x, target_y)
+        _force_player_turn(session)
+
+        blocker = session.entity_manager.get_at_position(target_x, target_y)
+        assert blocker is not None
+        # Drop the creature ref to exercise the sub_type fallback path.
+        blocker._creature_ref = None
+
+        result = session.combat_move("east")
+
+        assert "Giant Rat" in result
+
+
 class TestSessionResetGameMCPDispatch:
     """Tests for the MCP bridge dispatch path of reset_game (#373).
 
