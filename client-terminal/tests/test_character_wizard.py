@@ -654,3 +654,68 @@ class TestRandomPathEquipment:
 
         assert w1.character_class == w2.character_class
         assert w1.equipment_option_index == w2.equipment_option_index
+
+
+class TestTemplateEquipmentChoice:
+    """Template path should honor the per-template equipment_choice field."""
+
+    @pytest.fixture
+    def wizard(self):
+        dice_roller = DiceRoller(seed=42)
+        return CharacterCreationWizard(
+            character_factory=CharacterFactory(dice_roller=dice_roller),
+            data_loader=DataLoader(),
+            dice_roller=dice_roller,
+        )
+
+    def _drive_template(self, wizard, template_id):
+        mock_text = MagicMock()
+        mock_text.ask.return_value = "Test"
+
+        with patch("terminal_client.ui.character_wizard.questionary.text", return_value=mock_text):
+            with patch("terminal_client.ui.character_wizard.console.print"):
+                with patch("terminal_client.ui.character_wizard.print_status_message"):
+                    with patch.object(wizard, "_finalize_character", return_value=None):
+                        wizard._create_from_template(template_id)
+
+    def test_template_honors_equipment_choice(self, wizard):
+        """A template declaring equipment_choice: 2 should set the index."""
+        wizard.templates_data["custom_fighter"] = {
+            "name": "Custom Fighter",
+            "description": "Test fighter with chosen loadout",
+            "race": "human",
+            "class": "fighter",
+            "abilities": {
+                "strength": 15,
+                "dexterity": 12,
+                "constitution": 14,
+                "intelligence": 8,
+                "wisdom": 13,
+                "charisma": 10,
+            },
+            "skill_choices": ["athletics", "intimidation"],
+            "equipment_choice": 2,
+        }
+        self._drive_template(wizard, "custom_fighter")
+        assert wizard.equipment_option_index == 2
+
+    def test_template_defaults_equipment_choice_zero(self, wizard):
+        """A template without equipment_choice keeps the default of 0."""
+        wizard.templates_data["legacy_fighter"] = {
+            "name": "Legacy Fighter",
+            "description": "Pre-#382 template (no equipment_choice)",
+            "race": "human",
+            "class": "fighter",
+            "abilities": {
+                "strength": 15,
+                "dexterity": 12,
+                "constitution": 14,
+                "intelligence": 8,
+                "wisdom": 13,
+                "charisma": 10,
+            },
+            "skill_choices": ["athletics", "intimidation"],
+        }
+        wizard.equipment_option_index = 99  # poison value to prove a write happened
+        self._drive_template(wizard, "legacy_fighter")
+        assert wizard.equipment_option_index == 0

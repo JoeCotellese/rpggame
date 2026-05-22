@@ -798,6 +798,7 @@ class CharacterCreationWizard:
             self.race = template["race"]
             self.character_class = template["class"]
             self.abilities = template["abilities"].copy()
+            self.equipment_option_index = template.get("equipment_choice", 0)
 
             # Apply racial bonuses
             self.abilities = self.factory.apply_racial_bonuses(
