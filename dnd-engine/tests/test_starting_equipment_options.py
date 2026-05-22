@@ -1,6 +1,8 @@
 # ABOUTME: Tests for SRD A/B/C starting equipment options, pack expansion, and legacy fallback
 # ABOUTME: Covers _resolve_starting_items helper, apply_starting_equipment option_index, and create_character threading
 
+import pytest
+
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.character_factory import CharacterFactory
 from dnd_engine.core.creature import Abilities
@@ -110,6 +112,29 @@ class TestResolveStartingItems:
         assert ("shortsword", 1) not in resolved_a
         assert ("shortsword", 1) in resolved_b
         assert ("longsword", 1) not in resolved_b
+
+    def test_option_index_above_range_raises(self):
+        """option_index >= len(options) must raise ValueError."""
+        items = DataLoader().load_items()
+        class_data = {
+            "starting_equipment_options": [
+                {"name": "A", "items": ["longsword"], "gold": 0},
+                {"name": "B", "items": ["shortsword"], "gold": 0},
+            ]
+        }
+        with pytest.raises(ValueError, match="out of range"):
+            CharacterFactory._resolve_starting_items(class_data, items, option_index=99)
+
+    def test_option_index_negative_raises(self):
+        """Negative option_index must raise ValueError instead of silently wrapping."""
+        items = DataLoader().load_items()
+        class_data = {
+            "starting_equipment_options": [
+                {"name": "A", "items": ["longsword"], "gold": 0},
+            ]
+        }
+        with pytest.raises(ValueError, match="out of range"):
+            CharacterFactory._resolve_starting_items(class_data, items, option_index=-1)
 
     def test_pack_item_expands_to_contents(self):
         items = DataLoader().load_items()

@@ -25,7 +25,7 @@ class InventoryItem:
     """
 
     item_id: str
-    category: str  # "weapons", "armor", "consumables"
+    category: str  # "weapons", "armor", "consumables", "tools", "ammunition", "equipment"
     quantity: int = 1
     quest_item: bool = False  # Quest items don't transfer between campaigns
 
@@ -76,7 +76,8 @@ class Inventory:
 
         Args:
             item_id: ID of the item from items.json
-            category: Item category ("weapons", "armor", "consumables")
+            category: Item category — one of "weapons", "armor", "consumables",
+                "tools", "ammunition", or "equipment"
             quantity: Number to add (default 1)
             quest_item: Whether this item is campaign-specific (won't transfer)
 
