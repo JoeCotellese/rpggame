@@ -77,6 +77,7 @@ class CharacterCreationWizard:
         self.skill_proficiencies: list[str] = []
         self.expertise_skills: list[str] = []
         self.selected_spells: list[str] = []
+        self.equipment_option_index: int = 0
         self.level: int = 1
 
     def _load_templates(self) -> dict[str, Any]:
@@ -173,6 +174,7 @@ class CharacterCreationWizard:
             ("Class", self._custom_step_class),
             ("Abilities", self._custom_step_abilities),
             ("Skills", self._custom_step_skills),
+            ("Equipment", self._custom_step_equipment),
             ("Name", self._custom_step_name),
         ]
 
@@ -410,6 +412,73 @@ class CharacterCreationWizard:
             return self._get_navigation_choice()
         except (EOFError, KeyboardInterrupt):
             return "cancel"
+
+    def _custom_step_equipment(self) -> str:
+        """Custom path: pick a starting equipment option (A/B/C) for the class.
+
+        Classes that only declare the legacy `starting_equipment` field (no
+        `starting_equipment_options`) skip the prompt and keep the default
+        index of 0, since the engine ignores `option_index` in that case.
+        """
+        class_data = self.classes_data[self.character_class]
+        options = class_data.get("starting_equipment_options")
+        if not options:
+            return "next"
+
+        choices = []
+        for index, option in enumerate(options):
+            summary = self._format_option_summary(option)
+            choices.append(questionary.Choice(title=summary, value=index))
+        choices.append(questionary.Choice(title="← Back", value="back"))
+
+        try:
+            selected = questionary.select(
+                "Choose your starting equipment loadout:",
+                choices=choices,
+                use_arrow_keys=True,
+            ).ask()
+
+            if selected is None:
+                return "cancel"
+            if selected == "back":
+                return "back"
+
+            self.equipment_option_index = selected
+            option = options[selected]
+            print_status_message(f"✓ Equipment: {option['name']}", "success")
+
+            return self._get_navigation_choice()
+        except (EOFError, KeyboardInterrupt):
+            return "cancel"
+
+    def _format_option_summary(self, option: dict[str, Any]) -> str:
+        """Build a one-line label for an equipment option, truncated for display."""
+        item_names: list[str] = []
+        for item_id in option.get("items", []):
+            display = self._lookup_item_display_name(item_id)
+            item_names.append(display)
+        items_str = ", ".join(item_names) if item_names else "(no items)"
+        gold = option.get("gold", 0)
+        label = f"{option['name']} — {items_str} ({gold} gp)"
+        if len(label) > 100:
+            label = label[:97] + "..."
+        return label
+
+    def _lookup_item_display_name(self, item_id: str) -> str:
+        """Resolve an item id to its display name across all categories."""
+        for category in (
+            "weapons",
+            "armor",
+            "consumables",
+            "tools",
+            "ammunition",
+            "equipment",
+            "packs",
+        ):
+            entry = self.items_data.get(category, {}).get(item_id)
+            if entry:
+                return entry.get("name", item_id.replace("_", " ").title())
+        return item_id.replace("_", " ").title()
 
     def _select_skills_questionary(
         self, class_data: dict[str, Any], skills_data: dict[str, Any]

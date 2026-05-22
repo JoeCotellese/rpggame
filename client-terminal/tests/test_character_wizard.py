@@ -502,3 +502,91 @@ class TestCharacterCreationWizard:
 
         assert character is not None
         assert character.name == "Test Character"
+
+
+class TestCustomStepEquipment:
+    """Unit tests for the custom-path Equipment step (issue #382)."""
+
+    @pytest.fixture
+    def wizard(self):
+        dice_roller = DiceRoller(seed=42)
+        factory = CharacterFactory(dice_roller=dice_roller)
+        return CharacterCreationWizard(
+            character_factory=factory, data_loader=DataLoader(), dice_roller=dice_roller
+        )
+
+    def test_wizard_initializes_equipment_option_index_to_zero(self, wizard):
+        """Default equipment_option_index should be 0 (Standard Loadout)."""
+        assert wizard.equipment_option_index == 0
+
+    def test_custom_step_equipment_records_selection(self, wizard):
+        """Selecting option 1 stores its index on the wizard and continues."""
+        wizard.character_class = "fighter"
+
+        mock_select = MagicMock()
+        mock_select.ask.return_value = 1
+
+        mock_nav = MagicMock()
+        mock_nav.ask.return_value = "next"
+
+        with patch(
+            "terminal_client.ui.character_wizard.questionary.select",
+            side_effect=[mock_select, mock_nav],
+        ):
+            with patch("terminal_client.ui.character_wizard.print_status_message"):
+                with patch("terminal_client.ui.character_wizard.console.print"):
+                    result = wizard._custom_step_equipment()
+
+        assert wizard.equipment_option_index == 1
+        assert result == "next"
+
+    def test_custom_step_equipment_back_navigation(self, wizard):
+        """Back sentinel returns 'back' without setting an option."""
+        wizard.character_class = "fighter"
+        wizard.equipment_option_index = 0
+
+        mock_select = MagicMock()
+        mock_select.ask.return_value = "back"
+
+        with patch(
+            "terminal_client.ui.character_wizard.questionary.select", return_value=mock_select
+        ):
+            with patch("terminal_client.ui.character_wizard.console.print"):
+                result = wizard._custom_step_equipment()
+
+        assert result == "back"
+        assert wizard.equipment_option_index == 0
+
+    def test_custom_step_equipment_cancel(self, wizard):
+        """questionary returning None (Ctrl-C) cancels the step."""
+        wizard.character_class = "fighter"
+
+        mock_select = MagicMock()
+        mock_select.ask.return_value = None
+
+        with patch(
+            "terminal_client.ui.character_wizard.questionary.select", return_value=mock_select
+        ):
+            with patch("terminal_client.ui.character_wizard.console.print"):
+                result = wizard._custom_step_equipment()
+
+        assert result == "cancel"
+
+    def test_custom_step_equipment_no_options_skipped(self, wizard):
+        """Classes without starting_equipment_options skip the step silently."""
+        # Mutate the in-memory class data to simulate the legacy fallback
+        wizard.character_class = "fighter"
+        wizard.classes_data["fighter"] = {
+            k: v
+            for k, v in wizard.classes_data["fighter"].items()
+            if k != "starting_equipment_options"
+        }
+
+        with patch(
+            "terminal_client.ui.character_wizard.questionary.select"
+        ) as mock_select_module:
+            result = wizard._custom_step_equipment()
+
+        assert result == "next"
+        assert wizard.equipment_option_index == 0
+        mock_select_module.assert_not_called()
