@@ -77,6 +77,7 @@ class CharacterCreationWizard:
         self.skill_proficiencies: list[str] = []
         self.expertise_skills: list[str] = []
         self.selected_spells: list[str] = []
+        self.equipment_option_index: int = 0
         self.level: int = 1
 
     def _load_templates(self) -> dict[str, Any]:
@@ -173,6 +174,7 @@ class CharacterCreationWizard:
             ("Class", self._custom_step_class),
             ("Abilities", self._custom_step_abilities),
             ("Skills", self._custom_step_skills),
+            ("Equipment", self._custom_step_equipment),
             ("Name", self._custom_step_name),
         ]
 
@@ -410,6 +412,73 @@ class CharacterCreationWizard:
             return self._get_navigation_choice()
         except (EOFError, KeyboardInterrupt):
             return "cancel"
+
+    def _custom_step_equipment(self) -> str:
+        """Custom path: pick a starting equipment option (A/B/C) for the class.
+
+        Classes that only declare the legacy `starting_equipment` field (no
+        `starting_equipment_options`) skip the prompt and keep the default
+        index of 0, since the engine ignores `option_index` in that case.
+        """
+        class_data = self.classes_data[self.character_class]
+        options = class_data.get("starting_equipment_options")
+        if not options:
+            return "next"
+
+        choices = []
+        for index, option in enumerate(options):
+            summary = self._format_option_summary(option)
+            choices.append(questionary.Choice(title=summary, value=index))
+        choices.append(questionary.Choice(title="← Back", value="back"))
+
+        try:
+            selected = questionary.select(
+                "Choose your starting equipment loadout:",
+                choices=choices,
+                use_arrow_keys=True,
+            ).ask()
+
+            if selected is None:
+                return "cancel"
+            if selected == "back":
+                return "back"
+
+            self.equipment_option_index = selected
+            option = options[selected]
+            print_status_message(f"✓ Equipment: {option['name']}", "success")
+
+            return self._get_navigation_choice()
+        except (EOFError, KeyboardInterrupt):
+            return "cancel"
+
+    def _format_option_summary(self, option: dict[str, Any]) -> str:
+        """Build a one-line label for an equipment option, truncated for display."""
+        item_names: list[str] = []
+        for item_id in option.get("items", []):
+            display = self._lookup_item_display_name(item_id)
+            item_names.append(display)
+        items_str = ", ".join(item_names) if item_names else "(no items)"
+        gold = option.get("gold", 0)
+        label = f"{option['name']} — {items_str} ({gold} gp)"
+        if len(label) > 100:
+            label = label[:97] + "..."
+        return label
+
+    def _lookup_item_display_name(self, item_id: str) -> str:
+        """Resolve an item id to its display name across all categories."""
+        for category in (
+            "weapons",
+            "armor",
+            "consumables",
+            "tools",
+            "ammunition",
+            "equipment",
+            "packs",
+        ):
+            entry = self.items_data.get(category, {}).get(item_id)
+            if entry:
+                return entry.get("name", item_id.replace("_", " ").title())
+        return item_id.replace("_", " ").title()
 
     def _select_skills_questionary(
         self, class_data: dict[str, Any], skills_data: dict[str, Any]
@@ -729,6 +798,7 @@ class CharacterCreationWizard:
             self.race = template["race"]
             self.character_class = template["class"]
             self.abilities = template["abilities"].copy()
+            self.equipment_option_index = template.get("equipment_choice", 0)
 
             # Apply racial bonuses
             self.abilities = self.factory.apply_racial_bonuses(
@@ -876,6 +946,14 @@ class CharacterCreationWizard:
         if self.character_class == "rogue" and len(self.skill_proficiencies) >= 2:
             self.expertise_skills = rng.sample(self.skill_proficiencies, 2)
 
+        # Random starting equipment option (A/B/C). Classes that only declare
+        # the legacy `starting_equipment` field keep the default index of 0.
+        equipment_options = class_data.get("starting_equipment_options")
+        if equipment_options:
+            self.equipment_option_index = rng.randrange(len(equipment_options))
+        else:
+            self.equipment_option_index = 0
+
     def _show_random_preview(self) -> None:
         """Show preview of randomly generated character."""
         console.print(f"[bold]Race:[/bold] {self.races_data[self.race]['name']}")
@@ -1002,10 +1080,11 @@ class CharacterCreationWizard:
         con_modifier = abilities_obj.con_mod
         hp = self.factory.calculate_hp(class_data, con_modifier)
 
-        # Get AC from starting equipment
-        starting_equipment = class_data.get("starting_equipment", [])
+        # AC depends on whatever armor the resolved starting loadout grants.
+        # Resolve from the chosen option (or the legacy starting_equipment).
+        resolved_loadout = self._resolved_loadout_items(class_data)
         armor_id = None
-        for item_id in starting_equipment:
+        for item_id in resolved_loadout:
             if item_id in self.items_data.get("armor", {}):
                 armor_id = item_id
                 break
@@ -1032,27 +1111,73 @@ class CharacterCreationWizard:
             console.print()
 
         # Equipment preview
-        if starting_equipment:
+        self._render_equipment_summary(class_data)
+
+    def _resolved_loadout_items(self, class_data: dict[str, Any]) -> list[str]:
+        """Return the flat list of item ids for the currently selected loadout.
+
+        Honors `equipment_option_index` when the class declares
+        `starting_equipment_options`; otherwise falls back to the legacy
+        `starting_equipment` list.
+        """
+        options = class_data.get("starting_equipment_options")
+        if options:
+            index = self.equipment_option_index
+            if 0 <= index < len(options):
+                return list(options[index].get("items", []))
+        return list(class_data.get("starting_equipment", []))
+
+    def _render_equipment_summary(self, class_data: dict[str, Any]) -> None:
+        """Print the Starting Equipment section of the summary screen."""
+        options = class_data.get("starting_equipment_options")
+        if options and 0 <= self.equipment_option_index < len(options):
+            option = options[self.equipment_option_index]
             console.print("[bold]Starting Equipment:[/bold]")
-            weapon_id = None
-            for item_id in starting_equipment:
-                if item_id in self.items_data.get("weapons", {}):
-                    weapon_id = item_id
-                    weapon_data = self.items_data["weapons"][weapon_id]
-                    console.print(f"  Weapon: {weapon_data['name']}")
-                    break
+            console.print(f"  Loadout: {option['name']}")
 
-            if armor_data:
+            packs = self.items_data.get("packs", {})
+            for item_id in option.get("items", []):
+                display = self._lookup_item_display_name(item_id)
+                console.print(f"  • {display}")
+                if item_id in packs:
+                    contents = packs[item_id].get("contents", {})
+                    if contents:
+                        preview = ", ".join(
+                            f"{qty}× {self._lookup_item_display_name(cid)}"
+                            for cid, qty in list(contents.items())[:3]
+                        )
+                        more = len(contents) - 3
+                        suffix = f", +{more} more" if more > 0 else ""
+                        console.print(f"      [dim]contains: {preview}{suffix}[/dim]")
+
+            gold = option.get("gold", 0)
+            console.print(f"  Gold: {gold} gp")
+            return
+
+        # Legacy fallback: classes without options keep the previous summary.
+        starting_equipment = class_data.get("starting_equipment", [])
+        if not starting_equipment:
+            return
+        console.print("[bold]Starting Equipment:[/bold]")
+        for item_id in starting_equipment:
+            if item_id in self.items_data.get("weapons", {}):
+                weapon_data = self.items_data["weapons"][item_id]
+                console.print(f"  Weapon: {weapon_data['name']}")
+                break
+
+        for item_id in starting_equipment:
+            if item_id in self.items_data.get("armor", {}):
+                armor_data = self.items_data["armor"][item_id]
                 console.print(f"  Armor: {armor_data['name']}")
+                break
 
-            # Count consumables
-            consumable_count = sum(
-                1
-                for item_id in starting_equipment
-                if item_id in self.items_data.get("consumables", {})
-            )
-            if consumable_count > 0:
-                console.print(f"  + {consumable_count} consumable items")
+        consumable_count = sum(
+            1
+            for item_id in starting_equipment
+            if item_id in self.items_data.get("consumables", {})
+        )
+        if consumable_count > 0:
+            console.print(f"  + {consumable_count} consumable items")
 
     def _create_character(self) -> Character:
         """
@@ -1076,6 +1201,7 @@ class CharacterCreationWizard:
                 abilities=self.abilities,  # Already has racial bonuses
                 skill_proficiencies=self.skill_proficiencies,
                 expertise_skills=self.expertise_skills,
+                option_index=self.equipment_option_index,
             )
 
             # If we have pre-selected spells (from template), use those
