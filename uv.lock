@@ -506,6 +506,7 @@ name = "dnd-2d-client"
 version = "0.1.0"
 source = { editable = "client-2d" }
 dependencies = [
+    { name = "dnd-engine" },
     { name = "fastmcp" },
     { name = "numpy" },
 ]
@@ -528,6 +529,7 @@ mcp = [
 [package.metadata]
 requires-dist = [
     { name = "arcade", marker = "extra == 'graphics'", specifier = ">=2.6.0" },
+    { name = "dnd-engine", editable = "dnd-engine" },
     { name = "fastmcp", specifier = ">=2.14.2" },
     { name = "mcp", extras = ["cli"], marker = "extra == 'mcp'", specifier = ">=1.0.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.7.0" },
@@ -537,7 +539,7 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
 ]
-provides-extras = ["graphics", "engine", "mcp", "dev"]
+provides-extras = ["graphics", "mcp", "dev"]
 
 [[package]]
 name = "dnd-engine"
