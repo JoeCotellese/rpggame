@@ -13,8 +13,8 @@ authors = [
 ]
 
 dependencies = [
+    "dnd-engine",
     "fastmcp>=2.14.2",
-    # Phase 1: Standalone systems (fog, lighting, input, assets) - no engine dependency
     "numpy>=1.24.0",
 ]
 
@@ -22,10 +22,6 @@ dependencies = [
 graphics = [
     # Required for actual rendering (not needed for unit tests)
     "arcade>=2.6.0",
-]
-engine = [
-    # Required for Phase 2+ integration with dnd-engine
-    # "dnd-engine",  # Uncomment when ready for integration
 ]
 mcp = [
     # Required for MCP server (Claude-driven playtesting)
