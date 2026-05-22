@@ -557,18 +557,24 @@ class GameSession:
         elif check.get("party_wiped"):
             self._add_combat_log("Defeat! Your party has fallen...")
 
-    def execute_attack(self) -> dict[str, Any] | None:
+    def execute_attack(self, *, disadvantage: bool = False) -> dict[str, Any] | None:
         """Execute an attack on the currently-selected enemy.
 
         Reads ``self.selected_enemy`` (the engine's enemy index) and
         delegates to the engine adapter. Called by both GameWindow's
         input handler and the MCP attack path.
 
+        Args:
+            disadvantage: Roll with disadvantage (e.g. ranged attack at long
+                range). Forwarded to the engine adapter.
+
         Returns the engine adapter's attack-result dict on success so callers
         (notably the MCP attack handler) can render hit/miss/damage details.
         Returns ``None`` if the engine rejected the attack outright.
         """
-        result = self.engine.execute_attack(target_index=self.selected_enemy)
+        result = self.engine.execute_attack(
+            target_index=self.selected_enemy, disadvantage=disadvantage
+        )
 
         if result["success"]:
             if result["hit"]:
@@ -993,7 +999,7 @@ class GameSession:
         pre_attack_combatant = current["name"] if current else None
 
         self.selected_enemy = target_entity.enemy_index
-        attack_result = self.execute_attack()
+        attack_result = self.execute_attack(disadvantage=in_long_range)
 
         post_attack_combatant = self.engine.get_current_combatant()
         post_name = post_attack_combatant["name"] if post_attack_combatant else None
