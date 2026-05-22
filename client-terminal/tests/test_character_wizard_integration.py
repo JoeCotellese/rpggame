@@ -352,3 +352,80 @@ class TestCharacterCreationFlow:
         assert character.spellcasting_ability == "int"
         # Either known_spells from wizard state or initialized by factory
         assert len(character.known_spells) > 0
+
+
+class TestEquipmentOptionFlow:
+    """Verify wizard equipment_option_index actually reaches the inventory."""
+
+    @pytest.fixture
+    def wizard(self):
+        dice_roller = DiceRoller(seed=42)
+        return CharacterCreationWizard(
+            character_factory=CharacterFactory(dice_roller=dice_roller),
+            data_loader=DataLoader(),
+            dice_roller=dice_roller,
+        )
+
+    def _baseline_fighter(self, wizard, option_index):
+        wizard.name = "Test Fighter"
+        wizard.race = "human"
+        wizard.character_class = "fighter"
+        wizard.abilities = {
+            "strength": 16,
+            "dexterity": 14,
+            "constitution": 15,
+            "intelligence": 10,
+            "wisdom": 12,
+            "charisma": 8,
+        }
+        wizard.skill_proficiencies = ["athletics", "intimidation"]
+        wizard.expertise_skills = []
+        wizard.selected_spells = []
+        wizard.equipment_option_index = option_index
+
+    def test_fighter_option_zero_grants_standard_loadout(self, wizard):
+        self._baseline_fighter(wizard, 0)
+        character = wizard._create_character()
+
+        assert character.inventory.has_item("longsword")
+        assert character.inventory.has_item("chain_mail")
+        # Standard Loadout gold: 10 gp
+        assert character.inventory.gold == 10
+
+    def test_fighter_option_one_grants_skirmisher_loadout(self, wizard):
+        self._baseline_fighter(wizard, 1)
+        character = wizard._create_character()
+
+        assert character.inventory.has_item("studded_leather")
+        assert character.inventory.has_item("longbow")
+        assert character.inventory.has_item("arrows")
+        assert character.inventory.has_item("quiver")
+        # Skirmisher gold: 11 gp
+        assert character.inventory.gold == 11
+        # Should NOT have the standard loadout's armor
+        assert not character.inventory.has_item("chain_mail")
+
+    def test_rogue_freelancer_option_two_grants_gold_only(self, wizard):
+        wizard.name = "Test Rogue"
+        wizard.race = "halfling"
+        wizard.character_class = "rogue"
+        wizard.abilities = {
+            "strength": 8,
+            "dexterity": 16,
+            "constitution": 12,
+            "intelligence": 13,
+            "wisdom": 10,
+            "charisma": 14,
+        }
+        wizard.skill_proficiencies = ["stealth", "sleight_of_hand", "deception", "perception"]
+        wizard.expertise_skills = ["stealth", "sleight_of_hand"]
+        wizard.selected_spells = []
+        wizard.equipment_option_index = 2  # Freelancer: 100 gp, no items
+
+        character = wizard._create_character()
+
+        # Freelancer is a gold-only loadout
+        assert character.inventory.gold == 100
+        assert not character.inventory.has_item("rapier")
+        assert not character.inventory.has_item("shortbow")
+        assert not character.inventory.has_item("leather_armor")
