@@ -786,3 +786,51 @@ class TestSummaryDisplaysChosenEquipment:
         output = self._capture_summary(wizard)
         assert "Mercenary" in output
         assert "155" in output
+
+
+class TestCreateCharacterWiresOptionIndex:
+    """`_create_character` must pass equipment_option_index to the factory."""
+
+    @pytest.fixture
+    def wizard(self):
+        dice_roller = DiceRoller(seed=42)
+        return CharacterCreationWizard(
+            character_factory=CharacterFactory(dice_roller=dice_roller),
+            data_loader=DataLoader(),
+            dice_roller=dice_roller,
+        )
+
+    def _set_fighter_state(self, wizard, option_index):
+        wizard.name = "Test"
+        wizard.race = "human"
+        wizard.character_class = "fighter"
+        wizard.abilities = {
+            "strength": 16,
+            "dexterity": 14,
+            "constitution": 15,
+            "intelligence": 10,
+            "wisdom": 12,
+            "charisma": 8,
+        }
+        wizard.skill_proficiencies = ["athletics", "intimidation"]
+        wizard.expertise_skills = []
+        wizard.selected_spells = []
+        wizard.equipment_option_index = option_index
+
+    def test_option_zero_grants_standard_loadout(self, wizard):
+        self._set_fighter_state(wizard, 0)
+        with patch("terminal_client.ui.character_wizard.console.status"):
+            with patch("terminal_client.ui.character_wizard.print_status_message"):
+                character = wizard._create_character()
+        assert character.inventory.has_item("chain_mail")
+        assert character.inventory.has_item("longsword")
+        assert not character.inventory.has_item("longbow")
+
+    def test_option_one_grants_skirmisher_loadout(self, wizard):
+        self._set_fighter_state(wizard, 1)
+        with patch("terminal_client.ui.character_wizard.console.status"):
+            with patch("terminal_client.ui.character_wizard.print_status_message"):
+                character = wizard._create_character()
+        assert character.inventory.has_item("longbow")
+        assert character.inventory.has_item("studded_leather")
+        assert not character.inventory.has_item("chain_mail")

@@ -1201,6 +1201,7 @@ class CharacterCreationWizard:
                 abilities=self.abilities,  # Already has racial bonuses
                 skill_proficiencies=self.skill_proficiencies,
                 expertise_skills=self.expertise_skills,
+                option_index=self.equipment_option_index,
             )
 
             # If we have pre-selected spells (from template), use those
