@@ -1080,10 +1080,11 @@ class CharacterCreationWizard:
         con_modifier = abilities_obj.con_mod
         hp = self.factory.calculate_hp(class_data, con_modifier)
 
-        # Get AC from starting equipment
-        starting_equipment = class_data.get("starting_equipment", [])
+        # AC depends on whatever armor the resolved starting loadout grants.
+        # Resolve from the chosen option (or the legacy starting_equipment).
+        resolved_loadout = self._resolved_loadout_items(class_data)
         armor_id = None
-        for item_id in starting_equipment:
+        for item_id in resolved_loadout:
             if item_id in self.items_data.get("armor", {}):
                 armor_id = item_id
                 break
@@ -1110,27 +1111,73 @@ class CharacterCreationWizard:
             console.print()
 
         # Equipment preview
-        if starting_equipment:
+        self._render_equipment_summary(class_data)
+
+    def _resolved_loadout_items(self, class_data: dict[str, Any]) -> list[str]:
+        """Return the flat list of item ids for the currently selected loadout.
+
+        Honors `equipment_option_index` when the class declares
+        `starting_equipment_options`; otherwise falls back to the legacy
+        `starting_equipment` list.
+        """
+        options = class_data.get("starting_equipment_options")
+        if options:
+            index = self.equipment_option_index
+            if 0 <= index < len(options):
+                return list(options[index].get("items", []))
+        return list(class_data.get("starting_equipment", []))
+
+    def _render_equipment_summary(self, class_data: dict[str, Any]) -> None:
+        """Print the Starting Equipment section of the summary screen."""
+        options = class_data.get("starting_equipment_options")
+        if options and 0 <= self.equipment_option_index < len(options):
+            option = options[self.equipment_option_index]
             console.print("[bold]Starting Equipment:[/bold]")
-            weapon_id = None
-            for item_id in starting_equipment:
-                if item_id in self.items_data.get("weapons", {}):
-                    weapon_id = item_id
-                    weapon_data = self.items_data["weapons"][weapon_id]
-                    console.print(f"  Weapon: {weapon_data['name']}")
-                    break
+            console.print(f"  Loadout: {option['name']}")
 
-            if armor_data:
+            packs = self.items_data.get("packs", {})
+            for item_id in option.get("items", []):
+                display = self._lookup_item_display_name(item_id)
+                console.print(f"  • {display}")
+                if item_id in packs:
+                    contents = packs[item_id].get("contents", {})
+                    if contents:
+                        preview = ", ".join(
+                            f"{qty}× {self._lookup_item_display_name(cid)}"
+                            for cid, qty in list(contents.items())[:3]
+                        )
+                        more = len(contents) - 3
+                        suffix = f", +{more} more" if more > 0 else ""
+                        console.print(f"      [dim]contains: {preview}{suffix}[/dim]")
+
+            gold = option.get("gold", 0)
+            console.print(f"  Gold: {gold} gp")
+            return
+
+        # Legacy fallback: classes without options keep the previous summary.
+        starting_equipment = class_data.get("starting_equipment", [])
+        if not starting_equipment:
+            return
+        console.print("[bold]Starting Equipment:[/bold]")
+        for item_id in starting_equipment:
+            if item_id in self.items_data.get("weapons", {}):
+                weapon_data = self.items_data["weapons"][item_id]
+                console.print(f"  Weapon: {weapon_data['name']}")
+                break
+
+        for item_id in starting_equipment:
+            if item_id in self.items_data.get("armor", {}):
+                armor_data = self.items_data["armor"][item_id]
                 console.print(f"  Armor: {armor_data['name']}")
+                break
 
-            # Count consumables
-            consumable_count = sum(
-                1
-                for item_id in starting_equipment
-                if item_id in self.items_data.get("consumables", {})
-            )
-            if consumable_count > 0:
-                console.print(f"  + {consumable_count} consumable items")
+        consumable_count = sum(
+            1
+            for item_id in starting_equipment
+            if item_id in self.items_data.get("consumables", {})
+        )
+        if consumable_count > 0:
+            console.print(f"  + {consumable_count} consumable items")
 
     def _create_character(self) -> Character:
         """

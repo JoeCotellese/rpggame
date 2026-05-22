@@ -719,3 +719,70 @@ class TestTemplateEquipmentChoice:
         wizard.equipment_option_index = 99  # poison value to prove a write happened
         self._drive_template(wizard, "legacy_fighter")
         assert wizard.equipment_option_index == 0
+
+
+class TestSummaryDisplaysChosenEquipment:
+    """The summary screen should reflect the chosen equipment option."""
+
+    @pytest.fixture
+    def wizard(self):
+        return CharacterCreationWizard(
+            character_factory=CharacterFactory(),
+            data_loader=DataLoader(),
+            dice_roller=DiceRoller(seed=42),
+        )
+
+    def _capture_summary(self, wizard) -> str:
+        """Run _show_character_summary and return the joined console output."""
+        captured: list[str] = []
+
+        def fake_print(*args, **kwargs):
+            captured.append(" ".join(str(a) for a in args))
+
+        with patch(
+            "terminal_client.ui.character_wizard.console.print", side_effect=fake_print
+        ):
+            wizard._show_character_summary()
+
+        return "\n".join(captured)
+
+    def _set_state(self, wizard, character_class, option_index):
+        wizard.name = "Tester"
+        wizard.race = "human"
+        wizard.character_class = character_class
+        wizard.abilities = {
+            "strength": 15,
+            "dexterity": 12,
+            "constitution": 14,
+            "intelligence": 8,
+            "wisdom": 13,
+            "charisma": 10,
+        }
+        wizard.skill_proficiencies = []
+        wizard.expertise_skills = []
+        wizard.equipment_option_index = option_index
+
+    def test_summary_shows_fighter_skirmisher_loadout(self, wizard):
+        """Fighter option 1 (Skirmisher): longbow + studded leather + 11 gp."""
+        self._set_state(wizard, "fighter", 1)
+        output = self._capture_summary(wizard)
+        assert "Skirmisher" in output
+        assert "Longbow" in output
+        assert "Studded Leather" in output
+        assert "11" in output  # gold
+
+    def test_summary_shows_standard_loadout(self, wizard):
+        """Fighter option 0 (Standard Loadout): chain mail + longsword."""
+        self._set_state(wizard, "fighter", 0)
+        output = self._capture_summary(wizard)
+        assert "Standard Loadout" in output
+        assert "Chain Mail" in output
+        assert "Longsword" in output
+        assert "10" in output  # gold
+
+    def test_summary_shows_gold_only_loadout(self, wizard):
+        """Fighter option 2 (Mercenary): 155 gp, no items."""
+        self._set_state(wizard, "fighter", 2)
+        output = self._capture_summary(wizard)
+        assert "Mercenary" in output
+        assert "155" in output
