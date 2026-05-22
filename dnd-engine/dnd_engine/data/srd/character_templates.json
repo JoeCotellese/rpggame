@@ -13,7 +13,8 @@
       "charisma": 10
     },
     "skill_choices": ["athletics", "intimidation"],
-    "equipment_preference": "melee"
+    "equipment_preference": "melee",
+    "equipment_choice": 0
   },
   "sneaky_rogue": {
     "name": "Sneaky Rogue",
@@ -30,7 +31,8 @@
     },
     "skill_choices": ["stealth", "sleight_of_hand", "deception", "perception"],
     "expertise_choices": ["stealth", "sleight_of_hand"],
-    "equipment_preference": "finesse"
+    "equipment_preference": "finesse",
+    "equipment_choice": 0
   },
   "wise_wizard": {
     "name": "Wise Wizard",
@@ -50,7 +52,8 @@
       "cantrips": ["fire_bolt", "mage_hand", "light"],
       "level_1": ["mage_armor", "shield", "magic_missile", "detect_magic", "identify", "burning_hands"]
     },
-    "equipment_preference": "arcane_focus"
+    "equipment_preference": "arcane_focus",
+    "equipment_choice": 0
   },
   "arcane_wizard": {
     "name": "Arcane Wizard",
@@ -70,7 +73,8 @@
       "cantrips": ["fire_bolt", "mage_hand", "light"],
       "level_1": ["mage_armor", "magic_missile", "shield", "detect_magic", "burning_hands", "sleep"]
     },
-    "equipment_preference": "arcane_focus"
+    "equipment_preference": "arcane_focus",
+    "equipment_choice": 0
   },
   "versatile_fighter": {
     "name": "Versatile Fighter",
@@ -86,7 +90,8 @@
       "charisma": 8
     },
     "skill_choices": ["acrobatics", "perception"],
-    "equipment_preference": "ranged"
+    "equipment_preference": "ranged",
+    "equipment_choice": 0
   },
   "cunning_rogue": {
     "name": "Cunning Rogue",
@@ -103,6 +108,7 @@
     },
     "skill_choices": ["investigation", "perception", "stealth", "sleight_of_hand"],
     "expertise_choices": ["investigation", "stealth"],
-    "equipment_preference": "finesse"
+    "equipment_preference": "finesse",
+    "equipment_choice": 0
   }
 }
