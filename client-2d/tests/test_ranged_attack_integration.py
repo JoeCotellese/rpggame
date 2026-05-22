@@ -361,3 +361,60 @@ class TestSessionLongRangeDisadvantage:
         session_in_combat.attack(0)
 
         assert captured["disadvantage"] is False
+
+
+class TestSessionNoAmmoAttack:
+    """Regression coverage for issue #394.
+
+    When the engine short-circuits an attack because the equipped weapon has
+    no ammunition, the session must not advance the turn and must log the
+    real engine error (not a fabricated miss).
+    """
+
+    SCENARIO_DIR = (
+        Path(__file__).parent.parent.parent
+        / "dnd-engine"
+        / "tests"
+        / "scenarios"
+        / "yaml"
+    )
+
+    @pytest.fixture
+    def session_no_ammo(self):
+        from client_2d.session import GameSession
+
+        session = GameSession(enable_mcp=False, dev_mode=False)
+        session.load_scenario(str(self.SCENARIO_DIR / "ranged_attack_basic.yaml"))
+        assert session.engine.in_combat
+        # Aim at the live goblin; index matches the engine's active_enemies.
+        for idx, enemy in enumerate(session.engine.game_state.active_enemies):
+            if enemy.is_alive:
+                session.selected_enemy = idx
+                break
+        else:
+            pytest.skip("Scenario has no live enemy")
+        return session
+
+    def test_no_ammo_attack_does_not_advance_turn(self, session_no_ammo):
+        pre = session_no_ammo.engine.get_current_combatant()
+        pre_name = pre["name"] if pre else None
+
+        session_no_ammo.execute_attack()
+
+        post = session_no_ammo.engine.get_current_combatant()
+        post_name = post["name"] if post else None
+        assert pre_name == post_name, (
+            "Turn should not advance when the attack failed for lack of ammo"
+        )
+
+    def test_no_ammo_attack_logs_engine_error_to_combat_log(self, session_no_ammo):
+        session_no_ammo.execute_attack()
+
+        assert any("No ammunition" in entry for entry in session_no_ammo.combat_log), (
+            f"Expected ammo error in combat log, got: {session_no_ammo.combat_log}"
+        )
+
+    def test_no_ammo_attack_returns_none(self, session_no_ammo):
+        result = session_no_ammo.execute_attack()
+
+        assert result is None

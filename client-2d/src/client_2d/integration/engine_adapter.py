@@ -667,7 +667,8 @@ class EngineAdapter:
             )
 
             return {
-                "success": True,
+                "success": result.success,
+                "error": result.error if not result.success else None,
                 "hit": result.attack_result.hit if result.attack_result else False,
                 "damage": result.attack_result.damage if result.attack_result else 0,
                 "critical": result.attack_result.critical_hit if result.attack_result else False,
