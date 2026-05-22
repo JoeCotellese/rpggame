@@ -14,13 +14,7 @@ from pathlib import Path
 
 import pytest
 
-SCENARIO_DIR = (
-    Path(__file__).parent.parent.parent
-    / "dnd-engine"
-    / "tests"
-    / "scenarios"
-    / "yaml"
-)
+SCENARIO_DIR = Path(__file__).parent.parent.parent / "dnd-engine" / "tests" / "scenarios" / "yaml"
 
 
 @pytest.fixture
@@ -128,9 +122,7 @@ class TestEngineAdapterSuccessPassthrough:
         def _stub(*_args, **_kwargs):
             return fake_result
 
-        monkeypatch.setattr(
-            adapter_no_ammo.game_state, "execute_player_attack", _stub
-        )
+        monkeypatch.setattr(adapter_no_ammo.game_state, "execute_player_attack", _stub)
 
         result = adapter_no_ammo.execute_attack(target_index=target_index)
 

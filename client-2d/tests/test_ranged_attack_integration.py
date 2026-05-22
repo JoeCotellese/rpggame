@@ -410,9 +410,9 @@ class TestSessionNoAmmoAttack:
     def test_no_ammo_attack_logs_engine_error_to_combat_log(self, session_no_ammo):
         session_no_ammo.execute_attack()
 
-        assert any(
-            "No ammunition" in entry for entry in session_no_ammo.combat_log
-        ), f"Expected ammo error in combat log, got: {session_no_ammo.combat_log}"
+        assert any("No ammunition" in entry for entry in session_no_ammo.combat_log), (
+            f"Expected ammo error in combat log, got: {session_no_ammo.combat_log}"
+        )
 
     def test_no_ammo_attack_returns_none(self, session_no_ammo):
         result = session_no_ammo.execute_attack()
