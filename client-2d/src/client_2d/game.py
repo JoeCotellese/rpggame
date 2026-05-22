@@ -299,8 +299,8 @@ class GameWindow(arcade.Window):
     def _handle_combat_end(self) -> None:
         self.session._handle_combat_end()
 
-    def _execute_attack(self) -> None:
-        self.session.execute_attack()
+    def _execute_attack(self, *, disadvantage: bool = False) -> None:
+        self.session.execute_attack(disadvantage=disadvantage)
 
     def _pass_turn(self) -> None:
         self.session.pass_turn()
@@ -1282,7 +1282,7 @@ class GameWindow(arcade.Window):
             )
             return
 
-        # Log long range (disadvantage in future)
+        # Long-range attacks roll with disadvantage per D&D 5E.
         in_long_range = distance_ft > normal_range
         if in_long_range:
             self._add_combat_log(
@@ -1292,7 +1292,7 @@ class GameWindow(arcade.Window):
         # Set selected enemy and execute attack
         self.selected_enemy = target.enemy_index
         self.selected_target = target
-        self._execute_attack()
+        self._execute_attack(disadvantage=in_long_range)
 
     def _cycle_target(self, reverse: bool = False) -> None:
         """Cycle through targets sorted by distance (nearest first)."""

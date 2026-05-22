@@ -627,12 +627,16 @@ class EngineAdapter:
         self,
         target_index: int,
         attacker: Character | None = None,
+        *,
+        disadvantage: bool = False,
     ) -> dict[str, Any]:
-        """Execute a melee attack against an enemy.
+        """Execute an attack against an enemy.
 
         Args:
             target_index: Index into active_enemies list.
             attacker: Character making the attack. Uses current turn character if not provided.
+            disadvantage: Roll the attack with disadvantage (e.g. ranged attack
+                at long range). Forwarded to the engine's d20 roll.
 
         Returns:
             Dict with attack result info (hit, damage, target_killed, etc.)
@@ -658,7 +662,9 @@ class EngineAdapter:
 
         # Execute attack through game state
         try:
-            result = self._game_state.execute_player_attack(attacker, target)
+            result = self._game_state.execute_player_attack(
+                attacker, target, disadvantage=disadvantage
+            )
 
             return {
                 "success": True,
@@ -671,6 +677,9 @@ class EngineAdapter:
                 "attack_roll": result.attack_result.attack_roll if result.attack_result else 0,
                 "attack_bonus": result.attack_result.attack_bonus if result.attack_result else 0,
                 "target_ac": result.attack_result.target_ac if result.attack_result else 0,
+                "disadvantage": (
+                    result.attack_result.disadvantage if result.attack_result else False
+                ),
             }
         except Exception as e:
             return {"success": False, "error": str(e)}

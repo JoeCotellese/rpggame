@@ -2179,7 +2179,13 @@ class GameState:
         result.resources_consumed = resources_consumed
         return result
 
-    def execute_player_attack(self, attacker: Character, target: Creature) -> "PlayerAttackResult":
+    def execute_player_attack(
+        self,
+        attacker: Character,
+        target: Creature,
+        *,
+        disadvantage: bool = False,
+    ) -> "PlayerAttackResult":
         """
         Execute a player's attack with their equipped weapon.
 
@@ -2193,6 +2199,9 @@ class GameState:
         Args:
             attacker: Character making the attack
             target: Target creature
+            disadvantage: Roll the attack with disadvantage (e.g. ranged attack
+                at long range, target obscured). Forwarded to the combat
+                engine's d20 roll.
 
         Returns:
             PlayerAttackResult with all information needed for UI display.
@@ -2250,6 +2259,7 @@ class GameState:
             defender=target,
             attack_bonus=attack_bonus,
             damage_dice=damage_dice,
+            disadvantage=disadvantage,
             apply_damage=True,
             game_state=self,
         )

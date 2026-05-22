@@ -274,3 +274,66 @@ class TestConcentrationBreak(TestExecutePlayerAttack):
             assert result.concentration_broken is None or isinstance(
                 result.concentration_broken, dict
             )
+
+
+class TestDisadvantage(TestExecutePlayerAttack):
+    """Test that the disadvantage flag is forwarded to the underlying attack roll."""
+
+    def test_disadvantage_flag_propagates_to_attack_result(
+        self, game_state, fighter, goblin
+    ):
+        """When called with disadvantage=True, the AttackResult records it."""
+        result = game_state.execute_player_attack(fighter, goblin, disadvantage=True)
+
+        assert result.success is True
+        assert result.attack_result is not None
+        assert result.attack_result.disadvantage is True
+
+    def test_default_attack_has_no_disadvantage(self, game_state, fighter, goblin):
+        """Default attack (no kwarg) records disadvantage=False."""
+        result = game_state.execute_player_attack(fighter, goblin)
+
+        assert result.success is True
+        assert result.attack_result is not None
+        assert result.attack_result.disadvantage is False
+
+    def test_disadvantage_lowers_attack_roll(
+        self, fighter, goblin, event_bus, data_loader
+    ):
+        """A disadvantaged roll is the lower of two d20s; over many trials it
+        should produce a lower average attack roll than a normal attack with
+        the same seed sequence.
+        """
+        normal_rolls: list[int] = []
+        disadv_rolls: list[int] = []
+
+        for seed in range(50):
+            for bucket, disadvantage in ((normal_rolls, False), (disadv_rolls, True)):
+                dice_roller = DiceRoller(seed=seed)
+                party = Party([fighter])
+                gs = GameState(
+                    party=party,
+                    dungeon_name="test_dungeon",
+                    event_bus=event_bus,
+                    data_loader=data_loader,
+                    dice_roller=dice_roller,
+                )
+                # Use a fresh goblin per trial so HP changes don't matter.
+                target = Creature(
+                    name="Goblin",
+                    max_hp=999,
+                    ac=99,  # Guarantees miss so target stays alive
+                    abilities=Abilities(8, 14, 10, 10, 8, 8),
+                )
+                gs.active_enemies = [target]
+                result = gs.execute_player_attack(
+                    fighter, target, disadvantage=disadvantage
+                )
+                bucket.append(result.attack_result.attack_roll)
+
+        normal_avg = sum(normal_rolls) / len(normal_rolls)
+        disadv_avg = sum(disadv_rolls) / len(disadv_rolls)
+        assert disadv_avg < normal_avg, (
+            f"Expected disadvantage to lower avg roll, "
+            f"got normal={normal_avg:.2f} vs disadv={disadv_avg:.2f}"
+        )
