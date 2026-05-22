@@ -590,3 +590,67 @@ class TestCustomStepEquipment:
         assert result == "next"
         assert wizard.equipment_option_index == 0
         mock_select_module.assert_not_called()
+
+
+class TestRandomPathEquipment:
+    """Random path should pick an equipment option via the seeded RNG."""
+
+    def test_random_picks_equipment_option_in_range(self):
+        dice_roller = DiceRoller(seed=42)
+        wizard = CharacterCreationWizard(
+            character_factory=CharacterFactory(dice_roller=dice_roller),
+            data_loader=DataLoader(),
+            dice_roller=dice_roller,
+        )
+
+        wizard._generate_random_character()
+
+        class_data = wizard.classes_data[wizard.character_class]
+        options = class_data.get("starting_equipment_options", [])
+        if options:
+            assert 0 <= wizard.equipment_option_index < len(options)
+        else:
+            assert wizard.equipment_option_index == 0
+
+    def test_random_equipment_choice_varies_across_seeds(self):
+        """Across many seeds, random picks should hit more than just index 0.
+
+        Locks in that we are actually rolling for the option rather than
+        leaving it at the default of 0.
+        """
+        seen_indices: set[int] = set()
+        for seed in range(50):
+            dice_roller = DiceRoller(seed=seed)
+            wizard = CharacterCreationWizard(
+                character_factory=CharacterFactory(dice_roller=dice_roller),
+                data_loader=DataLoader(),
+                dice_roller=dice_roller,
+            )
+            wizard._generate_random_character()
+            class_data = wizard.classes_data[wizard.character_class]
+            if class_data.get("starting_equipment_options"):
+                seen_indices.add(wizard.equipment_option_index)
+        # All current SRD classes have exactly 3 options
+        assert len(seen_indices) > 1, (
+            f"Expected random rolls to hit multiple option indices, got {seen_indices}"
+        )
+
+    def test_random_equipment_choice_is_deterministic_with_seed(self):
+        d1 = DiceRoller(seed=100)
+        w1 = CharacterCreationWizard(
+            character_factory=CharacterFactory(dice_roller=d1),
+            data_loader=DataLoader(),
+            dice_roller=d1,
+        )
+        d2 = DiceRoller(seed=100)
+        w2 = CharacterCreationWizard(
+            character_factory=CharacterFactory(dice_roller=d2),
+            data_loader=DataLoader(),
+            dice_roller=d2,
+        )
+
+        w1._generate_random_character()
+        w2._generate_random_character()
+
+        assert w1.character_class == w2.character_class
+        assert w1.equipment_option_index == w2.equipment_option_index

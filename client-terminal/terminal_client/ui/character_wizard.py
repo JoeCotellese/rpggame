@@ -945,6 +945,14 @@ class CharacterCreationWizard:
         if self.character_class == "rogue" and len(self.skill_proficiencies) >= 2:
             self.expertise_skills = rng.sample(self.skill_proficiencies, 2)
 
+        # Random starting equipment option (A/B/C). Classes that only declare
+        # the legacy `starting_equipment` field keep the default index of 0.
+        equipment_options = class_data.get("starting_equipment_options")
+        if equipment_options:
+            self.equipment_option_index = rng.randrange(len(equipment_options))
+        else:
+            self.equipment_option_index = 0
+
     def _show_random_preview(self) -> None:
         """Show preview of randomly generated character."""
         console.print(f"[bold]Race:[/bold] {self.races_data[self.race]['name']}")
