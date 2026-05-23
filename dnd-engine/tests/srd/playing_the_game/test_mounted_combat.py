@@ -31,7 +31,7 @@ from pathlib import Path
 
 import pytest
 
-from dnd_engine.core.creature import Abilities, Creature
+from dnd_engine.core.creature import Abilities, Creature, Size
 from dnd_engine.systems.action_economy import TurnState
 
 pytestmark = pytest.mark.srd(
@@ -66,26 +66,24 @@ class TestMountedCombat_SizeAndWillingnessGate:
     > the following rules.
     """
 
-    def test_creature_class_has_no_size_attribute(self) -> None:
-        """Source-level guard: `Creature` does not carry a `size` field.
+    def test_creature_class_carries_size_field(self) -> None:
+        """Data-model check: `Creature` carries a `size` field (#442).
 
         The SRD's "at least one size larger than a rider" gate requires
         each creature to declare a size category (Tiny / Small /
         Medium / Large / Huge / Gargantuan). `monsters.json` records
-        `size` per stat block (e.g., goblin = "small") but
-        `Creature` (`dnd_engine/core/creature.py:61`) carries only
-        `name`, `max_hp`, `ac`, `abilities`, `speed`, and
-        `active_conditions` — no `size` attribute exists. The mount
-        gate therefore has nothing to check. Tracked by issue #442
-        (creature size categories).
+        `size` per stat block (e.g., goblin = "small") and
+        `Creature` (`dnd_engine/core/creature.py`) carries a `size`
+        attribute typed as `Size`, defaulting to `Size.MEDIUM`. This is
+        the data-model foundation issue #442 lands; the mount
+        eligibility comparison itself still depends on a mount-action
+        handler (tracked by issue #526) and is asserted in
+        `test_mount_must_be_one_size_larger_than_rider` below.
         """
         creature = _make_creature()
-        assert not hasattr(creature, "size"), (
-            "Creature now has a `size` attribute — the engine-side "
-            "creature-size gap (#442) appears to be closing. Flip "
-            "`test_mount_must_be_one_size_larger_than_rider` to a "
-            "real assertion."
-        )
+        assert hasattr(creature, "size"), "Creature must carry a `size` field per #442"
+        assert isinstance(creature.size, Size), "Creature.size must be a Size enum member"
+        assert creature.size is Size.MEDIUM, "Default creature size should be Medium"
 
     def test_monsters_json_carries_size_per_stat_block(self) -> None:
         """Data-parity check: `monsters.json` records a `size` per monster.

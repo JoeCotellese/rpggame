@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from dnd_engine.core.creature import Abilities, Creature
+from dnd_engine.core.creature import Abilities, Creature, Size
 from dnd_engine.core.dice import DiceRoller
 
 
@@ -87,6 +87,12 @@ class DataLoader:
         # Get speed (default 30 ft if not specified)
         speed = data.get("speed", 30)
 
+        # Get size (default Medium if not specified in the catalog). The
+        # canonical lowercase string in monsters.json matches Size.value
+        # directly; .lower() lets the loader tolerate stray casing without
+        # forcing a JSON rewrite.
+        size = Size(data.get("size", "medium").lower())
+
         # Create the creature
         creature = Creature(
             name=data["name"],
@@ -94,6 +100,7 @@ class DataLoader:
             ac=data["ac"],
             abilities=abilities,
             speed=speed,
+            size=size,
         )
 
         # Attach per-type damage modifier fields from the monster catalog.
