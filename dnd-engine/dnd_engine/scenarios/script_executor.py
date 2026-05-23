@@ -124,6 +124,32 @@ def _attack_range_for(weapon_data: dict[str, Any] | None) -> tuple[int, int]:
     return (5, 5)
 
 
+def _attack_reach_for(monster_action: dict[str, Any] | None) -> int:
+    """Parse a monster action's ``reach`` string into feet.
+
+    monsters.json encodes reach per attack action as ``"5 ft."`` or
+    ``"10 ft."``. Per SRD § Playing the Game › Melee Attacks, a creature
+    has a 5-foot reach by default; creatures with greater reach declare
+    it on the action. This helper returns the integer feet so the
+    executor can gate attack resolution on distance.
+
+    Missing or unparseable values fall back to the SRD default (5 ft) so
+    a malformed catalog row degrades to vanilla melee rather than
+    silently widening reach.
+    """
+    if not monster_action:
+        return 5
+    raw = monster_action.get("reach")
+    if not raw:
+        return 5
+    # "10 ft." → "10"; tolerate stray whitespace too.
+    head = str(raw).strip().split()[0]
+    try:
+        return int(head)
+    except ValueError:
+        return 5
+
+
 def _is_ranged_attack(weapon_data: dict[str, Any] | None) -> bool:
     """Return True when an attack with this weapon is a ranged attack roll.
 
@@ -180,6 +206,18 @@ class ScriptExecutor:
             if target is None:
                 raise ScriptExecutionError("attack action missing 'target'")
             self._action_attack(str(target))
+        elif a_type == "monster_attack":
+            attacker = action.get("attacker")
+            target = action.get("target")
+            monster_action_name = action.get("monster_action")
+            if attacker is None or target is None or monster_action_name is None:
+                raise ScriptExecutionError(
+                    "monster_attack action requires 'attacker', 'target', "
+                    "and 'monster_action'"
+                )
+            self._action_monster_attack(
+                str(attacker), str(target), str(monster_action_name)
+            )
         else:
             raise ScriptExecutionError(
                 f"unknown script action: {a_type!r}"
@@ -253,6 +291,91 @@ class ScriptExecutor:
             tracker.next_turn()
         self.ctx.turn_count += 1
 
+    def _action_monster_attack(
+        self,
+        attacker_id: str,
+        target_id: str,
+        monster_action_name: str,
+    ) -> None:
+        """Resolve a monster's melee attack, gated on the action's reach.
+
+        Mirrors ``_action_attack`` for the inverse direction (enemy →
+        party member). Reads the monster's action definition from
+        ``monsters.json`` via the engine's own data loader, parses the
+        action's ``reach`` field (SRD § Melee Attacks › Reach), and
+        rejects the attack if the target sits beyond it. A bearded
+        devil's Glaive (10 ft.) can hit a target two tiles away; a
+        goblin's Scimitar (5 ft.) cannot.
+        """
+        if attacker_id not in self.ctx.enemy_entity_ids:
+            raise ScriptExecutionError(
+                f"monster_attack: unknown attacker '{attacker_id}'"
+            )
+        if target_id not in self.ctx.party_entity_ids:
+            raise ScriptExecutionError(
+                f"monster_attack: unknown target '{target_id}'"
+            )
+
+        attacker = self.ctx.resolve_entity(attacker_id)
+        target = self.ctx.resolve_entity(target_id)
+        if attacker is None or target is None:
+            raise ScriptExecutionError(
+                f"monster_attack: could not resolve "
+                f"{attacker_id!r} or {target_id!r}"
+            )
+
+        attacker_pos = self.ctx.position_of(attacker_id)
+        target_pos = self.ctx.position_of(target_id)
+        if attacker_pos is None or target_pos is None:
+            raise ScriptExecutionError(
+                f"monster_attack: missing position for "
+                f"{attacker_id!r} or {target_id!r}"
+            )
+
+        action_data = self._monster_action_data(attacker_id, monster_action_name)
+        if action_data is None:
+            raise ScriptExecutionError(
+                f"monster_attack: no action {monster_action_name!r} on "
+                f"monster {attacker_id!r}"
+            )
+
+        reach_ft = _attack_reach_for(action_data)
+        distance = distance_in_feet(
+            attacker_pos[0], attacker_pos[1], target_pos[0], target_pos[1]
+        )
+        if distance > reach_ft:
+            self.ctx.last_attack_error = (
+                f"out of reach: {distance} ft > reach {reach_ft} ft "
+                f"({monster_action_name})"
+            )
+            self.ctx.last_attack = None
+            return
+
+        attack_bonus = action_data.get("attack_bonus")
+        damage_dice = action_data.get("damage")
+        if attack_bonus is None or damage_dice is None:
+            raise ScriptExecutionError(
+                f"monster_attack: action {monster_action_name!r} on "
+                f"{attacker_id!r} is missing attack_bonus/damage"
+            )
+
+        result = self.ctx.game_state.combat_engine.resolve_attack(
+            attacker=attacker,
+            defender=target,
+            attack_bonus=int(attack_bonus),
+            damage_dice=str(damage_dice),
+            apply_damage=True,
+            event_bus=getattr(self.ctx.game_state, "event_bus", None),
+            action=action_data,
+            game_state=self.ctx.game_state,
+        )
+        self.ctx.last_attack = result
+
+        tracker = self.ctx.game_state.initiative_tracker
+        if tracker is not None:
+            tracker.next_turn()
+        self.ctx.turn_count += 1
+
     # --- helpers ----------------------------------------------------------
 
     def _current_player_attacker(self) -> tuple[Any, str]:
@@ -317,3 +440,29 @@ class ScriptExecutor:
             return None
         items = data_loader.load_items(campaign_id)
         return items.get("weapons", {}).get(weapon_id)
+
+    def _monster_action_data(
+        self, enemy_entity_id: str, action_name: str
+    ) -> dict[str, Any] | None:
+        """Look up a named action on the given enemy's monster catalog row.
+
+        The entity_id encodes the monster id as ``{monster_id}_{index}``
+        (see ``ScenarioLoader``). Splits on the trailing index, loads
+        ``monsters.json`` through the engine's data loader, and returns
+        the first action whose ``name`` matches. Returns ``None`` when
+        the catalog row, action, or loader is unavailable so callers can
+        surface a precise script-level error.
+        """
+        # entity_id is "{monster_id}_{i}"; rstrip the index segment.
+        monster_id = enemy_entity_id.rsplit("_", 1)[0]
+        data_loader = getattr(self.ctx.game_state, "data_loader", None)
+        if data_loader is None:
+            return None
+        monsters = data_loader.load_monsters()
+        mdata = monsters.get(monster_id)
+        if not mdata:
+            return None
+        for act in mdata.get("actions") or []:
+            if act.get("name") == action_name:
+                return act
+        return None
