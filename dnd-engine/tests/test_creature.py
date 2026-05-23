@@ -370,6 +370,48 @@ class TestCreature:
         assert creature.has_condition("stunned")
         assert len(creature.conditions) == 2
 
+    def test_is_immune_to_condition_default_false(self):
+        """Without any immunity source, `is_immune_to_condition` is False."""
+        creature = Creature(name="Fighter", max_hp=20, ac=16, abilities=self.abilities)
+        assert creature.is_immune_to_condition("poisoned") is False
+
+    def test_is_immune_to_condition_catalog_field(self):
+        """`condition_immunities` list attribute marks immunity."""
+        creature = Creature(name="Bearded Devil", max_hp=52, ac=13, abilities=self.abilities)
+        creature.condition_immunities = ["poisoned"]
+        assert creature.is_immune_to_condition("poisoned") is True
+        assert creature.is_immune_to_condition("Poisoned") is True  # case-insensitive
+        assert creature.is_immune_to_condition("paralyzed") is False
+
+    def test_is_immune_to_condition_condition_flag(self):
+        """`has_immunity_{condition}` condition flag marks immunity.
+
+        Mirrors the existing `has_immunity_{type}` convention used by
+        the damage-type immunity stage in `_apply_damage_modifiers`.
+        """
+        creature = Creature(name="Paladin", max_hp=30, ac=18, abilities=self.abilities)
+        creature.add_condition("has_immunity_frightened")
+        assert creature.is_immune_to_condition("frightened") is True
+        assert creature.is_immune_to_condition("paralyzed") is False
+
+    def test_add_condition_blocked_by_immunity(self):
+        """`add_condition` is a no-op when the target is immune."""
+        creature = Creature(name="Bearded Devil", max_hp=52, ac=13, abilities=self.abilities)
+        creature.condition_immunities = ["poisoned"]
+        creature.add_condition("poisoned")
+        assert not creature.has_condition("poisoned")
+
+    def test_apply_condition_with_metadata_blocked_by_immunity(self):
+        """`apply_condition_with_metadata` is a no-op when the target is immune."""
+        creature = Creature(name="Bearded Devil", max_hp=52, ac=13, abilities=self.abilities)
+        creature.condition_immunities = ["poisoned"]
+        creature.apply_condition_with_metadata(
+            condition="poisoned",
+            duration_type="rounds",
+            duration=10,
+        )
+        assert not creature.has_condition("poisoned")
+
     def test_creature_initiative_modifier(self):
         """Test that initiative uses dexterity modifier"""
         creature = Creature(name="Goblin", max_hp=7, ac=15, abilities=self.abilities)

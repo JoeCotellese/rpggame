@@ -239,15 +239,54 @@ class Creature:
 
         self.current_hp = min(self.max_hp, self.current_hp + amount)
 
+    def is_immune_to_condition(self, condition: str) -> bool:
+        """
+        Check whether this creature is immune to a named condition.
+
+        SRD § Playing the Game › Immunity:
+            "Immunity to a condition means you aren't affected by it."
+
+        Two sources are honored, in parity with the damage-type
+        immunity path in `CombatEngine._apply_damage_modifiers`:
+          1. Catalog field `condition_immunities` — a list attribute
+             populated by `DataLoader.create_monster` from
+             monsters.json (e.g., bearded devil ships ["poisoned"]).
+          2. Condition flag `has_immunity_{condition}` — matches the
+             existing `has_immunity_{type}` convention used for
+             damage-type immunity, so future spells/effects can grant
+             condition immunity by attaching the flag.
+
+        Args:
+            condition: Name of the condition (case-insensitive).
+
+        Returns:
+            True if the creature is immune to the condition.
+        """
+        condition_name = condition.lower()
+        catalog_immunities = [
+            c.lower() for c in (getattr(self, "condition_immunities", None) or [])
+        ]
+        if condition_name in catalog_immunities:
+            return True
+        if self.has_condition(f"has_immunity_{condition_name}"):
+            return True
+        return False
+
     def add_condition(self, condition: str) -> None:
         """
         Add a basic condition to the creature (e.g., 'prone', 'stunned').
         For conditions with duration/repeat saves, use apply_condition_with_metadata().
 
+        Immunity guard: if the creature is immune to the named
+        condition (per `is_immune_to_condition`), the call is a no-op.
+        SRD: "Immunity to a condition means you aren't affected by it."
+
         Args:
             condition: Name of the condition to add
         """
         condition_name = condition.lower()
+        if self.is_immune_to_condition(condition_name):
+            return
         if condition_name not in self.active_conditions:
             self.active_conditions[condition_name] = {}
 
@@ -264,6 +303,10 @@ class Creature:
         """
         Apply a condition with full metadata for duration and repeat saves.
 
+        Immunity guard: if the creature is immune to the named
+        condition (per `is_immune_to_condition`), the call is a no-op.
+        SRD: "Immunity to a condition means you aren't affected by it."
+
         Args:
             condition: Name of the condition (e.g., 'paralyzed', 'poisoned')
             duration_type: Type of duration ('rounds', 'minutes', 'hours', 'permanent')
@@ -274,6 +317,8 @@ class Creature:
             repeat_timing: When repeat saves occur ('end_of_turn', 'start_of_turn')
         """
         condition_name = condition.lower()
+        if self.is_immune_to_condition(condition_name):
+            return
         self.active_conditions[condition_name] = {
             "duration_type": duration_type,
             "duration_remaining": duration,
