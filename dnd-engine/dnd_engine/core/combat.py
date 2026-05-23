@@ -170,7 +170,7 @@ class CombatEngine:
                     sneak_attack_dice = attacker.get_sneak_attack_dice()
                     if sneak_attack_dice:
                         sneak_attack_damage = self._calculate_damage(
-                            sneak_attack_dice, critical_hit=False
+                            sneak_attack_dice, critical_hit=critical_hit
                         )
 
                         # Emit sneak attack event
