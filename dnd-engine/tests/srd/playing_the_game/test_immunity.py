@@ -40,24 +40,110 @@ class TestImmunity_ToDamageType:
     """
 
     def test_damage_type_immunity_zeroes_damage(self):
-        pytest.skip(
-            "GAP: damage-type immunity is not implemented anywhere. "
-            "`systems/item_effects._apply_damage_effect` only halves "
-            "for `has_resistance_{type}` — no `has_immunity_{type}` "
-            "branch zeroes damage. `CombatEngine.resolve_attack` and "
-            "`CombatEngine.resolve_spell_save` don't consult any per-"
-            "type modifier table at all. The bearded devil's "
-            "`damage_immunities: [fire, poison]` (monsters.json) is "
-            "data-only. Tracked by issues #461 (damage_type pipeline "
-            "wiring) and #464 (damage-type Immunity)."
+        """A creature immune to a damage type takes 0 damage of that
+        type from an attack that hits.
+
+        SRD acceptance: a fire-immune bearded devil takes 0 damage from
+        a fire-typed attack (e.g., Fire Bolt), regardless of the attack
+        roll, because `_apply_damage_modifiers` zeroes the rolled
+        damage in the chokepoint before it is applied to HP.
+        """
+        from dnd_engine.core.combat import CombatEngine
+        from dnd_engine.core.creature import Abilities, Creature
+        from dnd_engine.core.dice import DiceRoller
+
+        attacker = Creature(
+            name="Wizard",
+            max_hp=20,
+            ac=12,
+            abilities=Abilities(
+                strength=10,
+                dexterity=10,
+                constitution=10,
+                intelligence=16,
+                wisdom=10,
+                charisma=10,
+            ),
+        )
+        bearded_devil = Creature(
+            name="Bearded Devil",
+            max_hp=52,
+            ac=13,
+            abilities=Abilities(
+                strength=16,
+                dexterity=15,
+                constitution=15,
+                intelligence=9,
+                wisdom=11,
+                charisma=11,
+            ),
+        )
+        # Mirror what `DataLoader.create_monster` attaches from the
+        # bearded devil's monsters.json entry.
+        bearded_devil.damage_immunities = ["fire", "poison"]
+
+        engine = CombatEngine(DiceRoller(seed=1))
+        # `attack_bonus=20` against AC 13 guarantees a hit so the
+        # damage pipeline runs — the assertion is on the post-modifier
+        # damage, not on hit/miss probability.
+        result = engine.resolve_attack(
+            attacker=attacker,
+            defender=bearded_devil,
+            attack_bonus=20,
+            damage_dice="1d10",  # Fire Bolt at level 1
+            damage_type="fire",
+            apply_damage=True,
+        )
+
+        assert result.hit is True
+        assert result.damage == 0, (
+            "Fire-immune defender must take 0 fire damage (SRD: "
+            "'Immunity to a damage type means you don't take damage of "
+            "that type.')."
+        )
+        assert bearded_devil.current_hp == bearded_devil.max_hp, (
+            "Immunity must prevent any HP loss from the matching type."
         )
 
     def test_damage_type_immunity_is_per_type(self):
-        pytest.skip(
-            "GAP: depends on damage-type immunity being implemented "
-            "first. The SRD scopes immunity per type — a fire-immune "
-            "creature still takes full damage from other types. "
-            "Tracked by issue #464."
+        """Immunity is scoped per damage type — a fire-immune creature
+        still takes full damage from a different type (e.g., cold).
+        """
+        from dnd_engine.core.combat import CombatEngine
+        from dnd_engine.core.creature import Abilities, Creature
+        from dnd_engine.core.dice import DiceRoller
+
+        target = Creature(
+            name="Fire-Immune Target",
+            max_hp=100,
+            ac=10,
+            abilities=Abilities(
+                strength=10,
+                dexterity=10,
+                constitution=10,
+                intelligence=10,
+                wisdom=10,
+                charisma=10,
+            ),
+        )
+        target.damage_immunities = ["fire"]
+
+        engine = CombatEngine(DiceRoller(seed=1))
+
+        fire_scaled = engine._apply_damage_modifiers(
+            target, raw_damage=20, damage_type="fire"
+        )
+        cold_scaled = engine._apply_damage_modifiers(
+            target, raw_damage=20, damage_type="cold"
+        )
+
+        assert fire_scaled == 0, (
+            "Fire-immune target must take 0 fire damage."
+        )
+        assert cold_scaled == 20, (
+            "Immunity is per-type — a fire-immune target takes full "
+            "damage from other types (SRD scopes immunity to the "
+            "named damage type)."
         )
 
     def test_monster_damage_immunities_field_is_consumed(self):
