@@ -26,6 +26,26 @@ class Size(str, Enum):
     GARGANTUAN = "gargantuan"
 
 
+class MovementMode(str, Enum):
+    """
+    SRD movement modes (SRD § Playing the Game › Movement › Movement Modes).
+
+    The canonical string value matches the lowercase form that monsters.json
+    is expected to use for any future per-mode `speeds` dict, so values
+    round-trip cleanly through JSON. Drives per-mode movement-cost logic
+    later in plan-03; this enum is the data-model foundation those systems
+    read alongside `Creature.speeds`.
+    """
+
+    WALK = "walk"
+    CLIMB = "climb"
+    SWIM = "swim"
+    CRAWL = "crawl"
+    JUMP = "jump"
+    FLY = "fly"
+    BURROW = "burrow"
+
+
 @dataclass
 class Abilities:
     """
@@ -89,6 +109,7 @@ class Creature:
         current_hp: int | None = None,
         speed: int = 30,
         size: Size = Size.MEDIUM,
+        speeds: dict[MovementMode, int] | None = None,
     ):
         """
         Initialize a creature.
@@ -99,19 +120,43 @@ class Creature:
             ac: Armor class (target number for attacks)
             abilities: Ability scores (STR, DEX, CON, INT, WIS, CHA)
             current_hp: Starting HP (defaults to max_hp if not specified)
-            speed: Movement speed in feet per round (default 30 ft)
+            speed: Movement speed in feet per round (default 30 ft). The
+                legacy single-int `speed` kwarg is preserved so existing
+                callers and monsters.json (which carries a plain int)
+                keep working. When `speeds` is omitted, it is derived as
+                `{MovementMode.WALK: speed}` so per-mode consumers can
+                always read `creature.speeds[MovementMode.WALK]`.
             size: SRD size category (default Medium). Drives map footprint
                 and reach geometry in plan-03; defaulting to Medium keeps
                 Characters and any creature constructed without an explicit
                 size on the SRD baseline.
+            speeds: Optional per-mode speed map (Walk/Climb/Swim/etc.).
+                When provided, `self.speeds` is set to the supplied dict
+                verbatim — no WALK auto-injection. The legacy `self.speed`
+                attribute mirrors `speeds[MovementMode.WALK]` if present,
+                otherwise falls back to the `speed` kwarg (this matters
+                for fly-only creatures whose walk speed is 0).
         """
         self.name = name
         self.max_hp = max_hp
         self.current_hp = current_hp if current_hp is not None else max_hp
         self._base_ac = ac  # Store base AC (before modifiers from spells/effects)
         self.abilities = abilities
-        self.speed = speed  # Movement speed in feet (5 ft = 1 grid square)
         self.size = size
+        # Per-mode speeds (plan-03). When `speeds` is omitted, derive a
+        # single-entry {WALK: speed} dict so downstream cost-multiplier
+        # code (slices 3-4) can always index by MovementMode. When
+        # `speeds` is provided, honor it as-is — a fly-only creature can
+        # legitimately ship {FLY: 60} with no WALK entry.
+        if speeds is None:
+            self.speeds: dict[MovementMode, int] = {MovementMode.WALK: speed}
+            self.speed = speed  # Movement speed in feet (5 ft = 1 grid square)
+        else:
+            self.speeds = speeds
+            # Legacy `self.speed` mirrors WALK from the speeds dict when
+            # present so existing callers reading `creature.speed` keep
+            # working; otherwise fall back to the supplied `speed` kwarg.
+            self.speed = speeds.get(MovementMode.WALK, speed)
         # Condition tracking with metadata for duration and repeat saves
         # Maps condition name -> metadata dict
         self.active_conditions: dict[str, dict] = {}

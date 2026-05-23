@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from dnd_engine.core.creature import Abilities, Creature, Size
+from dnd_engine.core.creature import Abilities, Creature, MovementMode, Size
 from dnd_engine.core.dice import DiceRoller
 
 
@@ -85,7 +85,20 @@ class DataLoader:
         max_hp = max(1, hp_roll.total)  # Minimum 1 HP
 
         # Get speed (default 30 ft if not specified)
-        speed = data.get("speed", 30)
+        speed = int(data.get("speed", 30))
+
+        # Optional per-mode speeds dict (plan-03). monsters.json today
+        # only carries a plain int `speed`; future entries may add a
+        # `speeds: {walk: 30, swim: 30, ...}` map. When present, parse
+        # keys into MovementMode members and pass through so the
+        # Creature ships the full per-mode map. When absent, the
+        # Creature constructor derives {WALK: speed} from the int.
+        speeds_data = data.get("speeds")
+        speeds: dict[MovementMode, int] | None
+        if isinstance(speeds_data, dict):
+            speeds = {MovementMode(k): int(v) for k, v in speeds_data.items()}
+        else:
+            speeds = None
 
         # Get size (default Medium if not specified in the catalog). The
         # canonical lowercase string in monsters.json matches Size.value
@@ -101,6 +114,7 @@ class DataLoader:
             abilities=abilities,
             speed=speed,
             size=size,
+            speeds=speeds,
         )
 
         # Attach per-type damage modifier fields from the monster catalog.
