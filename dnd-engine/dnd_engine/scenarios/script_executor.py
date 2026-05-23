@@ -264,6 +264,7 @@ class ScriptExecutor:
                 f"out of range: {distance} ft > max {max_range} ft "
                 f"({weapon_data.get('name') if weapon_data else 'unarmed'})"
             )
+            self.ctx.last_attack = None
             return
 
         in_long_range = distance > normal_range

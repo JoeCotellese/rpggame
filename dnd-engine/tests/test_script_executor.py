@@ -93,6 +93,30 @@ enemies:
     position: [20, 5]
 """
 
+# Chained scenario: one goblin in normal dagger range (2 tiles = 10 ft)
+# and one past max range (17 tiles = 85 ft > 60 ft). Used to verify the
+# rejection path clears `ctx.last_attack` so a previous landed attack
+# can't masquerade as the rejected attack's result.
+LAND_THEN_REJECT_YAML = """
+name: exec_land_then_reject
+seed: 42
+map:
+  dungeon: laboratory
+  campaign: poisoned_laboratory
+  start_room: laboratory.entrance
+party:
+  - class: fighter
+    race: high_elf
+    weapons: [dagger]
+    position: [3, 5]
+    name: Archy
+enemies:
+  - monster_id: goblin
+    position: [5, 5]
+  - monster_id: goblin
+    position: [20, 5]
+"""
+
 # Adjacent enemy for melee: distance 1 tile = 5 ft, well within
 # longsword's melee reach.
 MELEE_ADJACENT_YAML = """
@@ -277,6 +301,30 @@ def test_attack_out_of_range_rejects_without_resolving(tmp_path: Path) -> None:
     # and turn passed".
     assert ctx.turn_count == 0
     assert goblin.current_hp == starting_hp
+
+
+def test_attack_out_of_range_clears_prior_last_attack(tmp_path: Path) -> None:
+    """Rejection must blank `ctx.last_attack` so a prior landed attack
+    can't masquerade as the rejected attack's result. Mirrors the fix
+    applied to `_action_monster_attack` in PR #424 (#427).
+    """
+    path = _write(tmp_path, LAND_THEN_REJECT_YAML)
+    loaded = ScenarioLoader().load(path)
+
+    # Two intervening waits cycle initiative back to the fighter:
+    # fighter → goblin_0 → goblin_1 → fighter.
+    ctx = ScriptExecutor(loaded).run(
+        [
+            {"action": "attack", "target": "goblin_0"},
+            {"action": "wait"},
+            {"action": "wait"},
+            {"action": "attack", "target": "goblin_1"},
+        ]
+    )
+
+    assert ctx.last_attack is None
+    assert ctx.last_attack_error is not None
+    assert "range" in ctx.last_attack_error.lower()
 
 
 # --- attack: long-range disadvantage flag ----------------------------------
