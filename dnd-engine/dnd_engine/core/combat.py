@@ -92,26 +92,31 @@ class CombatEngine:
         self, target: Creature, raw_damage: int, damage_type: str | None
     ) -> int:
         """
-        Scale raw damage by the target's per-type Resistance / Immunity.
+        Scale raw damage by the target's per-type Resistance, Immunity,
+        and Vulnerability.
 
-        Single chokepoint that the SRD's Resistance, Immunity (and
-        later Vulnerability) rules key off of. This slice (#461)
-        implements Resistance + Immunity only; Vulnerability,
-        no-stacking, and order-of-application are tracked separately
-        (#463 / #468) and will plug in here.
+        Single chokepoint that the SRD's Resistance, Immunity, and
+        Vulnerability rules key off of. Pipeline order matches the SRD:
+        Immunity (zero) → Resistance (halve, floor) → Vulnerability
+        (double). The pre-Resistance "adjustments" stage and the full
+        no-stacking matrix remain tracked by #468.
 
-        Consults two sources of per-type modifiers:
-          1. Creature condition flags — `has_resistance_{type}` and
-             `has_immunity_{type}` — matching the existing convention
-             used by `systems/item_effects._apply_damage_effect`.
-          2. Monster catalog fields — `damage_resistances` and
-             `damage_immunities` list attributes on the Creature
-             instance (populated by `DataLoader.create_monster` from
-             `monsters.json`).
+        Consults two sources of per-type modifiers, in parity across
+        Resistance, Immunity, and Vulnerability:
+          1. Creature condition flags — `has_resistance_{type}`,
+             `has_immunity_{type}`, and `has_vulnerability_{type}` —
+             matching the existing convention used by
+             `systems/item_effects._apply_damage_effect`.
+          2. Monster catalog fields — `damage_resistances`,
+             `damage_immunities`, and `damage_vulnerabilities` list
+             attributes on the Creature instance (populated by
+             `DataLoader.create_monster` from `monsters.json`).
 
         SRD § Playing the Game › Resistance and Vulnerability:
             "If you have Resistance to a damage type, damage of that
              type is halved against you (round down)."
+            "If you have Vulnerability to a damage type, damage of that
+             type is doubled against you."
         SRD § Playing the Game › Immunity:
             "Immunity to a damage type means you don't take damage of
              that type."
@@ -124,7 +129,8 @@ class CombatEngine:
                 and `raw_damage` is returned unchanged.
 
         Returns:
-            The damage amount after Resistance / Immunity scaling.
+            The damage amount after Immunity / Resistance / Vulnerability
+            scaling.
         """
         # Untyped damage cannot consult per-type modifiers; return as-is.
         if damage_type is None:
@@ -145,6 +151,8 @@ class CombatEngine:
 
         # --- Resistance stage ------------------------------------------------
         # Resistance halves matching damage with floor rounding.
+        # TODO(#468): The "adjustments" stage (flat bonuses / penalties)
+        # applies BEFORE this Resistance stage per SRD order-of-application.
         resistance_condition = f"has_resistance_{normalized_type}"
         catalog_resistances = [
             t.lower() for t in (getattr(target, "damage_resistances", None) or [])
@@ -152,10 +160,23 @@ class CombatEngine:
         if target.has_condition(resistance_condition) or normalized_type in catalog_resistances:
             return raw_damage // 2
 
-        # TODO(#463): Vulnerability stage inserts here (double matching
-        # damage). TODO(#468): Order-of-application — flat adjustments
-        # apply BEFORE this Resistance stage; Vulnerability applies
-        # AFTER it. Both are out of scope for #461.
+        # --- Vulnerability stage --------------------------------------------
+        # Vulnerability doubles matching damage. Two sources (condition
+        # flag + catalog field) still double exactly once — the SRD's
+        # No-Stacking rule is satisfied by a single boolean branch rather
+        # than a counted multiplier. The full no-stacking matrix
+        # (interaction with Resistance, blanket "Vulnerability to all")
+        # is tracked by #468.
+        vulnerability_condition = f"has_vulnerability_{normalized_type}"
+        catalog_vulnerabilities = [
+            t.lower() for t in (getattr(target, "damage_vulnerabilities", None) or [])
+        ]
+        if (
+            target.has_condition(vulnerability_condition)
+            or normalized_type in catalog_vulnerabilities
+        ):
+            return raw_damage * 2
+
         return raw_damage
 
     def resolve_attack(
