@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from dnd_engine.core.distance import distance_in_feet
+from dnd_engine.systems.ranged_attacks import is_close_combat_ranged_disadvantage
 
 if TYPE_CHECKING:
     from dnd_engine.scenarios.loader import LoadedScenario
@@ -123,6 +124,22 @@ def _attack_range_for(weapon_data: dict[str, Any] | None) -> tuple[int, int]:
     return (5, 5)
 
 
+def _is_ranged_attack(weapon_data: dict[str, Any] | None) -> bool:
+    """Return True when an attack with this weapon is a ranged attack roll.
+
+    Per SRD: a thrown weapon attack is a ranged attack even when the
+    weapon itself is categorized as melee. Mirrors the precedent in
+    ``_attack_range_for`` so the close-combat rule lines up with the
+    range tuple it produces.
+    """
+    if not weapon_data:
+        return False
+    if weapon_data.get("category") == "ranged":
+        return True
+    properties = weapon_data.get("properties", []) or []
+    return "thrown" in properties
+
+
 class ScriptExecutor:
     """Runs a script of action dicts against a ``LoadedScenario``.
 
@@ -211,9 +228,21 @@ class ScriptExecutor:
             )
             return
 
-        self.ctx.last_attack_disadvantage = distance > normal_range
+        in_long_range = distance > normal_range
+        # SRD § Ranged Attacks in Close Combat (#400): applies to any
+        # ranged attack roll — bow shots and thrown melee weapons alike.
+        # Mirrors _attack_range_for's treatment of "thrown" as ranged.
+        is_ranged_attack = _is_ranged_attack(weapon_data)
+        in_close_combat = is_ranged_attack and is_close_combat_ranged_disadvantage(
+            attacker_pos=attacker_pos,
+            enemies=self._living_enemies_with_positions(),
+        )
+        disadvantage = in_long_range or in_close_combat
+        self.ctx.last_attack_disadvantage = disadvantage
 
-        result = self.ctx.game_state.execute_player_attack(attacker, target)
+        result = self.ctx.game_state.execute_player_attack(
+            attacker, target, disadvantage=disadvantage
+        )
         # ``execute_player_attack`` returns ``PlayerAttackResult``; the
         # nested ``AttackResult`` carries the fields the assertion
         # vocabulary actually inspects (hit, damage, attack_roll).
@@ -249,6 +278,26 @@ class ScriptExecutor:
             f"attack: current combatant {creature.name!r} is not a "
             f"party member (enemy turn?)"
         )
+
+    def _living_enemies_with_positions(
+        self,
+    ) -> list[tuple[tuple[int, int], Any]]:
+        """Pair each known enemy with its (x, y) position for rule helpers.
+
+        Skips entries missing either a tracked position or a live creature
+        reference. Dead enemies are still yielded; the rule helper filters
+        them itself so the data flow remains uniform.
+        """
+        enemies: list[tuple[tuple[int, int], Any]] = []
+        for entity_id in self.ctx.enemy_entity_ids:
+            pos = self.ctx.enemy_positions.get(entity_id)
+            if pos is None:
+                continue
+            creature = self.ctx.resolve_entity(entity_id)
+            if creature is None:
+                continue
+            enemies.append((pos, creature))
+        return enemies
 
     def _equipped_weapon_data(self, attacker: Any) -> dict[str, Any] | None:
         # Lazy-import to avoid pulling EquipmentSlot at module load — the

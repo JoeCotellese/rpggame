@@ -363,6 +363,113 @@ class TestSessionLongRangeDisadvantage:
         assert captured["disadvantage"] is False
 
 
+class TestSessionCloseCombatDisadvantage:
+    """When session.attack() fires a ranged weapon and the attacker is within
+    5 ft of a hostile enemy that can see them and isn't Incapacitated, the
+    attack must use disadvantage (SRD § Ranged Attacks in Close Combat,
+    issue #400).
+    """
+
+    SCENARIO_DIR = (
+        Path(__file__).parent.parent.parent
+        / "dnd-engine"
+        / "tests"
+        / "scenarios"
+        / "yaml"
+    )
+
+    @pytest.fixture
+    def session_in_combat(self):
+        """GameSession around the ranged_attack_basic scenario (shortbow)."""
+        from client_2d.session import GameSession
+
+        session = GameSession(enable_mcp=False, dev_mode=False)
+        session.load_scenario(str(self.SCENARIO_DIR / "ranged_attack_basic.yaml"))
+        assert session.engine.in_combat
+        return session
+
+    def _attach_attack_spy(self, session, monkeypatch):
+        """Patch the engine adapter's execute_attack to record disadvantage."""
+        captured: dict = {}
+        real_method = session.engine.execute_attack
+
+        def spy(target_index, *, disadvantage=False, **kwargs):
+            captured["disadvantage"] = disadvantage
+            return real_method(target_index, disadvantage=disadvantage, **kwargs)
+
+        monkeypatch.setattr(session.engine, "execute_attack", spy)
+        return captured
+
+    def _move_goblin_adjacent_to_attacker(self, session):
+        """Move the goblin visual entity to one square east of Archy (3,5)."""
+        monsters = session.entity_manager.get_monsters()
+        assert monsters, "Scenario should have at least one monster"
+        target = monsters[0]
+        target.grid_x = 4
+        target.grid_y = 5
+        return target
+
+    def test_adjacent_enemy_triggers_disadvantage_for_ranged_attack(
+        self, session_in_combat, monkeypatch
+    ):
+        """Shortbow attack with a seeing, non-incapacitated goblin in melee
+        range must roll with disadvantage.
+        """
+        captured = self._attach_attack_spy(session_in_combat, monkeypatch)
+        self._move_goblin_adjacent_to_attacker(session_in_combat)
+
+        session_in_combat.attack(0)
+
+        assert captured["disadvantage"] is True
+
+    def test_adjacent_incapacitated_enemy_does_not_trigger_disadvantage(
+        self, session_in_combat, monkeypatch
+    ):
+        """SRD carve-out: Incapacitated adjacent enemy is not threatening."""
+        captured = self._attach_attack_spy(session_in_combat, monkeypatch)
+        target = self._move_goblin_adjacent_to_attacker(session_in_combat)
+        target.creature.add_condition("incapacitated")
+
+        session_in_combat.attack(0)
+
+        assert captured["disadvantage"] is False
+
+    def test_no_close_combat_disadvantage_when_target_in_normal_range(
+        self, session_in_combat, monkeypatch
+    ):
+        """Default scenario position (10,5) is 35 ft away — no adjacent enemy,
+        no close-combat disadvantage."""
+        captured = self._attach_attack_spy(session_in_combat, monkeypatch)
+        session_in_combat.attack(0)
+        assert captured["disadvantage"] is False
+
+    def test_thrown_weapon_with_adjacent_enemy_triggers_disadvantage(
+        self, session_in_combat, monkeypatch
+    ):
+        """SRD: thrown weapon attacks are ranged attacks. A dagger thrown
+        with a hostile adjacent must roll with disadvantage even though
+        the dagger is category='melee' with the 'thrown' property.
+        """
+        from dnd_engine.systems.inventory import EquipmentSlot
+
+        captured = self._attach_attack_spy(session_in_combat, monkeypatch)
+
+        # Swap shortbow for dagger on the active player. equip_item only
+        # succeeds if the item is already in inventory, so add it first.
+        current = session_in_combat.engine.get_current_combatant()
+        assert current is not None and current["is_player"]
+        creature = current["creature"]
+        creature.inventory.add_item("dagger", "weapons", 1)
+        equipped = creature.inventory.equip_item("dagger", EquipmentSlot.WEAPON)
+        assert equipped, "Dagger failed to equip; test premise broken"
+
+        self._move_goblin_adjacent_to_attacker(session_in_combat)
+
+        session_in_combat.attack(0)
+
+        assert captured["disadvantage"] is True
+
+
 class TestSessionNoAmmoAttack:
     """Regression coverage for issue #394.
 

@@ -218,6 +218,28 @@ class Creature:
         incapacitating = ["paralyzed", "stunned", "unconscious", "petrified", "surprised"]
         return not any(cond in self.active_conditions for cond in incapacitating)
 
+    def is_incapacitated(self) -> bool:
+        """
+        Check if the creature has the Incapacitated condition (per SRD glossary).
+
+        Per SRD § Rules Glossary, Paralyzed, Petrified, Stunned, and Unconscious
+        each impose Incapacitated. "Surprised" is its own action-economy
+        restriction and is not the same as Incapacitated for SRD rules that
+        explicitly key off the Incapacitated condition (e.g., Ranged Attacks
+        in Close Combat).
+
+        Returns:
+            True if the creature is Incapacitated for SRD rule purposes.
+        """
+        incapacitated_conditions = (
+            "incapacitated",
+            "paralyzed",
+            "stunned",
+            "unconscious",
+            "petrified",
+        )
+        return any(cond in self.active_conditions for cond in incapacitated_conditions)
+
     def process_end_of_turn_conditions(self, event_bus=None) -> list[dict]:
         """
         Process conditions at end of turn: duration countdown and repeat saves.

@@ -113,6 +113,52 @@ enemies:
     position: [4, 5]
 """
 
+# Thrown-melee weapon (dagger) with an adjacent enemy and a distant
+# target. Per SRD, a thrown weapon attack IS a ranged attack and must
+# incur close-combat disadvantage even though dagger.category == 'melee'.
+THROWN_CLOSE_COMBAT_YAML = """
+name: exec_thrown_close_combat
+seed: 42
+map:
+  dungeon: laboratory
+  campaign: poisoned_laboratory
+  start_room: laboratory.entrance
+party:
+  - class: fighter
+    race: high_elf
+    weapons: [dagger]
+    position: [3, 5]
+    name: Archy
+enemies:
+  - monster_id: goblin
+    position: [4, 5]
+  - monster_id: goblin
+    position: [6, 5]
+"""
+
+# Ranged attacker with TWO goblins — one adjacent (close combat), one
+# at 35 ft (the intended ranged target). SRD § Ranged Attacks in Close
+# Combat (#400) requires disadvantage even when shooting the far target.
+CLOSE_COMBAT_RANGED_YAML = """
+name: exec_close_combat_ranged
+seed: 42
+map:
+  dungeon: laboratory
+  campaign: poisoned_laboratory
+  start_room: laboratory.entrance
+party:
+  - class: fighter
+    race: high_elf
+    weapons: [shortbow]
+    position: [3, 5]
+    name: Archy
+enemies:
+  - monster_id: goblin
+    position: [4, 5]
+  - monster_id: goblin
+    position: [10, 5]
+"""
+
 
 # --- scaffold ---------------------------------------------------------------
 
@@ -257,6 +303,84 @@ def test_attack_in_normal_range_leaves_disadvantage_off(tmp_path: Path) -> None:
     )
 
     assert ctx.last_attack_disadvantage is False
+
+
+# --- attack: close-combat disadvantage flag (#400) -------------------------
+
+
+def test_ranged_attack_with_adjacent_enemy_sets_disadvantage(tmp_path: Path) -> None:
+    """SRD § Ranged Attacks in Close Combat: an adjacent (≤5 ft) hostile
+    that can see the attacker and isn't Incapacitated imposes disadvantage
+    on a ranged attack, even when the attack is aimed at a different,
+    distant target.
+    """
+    path = _write(tmp_path, CLOSE_COMBAT_RANGED_YAML)
+    loaded = ScenarioLoader().load(path)
+
+    # goblin_0 is adjacent (4,5), goblin_1 is 35 ft away (10,5).
+    # Shooting at goblin_1 must still incur close-combat disadvantage.
+    ctx = ScriptExecutor(loaded).run(
+        [{"action": "attack", "target": "goblin_1"}]
+    )
+
+    assert ctx.last_attack is not None
+    assert ctx.last_attack_disadvantage is True
+
+
+def test_melee_attack_with_adjacent_enemy_does_not_set_disadvantage(
+    tmp_path: Path,
+) -> None:
+    """Close-combat disadvantage only applies to ranged attacks. A melee
+    weapon swinging at an adjacent foe must not be flagged.
+    """
+    path = _write(tmp_path, MELEE_ADJACENT_YAML)
+    loaded = ScenarioLoader().load(path)
+
+    ctx = ScriptExecutor(loaded).run(
+        [{"action": "attack", "target": "goblin_0"}]
+    )
+
+    assert ctx.last_attack_disadvantage is False
+
+
+def test_ranged_attack_with_incapacitated_adjacent_enemy_no_disadvantage(
+    tmp_path: Path,
+) -> None:
+    """SRD carve-out: an Incapacitated adjacent enemy does not impose
+    disadvantage on a ranged attack.
+    """
+    path = _write(tmp_path, CLOSE_COMBAT_RANGED_YAML)
+    loaded = ScenarioLoader().load(path)
+
+    # Knock out the adjacent goblin before the script runs.
+    adjacent_goblin = loaded.game_state.active_enemies[0]
+    adjacent_goblin.add_condition("incapacitated")
+
+    ctx = ScriptExecutor(loaded).run(
+        [{"action": "attack", "target": "goblin_1"}]
+    )
+
+    assert ctx.last_attack_disadvantage is False
+
+
+def test_thrown_attack_with_adjacent_enemy_sets_disadvantage(
+    tmp_path: Path,
+) -> None:
+    """SRD: thrown weapon attacks are ranged attacks. A dagger thrown at a
+    distant target while a hostile goblin is adjacent must roll with
+    disadvantage even though dagger.category == 'melee'.
+    """
+    path = _write(tmp_path, THROWN_CLOSE_COMBAT_YAML)
+    loaded = ScenarioLoader().load(path)
+
+    # goblin_0 at (4,5) is 5 ft from Archy at (3,5); throw at goblin_1
+    # at (6,5), 15 ft away (within dagger thrown range 20/60).
+    ctx = ScriptExecutor(loaded).run(
+        [{"action": "attack", "target": "goblin_1"}]
+    )
+
+    assert ctx.last_attack is not None
+    assert ctx.last_attack_disadvantage is True
 
 
 # --- error handling --------------------------------------------------------

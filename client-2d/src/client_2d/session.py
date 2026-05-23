@@ -952,6 +952,7 @@ class GameSession:
 
         from dnd_engine.core.distance import distance_in_feet
         from dnd_engine.systems.inventory import EquipmentSlot
+        from dnd_engine.systems.ranged_attacks import is_close_combat_ranged_disadvantage
 
         combatant_pos = self.entity_manager.get_current_turn_position(self.engine)
         if combatant_pos is None:
@@ -996,10 +997,32 @@ class GameSession:
                 f"{weapon_name} attack at {distance_ft} ft (long range - disadvantage)"
             )
 
+        # SRD § Ranged Attacks in Close Combat (#400): adjacent hostile
+        # imposes disadvantage on a ranged attack. Thrown melee weapons
+        # count as ranged attacks too, matching get_attack_range above.
+        is_ranged_attack = weapon_data is not None and (
+            weapon_data.get("category") == "ranged"
+            or "thrown" in (weapon_data.get("properties") or [])
+        )
+        in_close_combat = is_ranged_attack and is_close_combat_ranged_disadvantage(
+            attacker_pos=(combatant_x, combatant_y),
+            enemies=(
+                ((m.grid_x, m.grid_y), m.creature)
+                for m in monsters
+                if m.creature is not None
+            ),
+        )
+        if in_close_combat:
+            self._add_combat_log(
+                f"{weapon_name} attack in close combat (adjacent enemy - disadvantage)"
+            )
+
+        disadvantage = in_long_range or in_close_combat
+
         pre_attack_combatant = current["name"] if current else None
 
         self.selected_enemy = target_entity.enemy_index
-        attack_result = self.execute_attack(disadvantage=in_long_range)
+        attack_result = self.execute_attack(disadvantage=disadvantage)
 
         post_attack_combatant = self.engine.get_current_combatant()
         post_name = post_attack_combatant["name"] if post_attack_combatant else None
