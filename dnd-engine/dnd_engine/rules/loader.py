@@ -109,6 +109,14 @@ class DataLoader:
         creature.damage_immunities = list(data.get("damage_immunities") or [])
         creature.damage_vulnerabilities = list(data.get("damage_vulnerabilities") or [])
 
+        # Per-condition immunity list from the monster catalog (e.g.,
+        # bearded devil ships ["poisoned"]). Consulted by
+        # `Creature.is_immune_to_condition` so condition-application
+        # APIs (`add_condition`, `apply_condition_with_metadata`) skip
+        # attachment when the target is immune. SRD: "Immunity to a
+        # condition means you aren't affected by it."
+        creature.condition_immunities = list(data.get("condition_immunities") or [])
+
         return creature
 
     def load_items(self, campaign_id: str | None = None) -> dict[str, Any]:
