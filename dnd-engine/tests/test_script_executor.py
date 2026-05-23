@@ -406,3 +406,179 @@ def test_unknown_action_raises_clear_error(tmp_path: Path) -> None:
     msg = str(exc.value).lower()
     assert "teleport" in msg
     assert "unknown" in msg
+
+
+# --- monster reach parsing (#411) ------------------------------------------
+
+
+def test_attack_reach_for_parses_five_foot_default() -> None:
+    """A `5 ft.` reach string maps to 5."""
+    from dnd_engine.scenarios.script_executor import _attack_reach_for
+
+    assert _attack_reach_for({"reach": "5 ft."}) == 5
+
+
+def test_attack_reach_for_parses_ten_foot_extended() -> None:
+    """A `10 ft.` reach (bearded devil glaive) maps to 10."""
+    from dnd_engine.scenarios.script_executor import _attack_reach_for
+
+    assert _attack_reach_for({"reach": "10 ft."}) == 10
+
+
+def test_attack_reach_for_defaults_when_missing() -> None:
+    """Missing or empty reach falls back to the SRD default (5 ft).
+
+    Guards against silent reach-widening when a catalog row omits the
+    field — e.g., a homebrew monster JSON.
+    """
+    from dnd_engine.scenarios.script_executor import _attack_reach_for
+
+    assert _attack_reach_for({}) == 5
+    assert _attack_reach_for({"reach": None}) == 5
+    assert _attack_reach_for({"reach": ""}) == 5
+    assert _attack_reach_for(None) == 5
+
+
+def test_attack_reach_for_defaults_when_unparseable() -> None:
+    """A non-numeric reach value falls back to 5 ft.
+
+    Defensive: rather than crash on a malformed string, the helper
+    degrades to vanilla melee. Loud data errors are catalog-validator
+    territory, not attack-resolution territory.
+    """
+    from dnd_engine.scenarios.script_executor import _attack_reach_for
+
+    assert _attack_reach_for({"reach": "abc"}) == 5
+
+
+# --- monster_attack action (#411) ------------------------------------------
+
+# Fighter at (3, 5), bearded devil at (5, 5) — 2 tiles = 10 ft. The
+# devil's Glaive has reach 10 ft, so it can hit at this range.
+MONSTER_EXTENDED_REACH_YAML = """
+name: exec_monster_extended_reach
+seed: 7
+map:
+  dungeon: laboratory
+  campaign: poisoned_laboratory
+  start_room: laboratory.entrance
+party:
+  - class: fighter
+    race: human
+    weapons: [longsword]
+    position: [3, 5]
+    name: Brick
+enemies:
+  - monster_id: bearded_devil
+    position: [5, 5]
+"""
+
+# Same layout but the attacker is a goblin (Scimitar, reach 5 ft).
+# At 10 ft away the attack must be rejected.
+MONSTER_DEFAULT_REACH_YAML = """
+name: exec_monster_default_reach
+seed: 7
+map:
+  dungeon: laboratory
+  campaign: poisoned_laboratory
+  start_room: laboratory.entrance
+party:
+  - class: fighter
+    race: human
+    weapons: [longsword]
+    position: [3, 5]
+    name: Brick
+enemies:
+  - monster_id: goblin
+    position: [5, 5]
+"""
+
+
+def test_monster_attack_extended_reach_lands(tmp_path: Path) -> None:
+    """Bearded devil's Glaive (10 ft) resolves at 10 ft."""
+    path = _write(tmp_path, MONSTER_EXTENDED_REACH_YAML)
+    loaded = ScenarioLoader().load(path)
+
+    ctx = ScriptExecutor(loaded).run([
+        {"action": "wait"},
+        {
+            "action": "monster_attack",
+            "attacker": "bearded_devil_0",
+            "target": "pc_brick",
+            "monster_action": "Glaive",
+        },
+    ])
+
+    assert ctx.last_attack is not None
+    assert ctx.last_attack_error is None
+    assert hasattr(ctx.last_attack, "hit")
+
+
+def test_monster_attack_default_reach_rejected_at_ten_feet(tmp_path: Path) -> None:
+    """Goblin Scimitar (5 ft) is rejected at 10 ft and HP is preserved."""
+    path = _write(tmp_path, MONSTER_DEFAULT_REACH_YAML)
+    loaded = ScenarioLoader().load(path)
+    fighter = loaded.game_state.party.characters[0]
+    starting_hp = fighter.current_hp
+
+    ctx = ScriptExecutor(loaded).run([
+        {"action": "wait"},
+        {
+            "action": "monster_attack",
+            "attacker": "goblin_0",
+            "target": "pc_brick",
+            "monster_action": "Scimitar",
+        },
+    ])
+
+    assert ctx.last_attack is None
+    assert ctx.last_attack_error is not None
+    assert "reach" in ctx.last_attack_error.lower()
+    assert fighter.current_hp == starting_hp
+
+
+def test_monster_attack_missing_attacker_raises(tmp_path: Path) -> None:
+    """Unknown attacker entity_id surfaces a clear ScriptExecutionError."""
+    path = _write(tmp_path, MONSTER_EXTENDED_REACH_YAML)
+    loaded = ScenarioLoader().load(path)
+
+    with pytest.raises(ScriptExecutionError) as exc:
+        ScriptExecutor(loaded).run([
+            {
+                "action": "monster_attack",
+                "attacker": "ghost_0",
+                "target": "pc_brick",
+                "monster_action": "Glaive",
+            },
+        ])
+    assert "ghost_0" in str(exc.value)
+
+
+def test_monster_attack_unknown_action_raises(tmp_path: Path) -> None:
+    """Referencing an action the monster doesn't have raises an error."""
+    path = _write(tmp_path, MONSTER_EXTENDED_REACH_YAML)
+    loaded = ScenarioLoader().load(path)
+
+    with pytest.raises(ScriptExecutionError) as exc:
+        ScriptExecutor(loaded).run([
+            {
+                "action": "monster_attack",
+                "attacker": "bearded_devil_0",
+                "target": "pc_brick",
+                "monster_action": "DoesNotExist",
+            },
+        ])
+    assert "DoesNotExist" in str(exc.value)
+
+
+def test_monster_attack_missing_required_field_raises(tmp_path: Path) -> None:
+    """The action dispatcher rejects a monster_attack missing required keys."""
+    path = _write(tmp_path, MONSTER_EXTENDED_REACH_YAML)
+    loaded = ScenarioLoader().load(path)
+
+    with pytest.raises(ScriptExecutionError) as exc:
+        ScriptExecutor(loaded).run([
+            {"action": "monster_attack", "attacker": "bearded_devil_0"},
+        ])
+    msg = str(exc.value).lower()
+    assert "monster_attack" in msg or "target" in msg or "monster_action" in msg

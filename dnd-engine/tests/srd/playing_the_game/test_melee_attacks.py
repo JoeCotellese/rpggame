@@ -150,18 +150,118 @@ class TestReach_GreaterThanFiveFeet:
         )
 
     def test_extended_reach_data_is_consumed_by_attack_resolution(self):
-        pytest.skip(
-            "GAP: monster `reach` data in monsters.json is not read by "
-            'any attack-resolution code path. Grep for `"reach"` '
-            "across dnd-engine/dnd_engine/ outside of monsters.json "
-            "returns only script_executor._attack_range_for, which "
-            "operates on items.json (player weapons), not monster "
-            "actions. A bearded devil's Glaive (10 ft. reach) and a "
-            "goblin's Scimitar (5 ft. reach) behave identically. "
-            "Combat is room-scoped with no per-creature positions on "
-            "the engine side, so reach is effectively a flavor field. "
-            "Tracked by issue #411."
+        """A 10-ft reach action lands at 10 ft; a 5-ft action is rejected.
+
+        Verifies the SRD's "noted in their descriptions" clause is honored
+        end-to-end: `script_executor._attack_reach_for` parses the action's
+        `reach` string, and the `monster_attack` action gates resolution on
+        it. Mirrors the player-weapon range pattern (#400) so scenario
+        scripts can express monster melee that depends on reach.
+        """
+        import tempfile
+
+        from dnd_engine.scenarios.loader import ScenarioLoader
+        from dnd_engine.scenarios.script_executor import (
+            ScriptExecutor,
+            _attack_reach_for,
         )
+
+        monsters = json.loads(MONSTERS_JSON.read_text())
+
+        glaive = next(
+            a for a in monsters["bearded_devil"]["actions"]
+            if a.get("name") == "Glaive"
+        )
+        scimitar = next(
+            a for a in monsters["goblin"]["actions"]
+            if a.get("name") == "Scimitar"
+        )
+
+        # Helper consumes the field — that alone closes the GAP.
+        assert _attack_reach_for(glaive) == 10
+        assert _attack_reach_for(scimitar) == 5
+
+        # And it gates attack resolution: a 10-ft reach action lands at
+        # 10 ft, but a 5-ft action at the same distance is out of reach.
+        # Fixture: PC at (3, 5), monster at (5, 5) — 2 tiles = 10 ft.
+        bearded_devil_yaml = """
+name: srd_reach_extended
+seed: 7
+map:
+  dungeon: laboratory
+  campaign: poisoned_laboratory
+  start_room: laboratory.entrance
+party:
+  - class: fighter
+    race: human
+    weapons: [longsword]
+    position: [3, 5]
+    name: Brick
+enemies:
+  - monster_id: bearded_devil
+    position: [5, 5]
+"""
+        goblin_yaml = """
+name: srd_reach_default
+seed: 7
+map:
+  dungeon: laboratory
+  campaign: poisoned_laboratory
+  start_room: laboratory.entrance
+party:
+  - class: fighter
+    race: human
+    weapons: [longsword]
+    position: [3, 5]
+    name: Brick
+enemies:
+  - monster_id: goblin
+    position: [5, 5]
+"""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            bd_path = tmp_path / "bd.yaml"
+            bd_path.write_text(bearded_devil_yaml.lstrip())
+            gb_path = tmp_path / "gb.yaml"
+            gb_path.write_text(goblin_yaml.lstrip())
+
+            # Advance to the monster's turn, then have it attack the PC.
+            bd_loaded = ScenarioLoader().load(bd_path)
+            bd_executor = ScriptExecutor(bd_loaded)
+            bd_ctx = bd_executor.run([
+                {"action": "wait"},  # let fighter pass
+                {
+                    "action": "monster_attack",
+                    "attacker": "bearded_devil_0",
+                    "target": "pc_brick",
+                    "monster_action": "Glaive",
+                },
+            ])
+            # Glaive (10 ft) at 10 ft must resolve, not reject.
+            assert bd_ctx.last_attack is not None, (
+                f"bearded devil glaive (10 ft reach) should hit at 10 ft, "
+                f"got error: {bd_ctx.last_attack_error}"
+            )
+
+            gb_loaded = ScenarioLoader().load(gb_path)
+            gb_executor = ScriptExecutor(gb_loaded)
+            gb_ctx = gb_executor.run([
+                {"action": "wait"},
+                {
+                    "action": "monster_attack",
+                    "attacker": "goblin_0",
+                    "target": "pc_brick",
+                    "monster_action": "Scimitar",
+                },
+            ])
+            # Scimitar (5 ft) at 10 ft must be rejected.
+            assert gb_ctx.last_attack is None
+            assert gb_ctx.last_attack_error is not None
+            assert "reach" in gb_ctx.last_attack_error.lower(), (
+                f"expected out-of-reach rejection, got: "
+                f"{gb_ctx.last_attack_error}"
+            )
 
 
 class TestOpportunityAttacks_Triggering:
