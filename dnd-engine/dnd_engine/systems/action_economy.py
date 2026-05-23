@@ -22,6 +22,37 @@ class ActionType(Enum):
     NO_ACTION = "no_action"
 
 
+class Terrain(str, Enum):
+    """
+    Kinds of terrain a creature may move through, for movement-cost purposes.
+
+    SRD: "Each foot of movement in difficult terrain costs 1 extra foot."
+    So a 5-foot step through difficult terrain costs 10 feet of movement.
+    """
+
+    NORMAL = "normal"
+    DIFFICULT = "difficult"
+
+
+def cost_for(feet: int, terrain: Terrain) -> int:
+    """
+    Compute the movement-pool cost for traveling ``feet`` through ``terrain``.
+
+    Difficult terrain costs 1 extra foot per foot moved (effectively 2x).
+    Normal terrain costs exactly ``feet``.
+
+    Args:
+        feet: Distance the creature wants to travel, in feet.
+        terrain: Terrain kind being traversed.
+
+    Returns:
+        The number of feet to deduct from the movement pool.
+    """
+    if terrain == Terrain.DIFFICULT:
+        return feet * 2
+    return feet
+
+
 @dataclass
 class TurnState:
     """
@@ -80,15 +111,22 @@ class TurnState:
 
         return False
 
-    def consume_movement(self, feet: int = 5) -> bool:
+    def consume_movement(
+        self, feet: int = 5, terrain: Terrain = Terrain.NORMAL
+    ) -> bool:
         """
         Consume movement from remaining movement pool.
 
         Args:
             feet: Amount of movement to consume (default 5 ft = 1 grid square)
+            terrain: Terrain kind being traversed. Difficult terrain doubles
+                the cost per foot (SRD: each foot in difficult terrain costs
+                1 extra foot). Defaults to NORMAL so existing callers are
+                unaffected.
 
         Returns:
-            True if movement was available and consumed, False if insufficient
+            True if movement was available and consumed, False if insufficient.
+            On insufficient movement, ``movement_remaining`` is NOT changed.
 
         Example:
             >>> turn = TurnState(movement_remaining=30)
@@ -96,9 +134,14 @@ class TurnState:
             True
             >>> turn.movement_remaining
             25
+            >>> turn.consume_movement(5, terrain=Terrain.DIFFICULT)
+            True
+            >>> turn.movement_remaining
+            15
         """
-        if self.movement_remaining >= feet:
-            self.movement_remaining -= feet
+        cost = cost_for(feet, terrain)
+        if self.movement_remaining >= cost:
+            self.movement_remaining -= cost
             return True
         return False
 
