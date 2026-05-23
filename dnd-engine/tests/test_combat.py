@@ -519,6 +519,63 @@ class TestApplyDamageModifiers:
         result = self.engine._apply_damage_modifiers(self.target, raw_damage=10, damage_type="Fire")
         assert result == 0
 
+    def test_condition_flag_vulnerability_doubles_damage(self):
+        """`has_vulnerability_{type}` condition doubles matching damage."""
+        self.target.add_condition("has_vulnerability_fire")
+        result = self.engine._apply_damage_modifiers(
+            self.target, raw_damage=10, damage_type="fire"
+        )
+        assert result == 20
+
+    def test_condition_flag_vulnerability_is_per_type(self):
+        """Fire vulnerability does not amplify poison damage."""
+        self.target.add_condition("has_vulnerability_fire")
+        result = self.engine._apply_damage_modifiers(
+            self.target, raw_damage=10, damage_type="poison"
+        )
+        assert result == 10
+
+    def test_monster_catalog_vulnerability_doubles_damage(self):
+        """`damage_vulnerabilities` list attribute doubles matching damage.
+
+        SRD acceptance for the Skeleton: catalog ships
+        `damage_vulnerabilities: ["bludgeoning"]`, so a 20-damage
+        bludgeoning swing becomes 40.
+        """
+        self.target.damage_vulnerabilities = ["bludgeoning"]
+        result = self.engine._apply_damage_modifiers(
+            self.target, raw_damage=20, damage_type="bludgeoning"
+        )
+        assert result == 40
+
+    def test_vulnerability_no_stacking_two_sources_double_once(self):
+        """Condition flag + catalog field combined still double once."""
+        self.target.add_condition("has_vulnerability_fire")
+        self.target.damage_vulnerabilities = ["fire"]
+        result = self.engine._apply_damage_modifiers(
+            self.target, raw_damage=10, damage_type="fire"
+        )
+        assert result == 20
+
+    def test_immunity_takes_precedence_over_vulnerability(self):
+        """Immunity zero-out beats Vulnerability doubling (SRD order:
+        Immunity, then Resistance, then Vulnerability)."""
+        self.target.damage_immunities = ["fire"]
+        self.target.add_condition("has_vulnerability_fire")
+        result = self.engine._apply_damage_modifiers(
+            self.target, raw_damage=10, damage_type="fire"
+        )
+        assert result == 0
+
+    def test_vulnerability_damage_type_is_normalized_case_insensitively(self):
+        """Vulnerability matches even when the incoming damage type is
+        mixed-case (SRD types are lowercase in the catalog)."""
+        self.target.damage_vulnerabilities = ["bludgeoning"]
+        result = self.engine._apply_damage_modifiers(
+            self.target, raw_damage=20, damage_type="Bludgeoning"
+        )
+        assert result == 40
+
 
 class TestResolveAttackDamageType:
     """Tests for `damage_type` plumbing through `resolve_attack`."""
