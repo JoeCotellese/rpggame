@@ -89,7 +89,11 @@ class CombatEngine:
         self.dice_roller = dice_roller if dice_roller is not None else DiceRoller()
 
     def _apply_damage_modifiers(
-        self, target: Creature, raw_damage: int, damage_type: str | None
+        self,
+        target: Creature,
+        raw_damage: int,
+        damage_type: str | None,
+        environment: str | None = None,
     ) -> int:
         """
         Scale raw damage by the target's per-type Resistance, Immunity,
@@ -137,6 +141,15 @@ class CombatEngine:
              Resistance stage additionally recognizes the literal token
              `"all"` in `damage_resistances` as a blanket source.
 
+        Environment-granted Resistance:
+            SRD § Playing the Game › Underwater Combat carves out a
+            third Resistance source: "Anything underwater has
+            Resistance to Fire damage." This is environmental, not
+            creature-typed or condition-applied. When `environment ==
+            "underwater"` and `damage_type == "fire"`, the Resistance
+            stage halves the damage exactly once (No Stacking still
+            holds with any other Fire-Resistance source).
+
         SRD § Playing the Game › Resistance and Vulnerability:
             "If you have Resistance to a damage type, damage of that
              type is halved against you (round down)."
@@ -154,6 +167,12 @@ class CombatEngine:
             damage_type: SRD damage type (e.g. "fire", "cold",
                 "slashing"). If None, no per-type scaling can apply
                 and `raw_damage` is returned unchanged.
+            environment: Optional environment tag for the target's
+                current room (e.g. "underwater"). When provided, the
+                Resistance stage consults SRD environment carve-outs
+                (currently: underwater → Fire Resistance). Defaults to
+                None for callers that have no environment context;
+                this preserves legacy behavior.
 
         Returns:
             The damage amount after the full modifier pipeline.
@@ -189,16 +208,22 @@ class CombatEngine:
         # Resistance halves matching damage with floor rounding. The
         # No-Stacking rule is satisfied by a single boolean branch:
         # multiple sources (condition flag, per-type catalog entry,
-        # blanket "all") still halve exactly once.
+        # blanket "all", environment carve-out) still halve exactly once.
         resistance_condition = f"has_resistance_{normalized_type}"
         catalog_resistances = [
             t.lower() for t in (getattr(target, "damage_resistances", None) or [])
         ]
+        # SRD § Underwater Combat: "Anything underwater has Resistance
+        # to Fire damage." Environment-granted, not catalog or condition.
+        environment_grants_resistance = (
+            environment == "underwater" and normalized_type == "fire"
+        )
         has_resistance = (
             target.has_condition(resistance_condition)
             or target.has_condition("has_resistance_all")
             or normalized_type in catalog_resistances
             or "all" in catalog_resistances
+            or environment_grants_resistance
         )
         if has_resistance:
             damage = damage // 2
@@ -378,9 +403,18 @@ class CombatEngine:
             # so both summands route through the same chokepoint as a
             # single total. When `damage_type` is None this is a no-op
             # and the legacy untyped behavior is preserved.
+            # Environment context (SRD § Underwater Combat: underwater
+            # grants Fire Resistance, #518) is sourced from game_state
+            # when available; unit tests without a game_state see the
+            # legacy no-environment behavior.
+            environment = (
+                game_state.creature_environment(defender)
+                if game_state is not None and hasattr(game_state, "creature_environment")
+                else None
+            )
             total_pre_modifier = damage + sneak_attack_damage
             total_post_modifier = self._apply_damage_modifiers(
-                defender, total_pre_modifier, damage_type
+                defender, total_pre_modifier, damage_type, environment=environment
             )
             # Reflect the post-modifier values back onto the AttackResult.
             # When the target is immune both summands collapse to zero;
@@ -783,6 +817,7 @@ class CombatEngine:
         upcast_level: int | None = None,
         apply_damage: bool = False,
         event_bus=None,
+        game_state=None,
     ) -> dict[str, Any]:
         """
         Resolve a spell that requires saving throws.
@@ -805,6 +840,12 @@ class CombatEngine:
             upcast_level: Spell slot level used (for upcasting), defaults to spell's base level
             apply_damage: If True, apply damage to targets' HP
             event_bus: Optional EventBus instance for event emission
+            game_state: Optional GameState used to source per-target
+                environment context for the damage-modifier chokepoint
+                (SRD § Underwater Combat: anything underwater has
+                Resistance to Fire damage, #518). Optional for backward
+                compatibility — callers without a game_state see the
+                legacy no-environment behavior.
 
         Returns:
             Dictionary with spell cast results:
@@ -913,7 +954,17 @@ class CombatEngine:
             # that applies BEFORE Resistance per the Order-of-
             # Application rule; #468 will codify the ordering across
             # the full pipeline.
-            damage = self._apply_damage_modifiers(target, damage, spell_damage_type)
+            # Environment context (SRD § Underwater Combat: underwater
+            # grants Fire Resistance, #518) is sourced from game_state
+            # when available.
+            target_environment = (
+                game_state.creature_environment(target)
+                if game_state is not None and hasattr(game_state, "creature_environment")
+                else None
+            )
+            damage = self._apply_damage_modifiers(
+                target, damage, spell_damage_type, environment=target_environment
+            )
 
             # Apply damage if requested
             if apply_damage and damage > 0:

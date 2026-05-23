@@ -329,32 +329,68 @@ class TestUnderwaterCombat_FireResistance:
         )
 
     def test_underwater_creature_automatically_gains_fire_resistance(self) -> None:
-        pytest.skip(
-            "GAP: there is no automatic 'underwater grants Fire "
-            "Resistance' application. The resistance pipeline keys on "
-            "the `has_resistance_fire` *condition* (consumed at "
-            "`systems/item_effects.py` in `_apply_damage_effect`) but "
-            "no code path adds that condition based on environment. "
-            "`GameState.move_to_room` does not consult any "
-            "environment-grants-resistance table. The SRD's 'anything "
-            "underwater has Resistance to Fire' is unique among "
-            "resistance sources because it is environmental, not "
-            "creature-typed (#462) or condition-applied. Tracked by "
-            "issue #518 (depends on #514 environment seam)."
+        """Environment-granted Fire Resistance via the chokepoint (#518).
+
+        The chokepoint `CombatEngine._apply_damage_modifiers` takes an
+        optional `environment` argument. When that argument is
+        "underwater" and the damage type is fire, the Resistance stage
+        halves the damage — without the target carrying any
+        `has_resistance_fire` condition or catalog entry.
+        """
+        target = _make_creature(hp=50)
+        engine = CombatEngine(DiceRoller(seed=1))
+
+        # No condition, no catalog entry — only the environment.
+        assert not target.has_condition("has_resistance_fire")
+        assert not getattr(target, "damage_resistances", None)
+
+        result = engine._apply_damage_modifiers(
+            target, raw_damage=10, damage_type="fire", environment="underwater"
+        )
+        assert result == 5, (
+            "SRD: Anything underwater has Resistance to Fire damage — "
+            "10 fire damage should halve to 5 from the environment "
+            "alone."
         )
 
     def test_fire_resistance_in_attack_pipeline_underwater(self) -> None:
-        pytest.skip(
-            "GAP: even if the underwater environment applied "
-            "`has_resistance_fire`, attack-pipeline fire damage would "
-            "not honor it. `CombatEngine.resolve_attack` (`dnd_engine/"
-            "core/combat.py:91`) and `CombatEngine.resolve_spell_save` "
-            "(combat.py:547) do not consult any per-type resistance — "
-            "they call `target.take_damage(amount)` with a raw integer. "
-            "The resistance halving lives only in `systems/item_"
-            "effects._apply_damage_effect`. Tracked by issues #461 "
-            "(damage_type pipeline) and #518 (this rule's environment "
-            "seam)."
+        """End-to-end: a fire weapon attack in an underwater room halves.
+
+        Driving `CombatEngine.resolve_attack` with a stub `game_state`
+        whose `creature_environment` returns "underwater" exercises the
+        full integration path: the chokepoint is consulted, environment
+        is sourced via the game_state seam, and the damage applied to
+        the defender is halved.
+        """
+        engine = CombatEngine(DiceRoller(seed=7))
+        attacker = _make_creature("Attacker")
+        defender = _make_creature("Defender", hp=50)
+
+        class _StubGameState:
+            """Minimal game_state stub for the chokepoint env seam."""
+
+            def get_effective_ac(self, creature):
+                return creature._base_ac
+
+            def creature_environment(self, creature):
+                return "underwater"
+
+        # Fixed 10 fire damage ("0d4+10") removes the dice-roll
+        # noise; we care that 10 underwater fire halves to 5.
+        starting_hp = defender.current_hp
+        engine.resolve_attack(
+            attacker=attacker,
+            defender=defender,
+            attack_bonus=100,  # guarantee a hit
+            damage_dice="0d4+10",
+            apply_damage=True,
+            damage_type="fire",
+            game_state=_StubGameState(),
+        )
+        # Underwater env grants Fire Resistance → 10 halves to 5.
+        assert starting_hp - defender.current_hp == 5, (
+            "SRD: Fire damage against a creature in an underwater room "
+            "must route through Resistance halving via the chokepoint."
         )
 
 

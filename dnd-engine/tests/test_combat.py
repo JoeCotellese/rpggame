@@ -746,6 +746,98 @@ class TestBlanketResistance:
         assert result == 20
 
 
+class TestUnderwaterFireResistance:
+    """Tests for environment-granted Fire Resistance underwater (#518).
+
+    SRD § Playing the Game › Underwater Combat:
+        "Anything underwater has Resistance to Fire damage (explained in
+         'Damage and Healing')."
+
+    Unlike the condition-flag and monster-catalog Resistance sources,
+    this Resistance is *environmental* — it applies to any creature in
+    a room whose `environment` is "underwater", without mutating the
+    creature's conditions or catalog fields. The chokepoint reads the
+    environment via an optional `environment` parameter so the call
+    sites (`resolve_attack`, `resolve_spell_save`) can pass it in and
+    direct-chokepoint tests can exercise it without spinning up a full
+    `GameState`.
+    """
+
+    def setup_method(self):
+        self.engine = CombatEngine(DiceRoller(seed=1))
+        abilities = Abilities(
+            strength=10, dexterity=10, constitution=10, intelligence=10, wisdom=10, charisma=10
+        )
+        self.target = Creature(name="Target", max_hp=100, ac=10, abilities=abilities)
+
+    def test_underwater_environment_halves_fire_damage(self):
+        """SRD: anything underwater has Resistance to Fire damage."""
+        result = self.engine._apply_damage_modifiers(
+            self.target, raw_damage=10, damage_type="fire", environment="underwater"
+        )
+        assert result == 5
+
+    def test_underwater_environment_floors_odd_fire_damage(self):
+        """Resistance halves with floor rounding even when environment-granted."""
+        result = self.engine._apply_damage_modifiers(
+            self.target, raw_damage=7, damage_type="fire", environment="underwater"
+        )
+        assert result == 3
+
+    def test_non_underwater_environment_leaves_fire_damage_untouched(self):
+        """A creature on land takes full fire damage (no false-positive)."""
+        result = self.engine._apply_damage_modifiers(
+            self.target, raw_damage=10, damage_type="fire", environment=None
+        )
+        assert result == 10
+
+    def test_underwater_environment_does_not_resist_cold(self):
+        """Per-type scoping: underwater grants Fire Resistance only."""
+        result = self.engine._apply_damage_modifiers(
+            self.target, raw_damage=10, damage_type="cold", environment="underwater"
+        )
+        assert result == 10
+
+    def test_underwater_environment_does_not_resist_lightning(self):
+        """Per-type scoping: underwater grants Fire Resistance only.
+
+        Lightning underwater could plausibly be *worse* in fiction, but
+        SRD only carves out Fire Resistance. Anything else is untouched.
+        """
+        result = self.engine._apply_damage_modifiers(
+            self.target, raw_damage=10, damage_type="lightning", environment="underwater"
+        )
+        assert result == 10
+
+    def test_underwater_fire_resistance_does_not_stack_with_condition_flag(self):
+        """No Stacking: env + `has_resistance_fire` still halves once."""
+        self.target.add_condition("has_resistance_fire")
+        result = self.engine._apply_damage_modifiers(
+            self.target, raw_damage=10, damage_type="fire", environment="underwater"
+        )
+        assert result == 5
+
+    def test_underwater_fire_immunity_still_zeroes_damage(self):
+        """Immunity precedence: a fire-immune creature underwater still takes 0."""
+        self.target.damage_immunities = ["fire"]
+        result = self.engine._apply_damage_modifiers(
+            self.target, raw_damage=20, damage_type="fire", environment="underwater"
+        )
+        assert result == 0
+
+    def test_underwater_fire_resistance_then_vulnerability_doubles_after_halving(self):
+        """Pipeline ordering: env-Resistance halves, then Vulnerability doubles.
+
+        21 fire, fire-Vulnerable, underwater (env-granted Fire Resistance):
+            floor(21 / 2) = 10, then 10 * 2 = 20.
+        """
+        self.target.add_condition("has_vulnerability_fire")
+        result = self.engine._apply_damage_modifiers(
+            self.target, raw_damage=21, damage_type="fire", environment="underwater"
+        )
+        assert result == 20
+
+
 class TestResolveAttackDamageType:
     """Tests for `damage_type` plumbing through `resolve_attack`."""
 
