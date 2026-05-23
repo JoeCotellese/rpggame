@@ -113,6 +113,29 @@ enemies:
     position: [4, 5]
 """
 
+# Thrown-melee weapon (dagger) with an adjacent enemy and a distant
+# target. Per SRD, a thrown weapon attack IS a ranged attack and must
+# incur close-combat disadvantage even though dagger.category == 'melee'.
+THROWN_CLOSE_COMBAT_YAML = """
+name: exec_thrown_close_combat
+seed: 42
+map:
+  dungeon: laboratory
+  campaign: poisoned_laboratory
+  start_room: laboratory.entrance
+party:
+  - class: fighter
+    race: high_elf
+    weapons: [dagger]
+    position: [3, 5]
+    name: Archy
+enemies:
+  - monster_id: goblin
+    position: [4, 5]
+  - monster_id: goblin
+    position: [6, 5]
+"""
+
 # Ranged attacker with TWO goblins — one adjacent (close combat), one
 # at 35 ft (the intended ranged target). SRD § Ranged Attacks in Close
 # Combat (#400) requires disadvantage even when shooting the far target.
@@ -338,6 +361,26 @@ def test_ranged_attack_with_incapacitated_adjacent_enemy_no_disadvantage(
     )
 
     assert ctx.last_attack_disadvantage is False
+
+
+def test_thrown_attack_with_adjacent_enemy_sets_disadvantage(
+    tmp_path: Path,
+) -> None:
+    """SRD: thrown weapon attacks are ranged attacks. A dagger thrown at a
+    distant target while a hostile goblin is adjacent must roll with
+    disadvantage even though dagger.category == 'melee'.
+    """
+    path = _write(tmp_path, THROWN_CLOSE_COMBAT_YAML)
+    loaded = ScenarioLoader().load(path)
+
+    # goblin_0 at (4,5) is 5 ft from Archy at (3,5); throw at goblin_1
+    # at (6,5), 15 ft away (within dagger thrown range 20/60).
+    ctx = ScriptExecutor(loaded).run(
+        [{"action": "attack", "target": "goblin_1"}]
+    )
+
+    assert ctx.last_attack is not None
+    assert ctx.last_attack_disadvantage is True
 
 
 # --- error handling --------------------------------------------------------

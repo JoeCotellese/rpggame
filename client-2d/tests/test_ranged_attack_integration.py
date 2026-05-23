@@ -443,6 +443,32 @@ class TestSessionCloseCombatDisadvantage:
         session_in_combat.attack(0)
         assert captured["disadvantage"] is False
 
+    def test_thrown_weapon_with_adjacent_enemy_triggers_disadvantage(
+        self, session_in_combat, monkeypatch
+    ):
+        """SRD: thrown weapon attacks are ranged attacks. A dagger thrown
+        with a hostile adjacent must roll with disadvantage even though
+        the dagger is category='melee' with the 'thrown' property.
+        """
+        from dnd_engine.systems.inventory import EquipmentSlot
+
+        captured = self._attach_attack_spy(session_in_combat, monkeypatch)
+
+        # Swap shortbow for dagger on the active player. equip_item only
+        # succeeds if the item is already in inventory, so add it first.
+        current = session_in_combat.engine.get_current_combatant()
+        assert current is not None and current["is_player"]
+        creature = current["creature"]
+        creature.inventory.add_item("dagger", "weapons", 1)
+        equipped = creature.inventory.equip_item("dagger", EquipmentSlot.WEAPON)
+        assert equipped, "Dagger failed to equip; test premise broken"
+
+        self._move_goblin_adjacent_to_attacker(session_in_combat)
+
+        session_in_combat.attack(0)
+
+        assert captured["disadvantage"] is True
+
 
 class TestSessionNoAmmoAttack:
     """Regression coverage for issue #394.

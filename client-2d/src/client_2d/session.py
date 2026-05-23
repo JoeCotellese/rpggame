@@ -998,12 +998,13 @@ class GameSession:
             )
 
         # SRD § Ranged Attacks in Close Combat (#400): adjacent hostile
-        # imposes disadvantage on a ranged attack. Melee weapons aren't
-        # affected by this rule.
-        is_ranged_weapon = (
-            weapon_data is not None and weapon_data.get("category") == "ranged"
+        # imposes disadvantage on a ranged attack. Thrown melee weapons
+        # count as ranged attacks too, matching get_attack_range above.
+        is_ranged_attack = weapon_data is not None and (
+            weapon_data.get("category") == "ranged"
+            or "thrown" in (weapon_data.get("properties") or [])
         )
-        in_close_combat = is_ranged_weapon and is_close_combat_ranged_disadvantage(
+        in_close_combat = is_ranged_attack and is_close_combat_ranged_disadvantage(
             attacker_pos=(combatant_x, combatant_y),
             enemies=(
                 ((m.grid_x, m.grid_y), m.creature)

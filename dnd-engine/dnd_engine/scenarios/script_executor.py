@@ -124,6 +124,22 @@ def _attack_range_for(weapon_data: dict[str, Any] | None) -> tuple[int, int]:
     return (5, 5)
 
 
+def _is_ranged_attack(weapon_data: dict[str, Any] | None) -> bool:
+    """Return True when an attack with this weapon is a ranged attack roll.
+
+    Per SRD: a thrown weapon attack is a ranged attack even when the
+    weapon itself is categorized as melee. Mirrors the precedent in
+    ``_attack_range_for`` so the close-combat rule lines up with the
+    range tuple it produces.
+    """
+    if not weapon_data:
+        return False
+    if weapon_data.get("category") == "ranged":
+        return True
+    properties = weapon_data.get("properties", []) or []
+    return "thrown" in properties
+
+
 class ScriptExecutor:
     """Runs a script of action dicts against a ``LoadedScenario``.
 
@@ -213,12 +229,11 @@ class ScriptExecutor:
             return
 
         in_long_range = distance > normal_range
-        # SRD § Ranged Attacks in Close Combat (#400): only applies to
-        # ranged weapons; thrown melee weapons are exempt by category.
-        is_ranged_weapon = (
-            weapon_data is not None and weapon_data.get("category") == "ranged"
-        )
-        in_close_combat = is_ranged_weapon and is_close_combat_ranged_disadvantage(
+        # SRD § Ranged Attacks in Close Combat (#400): applies to any
+        # ranged attack roll — bow shots and thrown melee weapons alike.
+        # Mirrors _attack_range_for's treatment of "thrown" as ranged.
+        is_ranged_attack = _is_ranged_attack(weapon_data)
+        in_close_combat = is_ranged_attack and is_close_combat_ranged_disadvantage(
             attacker_pos=attacker_pos,
             enemies=self._living_enemies_with_positions(),
         )
