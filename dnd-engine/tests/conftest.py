@@ -31,11 +31,18 @@ AUTO_SCENARIO_DIR = Path(__file__).parent / "scenarios" / "yaml" / "auto"
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Register the ``scenario`` marker so ``pytest --strict-markers`` is happy."""
+    """Register custom markers so ``pytest --strict-markers`` is happy."""
     config.addinivalue_line(
         "markers",
         "scenario(*paths): parametrize a test across YAML scenarios. "
         "With no args, auto-discovers all YAMLs in tests/scenarios/yaml/auto/.",
+    )
+    config.addinivalue_line(
+        "markers",
+        "srd(path, lines=None): cross-reference a test to an SRD section. "
+        "`path` is relative to docs/srd/ (e.g. 'playing-the-game/ranged-attacks.md'). "
+        "`lines` optionally pins the source_lines range from the file's frontmatter. "
+        "Use on tests under tests/srd/ to build the conformance coverage matrix.",
     )
 
 
