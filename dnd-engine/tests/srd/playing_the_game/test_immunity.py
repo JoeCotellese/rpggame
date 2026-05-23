@@ -130,16 +130,10 @@ class TestImmunity_ToDamageType:
 
         engine = CombatEngine(DiceRoller(seed=1))
 
-        fire_scaled = engine._apply_damage_modifiers(
-            target, raw_damage=20, damage_type="fire"
-        )
-        cold_scaled = engine._apply_damage_modifiers(
-            target, raw_damage=20, damage_type="cold"
-        )
+        fire_scaled = engine._apply_damage_modifiers(target, raw_damage=20, damage_type="fire")
+        cold_scaled = engine._apply_damage_modifiers(target, raw_damage=20, damage_type="cold")
 
-        assert fire_scaled == 0, (
-            "Fire-immune target must take 0 fire damage."
-        )
+        assert fire_scaled == 0, "Fire-immune target must take 0 fire damage."
         assert cold_scaled == 20, (
             "Immunity is per-type — a fire-immune target takes full "
             "damage from other types (SRD scopes immunity to the "
@@ -170,15 +164,11 @@ class TestImmunity_ToDamageType:
             wisdom=11,
             charisma=11,
         )
-        bearded_devil = Creature(
-            name="Bearded Devil", max_hp=52, ac=13, abilities=abilities
-        )
+        bearded_devil = Creature(name="Bearded Devil", max_hp=52, ac=13, abilities=abilities)
         bearded_devil.damage_immunities = ["fire", "poison"]
 
         engine = CombatEngine(DiceRoller(seed=1))
-        scaled = engine._apply_damage_modifiers(
-            bearded_devil, raw_damage=22, damage_type="fire"
-        )
+        scaled = engine._apply_damage_modifiers(bearded_devil, raw_damage=22, damage_type="fire")
 
         assert scaled == 0, (
             "Catalog `damage_immunities` must zero damage of the "
@@ -218,39 +208,179 @@ class TestImmunity_ToCondition:
         )
 
     def test_general_saving_throw_path_consults_condition_immunity(self):
-        pytest.skip(
-            "GAP: `CombatEngine._process_saving_throw_effect` (dnd-"
-            "engine/dnd_engine/core/combat.py:371) applies the on-fail "
-            "condition (e.g., ghoul Paralyzed) directly via "
-            "`defender.apply_condition_with_metadata` with no immunity "
-            "check. The only honored condition-immunity path is the "
-            "hard-coded Sleep creature-type list in "
-            "`CombatEngine.resolve_spell_hp_pool` (combat.py:843-864). "
-            "Tracked by issue #466."
+        """The saving-throw effect path must skip on-fail condition
+        application when the defender is immune to that condition.
+
+        SRD acceptance: a bearded devil (condition_immunities:
+        [poisoned]) hit by an action that triggers a Constitution save
+        on hit with on_fail condition "poisoned" must not receive the
+        Poisoned condition, regardless of save success/failure. The
+        guard lives on `Creature.add_condition` /
+        `apply_condition_with_metadata` so any caller benefits.
+        """
+        from dnd_engine.core.combat import CombatEngine
+        from dnd_engine.core.creature import Abilities, Creature
+        from dnd_engine.core.dice import DiceRoller
+
+        attacker = Creature(
+            name="Bearded Devil Attacker",
+            max_hp=52,
+            ac=13,
+            abilities=Abilities(
+                strength=16,
+                dexterity=15,
+                constitution=15,
+                intelligence=9,
+                wisdom=11,
+                charisma=11,
+            ),
+        )
+        defender = Creature(
+            name="Bearded Devil Defender",
+            max_hp=52,
+            ac=13,
+            abilities=Abilities(
+                strength=16,
+                dexterity=15,
+                constitution=15,
+                intelligence=9,
+                wisdom=11,
+                charisma=11,
+            ),
+        )
+        # Mirror what `DataLoader.create_monster` attaches from the
+        # bearded devil's monsters.json entry.
+        defender.condition_immunities = ["poisoned"]
+
+        # Force the saving throw to fail by setting an impossibly high
+        # DC; on a failure the on-fail condition would normally attach.
+        saving_throw_data = {
+            "trigger": "on_hit",
+            "ability": "constitution",
+            "dc": 99,
+            "on_fail": {
+                "condition": "poisoned",
+                "duration_type": "rounds",
+                "duration": 10,
+                "allow_repeat_save": True,
+                "repeat_timing": "end_of_turn",
+            },
+        }
+
+        engine = CombatEngine(DiceRoller(seed=1))
+        result = engine._process_saving_throw_effect(saving_throw_data, attacker, defender)
+
+        assert result is not None
+        assert result["save_result"]["success"] is False, (
+            "DC 99 should force a failed save so the on-fail path runs."
+        )
+        assert result["condition_applied"] is None, (
+            "Condition must not be applied to a defender immune to it "
+            "(SRD: 'Immunity to a condition means you aren't affected "
+            "by it.')."
+        )
+        assert not defender.has_condition("poisoned"), (
+            "Defender immune to Poisoned must not have the condition attached after a failed save."
         )
 
     def test_monster_condition_immunities_field_is_consumed(self):
-        pytest.skip(
-            "GAP: monsters.json `condition_immunities` is data-only "
-            "for the catalog-driven path. The engine's only condition-"
-            "immunity check is hard-coded to creature *type* (undead / "
-            "construct → Sleep) at "
-            "`dnd-engine/dnd_engine/core/combat.py:843-854`, not the "
-            "per-monster `condition_immunities` list. A bearded "
-            "devil's `condition_immunities: [poisoned]` is never "
-            "consulted before applying the Poisoned condition. "
-            "Tracked by issue #466."
+        """A monster's catalog `condition_immunities` blocks the
+        matching condition from attaching via `Creature.add_condition`
+        and `apply_condition_with_metadata`.
+
+        Per #466, `DataLoader.create_monster` threads
+        `condition_immunities` onto the Creature, and the Creature's
+        condition-application APIs consult it via
+        `Creature.is_immune_to_condition`. A bearded devil with
+        `condition_immunities: [poisoned]` therefore cannot be made
+        Poisoned, no matter who calls `add_condition`.
+        """
+        from dnd_engine.core.creature import Abilities, Creature
+
+        abilities = Abilities(
+            strength=16,
+            dexterity=10,
+            constitution=15,
+            intelligence=9,
+            wisdom=11,
+            charisma=11,
+        )
+        bearded_devil = Creature(name="Bearded Devil", max_hp=52, ac=13, abilities=abilities)
+        # Mirror what `DataLoader.create_monster` attaches from the
+        # bearded devil's monsters.json entry.
+        bearded_devil.condition_immunities = ["poisoned"]
+
+        bearded_devil.add_condition("poisoned")
+        assert not bearded_devil.has_condition("poisoned"), (
+            "Catalog `condition_immunities` must block `add_condition` for matching conditions."
+        )
+
+        bearded_devil.apply_condition_with_metadata(
+            condition="poisoned",
+            duration_type="rounds",
+            duration=10,
+        )
+        assert not bearded_devil.has_condition("poisoned"), (
+            "Catalog `condition_immunities` must block "
+            "`apply_condition_with_metadata` for matching conditions."
         )
 
     def test_condition_immunity_blocks_condition_application(self):
-        pytest.skip(
-            "GAP: depends on the per-monster `condition_immunities` "
-            "field being consumed. The general rule "
-            "(`add_condition` / `apply_condition_with_metadata` in "
-            "`dnd-engine/dnd_engine/core/creature.py`) attaches a "
-            "condition unconditionally — there is no guard that "
-            "skips application when the target is immune. Tracked "
-            "by issue #466."
+        """A central guard on `Creature` prevents matching conditions
+        from attaching.
+
+        Two sources are honored in parity with the damage-immunity
+        path:
+          1. Catalog field `condition_immunities` (list attribute)
+          2. Condition flag `has_immunity_{condition}` (matches the
+             existing `has_immunity_{type}` convention used for
+             damage-type immunity).
+        """
+        from dnd_engine.core.creature import Abilities, Creature
+
+        abilities = Abilities(
+            strength=10,
+            dexterity=10,
+            constitution=10,
+            intelligence=10,
+            wisdom=10,
+            charisma=10,
+        )
+
+        # Source 1: catalog field.
+        catalog_immune = Creature(name="Catalog Immune", max_hp=20, ac=10, abilities=abilities)
+        catalog_immune.condition_immunities = ["paralyzed"]
+        catalog_immune.apply_condition_with_metadata(
+            condition="paralyzed",
+            duration_type="rounds",
+            duration=3,
+        )
+        assert not catalog_immune.has_condition("paralyzed"), (
+            "Catalog field `condition_immunities` must block condition application."
+        )
+
+        # Source 2: condition-flag form.
+        flag_immune = Creature(name="Flag Immune", max_hp=20, ac=10, abilities=abilities)
+        flag_immune.add_condition("has_immunity_paralyzed")
+        flag_immune.apply_condition_with_metadata(
+            condition="paralyzed",
+            duration_type="rounds",
+            duration=3,
+        )
+        assert not flag_immune.has_condition("paralyzed"), (
+            "Condition-flag `has_immunity_{condition}` must block "
+            "condition application (parity with damage-immunity path)."
+        )
+
+        # Non-immune control: condition does attach normally.
+        not_immune = Creature(name="Not Immune", max_hp=20, ac=10, abilities=abilities)
+        not_immune.apply_condition_with_metadata(
+            condition="paralyzed",
+            duration_type="rounds",
+            duration=3,
+        )
+        assert not_immune.has_condition("paralyzed"), (
+            "Sanity check: a non-immune creature still receives the condition normally."
         )
 
 
@@ -270,9 +400,7 @@ class TestImmunity_DataParity:
         commitment, independent of whether the engine reads it.
         """
         monsters: dict = json.loads(MONSTERS_JSON.read_text())
-        with_immunity = [
-            mid for mid, mdata in monsters.items() if mdata.get("damage_immunities")
-        ]
+        with_immunity = [mid for mid, mdata in monsters.items() if mdata.get("damage_immunities")]
         assert with_immunity, (
             "Expected at least one monster with `damage_immunities` "
             "in monsters.json (e.g., bearded_devil: fire, poison)."

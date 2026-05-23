@@ -171,9 +171,7 @@ class CombatEngine:
         # Placed first because Immunity is absolute ("you don't take
         # damage of that type"), not a multiplier — see method docstring.
         immunity_condition = f"has_immunity_{normalized_type}"
-        catalog_immunities = [
-            t.lower() for t in (getattr(target, "damage_immunities", None) or [])
-        ]
+        catalog_immunities = [t.lower() for t in (getattr(target, "damage_immunities", None) or [])]
         if target.has_condition(immunity_condition) or normalized_type in catalog_immunities:
             return 0
 
@@ -222,9 +220,7 @@ class CombatEngine:
 
         return damage
 
-    def _apply_damage_adjustments(
-        self, target: Creature, damage: int, damage_type: str
-    ) -> int:
+    def _apply_damage_adjustments(self, target: Creature, damage: int, damage_type: str) -> int:
         """
         Apply pre-Resistance flat adjustments (bonuses, penalties,
         multipliers) to the running damage.
@@ -639,6 +635,17 @@ class CombatEngine:
             condition = on_fail.get("condition")
 
             if condition:
+                # SRD § Playing the Game › Immunity: "Immunity to a
+                # condition means you aren't affected by it." Skip the
+                # on-fail condition (and its CONDITION_APPLIED event)
+                # when the defender is immune. The general guard also
+                # lives on `Creature.apply_condition_with_metadata`,
+                # but checking here lets us report the truthful
+                # `condition_applied: None` to callers and avoid
+                # emitting a misleading event.
+                if defender.is_immune_to_condition(condition):
+                    return {"save_result": save_result, "condition_applied": None}
+
                 # Apply condition with metadata
                 defender.apply_condition_with_metadata(
                     condition=condition,
