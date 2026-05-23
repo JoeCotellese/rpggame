@@ -64,23 +64,19 @@ class TestEffectiveACCalculation:
         assert effective_ac == 10
 
     def test_mage_armor_sets_ac(self, game_state_with_wizard, wizard):
-        """Test that Mage Armor sets AC to 13 + DEX"""
-        # Add Mage Armor effect (8 hours duration)
-        effect = ActiveEffect(
-            effect_type=EffectType.SPELL,
-            source="Mage Armor",
-            duration_type="hours",
-            duration_value=8,
-            remaining_value=8,
-            target_name=wizard.name,
-            description="Base AC becomes 13 + DEX",
-            concentration=False,
-            effect_data={
-                "modifier_type": ModifierType.AC_SET_BASE.value,
-                "formula": "13 + dex_mod",
-            },
-        )
-        game_state_with_wizard.time_manager.add_effect(effect)
+        """Test that Mage Armor sets AC to 13 + DEX.
+
+        Mage Armor migrated from the legacy `AC_SET_BASE` effect path
+        to the alt base-AC formula seam (issue #426). Setting the
+        alt formula directly here covers the same observable behavior
+        without re-creating the `ActiveEffect` wiring that
+        `_create_spell_effect` now performs end-to-end (see
+        `TestSpellCastingACModifierIntegration::test_casting_mage_armor_sets_ac`).
+        """
+        from dnd_engine.rules.ac_formulas import BASE_AC_FORMULAS
+
+        wizard.register_base_ac_formula("mage_armor", BASE_AC_FORMULAS["mage_armor"])
+        wizard.active_base_ac_formula = "mage_armor"
 
         # Effective AC should be 13 + 2 (DEX) = 15
         effective_ac = game_state_with_wizard.get_effective_ac(wizard)
@@ -107,23 +103,17 @@ class TestEffectiveACCalculation:
         assert effective_ac == 15
 
     def test_mage_armor_plus_shield(self, game_state_with_wizard, wizard):
-        """Test that Mage Armor and Shield stack correctly"""
-        # Add Mage Armor
-        mage_armor = ActiveEffect(
-            effect_type=EffectType.SPELL,
-            source="Mage Armor",
-            duration_type="hours",
-            duration_value=8,
-            remaining_value=8,
-            target_name=wizard.name,
-            description="Base AC becomes 13 + DEX",
-            concentration=False,
-            effect_data={
-                "modifier_type": ModifierType.AC_SET_BASE.value,
-                "formula": "13 + dex_mod",
-            },
-        )
-        game_state_with_wizard.time_manager.add_effect(mage_armor)
+        """Test that Mage Armor and Shield stack correctly.
+
+        Mage Armor's base now flows through the alt-formula seam;
+        Shield's +5 layers on top as an `AC_BONUS` effect. See
+        `TestAlternateBaseACComposesWithLayeredModifiers` for the
+        general invariant.
+        """
+        from dnd_engine.rules.ac_formulas import BASE_AC_FORMULAS
+
+        wizard.register_base_ac_formula("mage_armor", BASE_AC_FORMULAS["mage_armor"])
+        wizard.active_base_ac_formula = "mage_armor"
 
         # Add Shield
         shield = ActiveEffect(
@@ -143,43 +133,32 @@ class TestEffectiveACCalculation:
         effective_ac = game_state_with_wizard.get_effective_ac(wizard)
         assert effective_ac == 20
 
-    def test_multiple_ac_set_base_only_first_applies(self, game_state_with_wizard, wizard):
-        """Test that only the first AC set_base effect applies"""
-        # Add Mage Armor (13 + DEX)
-        mage_armor = ActiveEffect(
-            effect_type=EffectType.SPELL,
-            source="Mage Armor",
-            duration_type="hours",
-            duration_value=8,
-            remaining_value=8,
-            target_name=wizard.name,
-            description="Base AC becomes 13 + DEX",
-            concentration=False,
-            effect_data={
-                "modifier_type": ModifierType.AC_SET_BASE.value,
-                "formula": "13 + dex_mod",
-            },
-        )
-        game_state_with_wizard.time_manager.add_effect(mage_armor)
+    def test_only_one_active_base_ac_formula(self, game_state_with_wizard, wizard):
+        """Test that only one alternate base-AC formula is in effect at a time.
 
-        # Add a second set_base effect (should be ignored)
-        barkskin = ActiveEffect(
-            effect_type=EffectType.SPELL,
-            source="Barkskin",
-            duration_type="minutes",
-            duration_value=60,
-            remaining_value=60,
-            target_name=wizard.name,
-            description="Base AC becomes 16",
-            concentration=True,
-            caster_name=wizard.name,
-            effect_data={"modifier_type": ModifierType.AC_SET_BASE.value, "formula": "16"},
-        )
-        game_state_with_wizard.time_manager.add_effect(barkskin)
+        SRD § Playing the Game › Attack Rolls › Armor Class › "Only
+        One Base AC". With the migration to the alt-formula seam,
+        registering several formulas is allowed but only the named
+        `active_base_ac_formula` participates in `get_base_ac`. This
+        is the post-#426 replacement for the legacy "first-wins"
+        AC_SET_BASE semantics that the layered effect stack used to
+        enforce in `get_effective_ac`.
+        """
+        from dnd_engine.rules.ac_formulas import BASE_AC_FORMULAS
 
-        # Only Mage Armor should apply: 13 + 2 = 15
-        effective_ac = game_state_with_wizard.get_effective_ac(wizard)
-        assert effective_ac == 15
+        # Register both Mage Armor (13 + DEX = 15) and a competing
+        # alt formula (Barkskin floor = 17 since base 10 < 17).
+        wizard.register_base_ac_formula("mage_armor", BASE_AC_FORMULAS["mage_armor"])
+        wizard.register_base_ac_formula("barkskin", BASE_AC_FORMULAS["barkskin"])
+
+        # Select Mage Armor first: AC reflects that formula only.
+        wizard.active_base_ac_formula = "mage_armor"
+        assert game_state_with_wizard.get_effective_ac(wizard) == 15
+
+        # Switching the selection flips AC to the other formula's
+        # output (no stacking with the previous one).
+        wizard.active_base_ac_formula = "barkskin"
+        assert game_state_with_wizard.get_effective_ac(wizard) == 17
 
     def test_shield_expires_after_one_round(self, game_state_with_wizard, wizard):
         """Test that Shield effect expires after 1 combat round"""
@@ -210,7 +189,11 @@ class TestEffectiveACCalculation:
 
     def test_mage_armor_not_affected_by_rounds(self, game_state_with_wizard, wizard):
         """Test that time-based effects (Mage Armor) don't expire with round advancement"""
-        # Add Mage Armor (time-based, not round-based)
+        from dnd_engine.systems.time_manager import ModifierType
+
+        # Add Mage Armor (time-based, not round-based). Post-#426
+        # the effect_data registers a base-AC formula by id instead
+        # of carrying an inline `formula` string.
         effect = ActiveEffect(
             effect_type=EffectType.SPELL,
             source="Mage Armor",
@@ -221,10 +204,17 @@ class TestEffectiveACCalculation:
             description="Base AC becomes 13 + DEX",
             concentration=False,
             effect_data={
-                "modifier_type": ModifierType.AC_SET_BASE.value,
-                "formula": "13 + dex_mod",
+                "modifier_type": ModifierType.REGISTER_BASE_AC_FORMULA.value,
+                "formula_id": "mage_armor",
             },
         )
+        # Activate the alt formula directly so this unit test stays
+        # narrowly focused on time-vs-round advancement semantics
+        # without requiring the spell-cast pathway.
+        from dnd_engine.rules.ac_formulas import BASE_AC_FORMULAS
+
+        wizard.register_base_ac_formula("mage_armor", BASE_AC_FORMULAS["mage_armor"])
+        wizard.active_base_ac_formula = "mage_armor"
         game_state_with_wizard.time_manager.add_effect(effect)
 
         # AC should be boosted

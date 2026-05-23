@@ -606,6 +606,13 @@ class GameState:
         # Subscribe to quest completion for dungeon unlocking
         self.event_bus.subscribe(EventType.QUEST_COMPLETED, self._on_quest_completed)
 
+        # Subscribe to effect expiration so alt base-AC formula
+        # registrations from spells (Mage Armor, Barkskin) are torn
+        # down when the underlying ActiveEffect ends. See
+        # `_revert_base_ac_formula_from_effect_data` and SRD § Playing
+        # the Game › Attack Rolls › Armor Class ("Only One Base AC").
+        self.event_bus.subscribe(EventType.EFFECT_EXPIRED, self._on_effect_expired)
+
         # Combat state
         self.in_combat = False
         self.initiative_tracker: InitiativeTracker | None = None
@@ -2756,7 +2763,100 @@ class GameState:
             effect_data=effect_data,
         )
 
+        # If the spell registers an alternate base-AC formula (Mage
+        # Armor, Barkskin), wire it into the target creature now so
+        # `get_effective_ac` picks it up via `Creature.get_base_ac()`.
+        # See SRD § Playing the Game › Attack Rolls › Armor Class
+        # ("Only One Base AC") and `dnd_engine.rules.ac_formulas`.
+        self._apply_base_ac_formula_from_effect_data(target_name, effect_data)
+
         return effect
+
+    def _resolve_creature_by_name(self, name: str) -> "Creature | None":
+        """Find a Creature in the party or active enemies by name.
+
+        Spell effects reference targets by string name. Base-AC formula
+        registration must locate the actual Creature object to call
+        `register_base_ac_formula` / clear `active_base_ac_formula`.
+        """
+        character = self.party.get_character_by_name(name)
+        if character is not None:
+            return character
+        for enemy in self.active_enemies:
+            if enemy.name == name:
+                return enemy
+        return None
+
+    def _apply_base_ac_formula_from_effect_data(
+        self, target_name: str, effect_data: dict[str, Any]
+    ) -> None:
+        """Register and activate an alternate base-AC formula on target.
+
+        Looks for `modifier_type == "register_base_ac_formula"` and a
+        `formula_id` key in `effect_data`; if present, resolves the
+        formula via `dnd_engine.rules.ac_formulas.get_base_ac_formula`
+        and installs it on the target creature.
+        """
+        from dnd_engine.rules.ac_formulas import get_base_ac_formula
+        from dnd_engine.systems.time_manager import ModifierType
+
+        if effect_data.get("modifier_type") != ModifierType.REGISTER_BASE_AC_FORMULA.value:
+            return
+
+        formula_id = effect_data.get("formula_id")
+        if not formula_id:
+            logger.warning(
+                "Effect has modifier_type 'register_base_ac_formula' but no 'formula_id' key"
+            )
+            return
+
+        formula = get_base_ac_formula(formula_id)
+        if formula is None:
+            logger.warning(f"Unknown base-AC formula id: {formula_id}")
+            return
+
+        target = self._resolve_creature_by_name(target_name)
+        if target is None:
+            return
+
+        target.register_base_ac_formula(formula_id, formula)
+        target.active_base_ac_formula = formula_id
+
+    def _revert_base_ac_formula_from_effect_data(
+        self, target_name: str, effect_data: dict[str, Any]
+    ) -> None:
+        """Unregister an alternate base-AC formula when its effect ends.
+
+        Mirror of `_apply_base_ac_formula_from_effect_data`. If the
+        active selection still names this formula, clearing it via
+        `unregister_base_ac_formula` (which also wipes the selection)
+        is correct. If the player rotated to a different alt formula
+        in the meantime (Mage Armor → Barkskin), unregistering the
+        old name leaves the new selection intact.
+        """
+        from dnd_engine.systems.time_manager import ModifierType
+
+        if effect_data.get("modifier_type") != ModifierType.REGISTER_BASE_AC_FORMULA.value:
+            return
+
+        formula_id = effect_data.get("formula_id")
+        if not formula_id:
+            return
+
+        target = self._resolve_creature_by_name(target_name)
+        if target is None:
+            return
+
+        target.unregister_base_ac_formula(formula_id)
+
+    def _on_effect_expired(self, event: "Event") -> None:
+        """Handle EFFECT_EXPIRED: undo any alt base-AC formula registration."""
+        effect = event.data.get("effect")
+        if effect is None:
+            return
+        self._revert_base_ac_formula_from_effect_data(
+            effect.target_name, effect.effect_data or {}
+        )
 
     def _get_item_category(self, item_id: str) -> str | None:
         """
@@ -2818,9 +2918,22 @@ class GameState:
 
         This is the single source of truth for AC calculations. It applies
         modifiers from active effects (spells, items, conditions) in the correct order:
-        1. Base AC from armor/natural armor
-        2. AC set effects (Mage Armor, Barkskin) - only first applies
-        3. AC bonus effects (Shield, Haste) - all stack
+        1. Base AC from `creature.get_base_ac()` — honors the SRD "Only
+           One Base AC" rule via any active alternate base-AC formula
+           (Mage Armor, Barkskin, Unarmored Defense). When no alt
+           formula is selected, this is the stored `_base_ac` (armor or
+           natural-armor default).
+        2. AC bonus effects (Shield, Haste) — all stack on top.
+
+        Spells that previously set the base AC via a `modifier_type:
+        "ac_set_base"` active-effect entry are now expected to migrate
+        to the alt-formula seam (issue #426): the spell cast registers
+        and activates a named formula on the target via
+        `Creature.register_base_ac_formula` / `active_base_ac_formula`,
+        and on expiry the selection is cleared. This collapses two
+        previously competing mechanisms into one and removes the silent-
+        overwrite footgun where an `AC_SET_BASE` effect would clobber
+        an alt-formula base.
 
         Args:
             creature: Creature to calculate AC for
@@ -2841,7 +2954,6 @@ class GameState:
 
         # Apply AC modifiers in order
         final_ac = base_ac
-        has_set_base = False
 
         for effect in effects:
             effect_data = effect.effect_data
@@ -2850,14 +2962,7 @@ class GameState:
 
             modifier_type = effect_data.get("modifier_type", "")
 
-            if modifier_type == ModifierType.AC_SET_BASE.value and not has_set_base:
-                # Only first ac_set_base applies (Mage Armor, Barkskin)
-                # These spells set a minimum AC or replace base calculation
-                formula = effect_data.get("formula", "")
-                if formula:
-                    final_ac = self._evaluate_ac_formula(formula, creature)
-                    has_set_base = True
-            elif modifier_type == ModifierType.AC_BONUS.value:
+            if modifier_type == ModifierType.AC_BONUS.value:
                 # Bonuses stack (Shield: +5, Haste: +2, etc.)
                 final_ac += effect_data.get("value", 0)
 

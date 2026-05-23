@@ -27,7 +27,12 @@ class EffectType(str, Enum):
 class ModifierType(str, Enum):
     """Types of stat modifiers that effects can apply."""
 
-    AC_SET_BASE = "ac_set_base"  # Set base AC (Mage Armor: 13 + DEX)
+    # Register an alternate base-AC formula on the target and activate
+    # it. SRD § Playing the Game › Attack Rolls › Armor Class › "Only
+    # One Base AC". Used by Mage Armor (13 + DEX) and Barkskin
+    # (minimum AC 17). The effect_data must carry `formula_id`, which
+    # is looked up in `dnd_engine.rules.ac_formulas.BASE_AC_FORMULAS`.
+    REGISTER_BASE_AC_FORMULA = "register_base_ac_formula"
     AC_BONUS = "ac_bonus"  # Add to AC (Shield: +5)
     ATTACK_BONUS = "attack_bonus"  # Add to attack rolls (Bless: +1d4)
     SAVE_BONUS = "save_bonus"  # Add to saves (Bless: +1d4)
