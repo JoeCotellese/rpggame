@@ -7,6 +7,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 
+from dnd_engine.core.position import Position
+
 
 class Size(str, Enum):
     """
@@ -110,6 +112,7 @@ class Creature:
         speed: int = 30,
         size: Size = Size.MEDIUM,
         speeds: dict[MovementMode, int] | None = None,
+        position: Position | None = None,
     ):
         """
         Initialize a creature.
@@ -136,6 +139,8 @@ class Creature:
                 attribute mirrors `speeds[MovementMode.WALK]` if present,
                 otherwise falls back to the `speed` kwarg (this matters
                 for fly-only creatures whose walk speed is 0).
+            position: Optional grid position (x, y). Defaults to None for
+                creatures not yet placed on a map.
         """
         self.name = name
         self.max_hp = max_hp
@@ -157,6 +162,7 @@ class Creature:
             # present so existing callers reading `creature.speed` keep
             # working; otherwise fall back to the supplied `speed` kwarg.
             self.speed = speeds.get(MovementMode.WALK, speed)
+        self.position = position
         # Condition tracking with metadata for duration and repeat saves
         # Maps condition name -> metadata dict
         self.active_conditions: dict[str, dict] = {}
