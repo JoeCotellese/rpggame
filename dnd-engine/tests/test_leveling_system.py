@@ -1,7 +1,12 @@
 # ABOUTME: Unit tests for character leveling system
 # ABOUTME: Tests XP thresholds, level-up mechanics, HP increases, and feature granting
 
-from dnd_engine.core.character import Character, CharacterClass
+from dnd_engine.core.character import (
+    SRD_FIXED_HP_PER_HIT_DIE,
+    Character,
+    CharacterClass,
+    LevelUpHpPolicy,
+)
 from dnd_engine.core.creature import Abilities
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.utils.events import Event, EventBus, EventType
@@ -293,3 +298,127 @@ class TestLevelingSystem:
 
         assert not leveled_up
         assert self.character.level == 1
+
+
+class TestLevelUpHpPolicy:
+    """Test the LevelUpHpPolicy enum (ROLL vs FIXED) for HP at level-up.
+
+    SRD allows the player to take a fixed HP value at level-up instead of
+    rolling: d6 -> 4, d8 -> 5, d10 -> 6, d12 -> 7. Default is ROLL to
+    preserve current behavior.
+    """
+
+    def setup_method(self):
+        """Set up test fixtures"""
+        self.data_loader = DataLoader()
+        self.event_bus = EventBus()
+        self.events_received = []
+        self.event_bus.subscribe(EventType.LEVEL_UP, self._capture_event)
+
+    def _capture_event(self, event: Event):
+        self.events_received.append(event)
+
+    def _make_fighter(self, *, con_score: int = 14) -> Character:
+        abilities = Abilities(
+            strength=16,
+            dexterity=14,
+            constitution=con_score,
+            intelligence=10,
+            wisdom=12,
+            charisma=8,
+        )
+        return Character(
+            name="Test Fighter",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=abilities,
+            max_hp=12,
+            ac=16,
+            xp=0,
+        )
+
+    def test_level_up_roll_policy_preserves_current_behavior(self):
+        """Default ROLL policy keeps existing rolled-HP behavior."""
+        fighter = self._make_fighter(con_score=14)  # CON +2, d10 hit die
+        initial_hp = fighter.max_hp
+        fighter.gain_xp(300)
+
+        leveled_up = fighter.check_for_level_up(
+            self.data_loader, self.event_bus, hp_policy=LevelUpHpPolicy.ROLL
+        )
+
+        assert leveled_up
+        hp_increase = fighter.max_hp - initial_hp
+        # d10 (1..10) + CON +2 -> range [3, 12]
+        assert 3 <= hp_increase <= 12
+
+    def test_level_up_fixed_policy_uses_srd_value(self):
+        """FIXED policy uses SRD fixed value (6 for d10) plus CON modifier."""
+        fighter = self._make_fighter(con_score=14)  # CON +2, d10 hit die
+        initial_hp = fighter.max_hp
+        fighter.gain_xp(300)
+
+        leveled_up = fighter.check_for_level_up(
+            self.data_loader, self.event_bus, hp_policy=LevelUpHpPolicy.FIXED
+        )
+
+        assert leveled_up
+        # Fighter d10 fixed = 6, plus CON +2 = 8
+        assert fighter.max_hp - initial_hp == SRD_FIXED_HP_PER_HIT_DIE["1d10"] + 2
+        assert fighter.max_hp - initial_hp == 8
+
+    def test_level_up_fixed_policy_clamps_minimum_to_1(self):
+        """FIXED policy still honors the SRD minimum-1-HP-per-level clamp."""
+        # Build a wizard (1d6 hit die) with very low CON (-5 modifier).
+        # Fixed d6 = 4, +(-5) = -1 -> clamped to 1.
+        abilities = Abilities(
+            strength=10,
+            dexterity=10,
+            constitution=1,  # CON 1 -> -5 modifier
+            intelligence=16,
+            wisdom=12,
+            charisma=8,
+        )
+        wizard = Character(
+            name="Frail Wizard",
+            character_class=CharacterClass.WIZARD,
+            level=1,
+            abilities=abilities,
+            max_hp=6,
+            ac=10,
+            xp=0,
+        )
+        initial_hp = wizard.max_hp
+        wizard.gain_xp(300)
+
+        leveled_up = wizard.check_for_level_up(
+            self.data_loader, self.event_bus, hp_policy=LevelUpHpPolicy.FIXED
+        )
+
+        assert leveled_up
+        # 4 (d6 fixed) + (-5 CON) = -1, clamped to 1
+        assert wizard.max_hp - initial_hp == 1
+
+    def test_level_up_event_records_hp_policy(self):
+        """LEVEL_UP event payload includes the hp_policy used."""
+        fighter = self._make_fighter()
+        fighter.gain_xp(300)
+
+        fighter.check_for_level_up(
+            self.data_loader, self.event_bus, hp_policy=LevelUpHpPolicy.FIXED
+        )
+
+        level_up_events = [e for e in self.events_received if e.type == EventType.LEVEL_UP]
+        assert len(level_up_events) == 1
+        assert level_up_events[0].data["hp_policy"] == "fixed"
+
+        # And again with ROLL — same field, different value.
+        self.events_received.clear()
+        fighter2 = self._make_fighter()
+        fighter2.gain_xp(300)
+        fighter2.check_for_level_up(
+            self.data_loader, self.event_bus, hp_policy=LevelUpHpPolicy.ROLL
+        )
+        level_up_events = [e for e in self.events_received if e.type == EventType.LEVEL_UP]
+        assert len(level_up_events) == 1
+        assert level_up_events[0].data["hp_policy"] == "roll"

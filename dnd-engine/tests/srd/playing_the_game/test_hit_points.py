@@ -323,3 +323,45 @@ class TestHitPoints_MaxHpField:
         creature = _make_creature(max_hp=10, current_hp=8)
         creature.heal(100)
         assert creature.current_hp == 10
+
+
+class TestHitPoints_LevelUpHpPolicy:
+    """SRD § Playing the Game › Hit Points › HP at level-up.
+
+    > Each time you gain a level, your Hit Point maximum increases. To
+    > determine the increase, take your class's Hit Die roll (or use the
+    > fixed value listed for your class) and add your Constitution
+    > modifier. The fixed values are 4 for d6, 5 for d8, 6 for d10, and
+    > 7 for d12.
+    """
+
+    def test_fixed_hp_per_hit_die_matches_srd(self) -> None:
+        """`SRD_FIXED_HP_PER_HIT_DIE` matches the SRD-listed fixed values.
+
+        Source: `dnd_engine/core/character.py` —
+        `SRD_FIXED_HP_PER_HIT_DIE` maps each hit die to its SRD fixed
+        value (d6 -> 4, d8 -> 5, d10 -> 6, d12 -> 7).
+        """
+        from dnd_engine.core.character import SRD_FIXED_HP_PER_HIT_DIE
+
+        assert SRD_FIXED_HP_PER_HIT_DIE["1d6"] == 4
+        assert SRD_FIXED_HP_PER_HIT_DIE["1d8"] == 5
+        assert SRD_FIXED_HP_PER_HIT_DIE["1d10"] == 6
+        assert SRD_FIXED_HP_PER_HIT_DIE["1d12"] == 7
+
+    def test_level_up_fixed_policy_uses_srd_value(self) -> None:
+        """FIXED policy applies the SRD fixed value plus CON modifier.
+
+        Source: `dnd_engine/core/character.py` — `_increase_hp` branches
+        on `hp_policy`: FIXED looks up `SRD_FIXED_HP_PER_HIT_DIE` and
+        adds the CON modifier (clamped to a minimum of 1).
+        """
+        from dnd_engine.core.character import LevelUpHpPolicy
+        from dnd_engine.rules.loader import DataLoader
+
+        character = _make_character(max_hp=12)
+        initial_hp = character.max_hp
+        character.gain_xp(300)
+        character.check_for_level_up(DataLoader(), hp_policy=LevelUpHpPolicy.FIXED)
+        # Fighter d10 fixed = 6; CON 13 -> +1. Increase = 7.
+        assert character.max_hp - initial_hp == 7
