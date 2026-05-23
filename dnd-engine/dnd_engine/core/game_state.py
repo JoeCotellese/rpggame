@@ -648,6 +648,38 @@ class GameState:
         """
         return self.dungeon["rooms"][self.current_room_id]
 
+    def creature_environment(self, creature: "Creature") -> str | None:
+        """
+        Return the environment tag of the room containing `creature`.
+
+        Used by the combat damage-modifier chokepoint to consult
+        environment-granted carve-outs (SRD § Underwater Combat:
+        anything underwater has Resistance to Fire damage; #518).
+
+        Today the engine has no per-creature room tracking — both the
+        party and the `active_enemies` in a combat encounter share the
+        current room (enemies are instantiated from
+        `room["enemies"]` when combat starts; see
+        `_check_for_enemies`). This method therefore returns the
+        current room's `environment` for any creature, regardless of
+        identity. When per-creature room tracking lands (#514), this is
+        the single seam to update.
+
+        Args:
+            creature: The creature whose environment is being queried.
+                Currently unused but kept in the signature for forward
+                compatibility with per-creature room tracking.
+
+        Returns:
+            The room's `environment` value (e.g. `"underwater"`) or
+            `None` when the current room declares no environment tag.
+        """
+        room = self.get_current_room()
+        env = room.get("environment")
+        if env is None:
+            return None
+        return str(env).lower()
+
     def mark_room_displayed(self) -> None:
         """
         Mark current room as displayed for narrative transition tracking.
@@ -2419,13 +2451,17 @@ class GameState:
         broke_concentration: str | None,
     ) -> "CombatSpellResult":
         """Resolve saving throw spell via combat_engine.resolve_spell_save()."""
-        # Delegate to existing combat engine method
+        # Delegate to existing combat engine method.
+        # game_state is threaded through so the chokepoint can source
+        # per-target environment context (SRD § Underwater Combat
+        # auto-Fire-Resistance, #518).
         save_result = self.combat_engine.resolve_spell_save(
             caster=caster,
             targets=targets,
             spell=spell_data,
             apply_damage=True,
             event_bus=self.event_bus,
+            game_state=self,
         )
 
         # Check concentration breaks for each target that took damage

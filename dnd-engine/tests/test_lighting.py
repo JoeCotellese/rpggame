@@ -256,3 +256,47 @@ class TestPerceptionPenalties:
         assert effective_lighting == "dim"
 
         # So they get disadvantage (-5 for passive) instead of auto-fail
+
+
+class TestCreatureEnvironment:
+    """Test the `GameState.creature_environment` seam (#518).
+
+    The combat damage-modifier chokepoint reads a creature's environment
+    via this method to apply SRD environment carve-outs (underwater →
+    Fire Resistance). The method reads the current room's `environment`
+    field (the minimal schema addition for #518; full environment-flag
+    work — schema validation, per-creature room tracking — lives in
+    #514).
+    """
+
+    def test_returns_none_when_room_has_no_environment(self, human_character):
+        """A room without an `environment` field yields None."""
+        party = Party([human_character])
+        game_state = GameState(party, "test_dungeon")
+
+        room = game_state.get_current_room()
+        assert "environment" not in room
+
+        assert game_state.creature_environment(human_character) is None
+
+    def test_returns_underwater_when_room_environment_is_underwater(self, human_character):
+        """A room tagged `environment: "underwater"` yields "underwater"."""
+        party = Party([human_character])
+        game_state = GameState(party, "test_dungeon")
+
+        # Minimal schema addition for #518: rooms may carry an
+        # `environment` tag alongside `lighting`.
+        room = game_state.get_current_room()
+        room["environment"] = "underwater"
+
+        assert game_state.creature_environment(human_character) == "underwater"
+
+    def test_environment_lookup_is_case_insensitive(self, human_character):
+        """`Underwater` data normalizes to `underwater`."""
+        party = Party([human_character])
+        game_state = GameState(party, "test_dungeon")
+
+        room = game_state.get_current_room()
+        room["environment"] = "Underwater"
+
+        assert game_state.creature_environment(human_character) == "underwater"
