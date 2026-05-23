@@ -5,6 +5,25 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import Enum
+
+
+class Size(str, Enum):
+    """
+    SRD creature size categories (SRD § Creature Statistics › Size).
+
+    The canonical string value matches the lowercase form used in
+    `monsters.json` so values round-trip cleanly through JSON. Size
+    drives map footprint and reach geometry in plan-03; this enum is
+    the data-model foundation those systems read.
+    """
+
+    TINY = "tiny"
+    SMALL = "small"
+    MEDIUM = "medium"
+    LARGE = "large"
+    HUGE = "huge"
+    GARGANTUAN = "gargantuan"
 
 
 @dataclass
@@ -69,6 +88,7 @@ class Creature:
         abilities: Abilities,
         current_hp: int | None = None,
         speed: int = 30,
+        size: Size = Size.MEDIUM,
     ):
         """
         Initialize a creature.
@@ -80,6 +100,10 @@ class Creature:
             abilities: Ability scores (STR, DEX, CON, INT, WIS, CHA)
             current_hp: Starting HP (defaults to max_hp if not specified)
             speed: Movement speed in feet per round (default 30 ft)
+            size: SRD size category (default Medium). Drives map footprint
+                and reach geometry in plan-03; defaulting to Medium keeps
+                Characters and any creature constructed without an explicit
+                size on the SRD baseline.
         """
         self.name = name
         self.max_hp = max_hp
@@ -87,6 +111,7 @@ class Creature:
         self._base_ac = ac  # Store base AC (before modifiers from spells/effects)
         self.abilities = abilities
         self.speed = speed  # Movement speed in feet (5 ft = 1 grid square)
+        self.size = size
         # Condition tracking with metadata for duration and repeat saves
         # Maps condition name -> metadata dict
         self.active_conditions: dict[str, dict] = {}
