@@ -17,6 +17,7 @@ import inspect
 
 import pytest
 
+from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.combat import CombatEngine
 from dnd_engine.core.creature import Abilities, Creature
 from dnd_engine.core.dice import DiceRoller
@@ -139,36 +140,83 @@ class TestCriticalHit_ExtraDamageDiceAlsoDoubled:
     > Rogue's Sneak Attack feature, you also roll those dice twice.
     """
 
-    def test_sneak_attack_dice_doubled_on_critical_hit(self):
-        pytest.skip(
-            "GAP: sneak attack dice are NOT doubled on a critical hit. "
-            "dnd-engine/dnd_engine/core/combat.py:173 calls "
-            "`self._calculate_damage(sneak_attack_dice, critical_hit=False)` "
-            "with a hardcoded False inside the `if hit:` branch of "
-            "`resolve_attack`. SRD example explicitly calls out Sneak "
-            "Attack as a class of 'other damage dice' that must double "
-            "on a crit; the current implementation rolls them once "
-            "regardless of the attack's crit status. Tracked by issue "
-            "#416."
+    def test_sneak_attack_dice_doubled_on_critical_hit(self, monkeypatch):
+        """A nat-20 Sneak Attack rolls the sneak dice doubled.
+
+        Builds a level-3 Rogue (sneak attack 2d6), spies on
+        `_calculate_damage` to capture the dice notation and crit flag
+        used for each call, then loops attacks with advantage until a
+        critical hit lands with a sneak-attack proc. Asserts the spy
+        recorded the sneak-attack dice being passed with
+        `critical_hit=True`.
+        """
+        engine = _make_engine()
+
+        rogue_abilities = Abilities(
+            strength=10, dexterity=16, constitution=14, intelligence=12, wisdom=13, charisma=8
         )
+        rogue = Character(
+            name="Sneaky",
+            character_class=CharacterClass.ROGUE,
+            level=3,
+            abilities=rogue_abilities,
+            max_hp=20,
+            ac=14,
+        )
+        target_abilities = Abilities(
+            strength=8, dexterity=14, constitution=10, intelligence=10, wisdom=8, charisma=8
+        )
+        target = Creature(name="Dummy", max_hp=200, ac=10, abilities=target_abilities)
+
+        damage_calls: list[tuple[str, bool]] = []
+        original = engine._calculate_damage
+
+        def spy(damage_dice: str, critical_hit: bool) -> int:
+            damage_calls.append((damage_dice, critical_hit))
+            return original(damage_dice, critical_hit)
+
+        monkeypatch.setattr(engine, "_calculate_damage", spy)
+
+        for _ in range(500):
+            damage_calls.clear()
+            result = engine.resolve_attack(
+                attacker=rogue,
+                defender=target,
+                attack_bonus=5,
+                damage_dice="1d8+3",
+                advantage=True,
+            )
+            if result.critical_hit and result.sneak_attack_damage > 0:
+                sneak_calls = [c for c in damage_calls if c[0] == result.sneak_attack_dice]
+                assert sneak_calls, (
+                    "Spy did not observe sneak attack dice flowing through "
+                    "_calculate_damage — instrumentation broken."
+                )
+                assert all(c[1] is True for c in sneak_calls), (
+                    f"Sneak attack dice {result.sneak_attack_dice} were rolled "
+                    f"with critical_hit=False on a crit. Calls: {sneak_calls}"
+                )
+                return
+
+        pytest.fail("Did not observe a critical hit with sneak attack in 500 attempts.")
 
     def test_resolve_attack_sneak_attack_passes_critical_flag(self):
         """Source-level contract: the call site MUST consult `critical_hit`.
 
         Inspects `CombatEngine.resolve_attack` source to assert the
         sneak-attack damage calculation does not pass a hardcoded
-        `critical_hit=False`. When the gap is fixed, this assertion
-        flips from skip-companion to a real guard.
+        `critical_hit=False`. Regression guard against the original
+        #416 bug pattern.
         """
         src = inspect.getsource(CombatEngine.resolve_attack)
         assert "sneak_attack_dice" in src, (
             "resolve_attack must compute sneak attack dice — otherwise "
             "the SRD 'other damage dice' rule cannot be honored."
         )
-        pytest.skip(
-            "GAP companion (issue #416): when the hardcoded "
-            "`critical_hit=False` in combat.py:173 is replaced with the "
-            "live `critical_hit` flag, drop this skip and add a strict "
-            "negative assertion: `assert 'critical_hit=False' not in "
-            "<sneak-attack call site>`."
+        sneak_idx = src.index("sneak_attack_damage = self._calculate_damage(")
+        call_site = src[sneak_idx : sneak_idx + 200]
+        assert "critical_hit=False" not in call_site, (
+            "Sneak attack damage must not be calculated with a hardcoded "
+            "`critical_hit=False`; it must consult the live crit flag so "
+            "the SRD 'other damage dice' rule fires on a nat 20."
         )
