@@ -378,6 +378,125 @@ class TestCreature:
         assert creature.initiative_modifier == self.abilities.dex_mod
 
 
+class TestAlternateBaseACFormulas:
+    """Test the alt-AC registration + selection seam.
+
+    Backs the SRD "Only One Base AC" rule (Playing the Game › Attack
+    Rolls › Armor Class). The integration-level guard lives in the
+    SRD conformance suite (tests/srd/playing_the_game/test_attack_rolls.py
+    ::TestArmorClass_OnlyOneBaseAC); this class unit-tests the
+    registration, selection, and unregistration mechanics in isolation.
+    """
+
+    def setup_method(self):
+        self.abilities = Abilities(
+            strength=10, dexterity=14, constitution=16, intelligence=10, wisdom=12, charisma=8
+        )
+
+    def test_no_formula_registered_returns_stored_base_ac(self):
+        """Default behavior: with no alt formula, `ac` returns `_base_ac`."""
+        creature = Creature(name="Brawler", max_hp=20, ac=11, abilities=self.abilities)
+        assert creature.active_base_ac_formula is None
+        assert creature.ac == 11
+        assert creature.get_base_ac() == 11
+
+    def test_register_does_not_change_ac_until_selected(self):
+        """Registering a formula must not silently switch the active base AC."""
+        creature = Creature(name="Brawler", max_hp=20, ac=11, abilities=self.abilities)
+        creature.register_base_ac_formula("mage_armor", lambda c: 13 + c.abilities.dex_mod)
+
+        # Still default until explicit selection
+        assert creature.active_base_ac_formula is None
+        assert creature.ac == 11
+        assert creature.has_base_ac_formula("mage_armor")
+
+    def test_selecting_formula_changes_ac(self):
+        """`active_base_ac_formula` flips `ac` to the formula's value."""
+        creature = Creature(name="Brawler", max_hp=20, ac=11, abilities=self.abilities)
+        creature.register_base_ac_formula("mage_armor", lambda c: 13 + c.abilities.dex_mod)
+
+        creature.active_base_ac_formula = "mage_armor"
+        # 13 + dex_mod = 13 + ((14-10)//2) = 15
+        assert creature.ac == 15
+
+    def test_unknown_active_selection_falls_back_to_stored_base_ac(self):
+        """Pointing at an unregistered formula name reverts to `_base_ac`."""
+        creature = Creature(name="Brawler", max_hp=20, ac=11, abilities=self.abilities)
+
+        creature.active_base_ac_formula = "no_such_formula"
+        assert creature.ac == 11
+
+    def test_clearing_selection_reverts_to_stored_base_ac(self):
+        """Setting `active_base_ac_formula = None` reverts to `_base_ac`."""
+        creature = Creature(name="Brawler", max_hp=20, ac=11, abilities=self.abilities)
+        creature.register_base_ac_formula("mage_armor", lambda c: 13 + c.abilities.dex_mod)
+        creature.active_base_ac_formula = "mage_armor"
+        assert creature.ac == 15
+
+        creature.active_base_ac_formula = None
+        assert creature.ac == 11
+
+    def test_unregister_removes_formula_and_clears_active_selection(self):
+        """Unregistering the active formula resets the selection."""
+        creature = Creature(name="Brawler", max_hp=20, ac=11, abilities=self.abilities)
+        creature.register_base_ac_formula("mage_armor", lambda c: 13 + c.abilities.dex_mod)
+        creature.active_base_ac_formula = "mage_armor"
+
+        creature.unregister_base_ac_formula("mage_armor")
+
+        assert not creature.has_base_ac_formula("mage_armor")
+        assert creature.active_base_ac_formula is None
+        assert creature.ac == 11
+
+    def test_unregister_inactive_formula_does_not_clear_selection(self):
+        """Unregistering a non-active formula leaves the active one alone."""
+        creature = Creature(name="Brawler", max_hp=20, ac=11, abilities=self.abilities)
+        creature.register_base_ac_formula("mage_armor", lambda c: 13 + c.abilities.dex_mod)
+        creature.register_base_ac_formula(
+            "barbarian_unarmored",
+            lambda c: 10 + c.abilities.dex_mod + c.abilities.con_mod,
+        )
+        creature.active_base_ac_formula = "mage_armor"
+
+        creature.unregister_base_ac_formula("barbarian_unarmored")
+
+        assert creature.active_base_ac_formula == "mage_armor"
+        assert creature.ac == 15  # 13 + 2
+
+    def test_unregister_unknown_formula_is_a_no_op(self):
+        """Unregistering a never-registered name does not raise."""
+        creature = Creature(name="Brawler", max_hp=20, ac=11, abilities=self.abilities)
+        # Must not raise.
+        creature.unregister_base_ac_formula("never_registered")
+        assert creature.ac == 11
+
+    def test_re_registering_same_name_overwrites_formula(self):
+        """Re-registering the same name replaces the previous callable."""
+        creature = Creature(name="Brawler", max_hp=20, ac=11, abilities=self.abilities)
+        creature.register_base_ac_formula("alt", lambda c: 12)
+        creature.register_base_ac_formula("alt", lambda c: 17)
+
+        creature.active_base_ac_formula = "alt"
+        assert creature.ac == 17
+
+    def test_setter_assigns_base_ac_without_disturbing_alt_machinery(self):
+        """Assigning `creature.ac = N` updates `_base_ac` (the fallback)."""
+        creature = Creature(name="Brawler", max_hp=20, ac=11, abilities=self.abilities)
+        creature.ac = 13
+
+        assert creature._base_ac == 13
+        assert creature.ac == 13
+
+        # Alt formula still wins when selected
+        creature.register_base_ac_formula("alt", lambda c: 18)
+        creature.active_base_ac_formula = "alt"
+        assert creature.ac == 18
+
+        # Clearing reverts to the (updated) stored base
+        creature.active_base_ac_formula = None
+        assert creature.ac == 13
+
+
 class TestCharacter:
     """Test the Character class (player character)"""
 

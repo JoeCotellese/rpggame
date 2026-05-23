@@ -1,6 +1,9 @@
 # ABOUTME: Base Creature class representing any living entity in the game
 # ABOUTME: Handles HP, abilities, conditions, damage, and healing
 
+from __future__ import annotations
+
+from collections.abc import Callable
 from dataclasses import dataclass
 
 
@@ -88,6 +91,16 @@ class Creature:
         # Maps condition name -> metadata dict
         self.active_conditions: dict[str, dict] = {}
 
+        # Alternate base-AC formulas (SRD § Playing the Game › Attack Rolls
+        # › Armor Class › "Only One Base AC"). A creature may register
+        # multiple ways to calculate its base AC (Mage Armor, Barbarian /
+        # Monk Unarmored Defense, Draconic Resilience, etc.) but only the
+        # one named in `active_base_ac_formula` is honored when computing
+        # base AC. `None` means "use `_base_ac`" — the default unarmored
+        # or armor-derived value supplied at construction time.
+        self._alt_base_ac_formulas: dict[str, Callable[[Creature], int]] = {}
+        self.active_base_ac_formula: str | None = None
+
     @property
     def is_alive(self) -> bool:
         """Check if the creature is alive (HP > 0)"""
@@ -103,15 +116,101 @@ class Creature:
         """
         Base armor class (without spell modifiers).
 
-        For effective AC including active effects like Mage Armor or Shield,
-        use GameState.get_effective_ac(creature) instead.
+        Honors the "Only One Base AC" rule (SRD § Playing the Game ›
+        Attack Rolls › Armor Class): if the creature has an alternate
+        base-AC formula selected via `active_base_ac_formula`, that
+        formula's value is returned; otherwise the stored `_base_ac`
+        (the unarmored or armor-derived default) is returned.
+
+        For effective AC including active effects like Mage Armor or
+        Shield, use GameState.get_effective_ac(creature) instead — that
+        path layers AC bonuses on top of this base value.
         """
-        return self._base_ac
+        return self.get_base_ac()
 
     @ac.setter
     def ac(self, value: int) -> None:
         """Set base armor class."""
         self._base_ac = value
+
+    def get_base_ac(self) -> int:
+        """
+        Return the creature's current base AC honoring the active alt formula.
+
+        If `active_base_ac_formula` names a registered alternate formula,
+        that callable is invoked with `self` and its return value is the
+        base AC. Otherwise `_base_ac` (the stored default) is returned.
+
+        The active formula is invoked on every call, so the result tracks
+        live ability scores (e.g., a Mage-Armor or Unarmored-Defense
+        formula reads the current DEX/CON/WIS modifier each time AC is
+        queried). Callers that need to memoize must do so themselves.
+
+        Per SRD "Only One Base AC", at most one alternate formula is in
+        effect at a time even when several are registered — the active
+        selection is the single source of truth.
+
+        Interplay with `ModifierType.AC_SET_BASE`: `GameState.get_effective_ac`
+        seeds its layered-modifier stack with this value, then applies
+        `AC_SET_BASE` effects (Mage Armor, Barkskin) on top with
+        "first-wins" semantics. If an `AC_SET_BASE` effect is active on
+        the same creature as an alt-formula selection, the effect will
+        overwrite the alt formula's base. Migrating the remaining
+        `AC_SET_BASE` consumers onto this seam (issue #426) collapses
+        the two mechanisms into one and removes that footgun.
+
+        Returns:
+            The base AC value to use for this creature.
+        """
+        if self.active_base_ac_formula is not None:
+            formula = self._alt_base_ac_formulas.get(self.active_base_ac_formula)
+            if formula is not None:
+                return formula(self)
+        return self._base_ac
+
+    def register_base_ac_formula(self, name: str, formula: Callable[[Creature], int]) -> None:
+        """
+        Register an alternate base-AC formula on this creature.
+
+        Registration alone does NOT change the creature's AC; the formula
+        is dormant until `active_base_ac_formula` names it. This separation
+        enforces the SRD "Only One Base AC" rule even when multiple
+        features (e.g., Mage Armor + Barbarian Unarmored Defense) are
+        present on the same creature.
+
+        Args:
+            name: Stable identifier for the formula (e.g.,
+                "mage_armor", "barbarian_unarmored_defense"). Re-registering
+                the same name overwrites the previous formula.
+            formula: Callable taking the creature and returning its base AC.
+        """
+        self._alt_base_ac_formulas[name] = formula
+
+    def unregister_base_ac_formula(self, name: str) -> None:
+        """
+        Remove a previously registered alternate base-AC formula.
+
+        If the removed formula was the active selection, the selection is
+        cleared so AC reverts to the stored `_base_ac` default.
+
+        Args:
+            name: Identifier passed to `register_base_ac_formula`.
+        """
+        self._alt_base_ac_formulas.pop(name, None)
+        if self.active_base_ac_formula == name:
+            self.active_base_ac_formula = None
+
+    def has_base_ac_formula(self, name: str) -> bool:
+        """
+        Check whether a named alternate base-AC formula is registered.
+
+        Args:
+            name: Identifier to look up.
+
+        Returns:
+            True if the formula is registered (active or not).
+        """
+        return name in self._alt_base_ac_formulas
 
     def take_damage(self, amount: int) -> None:
         """
