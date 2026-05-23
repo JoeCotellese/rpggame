@@ -2792,7 +2792,11 @@ class GameState:
         """
         from dnd_engine.systems.time_manager import ModifierType
 
-        base_ac = creature._base_ac
+        # Use get_base_ac() so an active alternate base-AC formula (per
+        # SRD "Only One Base AC") feeds into the layered-modifier stack.
+        # When no alt formula is selected, this is identical to reading
+        # `_base_ac` directly.
+        base_ac = creature.get_base_ac()
 
         # Query active effects for this creature
         effects = self.time_manager.get_effects_for_character(creature.name)

@@ -321,18 +321,56 @@ class TestArmorClass_OnlyOneBaseAC:
     """
 
     def test_only_one_base_ac_selection_is_enforced(self):
-        pytest.skip(
-            "LATENT: no engine support for alternate base-AC formulas, "
-            "so the 'choose one' constraint cannot be violated today. "
-            "The unarmored default (character_factory.calculate_ac) is "
-            "the sole base-AC code path; there is no Mage Armor, "
-            "Barbarian Unarmored Defense, Monk Unarmored Defense, or "
-            "Draconic Resilience implementation that could compete. "
-            "When the first alternate base-AC feature lands, this test "
-            "becomes load-bearing: it must assert that activating one "
-            "alt-AC formula deactivates any other on the same creature. "
-            "Tracked by issue #418."
+        """Registering two alt-AC formulas must honor exactly one selection.
+
+        Builds two competing alternate base-AC formulas (the same shape
+        as Barbarian / Monk Unarmored Defense or Draconic Resilience
+        would take) on a single creature, then asserts:
+
+        1. With no selection, the creature's base AC is the default
+           value passed at construction time.
+        2. With formula A selected, AC matches A's output (and not B's).
+        3. Switching the selection to B flips AC to B's output (and
+           not A's). Both formulas remain registered — the SRD "choose
+           one" constraint is enforced by the *selector*, not by
+           unregistering competitors.
+        4. The wrong formula's value never leaks through when the
+           other is selected.
+
+        Tracked by issue #418.
+        """
+        abilities = Abilities(
+            strength=15, dexterity=14, constitution=16, intelligence=10, wisdom=13, charisma=8
         )
+        creature = Creature(name="Brawler", max_hp=20, ac=11, abilities=abilities)
+
+        # Two competing base-AC formulas with distinct, stable outputs:
+        #   dex_mod = (14-10)//2 = 2
+        #   con_mod = (16-10)//2 = 3
+        # alt_a => 10 + dex_mod + con_mod = 15  (Barbarian-Unarmored-style)
+        # alt_b => 16 + dex_mod           = 18  (Mage-Armor-style)
+        creature.register_base_ac_formula(
+            "alt_a", lambda c: 10 + c.abilities.dex_mod + c.abilities.con_mod
+        )
+        creature.register_base_ac_formula("alt_b", lambda c: 16 + c.abilities.dex_mod)
+
+        # Default: no alt-AC selected, base AC is the constructor value.
+        assert creature.active_base_ac_formula is None
+        assert creature.ac == 11
+
+        # Select A: AC must reflect A only (15), not B (18).
+        creature.active_base_ac_formula = "alt_a"
+        assert creature.ac == 15
+        assert creature.ac != 18, "Formula B must not leak through when A is selected."
+
+        # Switch to B: AC must reflect B only (18), not A (15).
+        creature.active_base_ac_formula = "alt_b"
+        assert creature.ac == 18
+        assert creature.ac != 15, "Formula A must not leak through when B is selected."
+
+        # Clear selection: fall back to the constructor base AC.
+        creature.active_base_ac_formula = None
+        assert creature.ac == 11
 
     def test_layered_modifiers_are_not_base_ac_alternatives(self):
         """Effective-AC overlays (Shield spell, etc.) are not 'base' AC.

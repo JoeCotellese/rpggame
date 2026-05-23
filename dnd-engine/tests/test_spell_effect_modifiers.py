@@ -380,3 +380,75 @@ class TestSpellCastingACModifierIntegration:
         assert effect.effect_data.get("value") == 5
         assert effect.duration_type == "rounds"
         assert effect.remaining_value == 1
+
+
+class TestAlternateBaseACComposesWithLayeredModifiers:
+    """SRD § Playing the Game › Attack Rolls › Armor Class.
+
+    The "Only One Base AC" rule applies to base-AC formulas (Mage Armor,
+    Unarmored Defense, Draconic Resilience, etc.). Layered modifiers
+    (Shield, magic-item AC bonuses, Haste) remain orthogonal and stack
+    on top of the selected base.
+
+    This guards that the registration seam introduced for issue #418
+    composes correctly with `GameState.get_effective_ac` so a future
+    Mage Armor / Unarmored Defense implementation can rely on it.
+    """
+
+    def test_alt_base_ac_formula_stacks_with_shield_bonus(self, game_state_with_wizard, wizard):
+        """Active alt-AC formula feeds the base; Shield's +5 stacks on top."""
+        from dnd_engine.systems.time_manager import ActiveEffect, EffectType, ModifierType
+
+        # Register an alt base-AC formula and select it. wizard DEX is 14
+        # (mod +2), so this yields a base of 13 + 2 = 15.
+        wizard.register_base_ac_formula("test_alt_base", lambda c: 13 + c.abilities.dex_mod)
+        wizard.active_base_ac_formula = "test_alt_base"
+
+        # Base reflects the alt formula (no spell modifiers yet).
+        assert game_state_with_wizard.get_effective_ac(wizard) == 15
+
+        # Shield is a layered AC bonus — it must stack on top of the alt
+        # base, not be treated as a competing base.
+        shield = ActiveEffect(
+            effect_type=EffectType.SPELL,
+            source="Shield",
+            duration_type="rounds",
+            duration_value=1,
+            remaining_value=1,
+            target_name=wizard.name,
+            description="+5 AC",
+            concentration=False,
+            effect_data={"modifier_type": ModifierType.AC_BONUS.value, "value": 5},
+        )
+        game_state_with_wizard.time_manager.add_effect(shield)
+
+        # 15 (alt base) + 5 (Shield) = 20.
+        assert game_state_with_wizard.get_effective_ac(wizard) == 20
+
+    def test_clearing_alt_selection_reverts_base_without_dropping_bonuses(
+        self, game_state_with_wizard, wizard
+    ):
+        """Clearing the alt selection drops only the base, not layered bonuses."""
+        from dnd_engine.systems.time_manager import ActiveEffect, EffectType, ModifierType
+
+        wizard.register_base_ac_formula("test_alt_base", lambda c: 13 + c.abilities.dex_mod)
+        wizard.active_base_ac_formula = "test_alt_base"
+
+        shield = ActiveEffect(
+            effect_type=EffectType.SPELL,
+            source="Shield",
+            duration_type="rounds",
+            duration_value=1,
+            remaining_value=1,
+            target_name=wizard.name,
+            description="+5 AC",
+            concentration=False,
+            effect_data={"modifier_type": ModifierType.AC_BONUS.value, "value": 5},
+        )
+        game_state_with_wizard.time_manager.add_effect(shield)
+        assert game_state_with_wizard.get_effective_ac(wizard) == 20  # 15 + 5
+
+        # Drop the alt base — Shield's +5 must still apply on top of the
+        # original `_base_ac` (10), giving 15.
+        wizard.active_base_ac_formula = None
+        assert game_state_with_wizard.get_effective_ac(wizard) == 15
