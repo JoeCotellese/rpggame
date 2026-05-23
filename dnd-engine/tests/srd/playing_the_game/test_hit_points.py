@@ -232,23 +232,63 @@ class TestHitPoints_Bloodied:
     """
 
     def test_creature_at_half_hp_or_fewer_is_bloodied(self) -> None:
-        pytest.skip(
-            "GAP: there is no `is_bloodied` property on `Creature` "
-            "(dnd_engine/core/creature.py:57+) and no `bloodied` "
-            "condition in the catalog. The string 'bloodied' appears "
-            "only as flavor prose in campaign narrative data "
-            "(dnd_engine/data/content/campaigns/the_unquiet_dead/dungeons/"
-            "cult_hideout.json:265). Tracked by issue #488."
-        )
+        """`is_bloodied` is True iff `0 < current_hp <= max_hp // 2`.
+
+        Source: `dnd_engine/core/creature.py` `Creature.is_bloodied`.
+        A creature at full HP is not Bloodied; a creature at 0 HP is
+        Dying/Dead/Stable, not Bloodied.
+        """
+        # At exactly half HP -> Bloodied
+        creature = _make_creature(max_hp=20, current_hp=10)
+        assert creature.is_bloodied is True
+
+        # Below half -> Bloodied
+        creature = _make_creature(max_hp=20, current_hp=5)
+        assert creature.is_bloodied is True
+
+        # Down to 1 HP -> still Bloodied (still alive, still <= half)
+        creature = _make_creature(max_hp=20, current_hp=1)
+        assert creature.is_bloodied is True
+
+        # Just above half -> not Bloodied
+        creature = _make_creature(max_hp=20, current_hp=11)
+        assert creature.is_bloodied is False
+
+        # Full HP -> not Bloodied
+        creature = _make_creature(max_hp=20, current_hp=20)
+        assert creature.is_bloodied is False
+
+        # 0 HP -> not Bloodied (creature is Dying/Dead/Stable, not Bloodied)
+        creature = _make_creature(max_hp=20, current_hp=0)
+        assert creature.is_bloodied is False
 
     def test_bloodied_state_has_no_inherent_mechanical_effect(self) -> None:
-        pytest.skip(
-            "GAP: depends on Bloodied being implemented. The SRD calls "
-            "out that Bloodied has no game effect on its own — the "
-            "engine must surface the state as a flag (event / property) "
-            "without attaching capability-altering modifiers. Tracked "
-            "by issue #488."
-        )
+        """Becoming Bloodied is a flag only — no conditions, no capability shift.
+
+        The SRD spells out that Bloodied "has no game effect on its own
+        but which might trigger other game effects." This test pins the
+        engine to surface the state as a pure derived property without
+        attaching any modifier, condition, or action-economy change.
+        """
+        creature = _make_creature(max_hp=20, current_hp=20)
+
+        # Pre-state: not bloodied, no conditions, can act, not incapacitated.
+        assert creature.is_bloodied is False
+        conditions_before = dict(creature.active_conditions)
+        can_act_before = creature.can_take_actions()
+        incapacitated_before = creature.is_incapacitated()
+
+        # Drop below half HP -> becomes Bloodied.
+        creature.take_damage(15)
+        assert creature.current_hp == 5
+        assert creature.is_bloodied is True
+
+        # No conditions were added or removed by crossing the threshold.
+        assert creature.active_conditions == conditions_before
+
+        # Action-economy capabilities are unchanged.
+        assert creature.can_take_actions() == can_act_before
+        assert creature.is_incapacitated() == incapacitated_before
 
 
 class TestHitPoints_MaxHpField:
