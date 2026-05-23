@@ -151,6 +151,100 @@ class TestCombatDamageWithDeathSaves:
             assert fighter.death_save_failures >= 3
             assert len(events) == 1
 
+    def test_critical_hit_at_zero_hp_via_combat_engine_adds_two_failures(
+        self, fighter, goblin, combat_engine, event_bus
+    ):
+        """A critical hit (natural 20) resolved through `CombatEngine`
+        against a 0-HP defender adds 2 death-save failures, exercising
+        the full crit-flag plumbing from `resolve_attack` into
+        `Character.take_damage`.
+        """
+        fighter.current_hp = 0
+        events = []
+        event_bus.subscribe(EventType.DAMAGE_AT_ZERO_HP, lambda e: events.append(e))
+
+        # Force a natural-20 attack roll → critical_hit=True; the
+        # damage roll deliberately stays below max_hp so the crit-at-0
+        # branch fires (not the massive-damage branch).
+        with patch.object(combat_engine.dice_roller, "roll") as mock_roll:
+            mock_roll.side_effect = [
+                Mock(total=20, rolls=[20]),  # Natural 20 attack → crit
+                Mock(total=3, rolls=[1, 2]),  # Low damage roll
+            ]
+            result = combat_engine.resolve_attack(
+                attacker=goblin,
+                defender=fighter,
+                attack_bonus=4,
+                damage_dice="1d6",
+                apply_damage=True,
+                event_bus=event_bus,
+            )
+
+        assert result.critical_hit is True
+        assert fighter.death_save_failures == 2
+        assert len(events) == 1
+        assert events[0].data["critical_hit"] is True
+        assert events[0].data["failures_added"] == 2
+
+    def test_non_critical_hit_at_zero_hp_via_combat_engine_adds_one_failure(
+        self, fighter, goblin, combat_engine, event_bus
+    ):
+        """Regression guard: a non-crit hit at 0 HP via the combat
+        engine still adds exactly 1 failure (no crit upgrade leakage).
+        """
+        fighter.current_hp = 0
+
+        # Attack roll of 15 (hit but not crit) and a small damage roll.
+        with patch.object(combat_engine.dice_roller, "roll") as mock_roll:
+            mock_roll.side_effect = [
+                Mock(total=15, rolls=[15]),  # Normal hit (not nat-20)
+                Mock(total=3, rolls=[3]),  # Low damage roll
+            ]
+            result = combat_engine.resolve_attack(
+                attacker=goblin,
+                defender=fighter,
+                attack_bonus=4,
+                damage_dice="1d6",
+                apply_damage=True,
+                event_bus=event_bus,
+            )
+
+        assert result.critical_hit is False
+        assert result.hit is True
+        assert fighter.death_save_failures == 1
+
+    def test_massive_damage_overflow_from_positive_hp_via_combat_engine(
+        self, fighter, goblin, combat_engine, event_bus
+    ):
+        """A single combat-engine attack that drops a positive-HP
+        character to 0 with damage overflow >= max_hp kills outright.
+
+        SRD overflow: HP 6/12, take 18 → remainder 12 == max → dead.
+        """
+        fighter.current_hp = 6
+        events = []
+        event_bus.subscribe(EventType.MASSIVE_DAMAGE_DEATH, lambda e: events.append(e))
+
+        with patch.object(combat_engine.dice_roller, "roll") as mock_roll:
+            mock_roll.side_effect = [
+                Mock(total=15, rolls=[15]),  # Normal hit (not crit)
+                Mock(total=18, rolls=[6, 6, 6]),  # Overflow >= max_hp
+            ]
+            result = combat_engine.resolve_attack(
+                attacker=goblin,
+                defender=fighter,
+                attack_bonus=4,
+                damage_dice="3d6",
+                apply_damage=True,
+                event_bus=event_bus,
+            )
+
+        assert result.hit is True
+        assert fighter.current_hp == 0
+        assert fighter.is_dead is True
+        assert fighter.death_save_failures == 3
+        assert len(events) == 1
+
 
 class TestPartyWipeMechanics:
     """Test party wipe conditions with death saves."""
