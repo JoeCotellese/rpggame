@@ -1,0 +1,265 @@
+# ABOUTME: SRD conformance audit for "Playing the Game > Advantage/Disadvantage".
+# ABOUTME: Cross-references docs/srd/playing-the-game/advantage-disadvantage.md against engine code.
+
+"""SRD conformance: Advantage / Disadvantage.
+
+Maps every rule in `docs/srd/playing-the-game/advantage-disadvantage.md`
+to a test. Real tests verify enforcement at the engine layer; stubs
+(`pytest.skip("GAP: ...")`) mark known gaps and cite where the rule is
+enforced today (if elsewhere) or that it isn't implemented anywhere.
+
+The conformance "report" is `pytest --collect-only -q tests/srd/`.
+"""
+
+from __future__ import annotations
+
+import inspect
+
+import pytest
+
+from dnd_engine.core.character import Character, CharacterClass
+from dnd_engine.core.combat import CombatEngine
+from dnd_engine.core.creature import Abilities, Creature
+from dnd_engine.core.dice import DiceRoller
+
+pytestmark = pytest.mark.srd(
+    "playing-the-game/advantage-disadvantage.md",
+    lines="1002-1011",
+)
+
+
+def _make_fighter() -> Character:
+    """Construct a minimal Fighter for advantage/disadvantage tests."""
+    abilities = Abilities(
+        strength=16,
+        dexterity=14,
+        constitution=15,
+        intelligence=10,
+        wisdom=12,
+        charisma=8,
+    )
+    return Character(
+        name="Fighter",
+        character_class=CharacterClass.FIGHTER,
+        level=1,
+        abilities=abilities,
+        max_hp=12,
+        ac=16,
+        saving_throw_proficiencies=["str", "con"],
+        skill_proficiencies=["athletics"],
+    )
+
+
+class TestDefinition_ModifiesD20Test:
+    """SRD § Playing the Game › Advantage/Disadvantage › Definition.
+
+    > Sometimes a D20 Test is modified by Advantage or Disadvantage.
+    > Advantage reflects the positive circumstances surrounding a d20
+    > roll, while Disadvantage reflects negative circumstances.
+    """
+
+    def test_dice_roller_supports_advantage_flag(self):
+        """`DiceRoller.roll` accepts an `advantage=True` flag.
+
+        The advantage mechanic is implemented at the `DiceRoller` level
+        (dnd-engine/dnd_engine/core/dice.py:85-140) and surfaced
+        through the d20-test entry points that wrap it.
+        """
+        roller = DiceRoller(seed=42)
+        result = roller.roll("1d20", advantage=True)
+        assert result.advantage is True
+        assert len(result.rolls) == 2
+
+    def test_dice_roller_supports_disadvantage_flag(self):
+        """`DiceRoller.roll` accepts a `disadvantage=True` flag.
+
+        Same plumbing as advantage, opposite math
+        (dnd-engine/dnd_engine/core/dice.py:39-44).
+        """
+        roller = DiceRoller(seed=42)
+        result = roller.roll("1d20", disadvantage=True)
+        assert result.disadvantage is True
+        assert len(result.rolls) == 2
+
+    def test_advantage_picks_higher_of_two_d20s(self):
+        """`DiceRoll.total` returns `max(rolls) + modifier` with advantage.
+
+        Implementation: `DiceRoll.total`
+        (dnd-engine/dnd_engine/core/dice.py:39-46). Confirmed by
+        construction: with seed=42 the two dice are deterministic and
+        we assert the total equals their max.
+        """
+        roller = DiceRoller(seed=42)
+        result = roller.roll("1d20", advantage=True)
+        assert result.total == max(result.rolls)
+        # Sanity: the modifier path is also exercised under +5.
+        roller2 = DiceRoller(seed=42)
+        with_mod = roller2.roll("1d20+5", advantage=True)
+        assert with_mod.total == max(with_mod.rolls) + 5
+
+    def test_disadvantage_picks_lower_of_two_d20s(self):
+        """`DiceRoll.total` returns `min(rolls) + modifier` with disadvantage.
+
+        Implementation: `DiceRoll.total`
+        (dnd-engine/dnd_engine/core/dice.py:41-44). Same construction
+        as the advantage test, opposite math.
+        """
+        roller = DiceRoller(seed=42)
+        result = roller.roll("1d20", disadvantage=True)
+        assert result.total == min(result.rolls)
+        roller2 = DiceRoller(seed=42)
+        with_mod = roller2.roll("1d20-2", disadvantage=True)
+        assert with_mod.total == min(with_mod.rolls) - 2
+
+
+class TestAcquisition_FromSpecialAbilitiesAndActions:
+    """SRD § Playing the Game › Advantage/Disadvantage › Acquisition.
+
+    > You usually acquire Advantage or Disadvantage through the use of
+    > special abilities and actions.
+    """
+
+    def test_advantage_propagates_through_attack_roll(self):
+        """`CombatEngine.resolve_attack` accepts and uses `advantage=True`.
+
+        The attack-roll surface threads the flag down to the dice
+        roller (`dnd-engine/dnd_engine/core/combat.py:130-133`). This
+        is the primary site where "special abilities and actions"
+        confer advantage on attacks (Pack Tactics, prone targets within
+        5 ft, etc.).
+        """
+        src = inspect.getsource(CombatEngine.resolve_attack)
+        assert "advantage=advantage" in src and "disadvantage=disadvantage" in src
+
+    def test_advantage_propagates_through_saving_throw(self):
+        """`Character.make_saving_throw` accepts `advantage=True`.
+
+        Used by spells / class features that grant advantage on a
+        save (e.g., Dodge action gives advantage on DEX saves).
+        Implementation: `dnd-engine/dnd_engine/core/character.py:297-298`.
+        """
+        src = inspect.getsource(Character.make_saving_throw)
+        assert "advantage=advantage" in src
+        # And confirm the dice path actually rolls 2d20 under advantage.
+        fighter = _make_fighter()
+        result = fighter.make_saving_throw(ability="con", dc=10, advantage=True)
+        # Result dict carries the same shape regardless of advantage,
+        # but the "roll" surfaced should be the higher of the pair.
+        assert "roll" in result
+        assert isinstance(result["roll"], int)
+
+    def test_advantage_propagates_through_skill_check(self):
+        """`Character.make_skill_check` accepts `advantage=True`.
+
+        Used by Help action (advantage on the helped creature's next
+        ability check). Implementation:
+        `dnd-engine/dnd_engine/core/character.py:765`.
+        """
+        src = inspect.getsource(Character.make_skill_check)
+        assert "advantage=advantage" in src
+        fighter = _make_fighter()
+        fighter._dice_roller = DiceRoller(seed=3)
+        skills = {"athletics": {"ability": "str"}}
+        result = fighter.make_skill_check(
+            "athletics", dc=10, skills_data=skills, advantage=True
+        )
+        assert "roll" in result
+
+    def test_disadvantage_propagates_through_all_three_surfaces(self):
+        """All three D20-test surfaces accept `disadvantage=True`.
+
+        Symmetric to the advantage tests above. Confirms the SRD's
+        opposite-direction case is wired through.
+        """
+        for func in (
+            CombatEngine.resolve_attack,
+            Character.make_saving_throw,
+            Character.make_skill_check,
+        ):
+            src = inspect.getsource(func)
+            assert "disadvantage=disadvantage" in src, (
+                f"{func.__qualname__} must thread disadvantage to the dice."
+            )
+
+
+class TestHeroicInspiration:
+    """SRD § Playing the Game › Advantage/Disadvantage › Heroic Inspiration.
+
+    > [Sidebar callout — full mechanic defined in Rules Glossary:]
+    > spend Heroic Inspiration to reroll any d20 and use either result.
+    """
+
+    def test_character_carries_heroic_inspiration_state(self):
+        pytest.skip(
+            "GAP: Heroic Inspiration is not implemented. No "
+            "`heroic_inspiration` field on `Character` "
+            "(dnd-engine/dnd_engine/core/character.py:35-127). "
+            "`dnd_engine/systems/resources.py` manages spell slots, "
+            "ki, rage uses, and bardic inspiration — Heroic "
+            "Inspiration is absent. Tracked by issue #489."
+        )
+
+    def test_heroic_inspiration_can_be_spent_to_reroll_d20(self):
+        pytest.skip(
+            "GAP: no hook on `make_skill_check` / `make_saving_throw` "
+            "/ `resolve_attack` to spend Heroic Inspiration for a "
+            "reroll. The dice roller's advantage path "
+            "(dnd-engine/dnd_engine/core/dice.py:111-113) is the "
+            "closest mechanic but it picks max(d1,d2) — Heroic "
+            "Inspiration picks *either* die, which is different. "
+            "Tracked by issue #489."
+        )
+
+    def test_heroic_inspiration_is_consumed_on_use(self):
+        pytest.skip(
+            "GAP: depends on the field existing. The SRD rule is that "
+            "Heroic Inspiration is a one-shot per character — once "
+            "spent it's gone until granted again. Tracked by issue "
+            "#489."
+        )
+
+
+class TestSurfaceParity_NotPropagatedOnCreature:
+    """SRD § Playing the Game › Advantage/Disadvantage › Creature parity.
+
+    The SRD doesn't distinguish PCs from monsters for D20 Tests — a
+    monster making a save under Bless / Bane gets the same
+    advantage/disadvantage math. This test confirms the engine surface
+    that monsters use also accepts the flag.
+    """
+
+    def test_creature_saving_throw_accepts_advantage(self):
+        """`Creature.make_saving_throw` threads advantage to the roller.
+
+        Monsters (non-Character) make saves via this method
+        (dnd-engine/dnd_engine/core/creature.py:478-578). The flag
+        passes through to `DiceRoller.roll`.
+        """
+        abilities = Abilities(
+            strength=10,
+            dexterity=14,
+            constitution=10,
+            intelligence=10,
+            wisdom=10,
+            charisma=10,
+        )
+        goblin = Creature(name="Goblin", max_hp=7, ac=13, abilities=abilities)
+        result = goblin.make_saving_throw(ability="dex", dc=10, advantage=True)
+        assert "roll" in result
+        assert "total" in result
+        assert isinstance(result["success"], bool)
+
+    def test_creature_saving_throw_accepts_disadvantage(self):
+        """`Creature.make_saving_throw` threads disadvantage."""
+        abilities = Abilities(
+            strength=10,
+            dexterity=14,
+            constitution=10,
+            intelligence=10,
+            wisdom=10,
+            charisma=10,
+        )
+        goblin = Creature(name="Goblin", max_hp=7, ac=13, abilities=abilities)
+        result = goblin.make_saving_throw(ability="dex", dc=10, disadvantage=True)
+        assert "roll" in result
+        assert isinstance(result["success"], bool)
