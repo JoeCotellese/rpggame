@@ -430,3 +430,235 @@ class TestSavingThrowEffects:
         else:
             assert not self.fighter.has_condition("paralyzed")
             assert result["condition_applied"] is None
+
+
+class TestApplyDamageModifiers:
+    """Tests for the per-type damage modifier chokepoint.
+
+    `CombatEngine._apply_damage_modifiers` is the single seam that
+    scales raw damage by the target's per-type Resistance / Immunity.
+    It must consult BOTH creature-condition flags (the legacy item-
+    effects path) AND the monster catalog fields (`damage_resistances`,
+    `damage_immunities`) attached to the Creature instance.
+
+    This slice (#461) wires Resistance + Immunity only. Vulnerability,
+    No-Stacking, Order-of-Application, and clamp-at-zero are tracked
+    by follow-up slices (#463, #468, #490).
+    """
+
+    def setup_method(self):
+        self.engine = CombatEngine(DiceRoller(seed=1))
+        abilities = Abilities(
+            strength=10, dexterity=10, constitution=10, intelligence=10, wisdom=10, charisma=10
+        )
+        self.target = Creature(name="Target", max_hp=100, ac=10, abilities=abilities)
+
+    def test_no_modifiers_returns_raw_damage(self):
+        """A target with no per-type modifiers takes the raw amount."""
+        result = self.engine._apply_damage_modifiers(self.target, raw_damage=10, damage_type="fire")
+        assert result == 10
+
+    def test_no_damage_type_returns_raw_damage(self):
+        """When damage_type is None, modifiers cannot apply."""
+        self.target.add_condition("has_resistance_fire")
+        result = self.engine._apply_damage_modifiers(self.target, raw_damage=10, damage_type=None)
+        assert result == 10
+
+    def test_condition_flag_resistance_halves_damage(self):
+        """`has_resistance_{type}` condition halves matching damage."""
+        self.target.add_condition("has_resistance_fire")
+        result = self.engine._apply_damage_modifiers(self.target, raw_damage=10, damage_type="fire")
+        assert result == 5
+
+    def test_condition_flag_resistance_floors_odd_damage(self):
+        """Resistance halves with floor rounding (SRD: 'round down')."""
+        self.target.add_condition("has_resistance_fire")
+        result = self.engine._apply_damage_modifiers(self.target, raw_damage=5, damage_type="fire")
+        assert result == 2
+
+    def test_condition_flag_resistance_is_per_type(self):
+        """Fire resistance does not reduce poison damage."""
+        self.target.add_condition("has_resistance_fire")
+        result = self.engine._apply_damage_modifiers(
+            self.target, raw_damage=10, damage_type="poison"
+        )
+        assert result == 10
+
+    def test_monster_catalog_resistance_halves_damage(self):
+        """`damage_resistances` list attribute halves matching damage."""
+        self.target.damage_resistances = ["cold"]
+        result = self.engine._apply_damage_modifiers(self.target, raw_damage=10, damage_type="cold")
+        assert result == 5
+
+    def test_monster_catalog_immunity_zeroes_damage(self):
+        """`damage_immunities` list attribute zeroes matching damage."""
+        self.target.damage_immunities = ["fire", "poison"]
+        result = self.engine._apply_damage_modifiers(self.target, raw_damage=20, damage_type="fire")
+        assert result == 0
+
+    def test_monster_catalog_immunity_is_per_type(self):
+        """A fire-immune creature still takes other damage types."""
+        self.target.damage_immunities = ["fire"]
+        result = self.engine._apply_damage_modifiers(
+            self.target, raw_damage=20, damage_type="slashing"
+        )
+        assert result == 20
+
+    def test_immunity_takes_precedence_over_resistance(self):
+        """If both immunity and resistance match the type, damage is 0."""
+        self.target.damage_immunities = ["fire"]
+        self.target.add_condition("has_resistance_fire")
+        result = self.engine._apply_damage_modifiers(self.target, raw_damage=10, damage_type="fire")
+        assert result == 0
+
+    def test_damage_type_is_normalized_case_insensitively(self):
+        """Mixed-case damage types match the modifier list (SRD types
+        are lowercased in the catalog)."""
+        self.target.damage_immunities = ["fire"]
+        result = self.engine._apply_damage_modifiers(self.target, raw_damage=10, damage_type="Fire")
+        assert result == 0
+
+
+class TestResolveAttackDamageType:
+    """Tests for `damage_type` plumbing through `resolve_attack`."""
+
+    def setup_method(self):
+        self.engine = CombatEngine(DiceRoller(seed=42))
+        attacker_abilities = Abilities(
+            strength=16, dexterity=14, constitution=15, intelligence=10, wisdom=12, charisma=8
+        )
+        self.attacker = Creature(
+            name="Attacker", max_hp=20, ac=16, abilities=attacker_abilities
+        )
+        defender_abilities = Abilities(
+            strength=10, dexterity=10, constitution=10, intelligence=10, wisdom=10, charisma=10
+        )
+        self.defender = Creature(name="Defender", max_hp=100, ac=10, abilities=defender_abilities)
+
+    def test_resolve_attack_accepts_damage_type_parameter(self):
+        """`resolve_attack` accepts an optional `damage_type` kwarg
+        without behavior change when target has no modifiers."""
+        result = self.engine.resolve_attack(
+            attacker=self.attacker,
+            defender=self.defender,
+            attack_bonus=20,  # always hits
+            damage_dice="0d4+10",
+            damage_type="fire",
+        )
+        assert result.hit is True
+        assert result.damage == 10  # No modifiers, full damage
+
+    def test_resolve_attack_immunity_zeroes_damage(self):
+        """A fire-immune monster takes 0 damage from a fire-typed attack."""
+        self.defender.damage_immunities = ["fire"]
+        result = self.engine.resolve_attack(
+            attacker=self.attacker,
+            defender=self.defender,
+            attack_bonus=20,
+            damage_dice="0d4+10",
+            damage_type="fire",
+            apply_damage=True,
+        )
+        assert result.hit is True
+        assert result.damage == 0
+        assert self.defender.current_hp == 100  # No HP lost
+
+    def test_resolve_attack_resistance_halves_damage(self):
+        """A cold-resistant target takes half damage from cold attacks."""
+        self.defender.damage_resistances = ["cold"]
+        result = self.engine.resolve_attack(
+            attacker=self.attacker,
+            defender=self.defender,
+            attack_bonus=20,
+            damage_dice="0d4+10",
+            damage_type="cold",
+            apply_damage=True,
+        )
+        assert result.hit is True
+        assert result.damage == 5
+        assert self.defender.current_hp == 95
+
+    def test_resolve_attack_without_damage_type_is_backward_compatible(self):
+        """Existing callers that don't pass `damage_type` see no change."""
+        # Even if the defender has fire immunity, it shouldn't apply when
+        # the attack has no damage_type tag.
+        self.defender.damage_immunities = ["fire"]
+        result = self.engine.resolve_attack(
+            attacker=self.attacker,
+            defender=self.defender,
+            attack_bonus=20,
+            damage_dice="0d4+10",
+            apply_damage=True,
+        )
+        assert result.hit is True
+        assert result.damage == 10
+        assert self.defender.current_hp == 90
+
+
+class TestResolveSpellSaveDamageType:
+    """Tests for damage_type wiring in `resolve_spell_save`."""
+
+    def setup_method(self):
+        self.engine = CombatEngine(DiceRoller(seed=42))
+
+    def _make_caster(self, dc: int = 15) -> Creature:
+        """Build a minimal caster that exposes `get_spell_save_dc`."""
+        abilities = Abilities(
+            strength=10, dexterity=10, constitution=10, intelligence=16, wisdom=10, charisma=10
+        )
+        caster = Creature(name="Caster", max_hp=20, ac=12, abilities=abilities)
+        caster.get_spell_save_dc = lambda: dc  # type: ignore[attr-defined]
+        return caster
+
+    def _make_target(self, name: str = "Target") -> Creature:
+        abilities = Abilities(
+            strength=10, dexterity=10, constitution=10, intelligence=10, wisdom=10, charisma=10
+        )
+        return Creature(name=name, max_hp=100, ac=10, abilities=abilities)
+
+    def test_spell_save_immunity_zeroes_damage(self):
+        """A fire-immune target takes 0 damage from a Fireball-style
+        save spell, even on a failed save."""
+        caster = self._make_caster(dc=99)  # impossible DC → always fails
+        target = self._make_target()
+        target.damage_immunities = ["fire"]
+
+        spell = {
+            "name": "Fireball",
+            "level": 3,
+            "id": "fireball",
+            "damage": {"dice": "0d6+30", "damage_type": "fire"},
+            "saving_throw": {"ability": "dex", "on_success": "half"},
+        }
+
+        result = self.engine.resolve_spell_save(
+            caster=caster, targets=[target], spell=spell, apply_damage=True
+        )
+        # Find the result row for our target
+        target_row = next(r for r in result["targets"] if r["name"] == target.name)
+        assert target_row["success"] is False  # failed the impossible save
+        assert target_row["damage"] == 0
+        assert target.current_hp == 100
+
+    def test_spell_save_resistance_halves_damage(self):
+        """A cold-resistant target takes half damage from a cold spell
+        on a failed save."""
+        caster = self._make_caster(dc=99)  # always fail
+        target = self._make_target()
+        target.damage_resistances = ["cold"]
+
+        spell = {
+            "name": "Ray of Frost (save variant)",
+            "level": 1,
+            "id": "rof_save",
+            "damage": {"dice": "0d6+10", "damage_type": "cold"},
+            "saving_throw": {"ability": "con", "on_success": "half"},
+        }
+
+        result = self.engine.resolve_spell_save(
+            caster=caster, targets=[target], spell=spell, apply_damage=True
+        )
+        target_row = next(r for r in result["targets"] if r["name"] == target.name)
+        assert target_row["success"] is False
+        assert target_row["damage"] == 5
+        assert target.current_hp == 95
