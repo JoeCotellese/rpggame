@@ -40,6 +40,28 @@ class DyingState(str, Enum):
     DEAD = "dead"
 
 
+class LevelUpHpPolicy(str, Enum):
+    """HP-at-level-up policy.
+
+    SRD allows the player to either roll the class's hit die or take a
+    fixed value when leveling up. ROLL preserves the existing behavior;
+    FIXED uses ``SRD_FIXED_HP_PER_HIT_DIE``.
+    """
+
+    ROLL = "roll"
+    FIXED = "fixed"
+
+
+# SRD fixed HP-per-level values keyed by hit die.
+# 5e PHB p.15: take the average of the hit die rounded up (e.g., d10 -> 6).
+SRD_FIXED_HP_PER_HIT_DIE: dict[str, int] = {
+    "1d6": 4,
+    "1d8": 5,
+    "1d10": 6,
+    "1d12": 7,
+}
+
+
 class Character(Creature):
     """
     Player character class.
@@ -581,13 +603,20 @@ class Character(Creature):
 
         return removed
 
-    def check_for_level_up(self, data_loader, event_bus=None) -> bool:
+    def check_for_level_up(
+        self,
+        data_loader,
+        event_bus=None,
+        hp_policy: LevelUpHpPolicy = LevelUpHpPolicy.ROLL,
+    ) -> bool:
         """
         Check if character has enough XP to level up and execute level-up if so.
 
         Args:
             data_loader: DataLoader instance to access progression data
             event_bus: Optional EventBus to emit level-up events
+            hp_policy: How to determine HP gained at level-up. ROLL (default)
+                rolls the class hit die; FIXED uses the SRD fixed value.
 
         Returns:
             True if character leveled up, False otherwise
@@ -602,18 +631,25 @@ class Character(Creature):
         next_level_xp = int(progression["xp_by_level"].get(str(next_level), 999999))
 
         if self.xp >= next_level_xp:
-            self._level_up(data_loader, event_bus)
+            self._level_up(data_loader, event_bus, hp_policy=hp_policy)
             return True
 
         return False
 
-    def _level_up(self, data_loader, event_bus=None) -> None:
+    def _level_up(
+        self,
+        data_loader,
+        event_bus=None,
+        hp_policy: LevelUpHpPolicy = LevelUpHpPolicy.ROLL,
+    ) -> None:
         """
         Perform level-up: increase level, HP, and grant class features.
 
         Args:
             data_loader: DataLoader instance to access class data
             event_bus: Optional EventBus to emit events
+            hp_policy: How to determine HP gained at level-up. ROLL (default)
+                rolls the class hit die; FIXED uses the SRD fixed value.
         """
         old_level = self.level
         old_max_hp = self.max_hp
@@ -622,7 +658,7 @@ class Character(Creature):
         self.level += 1
 
         # Increase HP
-        self._increase_hp(data_loader)
+        self._increase_hp(data_loader, hp_policy=hp_policy)
 
         # Grant class features for new level
         self._grant_class_features(data_loader, event_bus)
@@ -639,16 +675,24 @@ class Character(Creature):
                         "old_level": old_level,
                         "new_level": self.level,
                         "hp_increase": self.max_hp - old_max_hp,
+                        "hp_policy": hp_policy.value,
                     },
                 )
             )
 
-    def _increase_hp(self, data_loader) -> None:
+    def _increase_hp(
+        self,
+        data_loader,
+        hp_policy: LevelUpHpPolicy = LevelUpHpPolicy.ROLL,
+    ) -> None:
         """
-        Increase max HP on level-up by rolling hit die + CON modifier.
+        Increase max HP on level-up by the class hit die (or SRD fixed value)
+        plus CON modifier.
 
         Args:
             data_loader: DataLoader instance to access class data
+            hp_policy: ROLL rolls the hit die; FIXED uses the SRD fixed value
+                (d6 -> 4, d8 -> 5, d10 -> 6, d12 -> 7).
         """
         # Get hit die from class data
         classes_data = data_loader.load_classes()
@@ -660,9 +704,15 @@ class Character(Creature):
         else:
             hit_die = class_data.get("hit_die", "1d8")
 
-        # Roll hit die and add CON modifier
         con_mod = self.abilities.con_mod
-        hp_increase = self._dice_roller.roll(hit_die).total + con_mod
+
+        if hp_policy == LevelUpHpPolicy.FIXED:
+            # SRD fixed value per hit die + CON modifier
+            fixed_value = SRD_FIXED_HP_PER_HIT_DIE.get(hit_die, 5)
+            hp_increase = fixed_value + con_mod
+        else:
+            # Roll hit die and add CON modifier
+            hp_increase = self._dice_roller.roll(hit_die).total + con_mod
 
         # Minimum 1 HP per level
         hp_increase = max(1, hp_increase)
