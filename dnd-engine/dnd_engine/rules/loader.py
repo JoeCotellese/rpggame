@@ -96,6 +96,19 @@ class DataLoader:
             speed=speed,
         )
 
+        # Attach per-type damage modifier fields from the monster catalog.
+        # These attributes are consulted by
+        # `CombatEngine._apply_damage_modifiers` so Resistance / Immunity
+        # rules can key on a monster's catalog data without needing
+        # manually-applied conditions. SRD: each instance of damage has
+        # a type, and Resistance / Immunity scale damage of matching
+        # types (see playing-the-game/resistance-and-vulnerability.md
+        # and playing-the-game/immunity.md). Defaults to empty lists so
+        # downstream code can iterate without None checks.
+        creature.damage_resistances = list(data.get("damage_resistances") or [])
+        creature.damage_immunities = list(data.get("damage_immunities") or [])
+        creature.damage_vulnerabilities = list(data.get("damage_vulnerabilities") or [])
+
         return creature
 
     def load_items(self, campaign_id: str | None = None) -> dict[str, Any]:

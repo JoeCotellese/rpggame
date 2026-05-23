@@ -227,28 +227,40 @@ class TestDamageTypes_NoIntrinsicRules:
     """
 
     def test_combat_engine_does_not_branch_on_damage_type(self):
-        """`CombatEngine.resolve_attack` does not consult damage_type.
+        """`CombatEngine.resolve_attack` does not branch on damage_type.
 
-        Source-level guard: damage type is not a parameter or branch
-        condition in the core attack path. This is the SRD's "no rules
-        of their own" clause — the damage-type tag is metadata for
-        downstream systems (Resistance, Vulnerability, Immunity) and
-        must not gate hit / damage calculation at the combat engine
-        layer.
+        The SRD's "no rules of their own" clause means the damage-type
+        tag is metadata for downstream systems (Resistance,
+        Vulnerability, Immunity) and must not gate hit / damage
+        calculation at the combat engine layer.
+
+        `resolve_attack` now accepts a `damage_type` keyword (#461) so
+        the per-type modifier chokepoint can scale damage, but the
+        method itself must not conditionally branch on the *value* of
+        damage_type (e.g., no `if damage_type == "fire": ...` inside
+        the attack path). All type-keyed behaviour belongs in
+        `_apply_damage_modifiers`.
         """
         import inspect
+        import re
 
         from dnd_engine.core.combat import CombatEngine
 
         src = inspect.getsource(CombatEngine.resolve_attack)
-        # The current signature does not accept damage_type, and no
-        # branch in resolve_attack reads a damage_type field — which
-        # satisfies the SRD's "no rules of their own" clause for the
-        # core attack path.
-        assert "damage_type" not in src, (
-            "CombatEngine.resolve_attack must not branch on damage_type; "
-            "type-specific behavior belongs in Resistance / Vulnerability "
-            "/ Immunity layers, not the attack path."
+        # The chokepoint is allowed to consume `damage_type`, but
+        # resolve_attack itself must not test the value with an
+        # equality / membership comparison against a literal type
+        # name. This regex catches `damage_type == "fire"`,
+        # `damage_type in ("fire",)`, etc.
+        offenders = re.findall(
+            r"damage_type\s*(?:==|in|!=)\s*[\"'(\[]", src
+        )
+        assert not offenders, (
+            "CombatEngine.resolve_attack must not branch on the value "
+            "of damage_type; type-specific behavior belongs in "
+            "Resistance / Vulnerability / Immunity layers, not the "
+            "attack path. Found: "
+            f"{offenders}"
         )
 
     def test_resistance_system_keys_on_damage_type(self):

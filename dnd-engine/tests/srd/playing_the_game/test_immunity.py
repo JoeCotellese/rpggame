@@ -61,14 +61,44 @@ class TestImmunity_ToDamageType:
         )
 
     def test_monster_damage_immunities_field_is_consumed(self):
-        pytest.skip(
-            "GAP: monsters.json `damage_immunities` is data-only "
-            "(e.g., bearded_devil: fire, poison). No engine code "
-            "reads the field — `CombatEngine.resolve_attack` "
-            "(dnd-engine/dnd_engine/core/combat.py:91) doesn't take "
-            "a `damage_type` parameter, and `resolve_spell_save` "
-            "(combat.py:547) applies raw damage. Tracked by issues "
-            "#461 and #464."
+        """A monster's catalog `damage_immunities` zeroes damage of
+        that type via the engine chokepoint.
+
+        Per #461, `CombatEngine._apply_damage_modifiers` reads the
+        Creature's `damage_immunities` list attribute (populated by
+        `DataLoader.create_monster` from monsters.json). A bearded
+        devil with `["fire", "poison"]` therefore takes 0 damage from
+        a fire-typed attack without needing a manual condition.
+        """
+        from dnd_engine.core.combat import CombatEngine
+        from dnd_engine.core.creature import Abilities, Creature
+        from dnd_engine.core.dice import DiceRoller
+
+        # Mirror what `DataLoader.create_monster` would attach for the
+        # bearded devil (`monsters.json` ships `[fire, poison]`).
+        abilities = Abilities(
+            strength=16,
+            dexterity=10,
+            constitution=15,
+            intelligence=9,
+            wisdom=11,
+            charisma=11,
+        )
+        bearded_devil = Creature(
+            name="Bearded Devil", max_hp=52, ac=13, abilities=abilities
+        )
+        bearded_devil.damage_immunities = ["fire", "poison"]
+
+        engine = CombatEngine(DiceRoller(seed=1))
+        scaled = engine._apply_damage_modifiers(
+            bearded_devil, raw_damage=22, damage_type="fire"
+        )
+
+        assert scaled == 0, (
+            "Catalog `damage_immunities` must zero damage of the "
+            "matching type via the engine chokepoint (SRD: 'Immunity "
+            "to a damage type means you don't take damage of that "
+            "type.')."
         )
 
 
