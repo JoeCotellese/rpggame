@@ -230,25 +230,130 @@ class TestFallingUnconscious_ConditionApplied:
 
         `Creature.is_incapacitated()` (creature.py:320-340) checks
         membership of `"unconscious"` in `active_conditions`. Dropping
-        to 0 HP does NOT add the condition there — `take_damage`
-        (character.py:1100-1148) only updates death-save state. As a
-        result, an unconscious character is *not* flagged as
-        incapacitated by the SRD-glossary-aligned helper, so rules
-        that key off the Incapacitated condition (e.g. ranged-in-
-        close-combat advantage, OA visibility) won't see them.
+        to 0 HP adds the condition there so rules that key off the
+        Incapacitated condition (e.g. ranged-in-close-combat
+        advantage, OA visibility) see the downed character.
         """
-        pytest.skip(
-            "GAP: Dropping to 0 HP does not add the 'unconscious' "
-            "condition to `Creature.active_conditions`. `Character."
-            "take_damage` updates death-save state only "
-            "(dnd-engine/dnd_engine/core/character.py:1100-1148), so "
-            "`Creature.is_incapacitated()` "
-            "(dnd-engine/dnd_engine/core/creature.py:320-340), which "
-            "checks `active_conditions`, returns False for a "
-            "downed character. Rules that key off Incapacitated "
-            "(e.g. SRD ranged-attacks-in-close-combat exception) "
-            "won't fire. See issue #452."
-        )
+        character = _make_character(max_hp=12)
+
+        # Lethal-but-not-massive damage: brings positive-HP character
+        # to 0 without triggering the massive-damage instant-death
+        # branch (which requires already-at-0 entry today).
+        character.take_damage(12)
+
+        assert character.current_hp == 0
+        assert character.is_unconscious is True
+        assert "unconscious" in character.active_conditions
+        assert character.is_incapacitated() is True
+
+        # Healing past 0 HP should remove the Unconscious condition
+        # — SRD: "until you regain any Hit Points".
+        character.recover_hp(5)
+
+        assert character.current_hp == 5
+        assert "unconscious" not in character.active_conditions
+        assert character.is_incapacitated() is False
+
+
+class TestDyingState_DerivedProperty:
+    """Derived `Character.dying_state` reports Alive / Dying / Stable / Dead.
+
+    Foundation for plan-04 slices that need a single high-level read
+    of where a character sits in the dying pipeline. Pure function of
+    `current_hp`, `death_save_failures`, and `stabilized` — no setter,
+    no side effects.
+    """
+
+    def test_alive_when_hp_positive(self):
+        from dnd_engine.core.character import DyingState
+
+        character = _make_character(max_hp=12)
+
+        assert character.current_hp > 0
+        assert character.dying_state == DyingState.ALIVE
+
+    def test_dying_when_at_zero_hp_with_failures_below_three(self):
+        from dnd_engine.core.character import DyingState
+
+        character = _make_character(max_hp=12)
+        character.current_hp = 0
+
+        assert character.death_save_failures < 3
+        assert character.stabilized is False
+        assert character.dying_state == DyingState.DYING
+
+    def test_dying_with_partial_failures(self):
+        from dnd_engine.core.character import DyingState
+
+        character = _make_character(max_hp=12)
+        character.current_hp = 0
+        character.death_save_failures = 2
+
+        assert character.dying_state == DyingState.DYING
+
+    def test_stable_when_zero_hp_and_stabilized(self):
+        from dnd_engine.core.character import DyingState
+
+        character = _make_character(max_hp=12)
+        character.current_hp = 0
+        character.stabilized = True
+
+        assert character.dying_state == DyingState.STABLE
+
+    def test_dead_when_three_or_more_failures(self):
+        from dnd_engine.core.character import DyingState
+
+        character = _make_character(max_hp=12)
+        character.current_hp = 0
+        character.death_save_failures = 3
+
+        assert character.dying_state == DyingState.DEAD
+
+    def test_dying_state_is_read_only_property(self):
+        """`dying_state` is a derived property — no setter."""
+        character = _make_character(max_hp=12)
+
+        with pytest.raises(AttributeError):
+            character.dying_state = "alive"  # type: ignore[misc]
+
+
+class TestDyingState_DeathSaveLifecycle:
+    """Condition lifecycle around death-save outcomes."""
+
+    def test_natural_20_death_save_removes_unconscious_condition(self):
+        """Natural 20 brings the character to 1 HP and clears the
+        Unconscious condition from `active_conditions`."""
+        character = _make_character(max_hp=12)
+
+        character.take_damage(12)
+        assert "unconscious" in character.active_conditions
+
+        # Force a natural-20 death save by patching the dice roller
+        with patch.object(character._dice_roller, "roll") as mock_roll:
+            mock_roll.return_value = Mock(total=20)
+            result = character.make_death_save()
+
+        assert result["natural_20"] is True
+        assert character.current_hp == 1
+        assert "unconscious" not in character.active_conditions
+
+    def test_three_failures_replaces_unconscious_with_dead(self):
+        """When the character reaches 3 death save failures, the
+        Unconscious condition is replaced by a `"dead"` flag."""
+        character = _make_character(max_hp=12)
+
+        # Drop to 0 HP — adds 'unconscious'
+        character.take_damage(12)
+        assert "unconscious" in character.active_conditions
+
+        # Two more hits at 0 HP each add 1 death-save failure
+        character.take_damage(1)
+        character.take_damage(1)
+        character.take_damage(1)
+
+        assert character.is_dead is True
+        assert "unconscious" not in character.active_conditions
+        assert "dead" in character.active_conditions
 
 
 class TestDeathSavingThrows_TriggerOnStartOfTurn:

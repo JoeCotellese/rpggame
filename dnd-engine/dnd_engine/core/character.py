@@ -20,6 +20,26 @@ class CharacterClass(Enum):
     CLERIC = "cleric"
 
 
+class DyingState(str, Enum):
+    """High-level dying-pipeline state for a Character.
+
+    Derived purely from `current_hp`, `death_save_failures`, and
+    `stabilized`. Foundation for SRD "Dropping to 0 Hit Points" logic
+    that needs a single read of where the character sits in the
+    unconscious / stable / dead pipeline.
+
+    - ALIVE:  current_hp > 0
+    - DYING:  current_hp == 0, failures < 3, not stabilized
+    - STABLE: current_hp == 0, stabilized (auto-recovers eventually)
+    - DEAD:   failures >= 3
+    """
+
+    ALIVE = "alive"
+    DYING = "dying"
+    STABLE = "stable"
+    DEAD = "dead"
+
+
 class Character(Creature):
     """
     Player character class.
@@ -1114,6 +1134,12 @@ class Character(Creature):
         - If damage at 0 HP: add 1 death save failure
         - If damage >= max HP at 0 HP: instant death (massive damage)
 
+        Falling Unconscious (SRD § Playing the Game › Dropping to 0
+        Hit Points): when the character reaches 0 HP without dying
+        outright, the Unconscious condition is added to
+        `active_conditions` so `is_incapacitated()` reflects it.
+        Death (3 failures) replaces `"unconscious"` with `"dead"`.
+
         Args:
             amount: Amount of damage to apply
             event_bus: Optional EventBus for event emission
@@ -1155,11 +1181,21 @@ class Character(Creature):
                         )
                     )
 
+        # Sync the SRD Unconscious / Dead condition flags with the
+        # derived HP / death-save state. Done after the damage and
+        # failure bookkeeping above so a single-blow kill ends in the
+        # correct terminal state.
+        self._sync_dying_conditions()
+
     def recover_hp(self, amount: int | None = None) -> int:
         """
         Recover hit points.
 
         If recovering from 0 HP, resets death saves.
+
+        SRD § Playing the Game › Falling Unconscious: the Unconscious
+        condition lasts "until you regain any Hit Points". Healing
+        past 0 HP removes the condition from `active_conditions`.
 
         Args:
             amount: Amount to heal (None = full heal)
@@ -1178,6 +1214,7 @@ class Character(Creature):
         # Reset death saves if regaining HP from unconscious
         if was_unconscious and self.current_hp > 0:
             self.reset_death_saves()
+            self.remove_condition("unconscious")
 
         return healed
 
@@ -1314,6 +1351,51 @@ class Character(Creature):
         """
         return self.death_save_failures >= 3
 
+    @property
+    def dying_state(self) -> DyingState:
+        """
+        High-level dying-pipeline state.
+
+        Derived purely from `current_hp`, `death_save_failures`, and
+        `stabilized`. See `DyingState` for the four values:
+        ALIVE / DYING / STABLE / DEAD. Pure read — no side effects.
+
+        Returns:
+            DyingState reflecting where the character sits in the SRD
+            "Dropping to 0 Hit Points" pipeline.
+        """
+        if self.death_save_failures >= 3:
+            return DyingState.DEAD
+        if self.current_hp > 0:
+            return DyingState.ALIVE
+        if self.stabilized:
+            return DyingState.STABLE
+        return DyingState.DYING
+
+    def _sync_dying_conditions(self) -> None:
+        """
+        Keep `active_conditions` in sync with the dying-state pipeline.
+
+        Writes the SRD Unconscious / Dead condition flags so that
+        `Creature.is_incapacitated()` (which checks
+        `active_conditions`) reflects the character's HP / death-save
+        state. Called from `take_damage` and `make_death_save` after
+        their bookkeeping completes.
+
+        - Dead (3+ failures): replace `"unconscious"` with `"dead"`.
+        - Unconscious (HP 0, failures < 3): add `"unconscious"`.
+        - Conscious (HP > 0): clear `"unconscious"`. The `"dead"`
+          flag is intentionally not cleared here — revival is its own
+          flow.
+        """
+        if self.death_save_failures >= 3:
+            self.remove_condition("unconscious")
+            self.add_condition("dead")
+        elif self.current_hp == 0:
+            self.add_condition("unconscious")
+        else:
+            self.remove_condition("unconscious")
+
     def make_death_save(self, event_bus=None) -> dict[str, Any]:
         """
         Roll a death saving throw.
@@ -1376,6 +1458,7 @@ class Character(Creature):
             # Natural 20: regain 1 HP and become conscious
             self.current_hp = 1
             self.reset_death_saves()
+            self.remove_condition("unconscious")
             conscious = True
         elif natural_1:
             # Natural 1: counts as 2 failures
@@ -1389,6 +1472,11 @@ class Character(Creature):
         else:
             # Failure
             self.death_save_failures += 1
+
+        # Sync the SRD Unconscious / Dead condition flags after the
+        # save resolves so 3-failure death paths replace 'unconscious'
+        # with 'dead' immediately.
+        self._sync_dying_conditions()
 
         # Build result
         result = {
