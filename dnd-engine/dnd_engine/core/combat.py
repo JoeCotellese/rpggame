@@ -88,6 +88,76 @@ class CombatEngine:
         """
         self.dice_roller = dice_roller if dice_roller is not None else DiceRoller()
 
+    def _apply_damage_modifiers(
+        self, target: Creature, raw_damage: int, damage_type: str | None
+    ) -> int:
+        """
+        Scale raw damage by the target's per-type Resistance / Immunity.
+
+        Single chokepoint that the SRD's Resistance, Immunity (and
+        later Vulnerability) rules key off of. This slice (#461)
+        implements Resistance + Immunity only; Vulnerability,
+        no-stacking, and order-of-application are tracked separately
+        (#463 / #468) and will plug in here.
+
+        Consults two sources of per-type modifiers:
+          1. Creature condition flags — `has_resistance_{type}` and
+             `has_immunity_{type}` — matching the existing convention
+             used by `systems/item_effects._apply_damage_effect`.
+          2. Monster catalog fields — `damage_resistances` and
+             `damage_immunities` list attributes on the Creature
+             instance (populated by `DataLoader.create_monster` from
+             `monsters.json`).
+
+        SRD § Playing the Game › Resistance and Vulnerability:
+            "If you have Resistance to a damage type, damage of that
+             type is halved against you (round down)."
+        SRD § Playing the Game › Immunity:
+            "Immunity to a damage type means you don't take damage of
+             that type."
+
+        Args:
+            target: The creature taking the damage.
+            raw_damage: Damage rolled before per-type scaling.
+            damage_type: SRD damage type (e.g. "fire", "cold",
+                "slashing"). If None, no per-type scaling can apply
+                and `raw_damage` is returned unchanged.
+
+        Returns:
+            The damage amount after Resistance / Immunity scaling.
+        """
+        # Untyped damage cannot consult per-type modifiers; return as-is.
+        if damage_type is None:
+            return raw_damage
+
+        # Normalize: SRD damage-type tokens are lowercase in the catalog.
+        normalized_type = damage_type.lower()
+
+        # --- Immunity stage --------------------------------------------------
+        # Immunity zeroes damage of the matching type; both the
+        # condition-flag form and the catalog-field form are honored.
+        immunity_condition = f"has_immunity_{normalized_type}"
+        catalog_immunities = [
+            t.lower() for t in (getattr(target, "damage_immunities", None) or [])
+        ]
+        if target.has_condition(immunity_condition) or normalized_type in catalog_immunities:
+            return 0
+
+        # --- Resistance stage ------------------------------------------------
+        # Resistance halves matching damage with floor rounding.
+        resistance_condition = f"has_resistance_{normalized_type}"
+        catalog_resistances = [
+            t.lower() for t in (getattr(target, "damage_resistances", None) or [])
+        ]
+        if target.has_condition(resistance_condition) or normalized_type in catalog_resistances:
+            return raw_damage // 2
+
+        # TODO(#463): Vulnerability stage inserts here (double matching
+        # damage). TODO(#468): Order-of-application — flat adjustments
+        # apply BEFORE this Resistance stage; Vulnerability applies
+        # AFTER it. Both are out of scope for #461.
+        return raw_damage
+
     def resolve_attack(
         self,
         attacker: Creature,
@@ -100,6 +170,7 @@ class CombatEngine:
         event_bus=None,
         action: dict | None = None,
         game_state=None,
+        damage_type: str | None = None,
     ) -> AttackResult:
         """
         Resolve a complete attack.
@@ -112,7 +183,9 @@ class CombatEngine:
         5. If hit: roll damage dice
         6. If critical hit: double the damage dice (not the modifier)
         7. Apply sneak attack damage if applicable (Rogue with advantage/ally nearby)
-        8. Apply damage if requested
+        8. Scale damage by target's per-type Resistance / Immunity via
+           `_apply_damage_modifiers` (only when `damage_type` is given)
+        9. Apply damage if requested
 
         Args:
             attacker: The attacking creature
@@ -123,6 +196,18 @@ class CombatEngine:
             disadvantage: Roll with disadvantage (take lower of 2d20)
             apply_damage: If True, apply damage to defender's HP
             event_bus: Optional EventBus instance for event emission
+            damage_type: SRD damage type (e.g. "fire", "slashing"). When
+                provided, damage is routed through
+                `_apply_damage_modifiers` so the defender's per-type
+                Resistance / Immunity (from condition flags or the
+                monster-catalog `damage_resistances` / `damage_immunities`
+                fields) scales the final amount. Optional for backward
+                compatibility — callers that haven't been migrated to
+                tagged damage see the legacy untyped behavior. The
+                damage_type itself does not branch any other logic in
+                this method (SRD: "Damage types ... have no rules of
+                their own"); it is purely a key for the modifier
+                chokepoint.
 
         Returns:
             AttackResult containing full attack details including sneak attack if applicable
@@ -185,6 +270,25 @@ class CombatEngine:
                             )
                             event_bus.emit(event)
 
+            # Scale damage by target's per-type Resistance / Immunity.
+            # Sneak-attack damage shares the weapon's damage type per
+            # SRD ("Sneak Attack damage isn't a separate damage type"),
+            # so both summands route through the same chokepoint as a
+            # single total. When `damage_type` is None this is a no-op
+            # and the legacy untyped behavior is preserved.
+            total_pre_modifier = damage + sneak_attack_damage
+            total_post_modifier = self._apply_damage_modifiers(
+                defender, total_pre_modifier, damage_type
+            )
+            # Reflect the post-modifier values back onto the AttackResult.
+            # When the target is immune both summands collapse to zero;
+            # otherwise we scale them proportionally so the breakdown
+            # (damage vs sneak_attack_damage) remains meaningful.
+            if total_pre_modifier != total_post_modifier and total_pre_modifier > 0:
+                damage_share = round(damage * total_post_modifier / total_pre_modifier)
+                sneak_attack_damage = total_post_modifier - damage_share
+                damage = damage_share
+
             if apply_damage:
                 # Pass event_bus to take_damage for Character instances (death save handling)
                 if hasattr(defender, "take_damage") and hasattr(defender.__class__, "take_damage"):
@@ -193,11 +297,11 @@ class CombatEngine:
 
                     sig = inspect.signature(defender.take_damage)
                     if "event_bus" in sig.parameters:
-                        defender.take_damage(damage + sneak_attack_damage, event_bus=event_bus)
+                        defender.take_damage(total_post_modifier, event_bus=event_bus)
                     else:
-                        defender.take_damage(damage + sneak_attack_damage)
+                        defender.take_damage(total_post_modifier)
                 else:
-                    defender.take_damage(damage + sneak_attack_damage)
+                    defender.take_damage(total_post_modifier)
 
             # Process saving throw effects (e.g., ghoul paralysis)
             if action and "saving_throw" in action:
@@ -509,7 +613,10 @@ class CombatEngine:
         else:
             damage_dice = base_damage_dice
 
-        # Use the existing resolve_attack method for the mechanics
+        # Use the existing resolve_attack method for the mechanics.
+        # Pass through `damage_type` so the target's per-type
+        # Resistance / Immunity scales spell-attack damage (e.g.,
+        # Fire Bolt vs a bearded devil's fire immunity).
         result = self.resolve_attack(
             attacker=caster,
             defender=target,
@@ -519,6 +626,7 @@ class CombatEngine:
             disadvantage=disadvantage,
             apply_damage=apply_damage,
             event_bus=event_bus,
+            damage_type=damage_type,
         )
 
         # Emit spell-specific attack event
@@ -640,6 +748,18 @@ class CombatEngine:
         # Roll damage once for the spell
         base_damage = self._roll_spell_save_damage(spell, damage_info, spell_level, actual_level)
 
+        # Resolve the spell's damage type once. The same tag is routed
+        # to every target's per-type modifier chokepoint and surfaced
+        # on each row of `target_results` for downstream consumers.
+        if damage_info:
+            spell_damage_type = (
+                damage_info.get("damage_type")
+                if isinstance(damage_info, dict)
+                else damage_info.damage_type
+            )
+        else:
+            spell_damage_type = None
+
         # Process each target
         target_results = []
         for target in targets:
@@ -663,6 +783,15 @@ class CombatEngine:
             else:
                 damage = base_damage
 
+            # Route the post-save damage through the per-type modifier
+            # chokepoint so the target's Resistance / Immunity to the
+            # spell's `damage_type` scales the final amount. SRD: the
+            # save reduction (half-on-success) is a damage adjustment
+            # that applies BEFORE Resistance per the Order-of-
+            # Application rule; #468 will codify the ordering across
+            # the full pipeline.
+            damage = self._apply_damage_modifiers(target, damage, spell_damage_type)
+
             # Apply damage if requested
             if apply_damage and damage > 0:
                 # Check if target's take_damage accepts event_bus (Character) or not (Creature)
@@ -674,16 +803,6 @@ class CombatEngine:
                 else:
                     target.take_damage(damage)
 
-            # Get damage type
-            if damage_info:
-                damage_type = (
-                    damage_info.get("damage_type")
-                    if isinstance(damage_info, dict)
-                    else damage_info.damage_type
-                )
-            else:
-                damage_type = None
-
             target_results.append(
                 {
                     "name": target.name,
@@ -692,7 +811,7 @@ class CombatEngine:
                     "total": save_result["total"],
                     "success": save_result["success"],
                     "damage": damage,
-                    "damage_type": damage_type,
+                    "damage_type": spell_damage_type,
                 }
             )
 
