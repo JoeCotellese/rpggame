@@ -428,14 +428,20 @@ class CombatEngine:
             if apply_damage:
                 # Pass event_bus to take_damage for Character instances (death save handling)
                 if hasattr(defender, "take_damage") and hasattr(defender.__class__, "take_damage"):
-                    # Check if defender.take_damage accepts event_bus parameter
+                    # Inspect the defender's `take_damage` signature so
+                    # we surface the crit context only to callees that
+                    # accept it (Character does; the base Creature
+                    # does not). SRD § Death Saving Throws: a crit at
+                    # 0 HP yields 2 failures instead of 1.
                     import inspect
 
                     sig = inspect.signature(defender.take_damage)
+                    kwargs = {}
                     if "event_bus" in sig.parameters:
-                        defender.take_damage(total_post_modifier, event_bus=event_bus)
-                    else:
-                        defender.take_damage(total_post_modifier)
+                        kwargs["event_bus"] = event_bus
+                    if "critical_hit" in sig.parameters:
+                        kwargs["critical_hit"] = critical_hit
+                    defender.take_damage(total_post_modifier, **kwargs)
                 else:
                     defender.take_damage(total_post_modifier)
 

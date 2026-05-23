@@ -1175,14 +1175,17 @@ class Character(Creature):
         # Reconstruct the notation
         return f"{scaled_count}d{sides}{modifier_part}"
 
-    def take_damage(self, amount: int, event_bus=None) -> None:
+    def take_damage(self, amount: int, event_bus=None, critical_hit: bool = False) -> None:
         """
         Apply damage to the character.
 
         Handles D&D 5E death save mechanics:
         - If damage brings character to 0 HP, they fall unconscious
-        - If damage at 0 HP: add 1 death save failure
+        - If damage at 0 HP: add 1 death save failure (2 on a crit)
         - If damage >= max HP at 0 HP: instant death (massive damage)
+        - If damage from positive HP drops to 0 with remainder
+          (overflow) >= max HP: instant death (SRD massive-damage
+          overflow rule, #448)
 
         Falling Unconscious (SRD § Playing the Game › Dropping to 0
         Hit Points): when the character reaches 0 HP without dying
@@ -1193,15 +1196,22 @@ class Character(Creature):
         Args:
             amount: Amount of damage to apply
             event_bus: Optional EventBus for event emission
+            critical_hit: True when the damage source is a critical
+                hit. At 0 HP a crit adds 2 death-save failures
+                instead of 1 (SRD: "If the damage is from a Critical
+                Hit, you suffer two failures instead.").
         """
         from dnd_engine.utils.events import Event, EventType
 
         was_unconscious = self.is_unconscious
+        # Capture pre-damage HP so the positive-HP → 0 overflow path
+        # can compute the SRD remainder (amount - pre_hp).
+        pre_hp = self.current_hp
 
         # Apply damage (parent implementation)
         super().take_damage(amount)
 
-        # Handle damage while at 0 HP
+        # Handle damage while at 0 HP (already-unconscious entry)
         if was_unconscious:
             # Check for massive damage (damage >= max HP = instant death)
             if amount >= self.max_hp:
@@ -1216,8 +1226,10 @@ class Character(Creature):
                         )
                     )
             else:
-                # Taking damage at 0 HP = 1 automatic death save failure
-                self.add_death_save_failure(1)
+                # Taking damage at 0 HP = 1 automatic death save failure,
+                # 2 on a critical hit (SRD).
+                failures_added = 2 if critical_hit else 1
+                self.add_death_save_failure(failures_added)
 
                 if event_bus is not None:
                     event_bus.emit(
@@ -1227,6 +1239,31 @@ class Character(Creature):
                                 "character": self.name,
                                 "damage": amount,
                                 "failures": self.death_save_failures,
+                                "failures_added": failures_added,
+                                "critical_hit": critical_hit,
+                            },
+                        )
+                    )
+        elif pre_hp > 0 and self.current_hp == 0:
+            # Positive HP → 0 transition this call. Detect the SRD
+            # massive-damage overflow case: when the remainder of the
+            # incoming damage (after zeroing HP) meets or exceeds
+            # `max_hp`, the character dies outright rather than
+            # falling Unconscious. The "Unconscious" condition added
+            # by `_sync_dying_conditions` below will be replaced with
+            # "dead" because `death_save_failures` is forced to 3.
+            overflow = amount - pre_hp
+            if overflow >= self.max_hp:
+                self.death_save_failures = 3
+                if event_bus is not None:
+                    event_bus.emit(
+                        Event(
+                            type=EventType.MASSIVE_DAMAGE_DEATH,
+                            data={
+                                "character": self.name,
+                                "damage": amount,
+                                "max_hp": self.max_hp,
+                                "overflow": overflow,
                             },
                         )
                     )

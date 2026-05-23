@@ -184,24 +184,58 @@ class TestInstantDeath_MassiveDamage:
         """SRD example: HP 6, max 12, take 18 → drops to 0, remainder
         of 12 (== max) → instant death.
 
-        The engine's `take_damage` only checks the massive-damage
-        threshold when `was_unconscious` was already True at entry
-        (character.py:1115-1133). The classic SRD overflow case where
-        a single blow brings the character from positive HP to 0 with
-        remainder >= max_hp is NOT modeled — the character merely
-        falls unconscious instead of dying outright. Tracked by the
-        new gap issue filed alongside this audit.
+        `Character.take_damage` captures the pre-damage HP and, after
+        applying damage via the parent, detects the positive-HP →
+        overflow path: if the remainder (`amount - pre_hp`) meets or
+        exceeds `max_hp`, `death_save_failures` is set to 3 and the
+        `MASSIVE_DAMAGE_DEATH` event is emitted, mirroring the
+        already-at-0 instant-death branch.
         """
-        pytest.skip(
-            "GAP: Massive damage overflow from positive HP is not "
-            "modeled. `Character.take_damage` "
-            "(dnd-engine/dnd_engine/core/character.py:1115-1133) only "
-            "checks the massive-damage threshold when the character "
-            "was *already* unconscious at entry. A single attack that "
-            "deals 18 damage to a max-12 character at 6 HP should "
-            "kill outright per SRD; today it leaves the character "
-            "unconscious with 0 failures. See issue #448."
-        )
+        character = _make_character(max_hp=12)
+        character.current_hp = 6
+
+        character.take_damage(18)
+
+        assert character.current_hp == 0
+        assert character.death_save_failures == 3
+        assert character.is_dead is True
+
+    def test_overflow_below_max_hp_falls_unconscious_not_dead(self):
+        """Overflow strictly less than `max_hp` is the standard
+        positive-HP → 0 transition: Unconscious, not instant death.
+
+        SRD edge: HP 6, max 12, take 17 → overflow 11 < max 12 →
+        character falls Unconscious with 0 failures. Regression guard
+        ensuring the new instant-death branch only fires when the
+        remainder meets or exceeds the max-HP threshold.
+        """
+        character = _make_character(max_hp=12)
+        character.current_hp = 6
+
+        character.take_damage(17)
+
+        assert character.current_hp == 0
+        assert character.is_dead is False
+        assert character.is_unconscious is True
+        assert character.death_save_failures == 0
+
+    def test_massive_damage_overflow_emits_massive_damage_death_event(self):
+        """The overflow-from-positive-HP instant-death path emits
+        `MASSIVE_DAMAGE_DEATH` so listeners see the same SRD outcome
+        as the already-at-0 branch.
+        """
+        character = _make_character(max_hp=12)
+        character.current_hp = 6
+        bus = EventBus()
+        events = []
+        bus.subscribe(EventType.MASSIVE_DAMAGE_DEATH, lambda e: events.append(e))
+
+        character.take_damage(18, event_bus=bus)
+
+        assert len(events) == 1
+        assert events[0].data["character"] == character.name
+        assert events[0].data["damage"] == 18
+        assert events[0].data["max_hp"] == 12
 
 
 class TestFallingUnconscious_ConditionApplied:
@@ -618,25 +652,49 @@ class TestDamageAtZeroHP_AutoFailure:
     def test_critical_hit_damage_at_zero_hp_adds_two_failures(self):
         """A critical hit at 0 HP must add 2 failures, not 1.
 
-        `Character.take_damage(amount, event_bus=None)` does not
-        accept a `critical_hit` flag (character.py:1100), and the
-        combat resolver does not surface crit context through the
-        damage application path (combat.py:188-200 calls
-        `defender.take_damage(damage + sneak_attack_damage)` with no
-        crit signal). As a result, a critical at 0 HP currently only
-        increments failures by 1. The SRD requires 2.
+        `Character.take_damage` now accepts a `critical_hit` keyword
+        flag (character.py). When the character is at 0 HP and the
+        incoming damage is non-massive, the failure increment is
+        doubled (2 instead of 1) per SRD. `CombatEngine.resolve_attack`
+        propagates the crit flag through the damage-application call,
+        but unit-level coverage here exercises `take_damage` directly.
         """
-        pytest.skip(
-            "GAP: Critical-hit damage at 0 HP does not double the "
-            "death-save failure. `Character.take_damage` "
-            "(dnd-engine/dnd_engine/core/character.py:1100-1148) "
-            "accepts only `(amount, event_bus)` — no `critical_hit` "
-            "flag — and `CombatEngine.resolve_attack` "
-            "(dnd-engine/dnd_engine/core/combat.py:188-200) calls "
-            "`take_damage` without surfacing crit context. A crit "
-            "while at 0 HP today registers as 1 failure, not 2. "
-            "See issue #457."
-        )
+        character = _make_character()
+        character.current_hp = 0
+
+        character.take_damage(3, critical_hit=True)
+
+        assert character.death_save_failures == 2
+        assert character.is_dead is False  # 2 < 3
+
+    def test_non_critical_damage_at_zero_hp_still_adds_one_failure(self):
+        """Regression guard: a normal (non-crit) hit at 0 HP keeps
+        the 1-failure increment. The crit branch only fires when
+        `critical_hit=True` is passed explicitly.
+        """
+        character = _make_character()
+        character.current_hp = 0
+
+        character.take_damage(3, critical_hit=False)
+
+        assert character.death_save_failures == 1
+
+    def test_critical_hit_damage_at_zero_hp_emits_event_with_crit_metadata(self):
+        """The `DAMAGE_AT_ZERO_HP` event payload surfaces the
+        `critical_hit` flag and `failures_added` so observers can
+        distinguish crit hits from normal hits at 0 HP.
+        """
+        character = _make_character()
+        character.current_hp = 0
+        bus = EventBus()
+        events = []
+        bus.subscribe(EventType.DAMAGE_AT_ZERO_HP, lambda e: events.append(e))
+
+        character.take_damage(3, event_bus=bus, critical_hit=True)
+
+        assert len(events) == 1
+        assert events[0].data["critical_hit"] is True
+        assert events[0].data["failures_added"] == 2
 
     def test_damage_equal_to_max_hp_at_zero_hp_causes_instant_death(self):
         """Already covered by `TestInstantDeath_MassiveDamage` above —
