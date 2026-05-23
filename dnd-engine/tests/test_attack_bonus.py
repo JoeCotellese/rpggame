@@ -247,6 +247,17 @@ class TestGetDamageBonus:
         with pytest.raises(KeyError):
             fighter_str_high.get_damage_bonus("fake_weapon", items_data)
 
+    def test_fixed_damage_weapon_returns_zero(self, fighter_dex_high, items_data):
+        """Verify fixed-damage weapons (e.g., Blowgun) suppress the ability modifier.
+
+        SRD § Playing the Game › Damage Rolls: "Unless a rule says
+        otherwise, you don't add your ability modifier to a fixed damage
+        amount that doesn't use a roll, such as the damage of a Blowgun."
+        """
+        # Blowgun: ranged, fixed_damage. DEX +3 would otherwise apply.
+        bonus = fighter_dex_high.get_damage_bonus("blowgun", items_data)
+        assert bonus == 0
+
 
 class TestBackwardCompatibility:
     """Test that old attack bonus properties still work"""

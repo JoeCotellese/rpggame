@@ -246,17 +246,31 @@ class TestDamageRolls_FixedDamageNoModifier:
     """
 
     def test_fixed_damage_weapon_skips_ability_modifier(self) -> None:
-        pytest.skip(
-            "GAP: There is no fixed-damage weapon in the catalog and no "
-            "code path that suppresses the ability modifier for one. "
-            "`dnd_engine/data/srd/items.json:744-751` only carries "
-            "'Blowgun Needles' (ammunition) — the Blowgun weapon itself "
-            "is absent. `Character.get_damage_bonus` "
-            "(dnd_engine/core/character.py:414-448) returns "
-            "`ability_mod` unconditionally for ranged weapons; there is "
-            "no `fixed_damage` branch returning 0. Tracked by "
-            "issue #492."
+        """`Character.get_damage_bonus` returns 0 for fixed-damage weapons.
+
+        Source-level proof at `dnd_engine/core/character.py`: the
+        `get_damage_bonus` method short-circuits to `0` when the weapon
+        entry in items.json carries `"fixed_damage": true`. The Blowgun
+        (1 piercing, no roll, no ability modifier) is the canonical
+        SRD example; its catalog entry sits in
+        `dnd_engine/data/srd/items.json` alongside the other simple
+        ranged weapons. With DEX 18 (mod +4) a normal ranged weapon
+        would yield +4; the Blowgun yields 0 regardless.
+        """
+        character = _make_character(strength=10, dexterity=18)
+        items_data = json.loads(ITEMS_JSON.read_text())
+        assert "blowgun" in items_data["weapons"], (
+            "Expected blowgun in items.json for fixed-damage assertion."
         )
+        blowgun = items_data["weapons"]["blowgun"]
+        assert blowgun.get("fixed_damage") is True, (
+            "Blowgun catalog entry must declare `fixed_damage: true` so "
+            "the damage path can suppress the ability modifier."
+        )
+        # DEX +4 would normally apply for a ranged weapon; fixed_damage
+        # weapons must skip the ability modifier entirely.
+        damage_bonus = character.get_damage_bonus("blowgun", items_data)
+        assert damage_bonus == 0
 
 
 class TestDamageRolls_CatalogParity:
