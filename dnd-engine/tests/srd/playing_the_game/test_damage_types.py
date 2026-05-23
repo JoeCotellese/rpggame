@@ -102,14 +102,22 @@ class TestDamageTypes_EveryInstanceHasAType:
 
         Monsters express their attacks under `actions[*].damage`. Every
         attack that rolls damage must declare `damage_type` for the
-        same downstream reasons.
+        same downstream reasons. The audit also walks `reactions` and
+        `legendary_actions` because those entries follow the same
+        action shape and can carry damage rolls.
         """
-        pytest.skip(
-            "GAP: monsters.json `actions[*].damage` shape is not "
-            "consistently typed across the catalog. Damage-type "
-            "tagging on monster attacks is required before "
-            "Resistance / Vulnerability / Immunity can apply to "
-            "monster damage output. Tracked by issue #470."
+        monsters: dict = json.loads(MONSTERS_JSON.read_text())
+        missing: list[tuple[str, str, str]] = []
+        for mid, mdata in monsters.items():
+            for bucket in ("actions", "reactions", "legendary_actions"):
+                for action in mdata.get(bucket) or []:
+                    if not isinstance(action, dict):
+                        continue
+                    if action.get("damage") and not action.get("damage_type"):
+                        missing.append((mid, bucket, action.get("name", "<unnamed>")))
+        assert not missing, (
+            f"Monster actions with `damage` dice but no `damage_type` "
+            f"(SRD requires each damage instance to have a type): {missing}"
         )
 
 
@@ -180,6 +188,41 @@ class TestDamageTypes_EnumerationMatchesSRDGlossary:
         assert not offenders, (
             f"Item damage types outside the SRD glossary: {offenders}. "
             f"SRD set: {sorted(SRD_DAMAGE_TYPES)}."
+        )
+
+    def test_monster_action_damage_types_are_drawn_from_the_srd_set(self):
+        """Monster action damage_type values are SRD-listed types.
+
+        Schema-lint guard against future drift: any monster action
+        that carries a `damage_type` must name a single SRD glossary
+        type. Compound strings (e.g. "fire/cold") are split on common
+        separators so each component is validated independently, in
+        line with the spell-level audit above.
+        """
+        monsters: dict = json.loads(MONSTERS_JSON.read_text())
+        offenders: list[tuple[str, str, str, str]] = []
+        for mid, mdata in monsters.items():
+            for bucket in ("actions", "reactions", "legendary_actions"):
+                for action in mdata.get(bucket) or []:
+                    if not isinstance(action, dict):
+                        continue
+                    raw = action.get("damage_type")
+                    if not raw:
+                        continue
+                    components = (
+                        raw.replace(" and ", ",").replace("/", ",").replace(" or ", ",").split(",")
+                    )
+                    for piece in components:
+                        token = piece.strip().lower()
+                        if not token:
+                            continue
+                        if token not in SRD_DAMAGE_TYPES:
+                            offenders.append(
+                                (mid, bucket, action.get("name", "<unnamed>"), token)
+                            )
+        assert not offenders, (
+            f"Monster action damage_type values outside the SRD glossary: "
+            f"{offenders}. SRD set: {sorted(SRD_DAMAGE_TYPES)}."
         )
 
     def test_monster_damage_modifier_types_are_drawn_from_the_srd_set(self):
