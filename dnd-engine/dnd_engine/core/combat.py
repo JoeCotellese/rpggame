@@ -331,19 +331,29 @@ class CombatEngine:
         For critical hits, damage dice are doubled (but not modifiers).
         Example: 1d8+3 becomes 2d8+3 on a crit.
 
+        SRD § Playing the Game › Damage Rolls:
+            "If there's a penalty to the damage, it's possible to deal
+             0 damage but not negative damage."
+
+        The result is clamped at 0 at the dice-roll site so that any
+        downstream additive on-hit damage (sneak attack, divine smite)
+        accumulates from 0 rather than from a negative base — i.e.,
+        a -3 base + 4 sneak attack equals 4, not 1.
+
         Args:
             damage_dice: Damage dice notation (e.g., "1d8+3")
             critical_hit: Whether this is a critical hit
 
         Returns:
-            Total damage
+            Total damage, clamped at 0 (never negative)
         """
         if critical_hit:
             # Double the dice (but not the modifier)
             damage_dice = self._double_damage_dice(damage_dice)
 
         damage_roll = self.dice_roller.roll(damage_dice)
-        return damage_roll.total
+        # SRD clamp: penalties can reduce damage to 0 but not below.
+        return max(0, damage_roll.total)
 
     def _double_damage_dice(self, damage_dice: str) -> str:
         """

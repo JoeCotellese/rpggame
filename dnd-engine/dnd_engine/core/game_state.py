@@ -2538,7 +2538,9 @@ class GameState:
         if damage_data and "dice" in damage_data:
             damage_dice = damage_data.get("dice", "1d6")
             damage_roll = self.dice_roller.roll(damage_dice)
-            damage = damage_roll.total
+            # SRD § Playing the Game › Damage Rolls: penalties can
+            # reduce damage to 0 but not below.
+            damage = max(0, damage_roll.total)
 
             # Apply damage if there's a target
             if target and hasattr(target, "take_damage"):
