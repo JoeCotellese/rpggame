@@ -82,6 +82,19 @@
       "range": "80/320",
       "value": 25
     },
+    "blowgun": {
+      "name": "Blowgun",
+      "source": "D&D 5E SRD (CC BY 4.0)",
+      "type": "weapon",
+      "weapon_type": "martial",
+      "category": "ranged",
+      "damage": "1d1",
+      "damage_type": "piercing",
+      "fixed_damage": true,
+      "properties": ["ammunition", "loading"],
+      "range": "25/100",
+      "value": 10
+    },
     "longbow": {
       "name": "Longbow",
       "source": "D&D 5E SRD (CC BY 4.0)",
