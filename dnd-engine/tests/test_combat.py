@@ -577,6 +577,175 @@ class TestApplyDamageModifiers:
         assert result == 40
 
 
+class TestDamageAdjustmentsStage:
+    """Tests for the pre-Resistance adjustments hook (#468).
+
+    SRD § Playing the Game › Resistance and Vulnerability › Order of
+    Application:
+        "Modifiers to damage are applied in the following order:
+         adjustments such as bonuses, penalties, or multipliers are
+         applied first; Resistance is applied second; and Vulnerability
+         is applied third."
+
+    The adjustments stage reads `damage_taken_reduction` on the target
+    by default. Subclasses can override `_apply_damage_adjustments`
+    to add per-aura / per-condition payloads without changing the
+    pipeline shape.
+    """
+
+    def setup_method(self):
+        self.engine = CombatEngine(DiceRoller(seed=1))
+        abilities = Abilities(
+            strength=10, dexterity=10, constitution=10, intelligence=10, wisdom=10, charisma=10
+        )
+        self.target = Creature(name="Target", max_hp=100, ac=10, abilities=abilities)
+
+    def test_no_adjustments_returns_damage_unchanged(self):
+        """A target with no adjustments attribute passes damage through."""
+        result = self.engine._apply_damage_adjustments(
+            self.target, damage=10, damage_type="fire"
+        )
+        assert result == 10
+
+    def test_damage_taken_reduction_subtracts_flat_amount(self):
+        """`damage_taken_reduction = 5` subtracts 5 from damage."""
+        self.target.damage_taken_reduction = 5
+        result = self.engine._apply_damage_adjustments(
+            self.target, damage=20, damage_type="fire"
+        )
+        assert result == 15
+
+    def test_damage_taken_reduction_clamps_at_zero(self):
+        """Adjustment can't drive damage below 0 (SRD: no negative damage)."""
+        self.target.damage_taken_reduction = 10
+        result = self.engine._apply_damage_adjustments(
+            self.target, damage=3, damage_type="fire"
+        )
+        assert result == 0
+
+    def test_adjustments_apply_before_resistance(self):
+        """Pipeline order: adjustments first, then Resistance halves.
+
+        20 fire damage, fire-resistant, aura -5:
+            20 - 5 = 15, floor(15 / 2) = 7.
+        If Resistance ran first: floor(20/2) = 10, 10 - 5 = 5.
+        """
+        self.target.add_condition("has_resistance_fire")
+        self.target.damage_taken_reduction = 5
+        result = self.engine._apply_damage_modifiers(
+            self.target, raw_damage=20, damage_type="fire"
+        )
+        assert result == 7
+
+    def test_adjustments_do_not_run_when_immune(self):
+        """Immunity short-circuits before adjustments.
+
+        Without this guard, an immune target with a -5 adjustment would
+        still end up at 0 via the clamp, so observably the outcome is
+        the same. The guard is conceptually right: Immunity is "no
+        damage of that type", not "damage minus an adjustment".
+        """
+        self.target.damage_immunities = ["fire"]
+        self.target.damage_taken_reduction = 5
+        result = self.engine._apply_damage_modifiers(
+            self.target, raw_damage=20, damage_type="fire"
+        )
+        assert result == 0
+
+    def test_adjustments_combine_with_resistance_and_vulnerability(self):
+        """SRD worked example end-to-end via the chokepoint:
+
+        28 fire damage, Resistance to all, Vulnerability to fire, aura -5:
+            28 - 5 = 23, floor(23 / 2) = 11, 11 * 2 = 22.
+        """
+        self.target.damage_resistances = ["all"]
+        self.target.add_condition("has_vulnerability_fire")
+        self.target.damage_taken_reduction = 5
+        result = self.engine._apply_damage_modifiers(
+            self.target, raw_damage=28, damage_type="fire"
+        )
+        assert result == 22
+
+
+class TestBlanketResistance:
+    """Tests for 'Resistance to all damage' recognition (#468).
+
+    SRD § Playing the Game › Resistance and Vulnerability › No Stacking
+    cites a creature with "Resistance to Necrotic damage as well as
+    Resistance to all damage": both sources halve only once.
+
+    Blanket resistance is recognized in two parallel forms:
+      - Condition flag: `has_resistance_all`
+      - Catalog entry: `damage_resistances: ["all"]`
+    """
+
+    def setup_method(self):
+        self.engine = CombatEngine(DiceRoller(seed=1))
+        abilities = Abilities(
+            strength=10, dexterity=10, constitution=10, intelligence=10, wisdom=10, charisma=10
+        )
+        self.target = Creature(name="Target", max_hp=100, ac=10, abilities=abilities)
+
+    def test_condition_flag_blanket_resistance_halves_any_damage(self):
+        """`has_resistance_all` halves damage of every type."""
+        self.target.add_condition("has_resistance_all")
+        assert (
+            self.engine._apply_damage_modifiers(self.target, raw_damage=10, damage_type="fire")
+            == 5
+        )
+        assert (
+            self.engine._apply_damage_modifiers(
+                self.target, raw_damage=20, damage_type="bludgeoning"
+            )
+            == 10
+        )
+
+    def test_catalog_blanket_resistance_halves_any_damage(self):
+        """`damage_resistances: ["all"]` halves damage of every type."""
+        self.target.damage_resistances = ["all"]
+        assert (
+            self.engine._apply_damage_modifiers(self.target, raw_damage=10, damage_type="fire")
+            == 5
+        )
+        assert (
+            self.engine._apply_damage_modifiers(
+                self.target, raw_damage=20, damage_type="bludgeoning"
+            )
+            == 10
+        )
+
+    def test_blanket_plus_per_type_resistance_halves_only_once(self):
+        """No Stacking: blanket + per-type resistance still halves once."""
+        self.target.add_condition("has_resistance_fire")
+        self.target.damage_resistances = ["all"]
+        result = self.engine._apply_damage_modifiers(
+            self.target, raw_damage=10, damage_type="fire"
+        )
+        assert result == 5
+
+    def test_blanket_resistance_does_not_block_immunity(self):
+        """Immunity still zeros even when blanket resistance is set."""
+        self.target.add_condition("has_resistance_all")
+        self.target.damage_immunities = ["fire"]
+        result = self.engine._apply_damage_modifiers(
+            self.target, raw_damage=10, damage_type="fire"
+        )
+        assert result == 0
+
+    def test_blanket_resistance_interacts_with_vulnerability(self):
+        """Per SRD order: Resistance halves, then Vulnerability doubles.
+
+        Blanket Resistance + fire Vulnerability against odd-raw fire:
+            21 → floor(21/2) = 10 → 10 * 2 = 20.
+        """
+        self.target.damage_resistances = ["all"]
+        self.target.add_condition("has_vulnerability_fire")
+        result = self.engine._apply_damage_modifiers(
+            self.target, raw_damage=21, damage_type="fire"
+        )
+        assert result == 20
+
+
 class TestResolveAttackDamageType:
     """Tests for `damage_type` plumbing through `resolve_attack`."""
 
