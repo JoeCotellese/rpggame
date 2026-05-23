@@ -18,6 +18,7 @@ import pytest
 from dnd_engine.core.combat import CombatEngine
 from dnd_engine.core.creature import Abilities, Creature
 from dnd_engine.core.dice import DiceRoller
+from dnd_engine.systems.ranged_attacks import is_close_combat_ranged_disadvantage
 
 pytestmark = pytest.mark.srd(
     "playing-the-game/ranged-attacks.md",
@@ -131,27 +132,39 @@ class TestCloseCombat:
     """
 
     def test_attacker_within_5ft_of_seeing_enemy_has_disadvantage(self):
-        pytest.skip(
-            "GAP: rule not implemented anywhere. Grep for adjacency-based "
-            "disadvantage across dnd-engine/ and client-2d/ returns zero "
-            "matches. A ranged attacker standing next to an enemy gets no "
-            "disadvantage, which is a clear SRD divergence. File issue."
-        )
+        """Adjacent (≤5 ft / Chebyshev 1) hostile creature imposes disadvantage."""
+        _, _, goblin = _make_engine_and_combatants()
+        # Fighter at (5,5), goblin one square east — 5 ft.
+        enemies = [((6, 5), goblin)]
+        assert is_close_combat_ranged_disadvantage((5, 5), enemies) is True
 
     def test_no_disadvantage_when_adjacent_enemy_is_incapacitated(self):
-        pytest.skip(
-            "GAP: dependent on adjacency-disadvantage being implemented "
-            "first. SRD carves out an exception for the Incapacitated "
-            "condition; the Incapacitated condition exists in "
-            "dnd_engine/systems/condition_manager.py but is not consulted "
-            "by any ranged-attack code path."
-        )
+        """SRD carve-out: Incapacitated enemy doesn't impose disadvantage."""
+        _, _, goblin = _make_engine_and_combatants()
+        goblin.add_condition("incapacitated")
+        enemies = [((6, 5), goblin)]
+        assert is_close_combat_ranged_disadvantage((5, 5), enemies) is False
 
     def test_no_disadvantage_when_adjacent_enemy_cannot_see_attacker(self):
-        pytest.skip(
-            "GAP: dependent on adjacency-disadvantage being implemented "
-            "first. SRD carves out an exception when the enemy cannot see "
-            "the attacker (e.g., invisible attacker, blinded enemy). "
-            "Requires visibility/perception query the engine doesn't "
-            "currently expose to attack resolution."
+        """SRD carve-out: enemy that can't see the attacker doesn't threaten.
+
+        Exercises both engine-side blindness (Blinded condition) and the
+        caller-supplied visibility hook (e.g. attacker is invisible).
+        """
+        _, _, goblin = _make_engine_and_combatants()
+
+        # Blinded enemy: engine-tracked condition, no callback needed.
+        goblin.add_condition("blinded")
+        enemies = [((6, 5), goblin)]
+        assert is_close_combat_ranged_disadvantage((5, 5), enemies) is False
+        goblin.remove_condition("blinded")
+
+        # Invisible attacker: visibility callback returns False for any enemy.
+        assert (
+            is_close_combat_ranged_disadvantage(
+                (5, 5),
+                enemies,
+                attacker_visible_to=lambda _enemy: False,
+            )
+            is False
         )
