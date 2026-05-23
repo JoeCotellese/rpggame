@@ -113,20 +113,20 @@ class TestDamageRolls_ClampAtZero:
     """
 
     def test_negative_total_damage_is_clamped_to_zero(self) -> None:
-        pytest.skip(
-            "GAP: `CombatEngine._calculate_damage` "
-            "(dnd_engine/core/combat.py:223-242) returns "
-            "`damage_roll.total` directly with no `max(0, ...)` clamp. "
-            "With a sufficiently negative ability modifier (e.g., 1d4-5 "
-            "rolling a 1, total = -4), this method returns a negative "
-            "value. `Creature.take_damage` "
-            "(dnd_engine/core/creature.py:215-224) then computes "
-            "`max(0, current_hp - amount)` which, with negative damage, "
-            "becomes `max(0, current_hp + 4)` — the attack heals the "
-            "defender. The SRD requires the damage value itself to be "
-            "clamped at 0, not the post-application HP. Tracked by "
-            "issue #490."
-        )
+        """`CombatEngine._calculate_damage` clamps negative totals to 0.
+
+        Source-level proof: `dnd_engine/core/combat.py` wraps the
+        `damage_roll.total` in `max(0, ...)` so that a damage roll with
+        a sufficiently negative modifier (e.g., 1d4-5 rolling a 1,
+        total = -4) returns 0 rather than a negative value. The clamp
+        sits at the dice-roll site so on-hit additive damage (sneak
+        attack, divine smite) accumulates from 0 — not from a
+        negative — preserving SRD intent. Issue #490.
+        """
+        # seed=1 makes `1d4-5` roll a 1 → total = -4 pre-clamp.
+        engine = CombatEngine(DiceRoller(seed=1))
+        damage = engine._calculate_damage("1d4-5", critical_hit=False)
+        assert damage == 0
 
 
 class TestDamageRolls_AbilityModifierOnWeaponDamage:

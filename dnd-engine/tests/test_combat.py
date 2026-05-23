@@ -1,6 +1,7 @@
 # ABOUTME: Unit tests for the combat engine
 # ABOUTME: Tests attack resolution, damage calculation, critical hits, and combat outcomes
 
+from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.combat import AttackResult, CombatEngine
 from dnd_engine.core.creature import Abilities, Creature
 from dnd_engine.core.dice import DiceRoller
@@ -662,3 +663,145 @@ class TestResolveSpellSaveDamageType:
         assert target_row["success"] is False
         assert target_row["damage"] == 5
         assert target.current_hp == 95
+
+
+class TestDamageRollClampAtZero:
+    """Tests for SRD's clamp-at-zero rule on damage rolls.
+
+    SRD § Playing the Game › Damage Rolls:
+        "If there's a penalty to the damage, it's possible to deal 0
+         damage but not negative damage."
+
+    The clamp must happen at the raw damage roll site so that additive
+    on-hit damage (sneak attack, divine smite) accumulates from 0 — not
+    from a negative base — preserving the SRD's intent that penalties
+    can reduce damage to zero, never below.
+    """
+
+    def setup_method(self):
+        # seed=1 yields negative totals for `1d4-5`: first call = -3,
+        # second call = -4. This lets us assert that the clamp fires.
+        self.engine = CombatEngine(DiceRoller(seed=1))
+        self.abilities = Abilities(
+            strength=10, dexterity=10, constitution=10, intelligence=10, wisdom=10, charisma=10
+        )
+
+    def test_calculate_damage_clamps_negative_total_to_zero(self):
+        """`_calculate_damage` returns 0 when dice + modifier would be negative.
+
+        With a sufficiently negative modifier (e.g., a hypothetical
+        STR -5 wielding a club: 1d4-5), the dice roll alone cannot
+        compensate. The SRD says the damage is 0, not negative.
+        """
+        damage = self.engine._calculate_damage("1d4-5", critical_hit=False)
+        assert damage == 0
+
+    def test_calculate_damage_clamps_negative_critical_total_to_zero(self):
+        """The clamp also applies on critical hits.
+
+        Critical hits double the dice but not the modifier (1d4-5
+        becomes 2d4-5). A low roll on 2d4 (e.g., 2) still yields -3.
+        """
+        damage = self.engine._calculate_damage("1d4-5", critical_hit=True)
+        assert damage >= 0
+
+    def test_calculate_damage_preserves_positive_totals(self):
+        """The clamp is a floor, not a ceiling — positive damage is unchanged."""
+        # seed=1's first 1d8+3 roll is well above 0.
+        damage = self.engine._calculate_damage("1d8+3", critical_hit=False)
+        assert damage >= 4  # min 1d8 = 1, +3 modifier
+
+    def test_resolve_attack_clamps_negative_damage_to_zero(self):
+        """End-to-end: `resolve_attack` never returns negative damage.
+
+        With a guaranteed hit and a deeply negative damage modifier,
+        the returned `AttackResult.damage` must be 0, not negative.
+        """
+        attacker = Creature(name="Weakling", max_hp=10, ac=10, abilities=self.abilities)
+        defender = Creature(name="Dummy", max_hp=10, ac=1, abilities=self.abilities)
+        result = self.engine.resolve_attack(
+            attacker=attacker,
+            defender=defender,
+            attack_bonus=20,  # guaranteed hit
+            damage_dice="1d4-5",
+            apply_damage=True,
+        )
+        assert result.hit is True
+        assert result.damage == 0
+        # Defender must not be healed by negative damage leaking through.
+        assert defender.current_hp == 10
+
+    def test_sneak_attack_accumulates_from_zero_not_from_negative(self):
+        """Sneak attack damage adds to a base clamped at 0, not a negative.
+
+        Scenario: a Rogue with a negative damage modifier (e.g., STR -5
+        contrived for the test) hits with advantage. Base weapon damage
+        is negative pre-clamp; sneak attack adds 1d6 on top.
+
+        SRD requires the base to be clamped at 0 before additive on-hit
+        damage is added. Otherwise a -3 base + 4 sneak attack = 1
+        instead of the correct 4.
+        """
+        # Build a level-1 Rogue. Sneak attack dice = 1d6.
+        rogue = Character(
+            name="Rogue",
+            character_class=CharacterClass.ROGUE,
+            level=1,
+            abilities=self.abilities,
+            max_hp=10,
+            ac=12,
+        )
+        defender = Creature(name="Dummy", max_hp=20, ac=1, abilities=self.abilities)
+
+        # With advantage, sneak attack applies.
+        result = self.engine.resolve_attack(
+            attacker=rogue,
+            defender=defender,
+            attack_bonus=20,  # guaranteed hit
+            damage_dice="1d4-5",  # would roll negative
+            advantage=True,
+            apply_damage=False,
+        )
+        assert result.hit is True
+        assert result.sneak_attack_dice == "1d6"
+        # Base damage (1d4-5) must be clamped to 0 before sneak attack
+        # is added. Sneak attack itself rolls at least 1 (min 1d6).
+        # Total damage == sneak attack damage; base contributes 0.
+        assert result.damage >= 0
+        assert result.sneak_attack_damage >= 1
+        # The total visible damage on the result reflects the
+        # weapon-portion (clamped) + sneak attack portion. We check
+        # both pieces independently and the sum.
+        assert result.damage + result.sneak_attack_damage == result.total_damage
+        # Critically: the weapon-damage portion (before sneak attack)
+        # must be 0 — NOT a negative number that the sneak attack
+        # then "tops up" partway.
+        assert result.damage == 0
+
+    def test_resolve_saving_throw_effect_clamps_negative_damage(self):
+        """`resolve_saving_throw_effect` uses `_calculate_damage` and inherits the clamp.
+
+        A spell-effect with a contrived negative-modifier damage_dice
+        must report 0 damage taken, not negative.
+        """
+        target = Character(
+            name="Target",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=self.abilities,
+            max_hp=20,
+            ac=10,
+        )
+        starting_hp = target.current_hp
+        effect = {"damage_dice": "1d4-5"}
+        result = self.engine.resolve_saving_throw_effect(
+            target=target,
+            save_ability="dex",
+            dc=1,  # always succeeds
+            effect=effect,
+            apply_damage=True,
+        )
+        assert result["damage"] == 0
+        assert result["damage_taken"] == 0
+        # Crucially: target's HP did not increase from negative damage.
+        assert target.current_hp == starting_hp
