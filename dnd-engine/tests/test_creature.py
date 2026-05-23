@@ -195,6 +195,30 @@ class TestCreature:
             assert creature.can_take_actions() is False
             creature.remove_condition(condition)
 
+    def test_is_incapacitated_default(self):
+        """A fresh creature with no conditions is not incapacitated."""
+        creature = Creature(name="Fighter", max_hp=20, ac=16, abilities=self.abilities)
+        assert creature.is_incapacitated() is False
+
+    def test_is_incapacitated_with_incapacitating_conditions(self):
+        """Per SRD glossary: Incapacitated, Paralyzed, Stunned, Unconscious,
+        and Petrified all impose the Incapacitated state."""
+        for condition in ("incapacitated", "paralyzed", "stunned", "unconscious", "petrified"):
+            creature = Creature(name="Fighter", max_hp=20, ac=16, abilities=self.abilities)
+            creature.add_condition(condition)
+            assert creature.is_incapacitated() is True, f"{condition} should be incapacitating"
+
+    def test_is_incapacitated_ignores_non_incapacitating_conditions(self):
+        """Prone, poisoned, surprised, blinded do not make a creature Incapacitated
+        for SRD purposes."""
+        creature = Creature(name="Fighter", max_hp=20, ac=16, abilities=self.abilities)
+        for condition in ("prone", "poisoned", "surprised", "blinded"):
+            creature.add_condition(condition)
+            assert creature.is_incapacitated() is False, (
+                f"{condition} should not impose Incapacitated"
+            )
+            creature.remove_condition(condition)
+
     def test_process_end_of_turn_conditions_duration_countdown(self):
         """Test that round-based conditions countdown each turn"""
         creature = Creature(name="Fighter", max_hp=20, ac=16, abilities=self.abilities)
