@@ -107,6 +107,25 @@ class Creature:
         return self.current_hp > 0
 
     @property
+    def is_bloodied(self) -> bool:
+        """Whether the creature is Bloodied (SRD § Playing the Game › Hit Points).
+
+        Per SRD: "If you have half your Hit Points or fewer, you're
+        Bloodied, which has no game effect on its own but which might
+        trigger other game effects."
+
+        Pure derived flag — no stored state, no condition registered,
+        no mechanical modifier attached. A creature at 0 HP is not
+        Bloodied (it's Dying/Dead/Stable instead); a creature at full
+        HP is not Bloodied. Threshold uses integer division, so a
+        creature with `max_hp=21` is Bloodied at `current_hp <= 10`.
+
+        Returns:
+            True iff `0 < current_hp <= max_hp // 2`.
+        """
+        return 0 < self.current_hp <= self.max_hp // 2
+
+    @property
     def initiative_modifier(self) -> int:
         """Initiative modifier (uses Dexterity)"""
         return self.abilities.dex_mod

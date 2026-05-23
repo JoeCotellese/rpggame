@@ -134,6 +134,50 @@ class TestCreature:
         assert creature.current_hp == 0
         assert creature.is_alive is False
 
+    def test_is_bloodied_at_full_hp(self):
+        """A creature at full HP is not Bloodied."""
+        creature = Creature(name="Goblin", max_hp=20, ac=15, abilities=self.abilities)
+        assert creature.is_bloodied is False
+
+    def test_is_bloodied_at_exactly_half_hp(self):
+        """A creature at exactly half max HP is Bloodied (boundary: <= max_hp // 2)."""
+        creature = Creature(name="Goblin", max_hp=20, ac=15, abilities=self.abilities)
+        creature.take_damage(10)
+        assert creature.current_hp == 10
+        assert creature.is_bloodied is True
+
+    def test_is_bloodied_just_above_half_hp(self):
+        """A creature one HP above half is not Bloodied."""
+        creature = Creature(name="Goblin", max_hp=20, ac=15, abilities=self.abilities)
+        creature.take_damage(9)
+        assert creature.current_hp == 11
+        assert creature.is_bloodied is False
+
+    def test_is_bloodied_at_one_hp(self):
+        """A creature at 1 HP is Bloodied (still alive, still <= half)."""
+        creature = Creature(name="Goblin", max_hp=20, ac=15, abilities=self.abilities)
+        creature.take_damage(19)
+        assert creature.current_hp == 1
+        assert creature.is_bloodied is True
+
+    def test_is_bloodied_at_zero_hp(self):
+        """A creature at 0 HP is not Bloodied (it's Dying/Dead/Stable instead)."""
+        creature = Creature(name="Goblin", max_hp=20, ac=15, abilities=self.abilities)
+        creature.take_damage(20)
+        assert creature.current_hp == 0
+        assert creature.is_bloodied is False
+
+    def test_is_bloodied_uses_integer_half_for_odd_max_hp(self):
+        """Odd `max_hp` uses integer division: max_hp=21 -> bloodied at <= 10."""
+        creature = Creature(name="Goblin", max_hp=21, ac=15, abilities=self.abilities)
+        creature.take_damage(11)
+        assert creature.current_hp == 10
+        assert creature.is_bloodied is True
+
+        creature.heal(1)
+        assert creature.current_hp == 11
+        assert creature.is_bloodied is False
+
     def test_creature_conditions(self):
         """Test adding and removing conditions"""
         creature = Creature(name="Fighter", max_hp=20, ac=16, abilities=self.abilities)
