@@ -37,6 +37,7 @@ class EventType(Enum):
     DAMAGE_AT_ZERO_HP = "damage_at_zero_hp"
     MASSIVE_DAMAGE_DEATH = "massive_damage_death"
     CHARACTER_STABILIZED = "character_stabilized"
+    STABLE_RECOVERY = "stable_recovery"
 
     # Exploration events
     ROOM_ENTER = "room_enter"

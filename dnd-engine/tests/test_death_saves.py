@@ -154,7 +154,13 @@ class TestDeathSaveRolls:
         assert character.death_save_failures == 2
 
     def test_three_successes_stabilizes(self, character, event_bus):
-        """Three successes should stabilize the character."""
+        """Three successes should stabilize the character.
+
+        Per SRD § Death Saving Throws: "The number of both is reset
+        to zero when you ... become Stable." After the third success,
+        the success counter zeroes out as the character transitions
+        into the Stable state.
+        """
         character.current_hp = 0
         character.death_save_successes = 2
 
@@ -164,7 +170,8 @@ class TestDeathSaveRolls:
 
         assert result["stabilized"]
         assert character.stabilized
-        assert character.death_save_successes == 3
+        assert character.death_save_successes == 0
+        assert character.death_save_failures == 0
 
     def test_three_failures_means_death(self, character, event_bus):
         """Three failures should kill the character."""
@@ -386,3 +393,93 @@ class TestDeathSaveEdgeCases:
         assert character.death_save_successes == 0
         assert character.death_save_failures == 0
         assert not character.stabilized
+
+
+class TestProcessStableRecovery:
+    """SRD § Stabilizing a Character › Stable state:
+    "A Stable creature that isn't healed regains 1 Hit Point after
+    1d4 hours."
+    """
+
+    def test_recovery_happens_when_elapsed_meets_threshold(self, character):
+        """Elapsed >= rolled 1d4 threshold: heal to 1 HP, clear state."""
+        character.current_hp = 0
+        character.stabilize_character()
+
+        with patch.object(character._dice_roller, "roll") as mock_roll:
+            mock_roll.return_value = Mock(total=2)
+            recovered = character.process_stable_recovery(hours_elapsed=2.0)
+
+        assert recovered is True
+        assert character.current_hp == 1
+        assert character.stabilized is False
+        assert character.death_save_failures == 0
+        assert character.death_save_successes == 0
+        assert "unconscious" not in character.active_conditions
+
+    def test_recovery_skips_when_elapsed_below_threshold(self, character):
+        """Elapsed < rolled 1d4 threshold: no recovery."""
+        character.current_hp = 0
+        character.stabilize_character()
+
+        with patch.object(character._dice_roller, "roll") as mock_roll:
+            mock_roll.return_value = Mock(total=4)
+            recovered = character.process_stable_recovery(hours_elapsed=1.0)
+
+        assert recovered is False
+        assert character.current_hp == 0
+        assert character.stabilized is True
+
+    def test_recovery_no_op_when_not_stabilized(self, character):
+        """Non-stable creature is unaffected by `process_stable_recovery`."""
+        character.current_hp = 0
+        # Not stabilized
+        recovered = character.process_stable_recovery(hours_elapsed=8.0)
+
+        assert recovered is False
+        assert character.current_hp == 0
+        assert character.stabilized is False
+
+    def test_recovery_no_op_when_already_healed(self, character):
+        """Recovery skips creatures who already have HP."""
+        character.current_hp = 5
+        character.stabilized = True  # Inconsistent but defensive
+
+        recovered = character.process_stable_recovery(hours_elapsed=8.0)
+
+        assert recovered is False
+        assert character.current_hp == 5
+
+    def test_recovery_emits_event(self, character, event_bus):
+        """`process_stable_recovery` emits `STABLE_RECOVERY` event."""
+        character.current_hp = 0
+        character.stabilize_character()
+        events = []
+        event_bus.subscribe(EventType.STABLE_RECOVERY, lambda e: events.append(e))
+
+        with patch.object(character._dice_roller, "roll") as mock_roll:
+            mock_roll.return_value = Mock(total=1)
+            character.process_stable_recovery(hours_elapsed=4.0, event_bus=event_bus)
+
+        assert len(events) == 1
+        assert events[0].data["character"] == "TestHero"
+
+    def test_long_rest_revives_stable_character(self, character):
+        """An 8-hour long rest always exceeds 1d4 hours, so a Stable
+        character should wake at >=1 HP and then continue with the
+        standard long-rest healing.
+        """
+        character.current_hp = 0
+        character.stabilize_character()
+
+        # 1d4 mocked to any value 1-4: 8h always exceeds
+        with patch.object(character._dice_roller, "roll") as mock_roll:
+            mock_roll.return_value = Mock(total=4)
+            character.take_long_rest()
+
+        # After long rest the character should be at full HP via the
+        # standard recover_hp() path (stable recovery brought to 1
+        # first, then recovery fills the rest).
+        assert character.current_hp == character.max_hp
+        assert character.stabilized is False
+        assert "unconscious" not in character.active_conditions

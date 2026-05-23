@@ -1148,6 +1148,13 @@ class Character(Creature):
 
         was_unconscious = self.is_unconscious
 
+        # SRD § Stabilizing a Character › Stable state: "If the
+        # creature takes damage, it stops being Stable and starts
+        # making Death Saving Throws again." Clear before damage is
+        # applied so the downstream at-0-HP failure rule kicks in.
+        if self.stabilized:
+            self.stabilized = False
+
         # Apply damage (parent implementation)
         super().take_damage(amount)
 
@@ -1252,6 +1259,10 @@ class Character(Creature):
         - Recover resources with recovery_type="short_rest" (living characters only)
         - Clear conditions with duration <= 60 minutes
         - Can spend Hit Dice to heal (not implemented in MVP)
+        - SRD § Stabilizing a Character › Stable state: a Stable
+          character that has rested for 1d4 hours regains 1 HP. A
+          short rest is exactly 1 hour, so the roll may or may not
+          meet the threshold (25% chance: a roll of 1).
 
         Returns:
             Dictionary containing:
@@ -1266,6 +1277,10 @@ class Character(Creature):
             resources_recovered = []
             conditions_removed = []
         else:
+            # SRD: Stable creatures regain 1 HP after 1d4 hours. Run
+            # this before resource recovery so the result is reflected
+            # in dying-state queries for the rest of the rest flow.
+            self.process_stable_recovery(hours_elapsed=1.0)
             resources_recovered = self.recover_resources("short_rest")
             # Clear conditions that would expire within 1 hour (60 minutes)
             conditions_removed = self.clear_conditions_by_max_duration(max_minutes=60)
@@ -1305,6 +1320,14 @@ class Character(Creature):
             resources_recovered = []
             conditions_removed = []
         else:
+            # SRD § Stabilizing a Character › Stable state: a Stable
+            # creature regains 1 HP after 1d4 hours. An 8-hour long
+            # rest always exceeds that threshold, but
+            # `process_stable_recovery` still rolls the 1d4 for
+            # consistency and event emission. Run before
+            # `recover_hp` so the Stable→1HP transition completes
+            # before standard healing fills HP to full.
+            self.process_stable_recovery(hours_elapsed=8.0)
             hp_recovered = self.recover_hp()
             resources_recovered = self.recover_resources("long_rest")
             # Clear all non-permanent conditions (8 hours exceeds any timed condition)
@@ -1466,8 +1489,15 @@ class Character(Creature):
         elif success:
             # Success
             self.death_save_successes += 1
-            # Check for stabilization (3 successes)
+            # Check for stabilization (3 successes). Per SRD § Death
+            # Saving Throws: "The number of both is reset to zero
+            # when you ... become Stable." Zero the counters first,
+            # then flip `stabilized = True` (don't call
+            # `reset_death_saves()`, which would also clear the
+            # stabilized flag we're about to set).
             if self.death_save_successes >= 3:
+                self.death_save_successes = 0
+                self.death_save_failures = 0
                 self.stabilized = True
         else:
             # Failure
@@ -1544,9 +1574,69 @@ class Character(Creature):
         Used when:
         - Ally uses Medicine check (DC 10) successfully
         - Character gets 3 death save successes
+
+        Per SRD § Death Saving Throws: "The number of both is reset
+        to zero when you ... become Stable." Both counters zero out
+        as the character transitions into the Stable state.
         """
         if self.current_hp == 0:
+            self.death_save_successes = 0
+            self.death_save_failures = 0
             self.stabilized = True
+
+    def process_stable_recovery(
+        self, hours_elapsed: float, event_bus=None
+    ) -> bool:
+        """
+        Apply the SRD natural-healing rule for Stable creatures.
+
+        SRD § Stabilizing a Character › Stable state: "A Stable
+        creature that isn't healed regains 1 Hit Point after 1d4
+        hours."
+
+        Rolls 1d4 to determine the threshold in hours. If the
+        elapsed rest time meets or exceeds that threshold, the
+        character regains 1 HP, exits the Stable state, and clears
+        the Unconscious condition. Otherwise this is a no-op.
+
+        Args:
+            hours_elapsed: Hours of rest the character has had since
+                becoming Stable (or since the last recovery check).
+            event_bus: Optional EventBus for `STABLE_RECOVERY` emission.
+
+        Returns:
+            True if recovery occurred this call, False otherwise.
+        """
+        from dnd_engine.utils.events import Event, EventType
+
+        # Recovery only applies to Stable creatures still at 0 HP.
+        if not self.stabilized or self.current_hp > 0:
+            return False
+
+        threshold_hours = self._dice_roller.roll("1d4").total
+        if hours_elapsed < threshold_hours:
+            return False
+
+        # SRD: regain 1 HP. Healing past 0 implicitly exits the
+        # Dying/Stable pipeline, so reset death-save state and drop
+        # the Unconscious condition (mirrors `recover_hp`).
+        self.current_hp = 1
+        self.reset_death_saves()
+        self.remove_condition("unconscious")
+
+        if event_bus is not None:
+            event_bus.emit(
+                Event(
+                    type=EventType.STABLE_RECOVERY,
+                    data={
+                        "character": self.name,
+                        "hours_elapsed": hours_elapsed,
+                        "threshold_hours": threshold_hours,
+                    },
+                )
+            )
+
+        return True
 
     def can_cast_spell(self, spell: Spell) -> bool:
         """
