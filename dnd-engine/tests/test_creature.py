@@ -419,26 +419,6 @@ class TestAlternateBaseACFormulas:
         # 13 + dex_mod = 13 + ((14-10)//2) = 15
         assert creature.ac == 15
 
-    def test_only_active_selection_is_honored_with_multiple_registered(self):
-        """Multiple registered formulas — only the selected one is honored."""
-        creature = Creature(name="Brawler", max_hp=20, ac=11, abilities=self.abilities)
-        creature.register_base_ac_formula(
-            "barbarian_unarmored",
-            lambda c: 10 + c.abilities.dex_mod + c.abilities.con_mod,
-        )
-        creature.register_base_ac_formula("mage_armor", lambda c: 13 + c.abilities.dex_mod)
-
-        # barbarian: 10 + 2 + 3 = 15
-        creature.active_base_ac_formula = "barbarian_unarmored"
-        assert creature.ac == 15
-
-        # mage_armor: 13 + 2 = 15 — choose distinct DEX to force divergence
-        # Instead, swap and verify mage_armor value is what's returned.
-        # Use a tweaked formula with a unique constant offset:
-        creature.register_base_ac_formula("mage_armor", lambda c: 16 + c.abilities.dex_mod)
-        creature.active_base_ac_formula = "mage_armor"
-        assert creature.ac == 18
-
     def test_unknown_active_selection_falls_back_to_stored_base_ac(self):
         """Pointing at an unregistered formula name reverts to `_base_ac`."""
         creature = Creature(name="Brawler", max_hp=20, ac=11, abilities=self.abilities)

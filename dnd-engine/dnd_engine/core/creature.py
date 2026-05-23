@@ -141,9 +141,23 @@ class Creature:
         that callable is invoked with `self` and its return value is the
         base AC. Otherwise `_base_ac` (the stored default) is returned.
 
+        The active formula is invoked on every call, so the result tracks
+        live ability scores (e.g., a Mage-Armor or Unarmored-Defense
+        formula reads the current DEX/CON/WIS modifier each time AC is
+        queried). Callers that need to memoize must do so themselves.
+
         Per SRD "Only One Base AC", at most one alternate formula is in
         effect at a time even when several are registered — the active
         selection is the single source of truth.
+
+        Interplay with `ModifierType.AC_SET_BASE`: `GameState.get_effective_ac`
+        seeds its layered-modifier stack with this value, then applies
+        `AC_SET_BASE` effects (Mage Armor, Barkskin) on top with
+        "first-wins" semantics. If an `AC_SET_BASE` effect is active on
+        the same creature as an alt-formula selection, the effect will
+        overwrite the alt formula's base. Migrating the remaining
+        `AC_SET_BASE` consumers onto this seam (issue #426) collapses
+        the two mechanisms into one and removes that footgun.
 
         Returns:
             The base AC value to use for this creature.
