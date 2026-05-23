@@ -21,7 +21,12 @@ import pytest
 from dnd_engine.core.combat import CombatEngine
 from dnd_engine.core.creature import Abilities, Creature
 from dnd_engine.core.dice import DiceRoller
-from dnd_engine.scenarios.script_executor import _attack_range_for
+from dnd_engine.scenarios.loader import ScenarioLoader
+from dnd_engine.scenarios.script_executor import (
+    ScriptExecutor,
+    _attack_range_for,
+    _attack_reach_for,
+)
 
 pytestmark = pytest.mark.srd(
     "playing-the-game/melee-attacks.md",
@@ -149,7 +154,7 @@ class TestReach_GreaterThanFiveFeet:
             "in monsters.json (e.g., bearded_devil: Glaive 10 ft.)."
         )
 
-    def test_extended_reach_data_is_consumed_by_attack_resolution(self):
+    def test_extended_reach_data_is_consumed_by_attack_resolution(self, tmp_path: Path):
         """A 10-ft reach action lands at 10 ft; a 5-ft action is rejected.
 
         Verifies the SRD's "noted in their descriptions" clause is honored
@@ -158,14 +163,6 @@ class TestReach_GreaterThanFiveFeet:
         it. Mirrors the player-weapon range pattern (#400) so scenario
         scripts can express monster melee that depends on reach.
         """
-        import tempfile
-
-        from dnd_engine.scenarios.loader import ScenarioLoader
-        from dnd_engine.scenarios.script_executor import (
-            ScriptExecutor,
-            _attack_reach_for,
-        )
-
         monsters = json.loads(MONSTERS_JSON.read_text())
 
         glaive = next(
@@ -219,49 +216,47 @@ enemies:
     position: [5, 5]
 """
 
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            bd_path = tmp_path / "bd.yaml"
-            bd_path.write_text(bearded_devil_yaml.lstrip())
-            gb_path = tmp_path / "gb.yaml"
-            gb_path.write_text(goblin_yaml.lstrip())
+        bd_path = tmp_path / "bd.yaml"
+        bd_path.write_text(bearded_devil_yaml.lstrip())
+        gb_path = tmp_path / "gb.yaml"
+        gb_path.write_text(goblin_yaml.lstrip())
 
-            # Advance to the monster's turn, then have it attack the PC.
-            bd_loaded = ScenarioLoader().load(bd_path)
-            bd_executor = ScriptExecutor(bd_loaded)
-            bd_ctx = bd_executor.run([
-                {"action": "wait"},  # let fighter pass
-                {
-                    "action": "monster_attack",
-                    "attacker": "bearded_devil_0",
-                    "target": "pc_brick",
-                    "monster_action": "Glaive",
-                },
-            ])
-            # Glaive (10 ft) at 10 ft must resolve, not reject.
-            assert bd_ctx.last_attack is not None, (
-                f"bearded devil glaive (10 ft reach) should hit at 10 ft, "
-                f"got error: {bd_ctx.last_attack_error}"
-            )
+        # Advance to the monster's turn, then have it attack the PC.
+        bd_loaded = ScenarioLoader().load(bd_path)
+        bd_executor = ScriptExecutor(bd_loaded)
+        bd_ctx = bd_executor.run([
+            {"action": "wait"},  # let fighter pass
+            {
+                "action": "monster_attack",
+                "attacker": "bearded_devil_0",
+                "target": "pc_brick",
+                "monster_action": "Glaive",
+            },
+        ])
+        # Glaive (10 ft) at 10 ft must resolve, not reject.
+        assert bd_ctx.last_attack is not None, (
+            f"bearded devil glaive (10 ft reach) should hit at 10 ft, "
+            f"got error: {bd_ctx.last_attack_error}"
+        )
 
-            gb_loaded = ScenarioLoader().load(gb_path)
-            gb_executor = ScriptExecutor(gb_loaded)
-            gb_ctx = gb_executor.run([
-                {"action": "wait"},
-                {
-                    "action": "monster_attack",
-                    "attacker": "goblin_0",
-                    "target": "pc_brick",
-                    "monster_action": "Scimitar",
-                },
-            ])
-            # Scimitar (5 ft) at 10 ft must be rejected.
-            assert gb_ctx.last_attack is None
-            assert gb_ctx.last_attack_error is not None
-            assert "reach" in gb_ctx.last_attack_error.lower(), (
-                f"expected out-of-reach rejection, got: "
-                f"{gb_ctx.last_attack_error}"
-            )
+        gb_loaded = ScenarioLoader().load(gb_path)
+        gb_executor = ScriptExecutor(gb_loaded)
+        gb_ctx = gb_executor.run([
+            {"action": "wait"},
+            {
+                "action": "monster_attack",
+                "attacker": "goblin_0",
+                "target": "pc_brick",
+                "monster_action": "Scimitar",
+            },
+        ])
+        # Scimitar (5 ft) at 10 ft must be rejected.
+        assert gb_ctx.last_attack is None
+        assert gb_ctx.last_attack_error is not None
+        assert "reach" in gb_ctx.last_attack_error.lower(), (
+            f"expected out-of-reach rejection, got: "
+            f"{gb_ctx.last_attack_error}"
+        )
 
 
 class TestOpportunityAttacks_Triggering:

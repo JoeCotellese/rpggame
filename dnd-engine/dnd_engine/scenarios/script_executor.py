@@ -348,6 +348,7 @@ class ScriptExecutor:
                 f"out of reach: {distance} ft > reach {reach_ft} ft "
                 f"({monster_action_name})"
             )
+            self.ctx.last_attack = None
             return
 
         attack_bonus = action_data.get("attack_bonus")
