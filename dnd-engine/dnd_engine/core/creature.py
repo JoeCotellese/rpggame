@@ -150,14 +150,15 @@ class Creature:
         effect at a time even when several are registered — the active
         selection is the single source of truth.
 
-        Interplay with `ModifierType.AC_SET_BASE`: `GameState.get_effective_ac`
-        seeds its layered-modifier stack with this value, then applies
-        `AC_SET_BASE` effects (Mage Armor, Barkskin) on top with
-        "first-wins" semantics. If an `AC_SET_BASE` effect is active on
-        the same creature as an alt-formula selection, the effect will
-        overwrite the alt formula's base. Migrating the remaining
-        `AC_SET_BASE` consumers onto this seam (issue #426) collapses
-        the two mechanisms into one and removes that footgun.
+        Interplay with `GameState.get_effective_ac`: that method seeds
+        its layered-modifier stack with this value, then layers on
+        `ModifierType.AC_BONUS` effects (Shield, Haste) — there is no
+        longer a separate base-AC override path. Spells that change
+        the base AC (Mage Armor, Barkskin) register a formula here and
+        select it via `active_base_ac_formula`; layered bonuses stack
+        on top of whichever base is active. Per SRD § Playing the Game
+        › Attack Rolls › "Only One Base AC", the active alt-formula
+        selection is the single source of truth for the base value.
 
         Returns:
             The base AC value to use for this creature.
