@@ -50,6 +50,13 @@ The script also warns about **stale markers** — tests pointing at SRD
 files that no longer exist (e.g. after a `scripts/split_srd.py` rerun
 that renamed a section).
 
+It also separates **likely SRD-splitter stubs** from the audit queue
+— files whose YAML frontmatter `source_lines` range is 5 lines or
+fewer are chapter intros and framing text with no auditable rule.
+They're surfaced in their own section of the report but excluded from
+the suggested queue and the progress denominator so they don't pad
+the work to be done.
+
 ## Adding a new conformance file
 
 1. Identify the SRD doc you're auditing (e.g.
