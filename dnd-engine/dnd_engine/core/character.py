@@ -436,6 +436,14 @@ class Character(Creature):
         properties = weapon_data.get("properties", [])
         category = weapon_data.get("category", "melee")
 
+        # SRD § Playing the Game › Damage Rolls (lines 2205-2219):
+        # "Unless a rule says otherwise, you don't add your ability
+        #  modifier to a fixed damage amount that doesn't use a roll,
+        #  such as the damage of a Blowgun."
+        # Fixed-damage weapons short-circuit before any STR/DEX branch.
+        if weapon_data.get("fixed_damage"):
+            return 0
+
         # Determine damage bonus based on weapon type
         if "finesse" in properties:
             # Finesse weapon: use highest of STR or DEX
