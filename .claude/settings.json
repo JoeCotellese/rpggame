@@ -8,7 +8,7 @@
           {
             "type": "command",
             "if": "Bash(gh pr create*)",
-            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"A pull request was just created via `gh pr create`. Before continuing other work or marking the task complete, invoke the /code-review skill against this PR — review the diff, post findings as inline PR comments where useful, and report a brief summary back. (The PR URL is in the Bash tool output above.)\"}}'"
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"A pull request was just created via `gh pr create`. Offer the user a deep multi-agent review by asking via AskUserQuestion whether to run /code-review on this PR (it spawns several finder agents and can take a few minutes). Do NOT run it without their consent — default to skipping if they decline. Then continue with whatever was next regardless of their answer. The PR URL is in the Bash tool output above.\"}}'"
           }
         ]
       }
