@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(gh pr create*)",
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"A pull request was just created via `gh pr create`. Before continuing other work or marking the task complete, invoke the /code-review skill against this PR — review the diff, post findings as inline PR comments where useful, and report a brief summary back. (The PR URL is in the Bash tool output above.)\"}}'"
+          }
+        ]
+      }
+    ]
+  }
+}
