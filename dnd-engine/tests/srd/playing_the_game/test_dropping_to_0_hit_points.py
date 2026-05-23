@@ -524,20 +524,38 @@ class TestDeathSavingThrows_ThreeSuccessesOrFailures:
 
         Tracks both counters independently; the SRD wording "don't
         need to be consecutive" maps to the engine using separate
-        increment paths for each branch (character.py:1376-1383).
+        increment paths for each branch. Per SRD, both counters
+        reset to zero upon becoming Stable, so after the third
+        success they are both 0 even though the run mixed S and F.
         """
         character = _make_character()
         character.current_hp = 0
 
-        rolls = [15, 5, 15, 5, 15]  # S, F, S, F, S
+        # Capture counters after the second success (pre-stable) so
+        # we still demonstrate the non-consecutive tracking before
+        # the SRD's reset-on-Stable rule zeroes both counters.
         with patch.object(character._dice_roller, "roll") as mock_roll:
-            mock_roll.side_effect = [Mock(total=r) for r in rolls]
-            for _ in rolls:
+            mock_roll.side_effect = [
+                Mock(total=15),  # S
+                Mock(total=5),  # F
+                Mock(total=15),  # S
+                Mock(total=5),  # F
+            ]
+            for _ in range(4):
                 character.make_death_save()
 
-        assert character.death_save_successes == 3
+        assert character.death_save_successes == 2
         assert character.death_save_failures == 2
+        assert character.stabilized is False
+
+        # Third success: stabilizes and resets per SRD.
+        with patch.object(character._dice_roller, "roll") as mock_roll:
+            mock_roll.return_value = Mock(total=15)
+            character.make_death_save()
+
         assert character.stabilized is True
+        assert character.death_save_successes == 0
+        assert character.death_save_failures == 0
 
     def test_regaining_any_hit_points_resets_both_counters(self):
         """Healing 1 HP from 0 zeroes successes and failures.
@@ -559,25 +577,36 @@ class TestDeathSavingThrows_ThreeSuccessesOrFailures:
     def test_becoming_stable_resets_both_counters(self):
         """SRD: counts reset to zero on Stable.
 
-        Engine sets `stabilized = True` on the 3rd success but does
-        NOT reset `death_save_successes` to 0 (character.py:1376-1380).
-        After 3 successes the character still has
-        `death_save_successes == 3`, so the SRD wording "is reset to
-        zero when you ... become Stable" is not honored. Tracked by
-        a new gap issue.
+        On the third success in `make_death_save`, both counters
+        must zero out as the character transitions to Stable. Same
+        rule for the Medicine-check path via `stabilize_character`.
+        See issue #454.
         """
-        pytest.skip(
-            "GAP: Becoming Stable (3 successes) does not reset "
-            "`death_save_successes`/`death_save_failures` to zero. "
-            "`Character.make_death_save` "
-            "(dnd-engine/dnd_engine/core/character.py:1376-1380) sets "
-            "`stabilized = True` on the third success but leaves the "
-            "counters at their current values. The SRD says 'The "
-            "number of both is reset to zero when you regain any Hit "
-            "Points or become Stable.' Same gap applies to "
-            "`stabilize_character()` via Medicine check. See issue "
-            "#454."
-        )
+        # Path 1: third success via make_death_save
+        character = _make_character()
+        character.current_hp = 0
+        character.death_save_successes = 2
+        character.death_save_failures = 1
+
+        with patch.object(character._dice_roller, "roll") as mock_roll:
+            mock_roll.return_value = Mock(total=15)
+            character.make_death_save()
+
+        assert character.stabilized is True
+        assert character.death_save_successes == 0
+        assert character.death_save_failures == 0
+
+        # Path 2: Medicine-check stabilization via stabilize_character
+        character2 = _make_character()
+        character2.current_hp = 0
+        character2.death_save_successes = 1
+        character2.death_save_failures = 1
+
+        character2.stabilize_character()
+
+        assert character2.stabilized is True
+        assert character2.death_save_successes == 0
+        assert character2.death_save_failures == 0
 
 
 class TestDeathSavingThrows_Rolling20Or1:
@@ -840,38 +869,62 @@ class TestStabilizingACharacter_StableState:
         """Damage to a stable, 0-HP character must clear `stabilized`.
 
         Per SRD: "If the creature takes damage, it stops being Stable
-        and starts making Death Saving Throws again."
-        `Character.take_damage` (character.py:1100-1148) adds the
-        damage-at-0-HP failure but does NOT flip
-        `self.stabilized = False`. The character would still be
-        skipped by `process_unconscious_turn`'s
-        `if character.stabilized:` short-circuit (game_state.py:4157)
-        and continue not making rolls.
+        and starts making Death Saving Throws again." After taking
+        damage, the character is no longer Stable and the damage-at-
+        0-HP rule adds a death-save failure. See issue #458.
         """
-        pytest.skip(
-            "GAP: Damage to a stable creature does not clear "
-            "`stabilized`. `Character.take_damage` "
-            "(dnd-engine/dnd_engine/core/character.py:1100-1148) "
-            "increments death-save failures but never sets "
-            "`self.stabilized = False`. As a result, "
-            "`process_unconscious_turn` "
-            "(dnd-engine/dnd_engine/core/game_state.py:4156-4168) "
-            "continues to short-circuit on `character.stabilized` and "
-            "the SRD's 'stops being Stable and starts making Death "
-            "Saving Throws again' clause is unenforced. See issue "
-            "#458."
-        )
+        character = _make_character()
+        character.current_hp = 0
+        character.stabilize_character()
+        assert character.stabilized is True
+
+        character.take_damage(3)
+
+        assert character.stabilized is False
+        assert character.death_save_failures == 1
 
     def test_stable_creature_regains_one_hit_point_after_1d4_hours(self):
-        pytest.skip(
-            "GAP: No long-rest / hours-elapsed tick is modeled for "
-            "stable creatures. `rg 'stable.*1d4\\|stable.*hour\\|"
-            "stable.*1 hp' dnd-engine/dnd_engine/` is empty. "
-            "`test_death_saves_integration.py::test_stabilized_"
-            "character_heals_naturally_over_time` documents the gap "
-            "in a comment ('After 1d4 hours, would heal to 1 HP — "
-            "not implemented in MVP'). See issue #460."
-        )
+        """SRD: a Stable creature that isn't healed regains 1 HP after
+        1d4 hours of rest.
+
+        `Character.process_stable_recovery(hours_elapsed)` rolls 1d4
+        and converts Stable -> 1 HP if the elapsed time meets or
+        exceeds the rolled threshold. Below threshold: no change.
+        See issue #460.
+        """
+        # Above-threshold case: 1d4 rolls 2, 2.0 hours elapsed >= 2.
+        # Drive through take_damage so the Unconscious condition is
+        # applied by `_sync_dying_conditions`, matching the live flow.
+        character = _make_character()
+        character.take_damage(character.max_hp)
+        character.stabilize_character()
+        assert character.stabilized is True
+        assert "unconscious" in character.active_conditions
+
+        with patch.object(character._dice_roller, "roll") as mock_roll:
+            mock_roll.return_value = Mock(total=2)
+            recovered = character.process_stable_recovery(hours_elapsed=2.0)
+
+        assert recovered is True
+        assert character.current_hp == 1
+        assert character.stabilized is False
+        assert character.death_save_failures == 0
+        assert character.death_save_successes == 0
+        assert "unconscious" not in character.active_conditions
+
+        # Below-threshold case: 1d4 rolls 3, only 1.0 hour elapsed.
+        character2 = _make_character()
+        character2.take_damage(character2.max_hp)
+        character2.stabilize_character()
+
+        with patch.object(character2._dice_roller, "roll") as mock_roll:
+            mock_roll.return_value = Mock(total=3)
+            recovered = character2.process_stable_recovery(hours_elapsed=1.0)
+
+        assert recovered is False
+        assert character2.current_hp == 0
+        assert character2.stabilized is True
+        assert "unconscious" in character2.active_conditions
 
 
 class TestEventEmission_DeathSaveEventsAreSurfaced:

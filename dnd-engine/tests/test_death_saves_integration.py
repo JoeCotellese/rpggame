@@ -353,11 +353,13 @@ class TestDeathSaveProgression:
         assert result2["successes"] == 2
         assert not result2["stabilized"]
 
-        # Third success - stabilizes
+        # Third success - stabilizes. Per SRD § Death Saving Throws,
+        # both counters reset to zero on Stable, so the result reports
+        # 0 successes (the character is now in the Stable state).
         with patch.object(fighter._dice_roller, "roll") as mock_roll:
             mock_roll.return_value = Mock(total=18)
             result3 = fighter.make_death_save(event_bus)
-        assert result3["successes"] == 3
+        assert result3["successes"] == 0
         assert result3["stabilized"]
 
     def test_multiple_failed_death_saves(self, fighter, event_bus):
