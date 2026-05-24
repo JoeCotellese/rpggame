@@ -140,6 +140,13 @@ class GameSession:
         self.enemy_turn_timer = 0.0
         self.processing_enemy_turn = False
         self.combat_log: list[str] = []
+        # Per-MCP-call accumulator: every line the windowed-mode combat
+        # log gains during a synchronous enemy-turn drain is mirrored
+        # here so the MCP response can surface what happened between
+        # the player's actions (#570). Distinct from ``combat_log``
+        # because that buffer is bounded (10 lines) for the windowed
+        # HUD; this one is per-call and reset by ``_consume_pending_events``.
+        self._pending_combat_events: list[str] = []
 
         # MCP plumbing.
         self._mcp_bridge: MCPBridge | None = None
@@ -277,6 +284,53 @@ class GameSession:
         self.combat_log.append(message)
         if len(self.combat_log) > 10:
             self.combat_log = self.combat_log[-10:]
+
+    def _drain_enemy_turns(self) -> None:
+        """Run the FSM forward through every non-player turn.
+
+        Wraps the synchronous drain loop used by ``attack`` / ``wait``
+        so the MCP path can see what happened during the drain. Every
+        line the per-turn handler appends to ``combat_log`` is mirrored
+        into ``_pending_combat_events`` for later surfacing via
+        ``_consume_pending_events`` (#570).
+
+        Mirrors ``tick``'s branching so an unconscious PC's death-save
+        turn processes inside the same drain rather than being deferred
+        until the next tick.
+        """
+        while self.processing_enemy_turn:
+            log_before = len(self.combat_log)
+            if self.engine.is_current_combatant_unconscious():
+                self._process_unconscious_turn()
+            elif not self.engine.is_player_turn():
+                self._process_enemy_turn()
+            else:
+                # FSM contract: when the current combatant is a
+                # conscious PC, ``processing_enemy_turn`` should already
+                # be False. Guard against drift so a misconfigured state
+                # can't spin this loop forever.
+                self.processing_enemy_turn = False
+                break
+            self._pending_combat_events.extend(self.combat_log[log_before:])
+
+    def _consume_pending_events(self) -> list[str]:
+        """Return and clear the per-call combat event buffer."""
+        events = self._pending_combat_events
+        self._pending_combat_events = []
+        return events
+
+    @staticmethod
+    def _format_between_turns_block(events: list[str]) -> str:
+        """Render a list of drained-turn lines under a stable header.
+
+        Returns the empty string when ``events`` is empty so callers can
+        unconditionally embed the block in a response without producing
+        an orphan header (#570).
+        """
+        if not events:
+            return ""
+        body = "\n".join(f"  {line}" for line in events)
+        return f"Between turns:\n{body}"
 
     # ========== Lighting / party spread ==========
 
@@ -778,6 +832,17 @@ class GameSession:
             f"Explored: {state_dict['explored_tiles']}/{state_dict['total_tiles']}",
         ]
 
+        # Belt-and-braces (#570): if the caller invoked get_state()
+        # without going through attack/wait — which consume the buffer
+        # via _format_between_turns_block — surface the drained events
+        # here so they aren't silently dropped. Consumes the buffer so
+        # a subsequent call doesn't double-render.
+        unconsumed = self._consume_pending_events()
+        if unconsumed:
+            lines.append("")
+            lines.append("Recent Combat:")
+            lines.extend(f"  {line}" for line in unconsumed)
+
         if self.engine.in_combat:
             combat_data = self.engine.get_combat_data()
             if combat_data:
@@ -1166,11 +1231,16 @@ class GameSession:
         )
 
         # Drain enemy turns synchronously so the MCP caller sees the
-        # post-enemy-action state.
-        while self.processing_enemy_turn:
-            self._process_enemy_turn()
+        # post-enemy-action state. The helper also captures each
+        # processed turn into ``_pending_combat_events`` (#570).
+        self._drain_enemy_turns()
 
+        between = self._format_between_turns_block(self._consume_pending_events())
         state = self.get_state()
+        if report and between:
+            return f"{report}\n\n{between}\n\n{state}"
+        if between:
+            return f"{between}\n\n{state}"
         return f"{report}\n\n{state}" if report else state
 
     def _format_attack_report(
@@ -1236,10 +1306,13 @@ class GameSession:
 
         self.pass_turn()
 
-        while self.processing_enemy_turn:
-            self._process_enemy_turn()
+        self._drain_enemy_turns()
 
-        return self.get_state()
+        between = self._format_between_turns_block(self._consume_pending_events())
+        state = self.get_state()
+        if between:
+            return f"{between}\n\n{state}"
+        return state
 
     # ========== Public dev/MCP API (gated upstream by dev_mode) ==========
 

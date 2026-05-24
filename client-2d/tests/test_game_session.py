@@ -682,3 +682,273 @@ class TestSessionCombatMoveSpatialDelegation:
         assert result == "Cannot move: prone"
         # PC must not have moved on the unknown rejection.
         assert (session.player_x, session.player_y) == (target_x, target_y)
+
+
+def _force_combatant_turn(session, creature) -> None:
+    """Point the initiative tracker at a specific creature.
+
+    Generalises ``_force_player_turn`` to any combatant (PC or enemy).
+    """
+    tracker = session.engine._game_state.initiative_tracker
+    for idx, entry in enumerate(tracker.combatants):
+        if entry.creature is creature:
+            tracker.current_turn_index = idx
+            return
+    raise AssertionError(f"{creature} missing from initiative tracker")
+
+
+class TestSessionDrainEnemyTurns:
+    """Plan #570 fix Phase 1: per-call combat event accumulator.
+
+    The MCP request path drains the combat state machine forward to the
+    next PC turn synchronously inside ``attack()`` / ``wait()``. Before
+    this fix the drained turns left no trace in the MCP response — the
+    only artifact was windowed-mode's rolling combat log, which the MCP
+    formatter never reads. ``_drain_enemy_turns`` wraps the drain loop
+    and accumulates one entry per processed turn into
+    ``_pending_combat_events`` so MCP-facing code can surface what
+    happened between the player's actions.
+    """
+
+    def test_pending_events_starts_empty(self, session) -> None:
+        """A freshly loaded session has no buffered combat events."""
+        assert session._pending_combat_events == []
+        assert session._consume_pending_events() == []
+
+    def test_drain_is_noop_when_no_enemy_turn_pending(self, session) -> None:
+        """With ``processing_enemy_turn`` False the drain returns
+        immediately and the accumulator stays empty."""
+        session.processing_enemy_turn = False
+        session._pending_combat_events = []
+        session._drain_enemy_turns()
+        assert session._pending_combat_events == []
+
+    def test_consume_returns_and_clears_pending_events(self, session) -> None:
+        """``_consume_pending_events`` returns the buffer and drains it,
+        so a subsequent call returns the empty list."""
+        session._pending_combat_events = ["seeded line 1", "seeded line 2"]
+        first = session._consume_pending_events()
+        assert first == ["seeded line 1", "seeded line 2"]
+        assert session._consume_pending_events() == []
+
+    def test_drain_captures_enemy_attack_line(self, session) -> None:
+        """A goblin's turn during the drain leaves a readable line in
+        the accumulator naming the goblin and describing the outcome.
+
+        Setup: spawn a goblin adjacent to Archy so the AI's first turn
+        produces a melee attack (rather than a movement-only turn while
+        the goblin closes distance). Force initiative onto the goblin.
+        Deterministic seed pins dice rolls so this test stays stable.
+        """
+        adjacent_x = session.player_x + 1
+        adjacent_y = session.player_y
+        session.spawn_monster("goblin", adjacent_x, adjacent_y)
+
+        goblin = session.engine.game_state.active_enemies[-1]
+        _force_combatant_turn(session, goblin)
+        session.set_seed(42)
+
+        # Clear setup noise so we only assert on this drain's events.
+        session.combat_log.clear()
+        session._pending_combat_events.clear()
+
+        session.processing_enemy_turn = True
+        session._drain_enemy_turns()
+
+        events = session._consume_pending_events()
+        assert events, "drain should produce at least one event line"
+        joined = " ".join(events).lower()
+        assert "goblin" in joined, f"goblin not named in events: {events!r}"
+        assert any(kw in joined for kw in ("hit", "miss", "damage", "no action")), (
+            f"no readable action verb in events: {events!r}"
+        )
+
+    def test_drain_advances_initiative_back_to_player(self, session) -> None:
+        """After draining the goblin's turn, initiative rotates back to
+        the party so the PC can act on the next MCP call."""
+        adjacent_x = session.player_x + 1
+        adjacent_y = session.player_y
+        session.spawn_monster("goblin", adjacent_x, adjacent_y)
+
+        goblin = session.engine.game_state.active_enemies[-1]
+        _force_combatant_turn(session, goblin)
+        session.set_seed(42)
+
+        session.processing_enemy_turn = True
+        session._drain_enemy_turns()
+
+        # Drain must terminate (no infinite loop) and leave the FSM
+        # ready for player input.
+        assert session.processing_enemy_turn is False
+
+    def test_buffer_is_empty_immediately_after_consume(self, session) -> None:
+        """Once the caller consumes the buffer, the next drain starts
+        from an empty accumulator. Pins the contract that prevents lines
+        from one MCP call leaking into the next response."""
+        adjacent_x = session.player_x + 1
+        adjacent_y = session.player_y
+        session.spawn_monster("goblin", adjacent_x, adjacent_y)
+        goblin = session.engine.game_state.active_enemies[-1]
+        session.set_seed(42)
+
+        _force_combatant_turn(session, goblin)
+        session.combat_log.clear()
+        session._pending_combat_events.clear()
+        session.processing_enemy_turn = True
+        session._drain_enemy_turns()
+
+        first_events = session._consume_pending_events()
+        assert first_events, "sanity: first drain produced events"
+
+        # The instant the caller consumes, the buffer must be empty.
+        # If two MCP calls landed back-to-back without an intervening
+        # drain, the second response would otherwise inherit the first
+        # response's events.
+        assert session._pending_combat_events == []
+        assert session._consume_pending_events() == []
+
+
+class TestSessionMCPResponseSurfacesCombatEvents:
+    """Plan #570 fix Phase 2: surface drained enemy-turn events in MCP responses.
+
+    The acceptance criterion from the bug report: an MCP caller invoking
+    ``wait()`` while a hostile enemy is in initiative must see what the
+    enemy did during the drained turn. Before this fix the response was
+    a state snapshot with no trace of the goblin's attack — the party
+    could be wiped between calls with zero visibility (#570).
+    """
+
+    HEADER = "Between turns:"
+
+    def test_wait_response_includes_goblin_attack_line(self, session) -> None:
+        """Acceptance test: ``wait()`` reply contains the goblin's
+        attack outcome line, not just the post-drain state snapshot."""
+        adjacent_x = session.player_x + 1
+        adjacent_y = session.player_y
+        session.spawn_monster("goblin", adjacent_x, adjacent_y)
+
+        # Pin Archy as the current combatant so wait() yields to the
+        # goblin and the drain processes the goblin's turn.
+        _force_player_turn(session)
+        session.set_seed(42)
+
+        response = session.wait()
+
+        assert "Goblin" in response, (
+            f"goblin not named anywhere in wait() reply:\n{response}"
+        )
+        # ``_process_enemy_turn`` writes either a hit / miss / no-action
+        # line. All three carry a recognisable verb; one of them must
+        # be present for the reporter to know what happened.
+        verbs = ("hits", "misses", "takes no action")
+        assert any(v in response for v in verbs), (
+            f"no enemy-action verb in wait() reply:\n{response}"
+        )
+
+    def test_wait_response_uses_between_turns_header(self, session) -> None:
+        """Stable grep target: the surfaced events live under a
+        ``Between turns:`` header so MCP consumers can find them in the
+        unstructured response string."""
+        adjacent_x = session.player_x + 1
+        adjacent_y = session.player_y
+        session.spawn_monster("goblin", adjacent_x, adjacent_y)
+
+        _force_player_turn(session)
+        session.set_seed(42)
+
+        response = session.wait()
+
+        assert self.HEADER in response, (
+            f"missing {self.HEADER!r} header in wait() reply:\n{response}"
+        )
+
+    def test_between_turns_block_formatter_renders_lines(self, session) -> None:
+        """Unit test for the formatter helper: non-empty event list
+        produces a header + indented lines; empty list produces the
+        empty string so callers can unconditionally splice the block
+        into a response."""
+        block = session._format_between_turns_block(
+            ["Goblin hits Archy for 5 damage!", "Archy is down!"]
+        )
+        assert "Between turns:" in block
+        assert "Goblin hits Archy for 5 damage!" in block
+        assert "Archy is down!" in block
+
+        # Empty list → empty string (no orphan header).
+        assert session._format_between_turns_block([]) == ""
+
+    def test_attack_response_wires_pending_events_through_drain(self, session) -> None:
+        """When the drain populates events, ``attack()``'s response
+        includes the ``Between turns:`` block. Monkeypatch the drain so
+        this is decoupled from scenario-specific weapon/ammo issues —
+        the integration acceptance is covered by the ``wait()`` test
+        above; this test pins the attack-path surfacing wiring."""
+        adjacent_x = session.player_x + 1
+        adjacent_y = session.player_y
+        session.spawn_monster("goblin", adjacent_x, adjacent_y)
+        _force_player_turn(session)
+
+        # Stub the drain to inject events as if the goblin had acted.
+        # ``attack()`` then consumes them via the same code path as the
+        # real drain.
+        def fake_drain() -> None:
+            session._pending_combat_events.append("Goblin hits Archy for 5 damage!")
+            session.processing_enemy_turn = False
+
+        session._drain_enemy_turns = fake_drain  # type: ignore[assignment]
+        session.processing_enemy_turn = True
+
+        monsters = session.entity_manager.get_monsters()
+        target_idx = next(
+            i for i, m in enumerate(monsters)
+            if (m.grid_x, m.grid_y) == (adjacent_x, adjacent_y)
+        )
+        response = session.attack(target_idx)
+
+        assert self.HEADER in response, (
+            f"missing {self.HEADER!r} header in attack() reply:\n{response}"
+        )
+        assert "Goblin hits Archy for 5 damage!" in response
+
+    def test_response_omits_header_when_no_enemy_turns_drained(self, session) -> None:
+        """If no enemy turn ran during the call (e.g. attack ended
+        combat or only the PC acted), the response should not include
+        an empty ``Between turns:`` block."""
+        # No goblin in adjacency, force PC turn; wait() will still pass
+        # to the next combatant. The scenario goblin is at (10,5) — far
+        # enough that the AI might not produce an attack line. But the
+        # accumulator captures *any* combat_log line per processed turn,
+        # so this test instead verifies the empty-block guard at the
+        # formatter level by manually clearing the buffer after the drain.
+        _force_player_turn(session)
+
+        # Patch the helper to no-op so wait() drains nothing.
+        original_drain = session._drain_enemy_turns
+        session._drain_enemy_turns = lambda: None  # type: ignore[assignment]
+        try:
+            response = session.wait()
+        finally:
+            session._drain_enemy_turns = original_drain  # type: ignore[assignment]
+
+        assert self.HEADER not in response, (
+            f"empty {self.HEADER!r} block leaked into reply:\n{response}"
+        )
+
+    def test_state_response_surfaces_unconsumed_pending_events(self, session) -> None:
+        """Belt-and-braces: if a caller invokes ``get_state()`` without
+        having consumed the buffer (e.g. via a future code path that
+        accumulates between calls), the formatter renders them under a
+        ``Recent Combat:`` header so they aren't silently dropped."""
+        session._pending_combat_events = [
+            "Goblin hits Archy for 5 damage!",
+            "Goblin moves 5 ft.",
+        ]
+
+        state = session.get_state()
+
+        assert "Recent Combat:" in state
+        assert "Goblin hits Archy for 5 damage!" in state
+        assert "Goblin moves 5 ft." in state
+        # Rendering should consume the buffer to avoid double-rendering
+        # on a subsequent call.
+        assert session._pending_combat_events == []
