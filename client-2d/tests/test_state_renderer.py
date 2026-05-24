@@ -453,3 +453,70 @@ class TestStateRendererDirections:
         renderer = StateRenderer(width=5, height=5)
         direction = renderer._get_direction(0, 0)
         assert direction == "here"
+
+
+class TestStateRendererPlayerTileOverlay:
+    """Regression tests for issue #579.
+
+    When the @ cursor occupies the same tile as another entity, the entity
+    must still appear in the legend and Visible Entities, even though @
+    overlays the entity glyph on the ASCII map.
+    """
+
+    @pytest.fixture
+    def bright_room(self) -> tuple[list[list[int]], FogOfWarSystem]:
+        """Create a 5x5 open room with all tiles bright."""
+        room = [[0] * 5 for _ in range(5)]
+        fog = FogOfWarSystem(width=5, height=5)
+        for y in range(5):
+            for x in range(5):
+                fog.set_visibility(x, y, LightingState.BRIGHT)
+        return room, fog
+
+    def test_ascii_map_shows_player_when_entity_on_same_tile(
+        self, bright_room: tuple[list[list[int]], FogOfWarSystem]
+    ):
+        """@ overlay is preserved when an entity shares the player's tile."""
+        room, fog = bright_room
+        renderer = StateRenderer(width=5, height=5)
+        entities = [Entity(x=2, y=2, entity_type="party", entity_id="wizard_1")]
+
+        ascii_map = renderer.render_ascii_map(
+            room=room, player_x=2, player_y=2, entities=entities, fog=fog
+        )
+
+        lines = ascii_map.split("\n")
+        assert lines[2][2] == "@"
+
+    def test_legend_includes_entity_on_player_tile(
+        self, bright_room: tuple[list[list[int]], FogOfWarSystem]
+    ):
+        """Legend lists entities co-located with the player."""
+        room, fog = bright_room
+        renderer = StateRenderer(width=5, height=5)
+        entities = [Entity(x=2, y=2, entity_type="party", entity_id="wizard_1")]
+
+        state = renderer.render_state(
+            room=room, player_x=2, player_y=2, entities=entities, fog=fog
+        )
+
+        assert "party:wizard_1" in state["legend"].values()
+
+    def test_visible_entities_includes_entity_on_player_tile(
+        self, bright_room: tuple[list[list[int]], FogOfWarSystem]
+    ):
+        """Visible Entities reports co-located entities with distance 0/'here'."""
+        room, fog = bright_room
+        renderer = StateRenderer(width=5, height=5)
+        entities = [Entity(x=2, y=2, entity_type="party", entity_id="wizard_1")]
+
+        state = renderer.render_state(
+            room=room, player_x=2, player_y=2, entities=entities, fog=fog
+        )
+
+        assert "wizard_1" in state["visible_entities"]
+        wizard = state["visible_entities"]["wizard_1"]
+        assert wizard["distance"] == 0
+        assert wizard["direction"] == "here"
+        assert wizard["position"] == [2, 2]
+        assert wizard["type"] == "party"

@@ -128,6 +128,11 @@ class StateRenderer:
         """Get the character to display at a given tile position."""
         # Player always visible at their position
         if x == player_x and y == player_y:
+            # Register any co-located entity so it appears in the legend
+            # and Visible Entities even though @ overlays the glyph.
+            entity = entity_at.get((x, y))
+            if entity:
+                self._get_entity_symbol(entity)
             return self.PLAYER_CHAR
 
         # Check visibility
