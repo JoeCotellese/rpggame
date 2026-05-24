@@ -218,3 +218,117 @@ class TestRemoveCreaturePosition:
     ) -> None:
         with pytest.raises(ValueError, match=r"(?i)spatial|map"):
             game_state.remove_creature_position("goblin")
+
+
+class TestSetPositionNoOp:
+    """No-op set_position / move_creature should NOT emit CREATURE_MOVED."""
+
+    def test_set_position_to_same_tile_after_placement_emits_nothing(
+        self, game_state: GameState, map_5x5: Map
+    ) -> None:
+        game_state.spatial = SpatialIndex(map_5x5)
+        game_state.set_position("goblin", 0, 0)  # initial placement
+        moved = _capture(game_state.event_bus, EventType.CREATURE_MOVED)
+
+        result = game_state.set_position("goblin", 0, 0)  # same tile
+
+        assert result == Position(0, 0)
+        assert moved == []
+        assert game_state.spatial.position_of("goblin") == Position(0, 0)
+
+    def test_move_creature_zero_delta_emits_nothing(
+        self, game_state: GameState, map_5x5: Map
+    ) -> None:
+        game_state.spatial = SpatialIndex(map_5x5)
+        game_state.set_position("goblin", 0, 0)
+        moved = _capture(game_state.event_bus, EventType.CREATURE_MOVED)
+
+        result = game_state.move_creature("goblin", 0, 0)
+
+        assert result == Position(0, 0)
+        assert moved == []
+        assert game_state.spatial.position_of("goblin") == Position(0, 0)
+
+
+class TestSetPositionCreatureSync:
+    """set_position / move_creature / remove_creature_position keep
+    Creature.position in sync with the SpatialIndex when the entity_id maps
+    to a real Creature in the roster (party or active_enemies).
+    """
+
+    def test_set_position_syncs_creature_position_when_creature_in_roster(
+        self, game_state: GameState, map_5x5: Map, party_of_one: Party
+    ) -> None:
+        game_state.spatial = SpatialIndex(map_5x5)
+        character = party_of_one.characters[0]
+        # spawn_character formats PC entity_ids as ``pc_<name_lower>``.
+        entity_id = f"pc_{character.name.lower().replace(' ', '_')}"
+
+        game_state.set_position(entity_id, 2, 2)
+
+        assert character.position == Position(2, 2)
+
+    def test_set_position_unknown_entity_id_silently_skips_creature_sync(
+        self, game_state: GameState, map_5x5: Map
+    ) -> None:
+        game_state.spatial = SpatialIndex(map_5x5)
+        # entity_id has no matching Creature in party or active_enemies.
+        # Should succeed (SpatialIndex updated) without raising.
+        result = game_state.set_position("ghost", 1, 1)
+
+        assert result == Position(1, 1)
+        assert game_state.spatial.position_of("ghost") == Position(1, 1)
+
+    def test_move_creature_syncs_creature_position(
+        self, game_state: GameState, map_5x5: Map, party_of_one: Party
+    ) -> None:
+        game_state.spatial = SpatialIndex(map_5x5)
+        character = party_of_one.characters[0]
+        entity_id = f"pc_{character.name.lower().replace(' ', '_')}"
+        game_state.set_position(entity_id, 0, 0)
+
+        game_state.move_creature(entity_id, 1, 0)
+
+        assert character.position == Position(1, 0)
+
+    def test_remove_creature_position_clears_creature_position(
+        self, game_state: GameState, map_5x5: Map, party_of_one: Party
+    ) -> None:
+        game_state.spatial = SpatialIndex(map_5x5)
+        character = party_of_one.characters[0]
+        entity_id = f"pc_{character.name.lower().replace(' ', '_')}"
+        game_state.set_position(entity_id, 0, 0)
+        assert character.position == Position(0, 0)
+
+        game_state.remove_creature_position(entity_id)
+
+        assert character.position is None
+
+
+class TestBootstrapSpatial:
+    """GameState.bootstrap_spatial(map, *, replace=False) factory."""
+
+    def test_bootstrap_spatial_sets_attribute_and_returns_index(
+        self, game_state: GameState, map_5x5: Map
+    ) -> None:
+        result = game_state.bootstrap_spatial(map_5x5)
+
+        assert isinstance(result, SpatialIndex)
+        assert game_state.spatial is result
+
+    def test_bootstrap_spatial_double_call_raises_without_replace(
+        self, game_state: GameState, map_5x5: Map
+    ) -> None:
+        game_state.bootstrap_spatial(map_5x5)
+
+        with pytest.raises(ValueError, match=r"(?i)spatial|already"):
+            game_state.bootstrap_spatial(map_5x5)
+
+    def test_bootstrap_spatial_replace_succeeds(
+        self, game_state: GameState, map_5x5: Map
+    ) -> None:
+        first = game_state.bootstrap_spatial(map_5x5)
+        second = game_state.bootstrap_spatial(map_5x5, replace=True)
+
+        assert second is not first
+        assert game_state.spatial is second

@@ -11,6 +11,7 @@ from dnd_engine.core.character import Character
 from dnd_engine.core.combat import AttackResult, CombatEngine
 from dnd_engine.core.creature import Creature
 from dnd_engine.core.dice import DiceRoller, format_dice_with_modifier
+from dnd_engine.core.map import Map
 from dnd_engine.core.npc_manager import NPCManager
 from dnd_engine.core.party import Party
 from dnd_engine.core.position import Position
@@ -488,6 +489,15 @@ class GameState:
     - Game events
 
     Serves as the single source of truth for the entire game.
+
+    Spatial API contract (set_position vs move_creature):
+        ``set_position`` is the upsert path: it places if the entity isn't
+        in the spatial index, moves if it is. ``move_creature`` is the
+        strict delta path: it requires the entity to be placed and raises
+        ``KeyError`` if not. Callers that want "ensure placed at this
+        offset" should compute the absolute destination themselves and
+        call ``set_position``. This asymmetry is intentional: deltas are
+        only meaningful relative to an existing placement.
     """
 
     def __init__(
@@ -642,12 +652,93 @@ class GameState:
         # Action history for narrative context
         self.action_history: list[str] = []
 
+    def bootstrap_spatial(
+        self, map: Map, *, replace: bool = False
+    ) -> SpatialIndex:
+        """Construct and install a ``SpatialIndex`` backed by ``map``.
+
+        Single entry point for wiring up the engine spatial model. Guards
+        against accidental double-bootstrap (which would silently wipe all
+        existing placements). Callers that want a deliberate replace should
+        pass ``replace=True``.
+
+        Args:
+            map: The ``Map`` the new ``SpatialIndex`` will use for
+                blocking / line-of-sight queries.
+            replace: When True, allow replacing an existing
+                ``self.spatial``. Default False raises ``ValueError`` if
+                a SpatialIndex is already installed.
+
+        Returns:
+            The newly installed ``SpatialIndex`` (same object as
+            ``self.spatial`` after this call).
+
+        Raises:
+            ValueError: If ``self.spatial`` is already set and
+                ``replace`` is False.
+        """
+        if self.spatial is not None and not replace:
+            raise ValueError(
+                "GameState.spatial is already initialized; pass replace=True "
+                "to discard the existing SpatialIndex"
+            )
+        self.spatial = SpatialIndex(map)
+        return self.spatial
+
+    def _find_creature_by_id(self, entity_id: str) -> Creature | None:
+        """Look up the live ``Creature`` for a spatial entity_id, or None.
+
+        Mirrors the entity_id convention used by ``EngineAdapter.spawn_*``:
+        - PCs are addressed as ``f"pc_{name_lower_underscored}"`` and live
+          in ``self.party.characters``.
+        - Monsters are addressed as ``f"{monster_id}_{index}"`` and live
+          in ``self.active_enemies``. The index portion is the position
+          inside ``active_enemies`` at spawn time; once a monster is
+          appended its index is stable for the lifetime of that list.
+
+        Returns ``None`` when the entity_id has no matching Creature —
+        this is the expected path for synthetic ids used in unit tests
+        (e.g. "goblin", "ghost") and for any entity_id format outside the
+        spawn convention. Callers should treat the SpatialIndex as the
+        source of truth; ``Creature.position`` is a convenience mirror.
+        """
+        # PC path: pc_<name_lower_underscored>
+        if entity_id.startswith("pc_"):
+            target_key = entity_id[len("pc_") :]
+            for character in self.party.characters:
+                if character.name.lower().replace(" ", "_") == target_key:
+                    return character
+            return None
+        # Monster path: <monster_id>_<index>
+        if "_" in entity_id:
+            prefix, _, suffix = entity_id.rpartition("_")
+            if suffix.isdigit():
+                index = int(suffix)
+                if 0 <= index < len(self.active_enemies):
+                    return self.active_enemies[index]
+        return None
+
     def set_position(self, entity_id: str, x: int, y: int) -> Position:
         """Place or move an entity at ``(x, y)`` via the spatial index.
 
         Emits ``CREATURE_PLACED`` on the first call for an entity and
-        ``CREATURE_MOVED`` on subsequent calls. Delegates blocking /
-        occupancy validation to ``SpatialIndex``.
+        ``CREATURE_MOVED`` on subsequent calls. A no-op call (set to the
+        creature's current tile) updates nothing and emits no event.
+        Delegates blocking / occupancy validation to ``SpatialIndex``.
+
+        When the ``entity_id`` resolves to a live ``Creature`` via
+        ``_find_creature_by_id``, ``creature.position`` is mirrored to the
+        new ``Position`` so the dual-representation stays consistent.
+        Unknown entity_ids (no matching Creature) silently skip the mirror
+        write — the SpatialIndex remains the source of truth.
+
+        Note:
+            Events are emitted synchronously on the shared event bus.
+            Subscribers must NOT call ``set_position`` / ``move_creature`` /
+            ``remove_creature_position`` from within an event handler, as
+            this will recurse. If a subscriber needs to trigger a follow-on
+            placement (e.g. follower-pet behavior), schedule it out-of-band
+            (next tick, queued action) — not synchronously.
 
         Args:
             entity_id: Stable id of the creature.
@@ -678,6 +769,8 @@ class GameState:
                 )
             )
         else:
+            if existing == destination:
+                return destination  # No-op move; no spatial mutation, no event.
             self.spatial.move(entity_id, destination)
             self.event_bus.emit(
                 Event(
@@ -689,10 +782,25 @@ class GameState:
                     },
                 )
             )
+        creature = self._find_creature_by_id(entity_id)
+        if creature is not None:
+            creature.position = destination
         return destination
 
     def move_creature(self, entity_id: str, dx: int, dy: int) -> Position:
         """Move an already-placed entity by ``(dx, dy)`` and emit ``CREATURE_MOVED``.
+
+        A zero-delta call (``dx == dy == 0``) is a no-op: returns the
+        creature's current position without emitting an event.
+
+        When the ``entity_id`` resolves to a live ``Creature``,
+        ``creature.position`` is mirrored to the new ``Position``. Unknown
+        entity_ids silently skip the mirror write.
+
+        Note:
+            Events are emitted synchronously. See ``set_position`` for the
+            re-entrancy contract — subscribers must not call back into
+            these methods from within a handler.
 
         Args:
             entity_id: Stable id of the creature.
@@ -715,6 +823,8 @@ class GameState:
         current = self.spatial.position_of(entity_id)
         if current is None:
             raise KeyError(entity_id)
+        if dx == 0 and dy == 0:
+            return current  # No-op delta; no spatial mutation, no event.
         destination = Position(current.x + dx, current.y + dy)
         self.spatial.move(entity_id, destination)
         self.event_bus.emit(
@@ -727,6 +837,9 @@ class GameState:
                 },
             )
         )
+        creature = self._find_creature_by_id(entity_id)
+        if creature is not None:
+            creature.position = destination
         return destination
 
     def remove_creature_position(self, entity_id: str) -> None:
@@ -735,6 +848,15 @@ class GameState:
         No-op (and no event) if the entity is not currently placed —
         matches ``SpatialIndex.remove``'s contract so cleanup paths can
         call this unconditionally.
+
+        When the ``entity_id`` resolves to a live ``Creature``,
+        ``creature.position`` is cleared (set to ``None``). Unknown
+        entity_ids silently skip the mirror write.
+
+        Note:
+            Events are emitted synchronously. See ``set_position`` for the
+            re-entrancy contract — subscribers must not call back into
+            these methods from within a handler.
 
         Raises:
             ValueError: If ``self.spatial`` is None.
@@ -754,6 +876,9 @@ class GameState:
                 data={"entity_id": entity_id, "position": current},
             )
         )
+        creature = self._find_creature_by_id(entity_id)
+        if creature is not None:
+            creature.position = None
 
     def start(self) -> None:
         """
