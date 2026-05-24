@@ -97,6 +97,11 @@ class EngineAdapter:
         self._event_bus = None
         self._vault = None
         self._initialized = False
+        # Track entity_ids the adapter has placed into the SpatialIndex via
+        # spawn_monster / spawn_character / set_position. ``clear_enemies``
+        # and ``reset_game`` consult this so they only remove placements
+        # the adapter owns (other systems may write to spatial directly).
+        self._adapter_spatial_ids: set[str] = set()
 
     def load_party_from_vault(
         self, character_ids: list[str] | None = None
@@ -770,6 +775,10 @@ class EngineAdapter:
         to the WEAPON slot, the rest stay in the pack. If combat is active,
         the character joins the initiative tracker.
 
+        When ``GameState.spatial`` is wired up, the new PC is also placed
+        in the SpatialIndex at ``(x, y)``. If the SpatialIndex rejects the
+        placement, the return dict carries an ``"error"`` key.
+
         Args:
             class_name: Class ID (e.g. ``"ranger"``).
             race: Race ID (e.g. ``"elf"``).
@@ -783,7 +792,8 @@ class EngineAdapter:
 
         Returns:
             ``{"entity_id": "pc_<name>", "name": str, "hp": int,
-            "position": [x, y]}``.
+            "position": [x, y]}`` on success, plus an ``"error"`` key when
+            the SpatialIndex rejected the placement.
 
         Raises:
             ValueError: If initialize_game() has not been called, or if the
@@ -815,12 +825,19 @@ class EngineAdapter:
             self._game_state.initiative_tracker.add_combatant(character)
 
         entity_id = f"pc_{character.name.lower().replace(' ', '_')}"
-        return {
+        response: dict[str, Any] = {
             "entity_id": entity_id,
             "name": character.name,
             "hp": character.current_hp,
             "position": [x, y],
         }
+        if self._game_state.spatial is not None:
+            try:
+                self._game_state.set_position(entity_id, x, y)
+                self._adapter_spatial_ids.add(entity_id)
+            except ValueError as e:
+                response["error"] = str(e)
+        return response
 
     def spawn_monster(self, monster_id: str, x: int, y: int) -> dict[str, Any]:
         """Create a monster and place it on the map.
@@ -829,6 +846,13 @@ class EngineAdapter:
         already in combat, starts combat (matching the room-entry flow at
         ``game_state.py:_check_for_enemies``). If combat is active, adds the
         new creature to the existing initiative tracker.
+
+        When ``GameState.spatial`` is wired up, the new monster is also
+        placed in the SpatialIndex at ``(x, y)``. If the SpatialIndex
+        rejects the placement (blocking tile, occupied), the return dict
+        carries an ``"error"`` key with the rejection reason; the monster
+        is still added to ``active_enemies`` and initiative so the visual
+        layer can render it, but it has no spatial coordinate.
 
         Args:
             monster_id: SRD monster ID (e.g. ``"goblin"``). Surfaces a
@@ -839,7 +863,8 @@ class EngineAdapter:
 
         Returns:
             ``{"entity_id": "<monster_id>_<index>", "name": str, "hp": int,
-            "position": [x, y]}``.
+            "position": [x, y]}`` on success, plus an ``"error"`` key when
+            the SpatialIndex rejected the placement.
 
         Raises:
             ValueError: If initialize_game() has not been called.
@@ -857,20 +882,30 @@ class EngineAdapter:
         else:
             self._game_state._start_combat()
 
-        return {
-            "entity_id": f"{monster_id}_{index}",
+        entity_id = f"{monster_id}_{index}"
+        response: dict[str, Any] = {
+            "entity_id": entity_id,
             "name": creature.name,
             "hp": creature.current_hp,
             "position": [x, y],
         }
+        if self._game_state.spatial is not None:
+            try:
+                self._game_state.set_position(entity_id, x, y)
+                self._adapter_spatial_ids.add(entity_id)
+            except ValueError as e:
+                response["error"] = str(e)
+        return response
 
     def set_position(self, entity_id: str, x: int, y: int) -> dict[str, Any]:
         """Return a placement directive for the GameWindow handler to apply.
 
-        Engine-side creature coordinates are not tracked today; the visual
-        EntityManager owns ``grid_x``/``grid_y``. The adapter validates
-        inputs and returns a structured dict that the dispatch layer
-        translates into ``entity_manager.get_by_id(entity_id)`` + assign.
+        When ``GameState.spatial`` is wired up (Map bootstrapped), persist
+        the placement through the engine so the SpatialIndex stays in sync
+        with the visual EntityManager. When spatial is still None (no Map
+        yet — current default), fall back to the prior no-op behavior so
+        the bridge keeps working until P5 makes the engine spatial model
+        canonical.
 
         Args:
             entity_id: ID of the entity to move (as it appears in
@@ -879,7 +914,12 @@ class EngineAdapter:
             y: New tile Y.
 
         Returns:
-            ``{"entity_id": entity_id, "position": [x, y]}``.
+            ``{"entity_id": entity_id, "position": [x, y]}`` on success,
+            using the engine's authoritative Position. When the
+            SpatialIndex rejects the placement (blocking tile, occupied),
+            the dict carries an ``"error"`` key with the reason and the
+            requested ``[x, y]`` (the SpatialIndex is unchanged on
+            rejection).
 
         Raises:
             ValueError: If initialize_game() has not been called.
@@ -889,14 +929,93 @@ class EngineAdapter:
             raise ValueError("Must call initialize_game() first")
         if not isinstance(x, int) or not isinstance(y, int):
             raise TypeError("x and y must be integers")
+        if self._game_state.spatial is not None:
+            try:
+                pos = self._game_state.set_position(entity_id, x, y)
+            except ValueError as e:
+                return {
+                    "entity_id": entity_id,
+                    "position": [x, y],
+                    "error": str(e),
+                }
+            self._adapter_spatial_ids.add(entity_id)
+            return {"entity_id": entity_id, "position": [pos.x, pos.y]}
         return {"entity_id": entity_id, "position": [x, y]}
+
+    def move_creature(self, entity_id: str, dx: int, dy: int) -> dict[str, Any]:
+        """Move an already-placed entity by ``(dx, dy)`` via the engine.
+
+        Thin pass-through to ``GameState.move_creature`` so client-2d
+        callers don't have to bypass the adapter for delta moves. When
+        ``GameState.spatial`` is None (no Map bootstrapped), this is a
+        no-op that returns ``position: None`` — matching ``set_position``'s
+        unwired contract.
+
+        Args:
+            entity_id: Stable id of the placed entity.
+            dx: Horizontal delta in tiles.
+            dy: Vertical delta in tiles.
+
+        Returns:
+            ``{"entity_id": entity_id, "position": [x, y]}`` on success.
+            When the SpatialIndex rejects the move (blocking, occupied, or
+            entity not placed) the dict carries an ``"error"`` key instead
+            of ``"position"``.
+
+        Raises:
+            ValueError: If initialize_game() has not been called.
+            TypeError: If ``dx`` or ``dy`` is not an int.
+        """
+        if self._game_state is None:
+            raise ValueError("Must call initialize_game() first")
+        if not isinstance(dx, int) or not isinstance(dy, int):
+            raise TypeError("dx and dy must be integers")
+        if self._game_state.spatial is not None:
+            try:
+                pos = self._game_state.move_creature(entity_id, dx, dy)
+            except (ValueError, KeyError) as e:
+                return {"entity_id": entity_id, "error": str(e)}
+            return {"entity_id": entity_id, "position": [pos.x, pos.y]}
+        return {"entity_id": entity_id, "position": None}
+
+    def remove_creature_position(self, entity_id: str) -> dict[str, Any]:
+        """Remove an entity's placement from the SpatialIndex.
+
+        Thin pass-through to ``GameState.remove_creature_position``. Safe
+        to call for an entity that is not currently placed — idempotent
+        per the underlying contract. When ``GameState.spatial`` is None
+        this is a no-op that still reports success.
+
+        Args:
+            entity_id: Stable id of the entity to unplace.
+
+        Returns:
+            ``{"entity_id": entity_id, "removed": True}`` on success.
+            On unexpected SpatialIndex error, an ``"error"`` key replaces
+            ``"removed"``.
+
+        Raises:
+            ValueError: If initialize_game() has not been called.
+        """
+        if self._game_state is None:
+            raise ValueError("Must call initialize_game() first")
+        if self._game_state.spatial is not None:
+            try:
+                self._game_state.remove_creature_position(entity_id)
+            except ValueError as e:
+                return {"entity_id": entity_id, "error": str(e)}
+            self._adapter_spatial_ids.discard(entity_id)
+        return {"entity_id": entity_id, "removed": True}
 
     def clear_enemies(self) -> dict[str, Any]:
         """Remove all active enemies and end combat.
 
         Useful between test scenarios. Wipes ``active_enemies``, ends
         combat, and discards the initiative tracker so the next spawn
-        starts a fresh encounter.
+        starts a fresh encounter. When ``GameState.spatial`` is wired up,
+        each enemy is also removed from the SpatialIndex by its spawn-time
+        entity_id (``f"{monster_name}_{index}"`` — see
+        ``EngineAdapter.spawn_monster``).
 
         Returns:
             ``{"success": True, "cleared": <count of removed enemies>}``.
@@ -907,6 +1026,22 @@ class EngineAdapter:
         if self._game_state is None:
             raise ValueError("Must call initialize_game() first")
         cleared = len(self._game_state.active_enemies)
+        if self._game_state.spatial is not None:
+            # Drop adapter-owned monster placements from the SpatialIndex.
+            # Enemies use the ``<monster_id>_<index>`` convention (not the
+            # ``pc_`` prefix), so filter the tracking set to keep PCs in
+            # place. KeyError is tolerated (entity_id may have already
+            # been removed via remove_creature_position).
+            enemy_ids = {
+                eid for eid in self._adapter_spatial_ids
+                if not eid.startswith("pc_")
+            }
+            for entity_id in enemy_ids:
+                try:
+                    self._game_state.remove_creature_position(entity_id)
+                except KeyError:
+                    pass
+                self._adapter_spatial_ids.discard(entity_id)
         self._game_state.active_enemies = []
         self._game_state.in_combat = False
         self._game_state.initiative_tracker = None
@@ -919,7 +1054,10 @@ class EngineAdapter:
         ``clear_enemies`` by also emptying the party so the next
         ``load_scenario`` or ``spawn_character`` composes against a known
         zero state. The dungeon / map is left intact — callers swap maps
-        via ``load_scenario`` when they need to.
+        via ``load_scenario`` when they need to. When
+        ``GameState.spatial`` is wired up, party members and enemies are
+        also removed from the SpatialIndex by their spawn-time entity_ids
+        (``pc_<name>`` and ``<monster_name>_<index>``).
 
         Mutates engine objects (``Party.characters``, ``GameState.active_enemies``,
         ``in_combat``, ``initiative_tracker``) directly. This is the
@@ -937,6 +1075,16 @@ class EngineAdapter:
             raise ValueError("Must call initialize_game() first")
         cleared_party = len(self._party.characters)
         cleared_enemies = len(self._game_state.active_enemies)
+        if self._game_state.spatial is not None:
+            # Drop every adapter-owned placement — party + enemies — from
+            # the SpatialIndex. KeyError is tolerated (entity_id may have
+            # already been removed via remove_creature_position).
+            for entity_id in list(self._adapter_spatial_ids):
+                try:
+                    self._game_state.remove_creature_position(entity_id)
+                except KeyError:
+                    pass
+            self._adapter_spatial_ids.clear()
         self._party.characters = []
         self._game_state.active_enemies = []
         self._game_state.in_combat = False
