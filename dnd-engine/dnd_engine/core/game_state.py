@@ -12,13 +12,14 @@ from dnd_engine.core.combat import AttackResult, CombatEngine
 from dnd_engine.core.creature import Creature
 from dnd_engine.core.dice import DiceRoller, format_dice_with_modifier
 from dnd_engine.core.map import Map
+from dnd_engine.core.move_result import MoveResult
 from dnd_engine.core.npc_manager import NPCManager
 from dnd_engine.core.party import Party
 from dnd_engine.core.position import Position
 from dnd_engine.core.quest import QuestManager
 from dnd_engine.core.room_registry import RoomRegistry
 from dnd_engine.rules.loader import DataLoader
-from dnd_engine.systems.action_economy import ActionType
+from dnd_engine.systems.action_economy import ActionType, Terrain
 from dnd_engine.systems.ai import EnemyAI
 from dnd_engine.systems.condition_manager import ConditionManager
 from dnd_engine.systems.initiative import InitiativeTracker
@@ -879,6 +880,121 @@ class GameState:
         creature = self._find_creature_by_id(entity_id)
         if creature is not None:
             creature.position = None
+
+    def attempt_combat_step(
+        self,
+        entity_id: str,
+        dx: int,
+        dy: int,
+        *,
+        terrain: Terrain | None = None,
+    ) -> MoveResult:
+        """Engine-owned single-tile combat move with validation.
+
+        Runs the four checks that combat movement needs — placement,
+        blocking tile, occupancy, and remaining movement budget — and
+        on success deducts the cost from the current ``TurnState`` and
+        moves the entity. The Map's terrain at the destination drives
+        the cost by default so Difficult Terrain doubles the per-foot
+        deduction per the SRD; callers can override by passing an
+        explicit ``terrain`` (rare — only useful for scripted scenarios
+        that need to force a cost regardless of map geometry).
+
+        Args:
+            entity_id: Stable id of the moving entity.
+            dx: Horizontal delta in tiles (typically -1, 0, or 1).
+            dy: Vertical delta in tiles (typically -1, 0, or 1).
+            terrain: Optional override for the destination tile's
+                terrain. When ``None`` (the default), the destination
+                terrain is read from ``Map.terrain_at`` so map geometry
+                drives cost.
+
+        Returns:
+            A :class:`MoveResult` describing the outcome. On failure the
+            position field carries the entity's CURRENT position (no
+            move happened); on success it carries the new destination.
+            ``movement_remaining`` reflects the budget AFTER the
+            attempt — on failure no deduction is made.
+
+        Notes:
+            - Soft-fails (returns ``ok=False``) instead of raising when
+              the entity has no placement. This keeps the session-side
+              wiring simple — callers do not need to guard.
+            - When the destination tile is the entity's current tile
+              (``dx == dy == 0``) this delegates through ``move_creature``
+              which is a no-op for zero deltas; the cost is still
+              evaluated against the (zero) terrain step. Callers should
+              avoid zero-delta calls — the typical caller is a
+              direction-keyed move.
+        """
+        if self.spatial is None:
+            raise ValueError(
+                "GameState.spatial is not initialized; assign a SpatialIndex "
+                "(built from a Map) before calling attempt_combat_step"
+            )
+
+        current = self.spatial.position_of(entity_id)
+        if current is None:
+            return MoveResult(
+                ok=False,
+                reason="not placed",
+                position=Position(0, 0),
+                movement_remaining=0,
+            )
+
+        destination = Position(current.x + dx, current.y + dy)
+        spatial_map = self.spatial._map
+
+        turn_state = (
+            self.initiative_tracker.get_current_turn_state()
+            if self.initiative_tracker
+            else None
+        )
+        budget = turn_state.movement_remaining if turn_state is not None else 0
+
+        if spatial_map.is_blocking(destination.x, destination.y):
+            return MoveResult(
+                ok=False,
+                reason="blocking",
+                position=current,
+                movement_remaining=budget,
+            )
+
+        occupant = self.spatial.occupant_at(destination)
+        if occupant is not None and occupant != entity_id:
+            return MoveResult(
+                ok=False,
+                reason=f"occupied by {occupant}",
+                position=current,
+                movement_remaining=budget,
+            )
+
+        # Map drives terrain by default; explicit kwarg wins when supplied.
+        actual_terrain = (
+            terrain
+            if terrain is not None
+            else spatial_map.terrain_at(destination.x, destination.y)
+        )
+
+        if turn_state is None or not turn_state.consume_movement(
+            5, terrain=actual_terrain
+        ):
+            return MoveResult(
+                ok=False,
+                reason="no movement remaining",
+                position=current,
+                movement_remaining=budget,
+            )
+
+        # All preconditions satisfied; commit the move (emits CREATURE_MOVED
+        # and syncs Creature.position).
+        self.move_creature(entity_id, dx, dy)
+        return MoveResult(
+            ok=True,
+            reason=None,
+            position=destination,
+            movement_remaining=turn_state.movement_remaining,
+        )
 
     def start(self) -> None:
         """

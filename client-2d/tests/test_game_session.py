@@ -442,3 +442,63 @@ class TestSessionResetGameMCPDispatch:
         assert session.engine.game_state.active_enemies == []
         assert session.entity_manager.get_party_members() == []
         assert session.entity_manager.get_monsters() == []
+
+
+class TestSessionCombatMoveSpatialDelegation:
+    """Plan-03 P5: when ``GameState.spatial`` is bootstrapped, combat_move
+    routes through ``GameState.attempt_combat_step``. The MCP-visible
+    wire string template for a successful move MUST be preserved
+    byte-for-byte against the legacy ``RoomLayout``-driven path."""
+
+    def _bootstrap_spatial_around_pc(self, session) -> str:
+        """Wire a Map + SpatialIndex matching the session's room layout
+        and place the current PC at the session's player tile. Returns
+        the PC entity_id used."""
+        from dnd_engine.core.map import Map
+
+        # Use the session's existing RoomLayout to seed the engine Map.
+        game_state = session.engine.game_state
+        engine_map = Map.from_room_layout(session.room_layout)
+        game_state.bootstrap_spatial(engine_map)
+
+        # Place the current PC at the session's player tile.
+        current = session.engine.get_current_combatant()
+        creature = current["creature"]
+        entity_id = f"pc_{creature.name.lower().replace(' ', '_')}"
+        game_state.set_position(entity_id, session.player_x, session.player_y)
+        return entity_id
+
+    def test_successful_move_returns_same_wire_template(self, session) -> None:
+        """``combat_move("north")`` via the engine path must produce a
+        first-line equal to ``Moved <dir>. Movement remaining: <n> ft.``
+        — exactly what the legacy path returned."""
+        _force_player_turn(session)
+
+        # Move the PC to a tile with empty space all around so the chosen
+        # direction is guaranteed walkable on the room layout.
+        target_x, target_y = 5, 5
+        session.player_x = target_x
+        session.player_y = target_y
+        # Sync the entity manager so update_current_turn_position has
+        # something to advance from.
+        for ent in session.entity_manager.get_party_members():
+            ent.grid_x = target_x
+            ent.grid_y = target_y
+
+        self._bootstrap_spatial_around_pc(session)
+        starting_movement = session.engine.get_current_turn_state().movement_remaining
+
+        result = session.combat_move("north")
+
+        # First line must match the legacy wire format exactly. Movement
+        # is 5 ft on normal terrain so remaining = starting - 5.
+        expected_first_line = (
+            f"Moved north. Movement remaining: {starting_movement - 5} ft."
+        )
+        assert result.startswith(expected_first_line + "\n"), (
+            f"wire format drift: expected first line {expected_first_line!r}, "
+            f"got {result.splitlines()[0]!r}"
+        )
+
+        # And the session's player position must reflect the engine move.
+        assert (session.player_x, session.player_y) == (target_x, target_y - 1)
