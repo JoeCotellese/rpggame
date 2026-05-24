@@ -1293,7 +1293,16 @@ class GameSession:
         if not self.engine.in_combat:
             return "Not in combat! Use game_move() to explore."
 
-        self.pass_turn()
+        if self.engine.is_player_turn():
+            # Standard semantic: the PC chooses to pass. advance off them
+            # so the drain can run subsequent enemies.
+            self.pass_turn()
+        else:
+            # Non-PC turn (e.g. just after spawn_monster() left an enemy
+            # first in initiative, #572). Don't burn the enemy's slot via
+            # pass_turn(); raise the drain gate so _drain_enemy_turns()
+            # runs the enemy AI instead of silently advancing past it.
+            self.processing_enemy_turn = True
 
         self._drain_enemy_turns()
 
@@ -1331,6 +1340,18 @@ class GameSession:
             # placed PCs via spawn_character / load_scenario.
             if not self.entity_manager.get_party_members():
                 self._spread_party_for_combat()
+
+        # Mirror initialize()'s drain-gate pattern: if the spawn left a
+        # non-PC (or unconscious PC) as the current combatant, raise
+        # processing_enemy_turn so the next wait() / attack() drains the
+        # owed turn instead of silently advancing past it (#572).
+        if self.engine.in_combat:
+            if not self.engine.is_player_turn():
+                self.processing_enemy_turn = True
+                self.enemy_turn_timer = ENEMY_TURN_DELAY
+            elif self.engine.is_current_combatant_unconscious():
+                self.processing_enemy_turn = True
+                self.enemy_turn_timer = ENEMY_TURN_DELAY
 
         return (
             f"Spawned {result['name']} at ({x},{y}) as {result['entity_id']}. " + self.get_state()
