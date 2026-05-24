@@ -888,6 +888,16 @@ class GameSession:
             "east": (1, 0),
             "west": (-1, 0),
         }[direction]
+
+        # Engine-owned validation path (plan-03 P5). Only engaged when a
+        # SpatialIndex has been bootstrapped on GameState; otherwise the
+        # legacy RoomLayout-driven path below still runs unchanged.
+        game_state = self.engine.game_state
+        if game_state is not None and game_state.spatial is not None:
+            engine_result = self._combat_move_via_engine(direction, dx, dy)
+            if engine_result is not None:
+                return engine_result
+
         new_x = self.player_x + dx
         new_y = self.player_y + dy
 
@@ -916,6 +926,121 @@ class GameSession:
 
         remaining = turn_state.movement_remaining
         return f"Moved {direction}. Movement remaining: {remaining} ft.\n" + self.get_state()
+
+    def _combat_move_via_engine(
+        self, direction: str, dx: int, dy: int
+    ) -> str | None:
+        """Engine-validated combat step. Returns the same wire format the
+        legacy ``combat_move`` path produces so MCP ``game_move`` is
+        byte-for-byte stable.
+
+        Returns ``None`` when the engine path can't determine an
+        entity_id for the current combatant — caller falls back to the
+        legacy ``RoomLayout`` path. ``None`` is NOT a failure indicator;
+        explicit rejection messages always come back as strings.
+
+        Note on the difficult-terrain cost delta: the engine reads the
+        destination terrain from ``Map.terrain_at`` so a water tile
+        (``TerrainType.DIFFICULT``) charges 10 ft per 5-ft step per
+        SRD #436. The legacy ``RoomLayout`` path always charged a flat
+        5 ft regardless of tile. The engine cost is the SRD-correct
+        one; scenarios that depended on the legacy flat cost across
+        water need to flatten their terrain.
+        """
+        current = self.engine.get_current_combatant()
+        if current is None:
+            return None
+        creature = current["creature"]
+        # The plan-03 spatial convention for PC entity ids mirrors
+        # GameState._find_creature_by_id and EngineAdapter.spawn_character.
+        entity_id = f"pc_{creature.name.lower().replace(' ', '_')}"
+        game_state = self.engine.game_state
+        if game_state.spatial.position_of(entity_id) is None:
+            # Spatial is bootstrapped but the PC is not yet placed — seed
+            # from the session's current coords and proceed via the
+            # engine path. Avoids the silent desync where the legacy
+            # fallback would advance player_x/player_y without ever
+            # writing to spatial, leaving the bootstrap undone forever.
+            try:
+                game_state.set_position(entity_id, self.player_x, self.player_y)
+            except ValueError:
+                # Session coords are blocking / occupied per spatial —
+                # fall back to legacy and let the user see the legacy
+                # diagnostic.
+                return None
+
+        # Pre-check entity_manager for the destination tile. Spatial may
+        # not yet know about every entity (transition period until the
+        # bootstrap-wiring slice makes the two sources canonical), so we
+        # consult both and treat any entity_manager-only occupant as
+        # blocking. Doing this BEFORE attempt_combat_step avoids having
+        # to undo a committed move on the engine side.
+        dest_x = self.player_x + dx
+        dest_y = self.player_y + dy
+        ent_at_dest = self.entity_manager.get_at_position(dest_x, dest_y)
+        if ent_at_dest is not None and getattr(ent_at_dest, "entity_id", None) != entity_id:
+            blocker_id = getattr(ent_at_dest, "entity_id", "") or ""
+            name = self._resolve_blocker_name(blocker_id)
+            return f"Path blocked! {name} is in the way."
+
+        result = game_state.attempt_combat_step(entity_id, dx, dy)
+        if not result.ok:
+            if result.reason == "out of bounds":
+                # Distinct legacy wire string for OOB vs in-bounds walls.
+                return "Path blocked! Cannot move outside room."
+            if result.reason == "blocking":
+                return "Path blocked! Wall in the way."
+            if result.reason and result.reason.startswith("occupied"):
+                # Match the legacy phrasing so MCP consumers see the same
+                # "Path blocked! <Name> is in the way." string they rely on.
+                blocker_entity_id = result.reason[len("occupied by ") :]
+                name = self._resolve_blocker_name(blocker_entity_id)
+                return f"Path blocked! {name} is in the way."
+            if result.reason == "no movement remaining":
+                speed = creature.speed
+                return (
+                    f"No movement remaining (0/{speed} ft). "
+                    "Use game_attack() or game_wait()."
+                )
+            # All known reasons handled above. For any unrecognized
+            # reason, surface a generic message instead of falling back
+            # to legacy — falling back would let legacy execute a move
+            # the engine just rejected. The "not placed" path is
+            # already handled by the auto-place above so should never
+            # reach this branch.
+            return f"Cannot move: {result.reason}"
+
+        # Engine accepted the move; mirror the destination into the
+        # session/entity-manager state so the rest of the system
+        # (lighting, fog, renderer) sees the new position.
+        self.player_x = result.position.x
+        self.player_y = result.position.y
+        self._update_lighting()
+        self.entity_manager.update_current_turn_position(
+            self.engine, self.player_x, self.player_y
+        )
+
+        return (
+            f"Moved {direction}. Movement remaining: "
+            f"{result.movement_remaining} ft.\n"
+            + self.get_state()
+        )
+
+    def _resolve_blocker_name(self, blocker_entity_id: str) -> str:
+        """Match the legacy combat_move name-resolution order for a
+        blocking entity at the destination tile.
+
+        Prefers the engine creature's name when available; falls back
+        to the entity's ``sub_type`` titled and space-separated.
+        """
+        ent = self.entity_manager.get_by_id(blocker_entity_id)
+        if ent is not None:
+            if getattr(ent, "_creature_ref", None):
+                return ent._creature_ref.name
+            sub_type = getattr(ent, "sub_type", "") or ""
+            if sub_type:
+                return sub_type.replace("_", " ").title()
+        return blocker_entity_id
 
     def attack(self, target: int | str) -> str:
         """Attack a target enemy by index or entity ID."""
