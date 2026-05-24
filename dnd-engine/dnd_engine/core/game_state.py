@@ -891,14 +891,28 @@ class GameState:
     ) -> MoveResult:
         """Engine-owned single-tile combat move with validation.
 
-        Runs the four checks that combat movement needs — placement,
-        blocking tile, occupancy, and remaining movement budget — and
-        on success deducts the cost from the current ``TurnState`` and
-        moves the entity. The Map's terrain at the destination drives
-        the cost by default so Difficult Terrain doubles the per-foot
-        deduction per the SRD; callers can override by passing an
-        explicit ``terrain`` (rare — only useful for scripted scenarios
-        that need to force a cost regardless of map geometry).
+        Runs the checks that combat movement needs — placement, remaining
+        movement budget, out-of-bounds, blocking tile, and occupancy —
+        and on success deducts the cost from the current ``TurnState``
+        and moves the entity. The Map's terrain at the destination
+        drives the cost by default so Difficult Terrain doubles the
+        per-foot deduction per the SRD; callers can override by passing
+        an explicit ``terrain`` (rare — only useful for scripted
+        scenarios that need to force a cost regardless of map geometry).
+
+        Precedence (matches the legacy ``combat_move`` order so wire
+        strings stay aligned across the spatial-vs-legacy seam):
+            1. ``not placed`` — entity is not in the spatial index.
+            2. ``no movement remaining`` — budget below the 5 ft
+               minimum step cost.
+            3. ``out of bounds`` — destination tile has no entry in
+               the ``Map``.
+            4. ``blocking`` — destination is an in-bounds non-walkable
+               tile (wall, pit).
+            5. ``occupied by <id>`` — destination already holds
+               another entity.
+            6. ``no movement remaining`` — destination terrain cost
+               (e.g. Difficult) exceeds the remaining budget.
 
         Args:
             entity_id: Stable id of the moving entity.
@@ -952,6 +966,34 @@ class GameState:
         )
         budget = turn_state.movement_remaining if turn_state is not None else 0
 
+        # Read budget first to short-circuit on exhausted movement BEFORE
+        # evaluating the destination tile. Mirrors the legacy combat_move
+        # precedence (budget check first, then geometry) so wire strings
+        # stay aligned across the spatial-vs-legacy seam. 5 ft is the
+        # minimum cost for a single step; difficult terrain raises it
+        # further but a budget below 5 can never afford any step
+        # regardless of terrain.
+        if turn_state is None or budget < 5:
+            return MoveResult(
+                ok=False,
+                reason="no movement remaining",
+                position=current,
+                movement_remaining=budget,
+            )
+
+        # Distinguish out-of-bounds (Map.tile_at returns None) from
+        # in-bounds walls (is_blocking True). Legacy combat_move surfaced
+        # different messages for the two cases; collapsing them to a
+        # single "blocking" reason would drift the session's wire format
+        # for MCP consumers.
+        if spatial_map.tile_at(destination.x, destination.y) is None:
+            return MoveResult(
+                ok=False,
+                reason="out of bounds",
+                position=current,
+                movement_remaining=budget,
+            )
+
         if spatial_map.is_blocking(destination.x, destination.y):
             return MoveResult(
                 ok=False,
@@ -976,9 +1018,7 @@ class GameState:
             else spatial_map.terrain_at(destination.x, destination.y)
         )
 
-        if turn_state is None or not turn_state.consume_movement(
-            5, terrain=actual_terrain
-        ):
+        if not turn_state.consume_movement(5, terrain=actual_terrain):
             return MoveResult(
                 ok=False,
                 reason="no movement remaining",

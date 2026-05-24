@@ -244,3 +244,89 @@ class TestAttemptCombatStepNotPlaced:
         # Soft-fail position contract per the plan: Position(0, 0).
         assert result.position == Position(0, 0)
         assert result.movement_remaining == 0
+
+
+class TestAttemptCombatStepOutOfBounds:
+    """Engine must distinguish OOB tiles (Map.tile_at returns None) from
+    walls (is_blocking True for an in-bounds tile). Collapsing both to
+    ``reason="blocking"`` is wire-format drift against legacy
+    ``combat_move`` which surfaced a different message for OOB.
+    """
+
+    def test_step_off_map_returns_out_of_bounds(self, game_state, entity_id) -> None:
+        # Place at the NW corner and step further NW into a tile that
+        # has no entry in the Map (negative x or negative y).
+        game_state.set_position(entity_id, 0, 0)
+        starting = _current_turn_state(game_state).movement_remaining
+
+        result = game_state.attempt_combat_step(entity_id, -1, 0)
+
+        assert result.ok is False
+        assert result.reason == "out of bounds"
+        # Position unchanged — move did not happen.
+        assert result.position == Position(0, 0)
+        # Budget must NOT be deducted on rejection.
+        assert result.movement_remaining == starting
+        # Spatial unchanged.
+        assert game_state.spatial.position_of(entity_id) == Position(0, 0)
+
+
+class TestAttemptCombatStepPrecedence:
+    """Legacy ``combat_move`` checks movement budget FIRST, so an empty
+    pool returns "No movement remaining" even when the destination is a
+    wall or off-map. The engine must mirror that precedence so wire
+    strings stay aligned across the spatial-vs-legacy seam.
+    """
+
+    def test_step_off_map_with_zero_budget_returns_no_movement_first(
+        self, game_state, entity_id
+    ) -> None:
+        game_state.set_position(entity_id, 0, 0)
+        ts = _current_turn_state(game_state)
+        ts.movement_remaining = 0
+
+        result = game_state.attempt_combat_step(entity_id, -1, 0)
+
+        assert result.ok is False
+        assert result.reason == "no movement remaining"
+        assert result.position == Position(0, 0)
+        assert result.movement_remaining == 0
+
+    def test_step_into_wall_with_zero_budget_returns_no_movement_first(
+        self, game_state, entity_id
+    ) -> None:
+        # (2, 1) is a WALL in the fixture; place adjacent.
+        game_state.set_position(entity_id, 1, 1)
+        ts = _current_turn_state(game_state)
+        ts.movement_remaining = 0
+
+        result = game_state.attempt_combat_step(entity_id, 1, 0)
+
+        assert result.ok is False
+        assert result.reason == "no movement remaining"
+        assert result.position == Position(1, 1)
+        assert result.movement_remaining == 0
+
+
+class TestAttemptCombatStepWaterTileSRDDifficultTerrain:
+    """Per SRD #436, Difficult Terrain costs 2 ft per 1 ft of movement.
+    Water tiles map to ``TerrainType.DIFFICULT`` (P2
+    ``Map.from_room_layout``).
+
+    This is a deliberate behavior change vs the legacy ``combat_move``,
+    which always charged 5 ft per step regardless of tile. Scenarios
+    that rely on the legacy 5-ft-per-step behavior across water need
+    to flatten their terrain.
+    """
+
+    def test_water_tile_costs_double_per_srd(self, game_state, entity_id) -> None:
+        # Place at (2, 0); step east into (3, 0) which is WATER.
+        game_state.set_position(entity_id, 2, 0)
+        starting = _current_turn_state(game_state).movement_remaining
+
+        result = game_state.attempt_combat_step(entity_id, 1, 0)
+
+        assert result.ok is True
+        assert result.position == Position(3, 0)
+        # SRD-correct: 5 ft step on Difficult Terrain costs 10 ft.
+        assert result.movement_remaining == starting - 10

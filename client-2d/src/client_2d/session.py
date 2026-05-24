@@ -938,6 +938,14 @@ class GameSession:
         entity_id for the current combatant — caller falls back to the
         legacy ``RoomLayout`` path. ``None`` is NOT a failure indicator;
         explicit rejection messages always come back as strings.
+
+        Note on the difficult-terrain cost delta: the engine reads the
+        destination terrain from ``Map.terrain_at`` so a water tile
+        (``TerrainType.DIFFICULT``) charges 10 ft per 5-ft step per
+        SRD #436. The legacy ``RoomLayout`` path always charged a flat
+        5 ft regardless of tile. The engine cost is the SRD-correct
+        one; scenarios that depended on the legacy flat cost across
+        water need to flatten their terrain.
         """
         current = self.engine.get_current_combatant()
         if current is None:
@@ -948,12 +956,38 @@ class GameSession:
         entity_id = f"pc_{creature.name.lower().replace(' ', '_')}"
         game_state = self.engine.game_state
         if game_state.spatial.position_of(entity_id) is None:
-            # Spatial is bootstrapped but the PC isn't placed yet — let
-            # the legacy path handle it so the move can still proceed.
-            return None
+            # Spatial is bootstrapped but the PC is not yet placed — seed
+            # from the session's current coords and proceed via the
+            # engine path. Avoids the silent desync where the legacy
+            # fallback would advance player_x/player_y without ever
+            # writing to spatial, leaving the bootstrap undone forever.
+            try:
+                game_state.set_position(entity_id, self.player_x, self.player_y)
+            except ValueError:
+                # Session coords are blocking / occupied per spatial —
+                # fall back to legacy and let the user see the legacy
+                # diagnostic.
+                return None
+
+        # Pre-check entity_manager for the destination tile. Spatial may
+        # not yet know about every entity (transition period until the
+        # bootstrap-wiring slice makes the two sources canonical), so we
+        # consult both and treat any entity_manager-only occupant as
+        # blocking. Doing this BEFORE attempt_combat_step avoids having
+        # to undo a committed move on the engine side.
+        dest_x = self.player_x + dx
+        dest_y = self.player_y + dy
+        ent_at_dest = self.entity_manager.get_at_position(dest_x, dest_y)
+        if ent_at_dest is not None and getattr(ent_at_dest, "entity_id", None) != entity_id:
+            blocker_id = getattr(ent_at_dest, "entity_id", "") or ""
+            name = self._resolve_blocker_name(blocker_id)
+            return f"Path blocked! {name} is in the way."
 
         result = game_state.attempt_combat_step(entity_id, dx, dy)
         if not result.ok:
+            if result.reason == "out of bounds":
+                # Distinct legacy wire string for OOB vs in-bounds walls.
+                return "Path blocked! Cannot move outside room."
             if result.reason == "blocking":
                 return "Path blocked! Wall in the way."
             if result.reason and result.reason.startswith("occupied"):
@@ -968,10 +1002,13 @@ class GameSession:
                     f"No movement remaining (0/{speed} ft). "
                     "Use game_attack() or game_wait()."
                 )
-            # Defensive: any other reason (e.g. "not placed") falls back
-            # to the legacy RoomLayout path rather than inventing a new
-            # wire string.
-            return None
+            # All known reasons handled above. For any unrecognized
+            # reason, surface a generic message instead of falling back
+            # to legacy — falling back would let legacy execute a move
+            # the engine just rejected. The "not placed" path is
+            # already handled by the auto-place above so should never
+            # reach this branch.
+            return f"Cannot move: {result.reason}"
 
         # Engine accepted the move; mirror the destination into the
         # session/entity-manager state so the rest of the system

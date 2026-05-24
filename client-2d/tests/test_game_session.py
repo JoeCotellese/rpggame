@@ -502,3 +502,183 @@ class TestSessionCombatMoveSpatialDelegation:
 
         # And the session's player position must reflect the engine move.
         assert (session.player_x, session.player_y) == (target_x, target_y - 1)
+
+    def test_step_off_map_wire_string(self, session) -> None:
+        """When the engine rejects with ``out of bounds``, the session
+        must surface the legacy ``"Path blocked! Cannot move outside
+        room."`` wire string so MCP consumers branching on the OOB
+        phrase keep working.
+
+        Uses a custom 3x3 all-floor Map so the PC can sit at the (0, 0)
+        corner and a north step lands at (0, -1) which has no entry in
+        the Map — exactly the OOB case the engine distinguishes from
+        in-bounds walls. The scenario's RoomLayout is wall-bordered so
+        it can't reproduce the OOB shape directly.
+        """
+        from dnd_engine.core.map import Map, TileType
+
+        _force_player_turn(session)
+        # Park the PC at (0, 0) of the synthetic map.
+        target_x, target_y = 0, 0
+        session.player_x = target_x
+        session.player_y = target_y
+        for ent in session.entity_manager.get_party_members():
+            ent.grid_x = target_x
+            ent.grid_y = target_y
+
+        # 3x3 all-floor Map so (0, -1) is OOB (tile_at returns None)
+        # rather than an in-bounds wall.
+        tiles = {
+            (x, y): TileType.FLOOR for x in range(3) for y in range(3)
+        }
+        engine_map = Map(width=3, height=3, tiles=tiles)
+        game_state = session.engine.game_state
+        game_state.bootstrap_spatial(engine_map)
+        pc = session.engine.party.characters[0]
+        entity_id = f"pc_{pc.name.lower().replace(' ', '_')}"
+        game_state.set_position(entity_id, target_x, target_y)
+        _force_player_turn(session)
+
+        result = session.combat_move("north")
+
+        # First line + newline exactly match the legacy OOB string.
+        assert result.startswith("Path blocked! Cannot move outside room.\n") or (
+            result == "Path blocked! Cannot move outside room."
+        )
+
+    def test_engine_path_auto_places_pc_when_unplaced(self, session) -> None:
+        """F2: when spatial is bootstrapped but the PC is not yet placed,
+        the engine path must auto-place the PC at the session's current
+        coords and then drive the move through ``attempt_combat_step``
+        — not silently fall back to legacy (which would never write to
+        spatial and leave the desync intact).
+        """
+        from dnd_engine.core.map import Map
+
+        _force_player_turn(session)
+        target_x, target_y = 5, 5
+        session.player_x = target_x
+        session.player_y = target_y
+        for ent in session.entity_manager.get_party_members():
+            ent.grid_x = target_x
+            ent.grid_y = target_y
+
+        # Bootstrap spatial but DO NOT call set_position for the PC.
+        game_state = session.engine.game_state
+        engine_map = Map.from_room_layout(session.room_layout)
+        game_state.bootstrap_spatial(engine_map)
+        current = session.engine.get_current_combatant()
+        entity_id = f"pc_{current['creature'].name.lower().replace(' ', '_')}"
+        assert game_state.spatial.position_of(entity_id) is None
+
+        starting_movement = session.engine.get_current_turn_state().movement_remaining
+
+        result = session.combat_move("north")
+
+        # PC ended up placed in spatial at the new tile (proving the
+        # engine path ran and committed; the legacy path would never
+        # write to spatial).
+        from dnd_engine.core.position import Position
+
+        assert game_state.spatial.position_of(entity_id) == Position(
+            target_x, target_y - 1
+        )
+        # And the wire format is the engine format (Movement remaining
+        # deducts 5 ft for a normal-terrain step).
+        expected_first_line = (
+            f"Moved north. Movement remaining: {starting_movement - 5} ft."
+        )
+        assert result.startswith(expected_first_line + "\n")
+
+    def test_engine_path_blocks_on_entity_manager_only_entity(self, session) -> None:
+        """F3: an entity present in entity_manager but NOT in spatial
+        must still block the move. Until the bootstrap-wiring slice
+        unifies the two sources, the session must consult both and
+        treat any entity_manager occupant as blocking with the legacy
+        ``"Path blocked! <Name> is in the way."`` wire string.
+        """
+        from dnd_engine.core.map import Map
+        from dnd_engine.core.position import Position
+
+        _force_player_turn(session)
+        target_x, target_y = 5, 5
+        session.player_x = target_x
+        session.player_y = target_y
+        for ent in session.entity_manager.get_party_members():
+            ent.grid_x = target_x
+            ent.grid_y = target_y
+
+        # Spawn a fresh goblin one tile north — into the entity_manager
+        # via spawn_monster. spawn_monster does NOT place into spatial,
+        # so the goblin is entity_manager-only by construction.
+        north_x, north_y = target_x, target_y - 1
+        session.spawn_monster("goblin", north_x, north_y)
+
+        # Now bootstrap spatial and place ONLY the PC. The goblin stays
+        # absent from spatial — exactly the divergence F3 fixes. Derive
+        # the PC entity_id from the actual PC creature (not from the
+        # current combatant, which spawn_monster has just rotated onto
+        # the new goblin).
+        game_state = session.engine.game_state
+        engine_map = Map.from_room_layout(session.room_layout)
+        game_state.bootstrap_spatial(engine_map)
+        pc = session.engine.party.characters[0]
+        entity_id = f"pc_{pc.name.lower().replace(' ', '_')}"
+        game_state.set_position(entity_id, target_x, target_y)
+        # Sanity: spatial does NOT know about the goblin.
+        assert game_state.spatial.occupant_at(Position(north_x, north_y)) is None
+        _force_player_turn(session)
+
+        result = session.combat_move("north")
+
+        assert "Path blocked!" in result
+        assert "is in the way" in result
+        # PC must not have moved.
+        assert (session.player_x, session.player_y) == (target_x, target_y)
+
+    def test_engine_path_unknown_reason_returns_generic_message(
+        self, session, monkeypatch
+    ) -> None:
+        """F6: an unrecognized ``MoveResult.reason`` must surface a
+        generic message rather than silently falling back to the
+        legacy path (which would execute a move the engine just
+        rejected).
+        """
+        from dnd_engine.core.map import Map
+        from dnd_engine.core.move_result import MoveResult
+        from dnd_engine.core.position import Position
+
+        _force_player_turn(session)
+        target_x, target_y = 5, 5
+        session.player_x = target_x
+        session.player_y = target_y
+        for ent in session.entity_manager.get_party_members():
+            ent.grid_x = target_x
+            ent.grid_y = target_y
+
+        game_state = session.engine.game_state
+        engine_map = Map.from_room_layout(session.room_layout)
+        game_state.bootstrap_spatial(engine_map)
+        current = session.engine.get_current_combatant()
+        entity_id = f"pc_{current['creature'].name.lower().replace(' ', '_')}"
+        game_state.set_position(entity_id, target_x, target_y)
+
+        # Force the engine to return an invented reason that the session
+        # has no branch for.
+        def _fake_step(self, _entity_id, _dx, _dy, **_kwargs):  # noqa: ANN001
+            return MoveResult(
+                ok=False,
+                reason="prone",
+                position=Position(target_x, target_y),
+                movement_remaining=30,
+            )
+
+        monkeypatch.setattr(
+            type(game_state), "attempt_combat_step", _fake_step, raising=True
+        )
+
+        result = session.combat_move("north")
+
+        assert result == "Cannot move: prone"
+        # PC must not have moved on the unknown rejection.
+        assert (session.player_x, session.player_y) == (target_x, target_y)
