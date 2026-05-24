@@ -1173,3 +1173,115 @@ class TestSessionSpawnMonsterOccupancy:
         ent = session.entity_manager.get_at_position(gx, gy)
         assert ent is not None
         assert ent.sub_type == "giant_rat"
+
+
+class TestSessionEnemyTurnSingleAdvance:
+    """Regression tests for #569.
+
+    Before the fix, ``_process_enemy_turn()`` called
+    ``engine.advance_turn()`` *after* ``engine.process_enemy_turn()``,
+    but the engine's ``process_enemy_turn`` already advances the
+    initiative tracker internally on every return path (party-wipe
+    branch aside). The result was a double-``next_turn()`` per enemy
+    turn — the next combatant was silently skipped and their
+    ``TurnState`` was never observed.
+
+    The symptom in playtest was a "Movement: N ft remaining" line that
+    appeared to carry over stale movement budget between combatant
+    turns: with the skipped combatant invisible to the MCP renderer,
+    each enemy drain pushed initiative forward by 2 slots and the
+    user couldn't see whose turn state was actually being rendered.
+    """
+
+    def test_process_enemy_turn_advances_initiative_by_one(self, session) -> None:
+        """One ``_process_enemy_turn()`` call must advance the initiative
+        index by exactly one slot — not two."""
+        # Add a second PC so we have ≥3 combatants and can detect a
+        # turn-skip (with 2 combatants the wrap masks the bug).
+        session.spawn_character("wizard", "human", ["dagger"], 4, 5, name="Bob")
+        tracker = session.engine.game_state.initiative_tracker
+        combatants = tracker.get_all_combatants()
+
+        # Force the goblin to be current so we exercise the non-PC path.
+        goblin_idx = next(
+            i for i, c in enumerate(combatants) if "goblin" in c.creature.name.lower()
+        )
+        tracker.current_turn_index = goblin_idx
+        # Reset goblin's turn state so the start condition is well-defined.
+        tracker.get_current_turn_state().reset(
+            speed=tracker.get_current_combatant().creature.speed
+        )
+
+        session.processing_enemy_turn = True
+        session._process_enemy_turn()
+
+        expected_idx = (goblin_idx + 1) % len(combatants)
+        expected_name = combatants[expected_idx].creature.name
+        actual_name = tracker.get_current_combatant().creature.name
+        assert actual_name == expected_name, (
+            f"_process_enemy_turn skipped a combatant: expected next = "
+            f"{expected_name} (idx {expected_idx}), got {actual_name} "
+            f"(idx {tracker.current_turn_index})"
+        )
+
+    def test_process_enemy_turn_calls_next_turn_once(self, session) -> None:
+        """The session's enemy-turn handler must not double-trigger
+        ``initiative_tracker.next_turn()`` — once via the engine's
+        ``process_enemy_turn`` (which already advances) and once via a
+        redundant session-side ``advance_turn`` call."""
+        session.spawn_character("wizard", "human", ["dagger"], 4, 5, name="Bob")
+        tracker = session.engine.game_state.initiative_tracker
+
+        # Force the goblin current.
+        combatants = tracker.get_all_combatants()
+        goblin_idx = next(
+            i for i, c in enumerate(combatants) if "goblin" in c.creature.name.lower()
+        )
+        tracker.current_turn_index = goblin_idx
+        tracker.get_current_turn_state().reset(
+            speed=tracker.get_current_combatant().creature.speed
+        )
+
+        # Count next_turn() calls.
+        original_next_turn = tracker.next_turn
+        call_count = {"n": 0}
+
+        def counting_next_turn() -> None:
+            call_count["n"] += 1
+            original_next_turn()
+
+        tracker.next_turn = counting_next_turn
+
+        session.processing_enemy_turn = True
+        session._process_enemy_turn()
+
+        assert call_count["n"] == 1, (
+            f"expected exactly one next_turn() per enemy turn, got {call_count['n']}"
+        )
+
+    def test_next_combatant_after_enemy_turn_has_full_movement(self, session) -> None:
+        """After a single enemy turn drain, the new current combatant's
+        ``movement_remaining`` must equal their full speed — proving the
+        engine's per-turn reset wasn't masked by a skipped slot."""
+        session.spawn_character("wizard", "human", ["dagger"], 4, 5, name="Bob")
+        tracker = session.engine.game_state.initiative_tracker
+        combatants = tracker.get_all_combatants()
+
+        goblin_idx = next(
+            i for i, c in enumerate(combatants) if "goblin" in c.creature.name.lower()
+        )
+        tracker.current_turn_index = goblin_idx
+        tracker.get_current_turn_state().reset(
+            speed=tracker.get_current_combatant().creature.speed
+        )
+
+        session.processing_enemy_turn = True
+        session._process_enemy_turn()
+
+        new_current = tracker.get_current_combatant()
+        new_turn_state = tracker.get_current_turn_state()
+        assert new_turn_state.movement_remaining == new_current.creature.speed, (
+            f"{new_current.creature.name} movement_remaining is "
+            f"{new_turn_state.movement_remaining}, expected "
+            f"{new_current.creature.speed}"
+        )

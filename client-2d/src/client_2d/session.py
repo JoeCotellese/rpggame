@@ -543,11 +543,14 @@ class GameSession:
         self.entity_manager.sync_from_engine(self.engine)
         self.entity_manager.update_party_turn_status(self.engine)
 
-        turn_result = self.engine.advance_turn()
-
-        if turn_result.get("combat_ended"):
+        # The engine's process_enemy_turn already advances the initiative
+        # tracker on every non-party-wipe return path, so we must NOT call
+        # engine.advance_turn() again here — that double-advance silently
+        # skipped the next combatant and left their TurnState unrendered
+        # in MCP output (#569).
+        if not self.engine.in_combat:
             self._handle_combat_end()
-        elif not turn_result.get("is_player_turn"):
+        elif not self.engine.is_player_turn():
             self.enemy_turn_timer = ENEMY_TURN_DELAY
         else:
             if self.engine.is_current_combatant_unconscious():
