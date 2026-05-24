@@ -951,3 +951,139 @@ class TestSessionMCPResponseSurfacesCombatEvents:
         assert session._pending_combat_events == ["Goblin hits Archy for 5 damage!"]
         assert "Recent Combat:" not in state
         assert "Goblin hits Archy for 5 damage!" not in state
+
+
+class TestSessionWaitOnEnemyTurn:
+    """Regression tests for #572.
+
+    Calling ``wait()`` while a non-PC is the current combatant must
+    drain enemy turns rather than burn the enemy's slot via
+    ``pass_turn()``. The bug was that ``wait()`` unconditionally called
+    ``pass_turn()`` (which logs ``"X waits..."`` and advances initiative
+    past whoever is current — including an enemy), so the enemy's AI
+    never ran and the response was silent.
+    """
+
+    HEADER = "Between turns:"
+
+    def test_wait_on_enemy_turn_drains_instead_of_skipping(self, session) -> None:
+        """When ``wait()`` is invoked on an enemy's turn, the enemy AI
+        runs and surfaces in the response under the ``Between turns:``
+        header — instead of being silently skipped."""
+        adjacent_x = session.player_x + 1
+        adjacent_y = session.player_y
+        session.spawn_monster("goblin", adjacent_x, adjacent_y)
+
+        # Pin the goblin as the current combatant so wait() is invoked on
+        # its turn. Lower the drain gate to simulate the pre-#572-fix
+        # state for spawn_monster (also covered by separate tests below).
+        goblin = session.engine.game_state.active_enemies[-1]
+        _force_combatant_turn(session, goblin)
+        session.processing_enemy_turn = False
+        session.set_seed(42)
+
+        response = session.wait()
+
+        # Goblin's per-turn handler must have produced an action line.
+        verbs = ("hits", "misses", "takes no action")
+        assert any(v in response for v in verbs), (
+            f"no enemy-action verb in wait() reply "
+            f"(goblin turn was skipped):\n{response}"
+        )
+        assert self.HEADER in response, (
+            f"missing {self.HEADER!r} header in wait() reply:\n{response}"
+        )
+
+    def test_wait_on_enemy_turn_does_not_log_pc_waits(self, session) -> None:
+        """``wait()`` on an enemy's turn must not call ``pass_turn()`` —
+        which would write a ``"Goblin waits..."`` line and advance off
+        the goblin without running its AI.
+
+        The leaked line lives in ``session.combat_log`` rather than the
+        response string (``pass_turn`` appends *before* the drain so the
+        line is not captured into ``_pending_combat_events``), so we
+        assert against the log directly.
+        """
+        adjacent_x = session.player_x + 1
+        adjacent_y = session.player_y
+        session.spawn_monster("goblin", adjacent_x, adjacent_y)
+
+        goblin = session.engine.game_state.active_enemies[-1]
+        _force_combatant_turn(session, goblin)
+        session.processing_enemy_turn = False
+        session.set_seed(42)
+
+        log_before = list(session.combat_log)
+        session.wait()
+        new_lines = session.combat_log[len(log_before):]
+
+        assert not any("Goblin waits" in line for line in new_lines), (
+            f"goblin turn was burned via pass_turn (wait line leaked):\n"
+            f"{new_lines}"
+        )
+
+
+class TestSessionSpawnMonsterDrainGate:
+    """Regression tests for #572 companion bug.
+
+    ``spawn_monster()`` previously never set ``processing_enemy_turn``
+    even when the spawn left a non-PC as the current combatant. The
+    initial-combat path in ``initialize()`` does this correctly; the fix
+    mirrors that pattern in ``spawn_monster()`` so subsequent
+    ``wait()`` / ``attack()`` calls find the drain gate raised.
+    """
+
+    def test_spawn_monster_raises_drain_gate_when_enemy_is_current(
+        self, session, monkeypatch
+    ) -> None:
+        """When the engine reports a non-PC as current combatant after a
+        spawn, ``processing_enemy_turn`` must be ``True`` so the next
+        ``wait()`` / ``attack()`` drains the enemy AI."""
+        session.processing_enemy_turn = False
+
+        # Patch the engine's turn predicates so this test pins the fix's
+        # gate-raise behavior without coupling to engine RNG or
+        # initiative internals. Matches the "goblin lands first in
+        # initiative" outcome described in #572.
+        monkeypatch.setattr(session.engine, "is_player_turn", lambda: False)
+        monkeypatch.setattr(
+            session.engine, "is_current_combatant_unconscious", lambda: False
+        )
+
+        session.spawn_monster("goblin", session.player_x + 5, session.player_y)
+
+        assert session.processing_enemy_turn is True
+
+    def test_spawn_monster_raises_drain_gate_when_pc_unconscious(
+        self, session, monkeypatch
+    ) -> None:
+        """Mirror the ``initialize()`` branch that handles a current PC
+        who is unconscious — the drain loop owns death-save processing,
+        so the gate must be raised in that case too."""
+        session.processing_enemy_turn = False
+
+        monkeypatch.setattr(session.engine, "is_player_turn", lambda: True)
+        monkeypatch.setattr(
+            session.engine, "is_current_combatant_unconscious", lambda: True
+        )
+
+        session.spawn_monster("goblin", session.player_x + 5, session.player_y)
+
+        assert session.processing_enemy_turn is True
+
+    def test_spawn_monster_leaves_gate_lowered_when_pc_is_current(
+        self, session, monkeypatch
+    ) -> None:
+        """When the engine reports a conscious PC as current combatant
+        after a spawn, ``processing_enemy_turn`` must remain ``False`` —
+        the PC owes the next action and the drain must not run."""
+        session.processing_enemy_turn = False
+
+        monkeypatch.setattr(session.engine, "is_player_turn", lambda: True)
+        monkeypatch.setattr(
+            session.engine, "is_current_combatant_unconscious", lambda: False
+        )
+
+        session.spawn_monster("goblin", session.player_x + 5, session.player_y)
+
+        assert session.processing_enemy_turn is False
