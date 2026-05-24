@@ -197,6 +197,45 @@ class EntityManager:
 
         return removed
 
+    def _find_free_tile_near(
+        self,
+        target_x: int,
+        target_y: int,
+        layout: RoomLayout,
+        max_radius: int = 5,
+    ) -> tuple[int, int] | None:
+        """Return the nearest in-bounds, non-blocking, unoccupied tile to
+        ``(target_x, target_y)`` via a Chebyshev-distance spiral search.
+
+        Returns ``None`` if no candidate is free inside ``max_radius`` —
+        callers should fall back to a safe default (typically the
+        formation center) in that case.
+
+        "Occupied" is read from the entity-manager's combined entity
+        collection so monsters, items, and party members already placed
+        in the current spread iteration all count as blockers.
+        """
+
+        def _is_free(x: int, y: int) -> bool:
+            if not (0 <= x < layout.width and 0 <= y < layout.height):
+                return False
+            if layout.is_blocking(x, y):
+                return False
+            return self.get_at_position(x, y) is None
+
+        if _is_free(target_x, target_y):
+            return (target_x, target_y)
+
+        for radius in range(1, max_radius + 1):
+            for dy in range(-radius, radius + 1):
+                for dx in range(-radius, radius + 1):
+                    if max(abs(dx), abs(dy)) != radius:
+                        continue
+                    cx, cy = target_x + dx, target_y + dy
+                    if _is_free(cx, cy):
+                        return (cx, cy)
+        return None
+
     def spread_party_for_combat(
         self,
         engine: EngineAdapter,
@@ -255,9 +294,18 @@ class EntityManager:
             px = max(1, min(px, layout.width - 2))
             py = max(1, min(py, layout.height - 2))
 
-            # If blocked, try the center position
-            if layout.is_blocking(px, py):
-                px, py = center_x, center_y
+            # Pick a tile that is neither a wall nor already occupied by
+            # another entity (monster, item, prior party member). Without
+            # this, a spawn_monster() that triggers the combat-start
+            # spread will overlay the front-left fighter onto the new
+            # monster, hiding it from the ASCII map (#576).
+            chosen = self._find_free_tile_near(px, py, layout)
+            if chosen is None:
+                # Last-resort fallback preserves the legacy behavior of
+                # stacking onto the center tile when no free tile can be
+                # found inside the spiral search radius.
+                chosen = (center_x, center_y)
+            px, py = chosen
 
             positions.append((px, py))
 
