@@ -363,6 +363,76 @@ class TestEntityManagerEngineIntegration:
             assert pm._creature_ref is not None
             assert pm.character_class != ""
 
+    def test_spread_party_avoids_existing_monster_tile(
+        self, engine_adapter, layout_loader
+    ):
+        """Regression for #576: ``spread_party_for_combat`` must skip tiles
+        already held by a monster instead of overlaying party members on
+        them.
+
+        Without this guarantee, ``session.spawn_monster`` followed by the
+        automatic spread-into-combat step lands the front-left fighter
+        on the just-spawned monster, hiding the monster on the ASCII map
+        and breaking the occupancy invariant the #574 gate was added to
+        protect.
+        """
+        from client_2d.entities.entity import MonsterEntity
+
+        manager = EntityManager()
+
+        layout = layout_loader.load_room_with_fallback(
+            dungeon_name="cellar",
+            room_id="cellar.storage",
+            campaign_id="poisoned_laboratory",
+            default_width=20,
+            default_height=15,
+            exits={"south": "cellar.stairs"},
+        )
+
+        # Start from an empty manager (no room monsters) so we can pin a
+        # single monster onto the front-left formation tile and assert
+        # that the spread step routes around it.
+        manager.clear()
+
+        center_x, center_y = 10, 7
+        front_left = (center_x - 1, center_y)
+
+        blocker = MonsterEntity(
+            entity_id="monster_blocker",
+            grid_x=front_left[0],
+            grid_y=front_left[1],
+            entity_type=EntityType.MONSTER,
+            sub_type="goblin",
+        )
+        manager._add_entity(blocker)
+
+        positions = manager.spread_party_for_combat(
+            engine=engine_adapter,
+            center_x=center_x,
+            center_y=center_y,
+            layout=layout,
+            character_textures={},
+        )
+
+        # The blocking monster's tile must not appear in the formation
+        # positions, and no party member should be sitting on it.
+        assert front_left not in positions, (
+            f"spread_party_for_combat placed a party member onto the "
+            f"monster's tile {front_left}; positions={positions}"
+        )
+        for pm in manager.get_party_members():
+            assert (pm.grid_x, pm.grid_y) != front_left, (
+                f"party member {pm.entity_id} landed on monster tile "
+                f"{front_left}"
+            )
+
+        # The blocker itself must remain at its tile, untouched.
+        still_there = manager.get_at_position(*front_left)
+        assert still_there is blocker, (
+            f"blocker monster was displaced or evicted by the spread step; "
+            f"get_at_position({front_left}) -> {still_there}"
+        )
+
     def test_collapse_party_removes_party_entities(
         self, engine_adapter, layout_loader
     ):
