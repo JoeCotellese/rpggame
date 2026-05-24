@@ -1,5 +1,5 @@
 # ABOUTME: Tests for SpatialIndex (plan-03 P3): placements, distance, LoS, range.
-# ABOUTME: Pins current corner-cutting LoS behavior so P7's tightening is a real change.
+# ABOUTME: Pins supercover LoS, blocking-endpoint guard, are_adjacent_tiles, and range validation.
 
 from __future__ import annotations
 
@@ -146,16 +146,16 @@ def test_distance_in_feet_uses_5ft_per_tile(index: SpatialIndex) -> None:
     assert index.distance_in_feet(Position(0, 0), Position(3, 4)) == 20
 
 
-class TestAdjacency:
+class TestAreAdjacentTiles:
     def test_diagonal_is_adjacent(self, index: SpatialIndex) -> None:
-        assert index.is_adjacent(Position(0, 0), Position(1, 1)) is True
+        assert index.are_adjacent_tiles(Position(0, 0), Position(1, 1)) is True
 
     def test_same_position_is_not_adjacent(self, index: SpatialIndex) -> None:
         # Chebyshev 0 != 1, so same square is NOT adjacent under this contract.
-        assert index.is_adjacent(Position(0, 0), Position(0, 0)) is False
+        assert index.are_adjacent_tiles(Position(0, 0), Position(0, 0)) is False
 
     def test_two_squares_apart_is_not_adjacent(self, index: SpatialIndex) -> None:
-        assert index.is_adjacent(Position(0, 0), Position(2, 0)) is False
+        assert index.are_adjacent_tiles(Position(0, 0), Position(2, 0)) is False
 
 
 class TestTilesInRange:
@@ -176,9 +176,19 @@ class TestTilesInRange:
     def test_zero_feet_returns_only_origin(self, index: SpatialIndex) -> None:
         assert index.tiles_in_range(Position(2, 2), 0) == {Position(2, 2)}
 
+    @pytest.mark.parametrize("range_feet", [-1, -5, -100])
+    def test_negative_range_raises(
+        self, index: SpatialIndex, range_feet: int
+    ) -> None:
+        # Negative ranges previously yielded an empty set silently; the
+        # contract now requires an explicit ValueError so callers cannot
+        # pass through a bad range and assume "nothing in range".
+        with pytest.raises(ValueError, match="non-negative"):
+            index.tiles_in_range(Position(2, 2), range_feet)
+
 
 class TestLineOfSight:
-    """has_line_of_sight uses Bresenham vs Map.is_blocking; endpoints exempt."""
+    """has_line_of_sight uses a supercover line vs Map.is_blocking."""
 
     def test_open_vertical(self, index: SpatialIndex) -> None:
         assert index.has_line_of_sight(Position(0, 0), Position(0, 4)) is True
@@ -216,21 +226,58 @@ class TestLineOfSight:
     def test_same_position_has_line_of_sight(self, index: SpatialIndex) -> None:
         assert index.has_line_of_sight(Position(2, 2), Position(2, 2)) is True
 
+    def test_endpoint_blocking_returns_false(self, index: SpatialIndex) -> None:
+        # If either endpoint is itself a blocking tile (a wall here), LoS
+        # must be False — you cannot see "through" or "into" a wall.
+        wall = Position(2, 1)
+        floor = Position(0, 0)
+        assert index.has_line_of_sight(floor, wall) is False
+        assert index.has_line_of_sight(wall, floor) is False
 
-class TestCornerCuttingStagingForP7:
-    """Pin current corner-cutting behavior so P7's tightening is a real change.
+    def test_same_position_on_wall_returns_false(self, index: SpatialIndex) -> None:
+        # a == b on a wall: degenerate query but it still must respect the
+        # blocking endpoint guard. A wall cannot have LoS to itself.
+        wall = Position(2, 1)
+        assert index.has_line_of_sight(wall, wall) is False
 
-    Layout for this test (3x3 only):
+    def test_endpoint_out_of_bounds_returns_false(
+        self, index: SpatialIndex
+    ) -> None:
+        # OOB is reported as blocking by Map.is_blocking, so an OOB endpoint
+        # is treated the same as a wall endpoint.
+        oob = Position(10, 10)
+        assert index.has_line_of_sight(Position(0, 0), oob) is False
+
+    def test_supercover_visits_shallow_line_clipped_tile(self) -> None:
+        # Supercover traversal of (0,0)->(3,1) must visit (1,1). A standard
+        # single-step Bresenham yields (0,0),(1,0),(2,1),(3,1) and skips
+        # (1,1); a wall at (1,1) would then NOT block LoS — that's the bug
+        # this test guards against.
+        tiles: dict[tuple[int, int], TileType] = {}
+        for y in range(2):
+            for x in range(4):
+                tiles[(x, y)] = TileType.FLOOR
+        tiles[(1, 1)] = TileType.WALL
+        m = Map(width=4, height=2, tiles=tiles)
+        si = SpatialIndex(m)
+        assert si.has_line_of_sight(Position(0, 0), Position(3, 1)) is False
+
+
+class TestCornerCuttingDiagonal:
+    """Supercover traversal visits one of the corner walls on the diagonal,
+    blocking LoS — closes the corner-cutting concern that P7 was originally
+    going to address.
+
+    Layout for this test (2x2):
         .#
         #.
 
-    Two walls form a diagonal pinch between (0,0) and (1,1). P7 will make
-    has_line_of_sight return False for this geometry. For now (P3), Bresenham
-    walks straight from (0,0) to (1,1) — no intermediate tile to check — so
-    LoS is True. This test PINS that True and will need flipping in P7.
+    Two walls form a diagonal pinch between (0,0) and (1,1). Supercover
+    traversal of (0,0)->(1,1) steps through (0,1) (or (1,0), depending on
+    error tiebreak), both of which are walls, so LoS is False.
     """
 
-    def test_corner_diagonal_currently_passes(self) -> None:
+    def test_corner_diagonal_blocked_by_supercover(self) -> None:
         # 2x2 with walls at (1,0) and (0,1); floor at (0,0) and (1,1).
         tiles: dict[tuple[int, int], TileType] = {
             (0, 0): TileType.FLOOR,
@@ -240,9 +287,9 @@ class TestCornerCuttingStagingForP7:
         }
         m = Map(width=2, height=2, tiles=tiles)
         si = SpatialIndex(m)
-        # Currently True: Bresenham from (0,0) to (1,1) has no intermediate
-        # tile to check (endpoints are exempt). P7 will flip this to False.
-        assert si.has_line_of_sight(Position(0, 0), Position(1, 1)) is True
+        # Supercover visits an intermediate corner-wall tile on the (0,0)->
+        # (1,1) diagonal, so LoS is False.
+        assert si.has_line_of_sight(Position(0, 0), Position(1, 1)) is False
 
 
 class TestOccupantsView:

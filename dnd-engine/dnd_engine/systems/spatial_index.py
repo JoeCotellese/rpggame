@@ -1,5 +1,5 @@
 # ABOUTME: Per-combat registry of creature placements plus spatial queries.
-# ABOUTME: Distance/adjacency delegate to core.distance; LoS uses Bresenham vs Map.is_blocking.
+# ABOUTME: Distance/adjacency delegate to core.distance; LoS uses a supercover line vs Map.is_blocking.
 
 from __future__ import annotations
 
@@ -22,9 +22,9 @@ class SpatialIndex:
 
     Mutations (`place`, `move`, `remove`) reject blocking tiles via
     ``Map.is_blocking`` and reject double-occupancy. Queries (`distance`,
-    `is_adjacent`, `tiles_in_range`, `has_line_of_sight`) are pure functions
-    over the supplied positions and the underlying map; they do not require
-    either position to be a placed occupant.
+    `are_adjacent_tiles`, `tiles_in_range`, `has_line_of_sight`) are pure
+    functions over the supplied positions and the underlying map; they do
+    not require either position to be a placed occupant.
     """
 
     def __init__(self, map: Map) -> None:
@@ -124,8 +124,14 @@ class SpatialIndex:
         """Chebyshev distance converted to feet (5 ft per tile)."""
         return self.distance(a, b) * 5
 
-    def is_adjacent(self, a: Position, b: Position) -> bool:
-        """True iff the two positions are exactly one tile apart (Chebyshev=1)."""
+    def are_adjacent_tiles(self, a: Position, b: Position) -> bool:
+        """True iff the two positions are exactly one tile apart (Chebyshev=1).
+
+        Same-tile (``a == b``) returns False — for the same-tile case, use
+        ``distance(a, b) == 0`` explicitly. This deliberately differs from
+        ``core.distance.is_adjacent`` which treats same-tile as adjacent
+        under Chebyshev ≤ 1.
+        """
         # ``core.distance.is_adjacent`` uses Chebyshev <= 1, which includes
         # the same-square case. The plan-03 contract excludes same-square.
         return is_adjacent(a.x, a.y, b.x, b.y) and a != b
@@ -134,8 +140,16 @@ class SpatialIndex:
         """All tiles within Chebyshev ``range_feet // 5`` of ``origin``.
 
         Includes ``origin`` itself. Does not filter by walkability — callers
-        decide whether to drop blocking tiles.
+        decide whether to drop blocking tiles. ``range_feet`` of 0 returns
+        ``{origin}``.
+
+        Raises:
+            ValueError: If ``range_feet`` is negative.
         """
+        if range_feet < 0:
+            raise ValueError(
+                f"range_feet must be non-negative, got {range_feet}"
+            )
         r = range_feet // 5
         return {
             Position(origin.x + dx, origin.y + dy)
@@ -144,43 +158,55 @@ class SpatialIndex:
         }
 
     def has_line_of_sight(self, a: Position, b: Position) -> bool:
-        """True iff no intermediate tile on the Bresenham line a→b blocks.
+        """True iff no tile on the supercover line a→b blocks.
 
-        Endpoints ``a`` and ``b`` are NOT checked — occupants live on
-        walkable tiles by construction. Identical positions return True.
-        Diagonal corner-cutting is NOT yet enforced; P7 will tighten this.
+        If either endpoint is itself blocking per ``Map.is_blocking`` (wall,
+        pit, out-of-bounds), returns False — you cannot see through or into
+        solid geometry. Identical non-blocking positions return True; an
+        identical blocking position returns False.
+
+        The line uses a supercover (DDA-style) traversal so every tile the
+        geometric segment clips is checked — a wall on a shallow-line tile
+        will block LoS where a standard Bresenham walk would skip it.
         """
+        if self._map.is_blocking(a.x, a.y) or self._map.is_blocking(b.x, b.y):
+            return False
         if a == b:
             return True
-        for x, y in _bresenham_line(a.x, a.y, b.x, b.y):
-            if (x, y) == (a.x, a.y) or (x, y) == (b.x, b.y):
-                continue
+        # Endpoints are guaranteed non-blocking by the guard above, so we
+        # only need to inspect the intermediate tiles of the line.
+        for x, y in _supercover_line(a.x, a.y, b.x, b.y)[1:-1]:
             if self._map.is_blocking(x, y):
                 return False
         return True
 
 
-def _bresenham_line(x0: int, y0: int, x1: int, y1: int) -> list[tuple[int, int]]:
-    """Integer Bresenham line from (x0, y0) to (x1, y1), inclusive of both endpoints.
+def _supercover_line(x0: int, y0: int, x1: int, y1: int) -> list[tuple[int, int]]:
+    """Supercover line traversal — every tile the segment from (x0,y0) to
+    (x1,y1) geometrically touches, inclusive of both endpoints. Unlike
+    standard Bresenham this never skips tiles the line clips through.
 
-    Standard 8-octant integer algorithm. Returns the tiles in order from
-    start to end. For degenerate (start == end) inputs, returns ``[(x0, y0)]``.
+    Algorithm: take exactly 1 + dx + dy steps, advancing one axis per
+    step based on accumulated error. Visits the cells in a manner
+    equivalent to a 2D DDA / Amanatides-Woo grid traversal for
+    integer endpoints.
     """
-    points: list[tuple[int, int]] = []
     dx = abs(x1 - x0)
     dy = abs(y1 - y0)
-    sx = 1 if x0 < x1 else -1
-    sy = 1 if y0 < y1 else -1
-    err = dx - dy
     x, y = x0, y0
-    while True:
+    n = 1 + dx + dy
+    x_inc = 1 if x1 > x0 else -1
+    y_inc = 1 if y1 > y0 else -1
+    error = dx - dy
+    dx2 = dx * 2
+    dy2 = dy * 2
+    points: list[tuple[int, int]] = []
+    for _ in range(n):
         points.append((x, y))
-        if x == x1 and y == y1:
-            return points
-        e2 = 2 * err
-        if e2 > -dy:
-            err -= dy
-            x += sx
-        if e2 < dx:
-            err += dx
-            y += sy
+        if error > 0:
+            x += x_inc
+            error -= dy2
+        else:
+            y += y_inc
+            error += dx2
+    return points
