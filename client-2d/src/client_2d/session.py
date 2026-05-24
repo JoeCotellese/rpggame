@@ -832,17 +832,6 @@ class GameSession:
             f"Explored: {state_dict['explored_tiles']}/{state_dict['total_tiles']}",
         ]
 
-        # Belt-and-braces (#570): if the caller invoked get_state()
-        # without going through attack/wait — which consume the buffer
-        # via _format_between_turns_block — surface the drained events
-        # here so they aren't silently dropped. Consumes the buffer so
-        # a subsequent call doesn't double-render.
-        unconsumed = self._consume_pending_events()
-        if unconsumed:
-            lines.append("")
-            lines.append("Recent Combat:")
-            lines.extend(f"  {line}" for line in unconsumed)
-
         if self.engine.in_combat:
             combat_data = self.engine.get_combat_data()
             if combat_data:

@@ -934,21 +934,20 @@ class TestSessionMCPResponseSurfacesCombatEvents:
             f"empty {self.HEADER!r} block leaked into reply:\n{response}"
         )
 
-    def test_state_response_surfaces_unconsumed_pending_events(self, session) -> None:
-        """Belt-and-braces: if a caller invokes ``get_state()`` without
-        having consumed the buffer (e.g. via a future code path that
-        accumulates between calls), the formatter renders them under a
-        ``Recent Combat:`` header so they aren't silently dropped."""
-        session._pending_combat_events = [
-            "Goblin hits Archy for 5 damage!",
-            "Goblin moves 5 ft.",
-        ]
+    def test_get_state_does_not_consume_pending_events(self, session) -> None:
+        """``get_state()`` is a pure read with no side effect on the
+        combat-event buffer. The contract is that ``attack()`` /
+        ``wait()`` own consumption via ``_format_between_turns_block``
+        before calling ``get_state()``; any path that drains without
+        surfacing is a bug in that path, not a case for ``get_state()``
+        to paper over silently."""
+        session._pending_combat_events = ["Goblin hits Archy for 5 damage!"]
 
         state = session.get_state()
 
-        assert "Recent Combat:" in state
-        assert "Goblin hits Archy for 5 damage!" in state
-        assert "Goblin moves 5 ft." in state
-        # Rendering should consume the buffer to avoid double-rendering
-        # on a subsequent call.
-        assert session._pending_combat_events == []
+        # The buffer is untouched, and the state response does not
+        # silently surface pending events under a ``Recent Combat:``
+        # header.
+        assert session._pending_combat_events == ["Goblin hits Archy for 5 damage!"]
+        assert "Recent Combat:" not in state
+        assert "Goblin hits Archy for 5 damage!" not in state
