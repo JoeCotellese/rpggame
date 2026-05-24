@@ -225,6 +225,89 @@ class TestSessionTick:
         assert session.processing_enemy_turn in (False, True)
         session.tick(0.016)
 
+    def test_tick_polls_mcp_commands_while_enemy_turn_pending(self) -> None:
+        """Regression for #577 follow-on: with the ticker no longer
+        auto-draining, ``_process_mcp_commands`` must still poll user
+        commands while ``processing_enemy_turn`` is True. Otherwise the
+        user's ``game_wait()`` deadlocks waiting for a tick that never
+        services the queue, because spawn_monster leaves the flag
+        raised until the next user-initiated drain.
+        """
+        from client_2d.mcp_bridge import CommandRequest, CommandType, MCPBridge
+        from client_2d.session import GameSession
+
+        s = GameSession(enable_mcp=False, dev_mode=True)
+        bridge = MCPBridge()
+        s._mcp_bridge = bridge
+
+        # Simulate the post-spawn state: an enemy is queued up and the
+        # drain gate is raised, exactly as spawn_monster leaves things.
+        s.processing_enemy_turn = True
+
+        # Enqueue a no-op GET_STATE command and verify tick drains it.
+        request = CommandRequest(command_type=CommandType.GET_STATE)
+        bridge._command_queue.put(request)
+
+        s.tick(0.016)
+
+        assert request.response_future.done(), (
+            "MCP command starved while processing_enemy_turn was True; "
+            "wait()/attack() would deadlock waiting for tick to service it"
+        )
+
+    def test_tick_does_not_auto_drain_enemy_turns_when_mcp_active(self) -> None:
+        """Regression for #577: with MCP driving the session, tick must NOT
+        auto-process an enemy turn after ENEMY_TURN_DELAY elapses.
+
+        The MCP code path drains enemy turns synchronously inside
+        ``wait()``/``attack()``/``spawn_monster()`` via
+        ``_drain_enemy_turns``. If ``tick`` also auto-drains in the
+        background it races against the user's commands and silently
+        consumes a PC's turn: tick advances Goblin -> Abe between
+        spawn_monster and the user's first wait(); the user's wait then
+        operates on Abe, advancing Abe -> Bob and burning Abe's turn.
+        """
+        import random
+
+        from client_2d.mcp_bridge import MCPBridge
+        from client_2d.session import GameSession
+
+        s = GameSession(enable_mcp=False, dev_mode=True)
+        # Match the live MCP wiring without starting the HTTP thread:
+        # an attached _mcp_bridge is what signals "MCP is driving."
+        s.initialize()
+        s._mcp_bridge = MCPBridge()
+        # Deterministic seed used in the #577 repro.
+        s.engine.game_state.dice_roller.random = random.Random(42)
+
+        s.spawn_monster("goblin", 9, 7)
+        tracker = s.engine.game_state.initiative_tracker
+        assert tracker is not None
+
+        # After spawn the goblin should be the current combatant and the
+        # drain gate should be raised so the user's next wait() resolves it.
+        current_before = tracker.get_current_combatant()
+        assert current_before is not None
+        assert current_before.creature.name == "Goblin"
+        assert s.processing_enemy_turn is True
+        idx_before = tracker.current_turn_index
+
+        # Simulate the user thinking about their move for several seconds.
+        # Each tick is one frame; together they exceed ENEMY_TURN_DELAY (1.5s).
+        for _ in range(120):
+            s.tick(0.05)
+
+        # The ticker must NOT have advanced past the goblin while MCP
+        # is the driver. The goblin's turn is the user's to resolve.
+        current_after = tracker.get_current_combatant()
+        assert current_after is not None, "tick must not corrupt initiative state"
+        assert tracker.current_turn_index == idx_before, (
+            f"tick silently advanced initiative under MCP: idx "
+            f"{idx_before} -> {tracker.current_turn_index}, "
+            f"current now {current_after.creature.name}"
+        )
+        assert current_after.creature.name == "Goblin"
+
 
 class TestMCPServerWiring:
     def test_enable_mcp_creates_bridge_and_server(self) -> None:

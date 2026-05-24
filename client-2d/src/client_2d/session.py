@@ -268,6 +268,15 @@ class GameSession:
             return
 
         if self.processing_enemy_turn:
+            # When MCP is driving, wait()/attack()/spawn_monster() drain
+            # enemy turns synchronously via _drain_enemy_turns(). Letting
+            # the tick loop also auto-drain races against user commands:
+            # after ENEMY_TURN_DELAY seconds of think-time the ticker
+            # silently advances one enemy turn and lands on the next PC,
+            # so the user's next wait() burns that PC's turn instead of
+            # resolving the enemy's (#577). Hand pacing to the bridge.
+            if self._mcp_bridge is not None:
+                return
             self.enemy_turn_timer -= delta_time
             if self.enemy_turn_timer <= 0:
                 if self.engine.is_current_combatant_unconscious():
@@ -684,12 +693,16 @@ class GameSession:
     # ========== MCP command processing ==========
 
     def _process_mcp_commands(self) -> None:
-        """Drain one pending command from the MCP bridge, if any."""
-        if self._mcp_bridge is None:
-            return
+        """Drain one pending command from the MCP bridge, if any.
 
-        # Skip if enemy turn is being processed (avoid inconsistent state)
-        if self.processing_enemy_turn:
+        Once ``tick`` hands enemy-turn pacing to the bridge (#577), the
+        ``processing_enemy_turn`` flag stays raised between MCP calls
+        until ``wait()``/``attack()`` drains it. Polling commands while
+        that flag is set is therefore the normal MCP-driven flow, not a
+        race — those handlers drain synchronously, leaving the flag in
+        a consistent state before they return.
+        """
+        if self._mcp_bridge is None:
             return
 
         request = self._mcp_bridge.poll_commands()
