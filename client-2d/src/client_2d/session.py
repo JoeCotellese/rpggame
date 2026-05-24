@@ -952,6 +952,19 @@ class GameSession:
             speed = current["creature"].speed if current else 30
             return f"No movement remaining (0/{speed} ft). Use game_attack() or game_wait()."
 
+        # Anchor the `@` cursor to the active combatant's TRUE tile
+        # before computing the move. ``spread_party_for_combat`` puts
+        # each PC on its own tile around `@`, but `self.player_x/y` is
+        # never re-synced when turns advance — so a non-leader PC's
+        # ``combat_move`` would otherwise compute ``new_x = player_x +
+        # dx`` from the stale leader tile and then ``update_current_turn
+        # _position(new_x, new_y)`` would slam the PC's entity grid to
+        # that wrong destination (either a silent no-op when it lands
+        # on the PC's existing tile, or a teleport). See #578.
+        combatant_pos = self.entity_manager.get_current_turn_position(self.engine)
+        if combatant_pos is not None:
+            self.player_x, self.player_y = combatant_pos
+
         dx, dy = {
             "north": (0, -1),
             "south": (0, 1),

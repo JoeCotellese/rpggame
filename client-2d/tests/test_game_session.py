@@ -492,6 +492,89 @@ class TestSessionCombatMoveBlockedByMonster:
         assert "Giant Rat" in result
 
 
+class TestSessionCombatMoveAnchorsToActiveCombatant:
+    """Regression tests for #578.
+
+    The ``@`` cursor (``session.player_x/y``) is set during the
+    room-entry party-spread to the party-leader tile and is never
+    re-anchored to the active PC when their turn begins. Before this
+    fix, ``combat_move`` computed the destination as
+    ``self.player_x + dx`` — so a non-leader PC's move went from the
+    cursor's tile rather than the PC's true tile. The downstream
+    ``update_current_turn_position(new_x, new_y)`` call then slammed
+    the PC's entity grid to that wrong destination, either silently
+    no-op-ing (when the destination equalled the PC's existing tile)
+    or teleporting the PC. Both flavors consumed 5 ft of budget per
+    press without doing what the player asked.
+    """
+
+    def test_move_anchors_north_when_cursor_lags_south(self, session) -> None:
+        """When ``@`` is one tile south of the active PC, pressing
+        north must move the PC one tile north of its TRUE tile — not
+        leave the PC in place after the cursor's would-be destination
+        collides with the PC's current tile."""
+        _force_player_turn(session)
+
+        # Scenario seeds Archy at (3, 5) and `@` follows. Decouple
+        # them: leave `@` at (3, 5) but lift the PC's entity grid one
+        # tile north to (3, 4). This mimics the issue #578 repro where
+        # spread_party_for_combat puts non-leader PCs on tiles other
+        # than `@`.
+        party = session.entity_manager.get_party_members()
+        assert len(party) == 1
+        pc_entity = party[0]
+        pc_entity.grid_x = 3
+        pc_entity.grid_y = 4
+        assert (session.player_x, session.player_y) == (3, 5)
+
+        starting_movement = session.engine.get_current_turn_state().movement_remaining
+
+        session.combat_move("north")
+
+        # The PC must move from its TRUE tile (3, 4) → (3, 3). Under
+        # the bug, ``new_y = self.player_y + dy = 5 - 1 = 4`` and
+        # ``update_current_turn_position(3, 4)`` re-set the PC's grid
+        # back to (3, 4) — a silent no-op despite the budget spend.
+        assert (pc_entity.grid_x, pc_entity.grid_y) == (3, 3)
+        # Cursor coupled to the PC after the move.
+        assert (session.player_x, session.player_y) == (3, 3)
+        # Exactly one 5-ft step on normal terrain.
+        assert (
+            session.engine.get_current_turn_state().movement_remaining
+            == starting_movement - 5
+        )
+
+    def test_repeated_moves_anchor_each_time(self, session) -> None:
+        """Two consecutive presses from a desynced cursor must each
+        advance the PC by one tile. The pre-fix behaviour was that the
+        first press wasted budget while snapping `@` onto the PC; only
+        the second press moved the PC. This pins both presses to a
+        real advance so a regression that re-introduces the snap-then-
+        move pattern fails immediately."""
+        _force_player_turn(session)
+
+        party = session.entity_manager.get_party_members()
+        assert len(party) == 1
+        pc_entity = party[0]
+        # PC at (3, 4); `@` lags at (3, 5).
+        pc_entity.grid_x = 3
+        pc_entity.grid_y = 4
+        assert (session.player_x, session.player_y) == (3, 5)
+
+        starting_movement = session.engine.get_current_turn_state().movement_remaining
+
+        session.combat_move("north")
+        session.combat_move("north")
+
+        # PC advances two tiles north of its true starting tile.
+        assert (pc_entity.grid_x, pc_entity.grid_y) == (3, 2)
+        assert (session.player_x, session.player_y) == (3, 2)
+        assert (
+            session.engine.get_current_turn_state().movement_remaining
+            == starting_movement - 10
+        )
+
+
 class TestSessionResetGameMCPDispatch:
     """Tests for the MCP bridge dispatch path of reset_game (#373).
 
