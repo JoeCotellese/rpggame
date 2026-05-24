@@ -889,6 +889,14 @@ class EngineAdapter:
             raise ValueError("Must call initialize_game() first")
         if not isinstance(x, int) or not isinstance(y, int):
             raise TypeError("x and y must be integers")
+        # plan-03 P4 (#532d): when GameState.spatial is wired up (Map
+        # bootstrapped), persist the placement through the engine so the
+        # SpatialIndex stays in sync with the visual EntityManager. When
+        # spatial is still None (no Map yet — current default), fall back
+        # to the prior no-op behavior so the bridge keeps working until
+        # P5 makes the engine spatial model canonical.
+        if self._game_state.spatial is not None:
+            self._game_state.set_position(entity_id, x, y)
         return {"entity_id": entity_id, "position": [x, y]}
 
     def clear_enemies(self) -> dict[str, Any]:

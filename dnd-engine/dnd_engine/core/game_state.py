@@ -13,6 +13,7 @@ from dnd_engine.core.creature import Creature
 from dnd_engine.core.dice import DiceRoller, format_dice_with_modifier
 from dnd_engine.core.npc_manager import NPCManager
 from dnd_engine.core.party import Party
+from dnd_engine.core.position import Position
 from dnd_engine.core.quest import QuestManager
 from dnd_engine.core.room_registry import RoomRegistry
 from dnd_engine.rules.loader import DataLoader
@@ -21,6 +22,7 @@ from dnd_engine.systems.ai import EnemyAI
 from dnd_engine.systems.condition_manager import ConditionManager
 from dnd_engine.systems.initiative import InitiativeTracker
 from dnd_engine.systems.inventory import EquipmentSlot
+from dnd_engine.systems.spatial_index import SpatialIndex
 from dnd_engine.systems.time_manager import ActiveEffect, EffectType, TimeManager
 from dnd_engine.utils.events import Event, EventBus, EventType
 
@@ -621,6 +623,13 @@ class GameState:
         self.combat_history: list[CombatEvent] = []
         self.max_combat_history_size = 50  # Configurable limit
 
+        # Engine spatial model (plan-03 P4). Left None here because a Map is
+        # only meaningful inside a combat / room context; callers (combat
+        # start path, scenarios) construct a Map and assign a SpatialIndex
+        # when they're ready. set_position / move_creature /
+        # remove_creature_position raise ValueError until that happens.
+        self.spatial: SpatialIndex | None = None
+
         # Enemy AI and condition management for enemy turn processing
         self.enemy_ai = EnemyAI()
         self.condition_manager = ConditionManager(
@@ -632,6 +641,119 @@ class GameState:
 
         # Action history for narrative context
         self.action_history: list[str] = []
+
+    def set_position(self, entity_id: str, x: int, y: int) -> Position:
+        """Place or move an entity at ``(x, y)`` via the spatial index.
+
+        Emits ``CREATURE_PLACED`` on the first call for an entity and
+        ``CREATURE_MOVED`` on subsequent calls. Delegates blocking /
+        occupancy validation to ``SpatialIndex``.
+
+        Args:
+            entity_id: Stable id of the creature.
+            x: Destination tile X.
+            y: Destination tile Y.
+
+        Returns:
+            The new ``Position(x, y)``.
+
+        Raises:
+            ValueError: If ``self.spatial`` is None (no Map bootstrapped
+                yet), or if the SpatialIndex rejects the placement
+                (blocking tile, occupied by another entity).
+        """
+        if self.spatial is None:
+            raise ValueError(
+                "GameState.spatial is not initialized; assign a SpatialIndex "
+                "(built from a Map) before calling set_position"
+            )
+        destination = Position(x, y)
+        existing = self.spatial.position_of(entity_id)
+        if existing is None:
+            self.spatial.place(entity_id, destination)
+            self.event_bus.emit(
+                Event(
+                    type=EventType.CREATURE_PLACED,
+                    data={"entity_id": entity_id, "position": destination},
+                )
+            )
+        else:
+            self.spatial.move(entity_id, destination)
+            self.event_bus.emit(
+                Event(
+                    type=EventType.CREATURE_MOVED,
+                    data={
+                        "entity_id": entity_id,
+                        "from": existing,
+                        "to": destination,
+                    },
+                )
+            )
+        return destination
+
+    def move_creature(self, entity_id: str, dx: int, dy: int) -> Position:
+        """Move an already-placed entity by ``(dx, dy)`` and emit ``CREATURE_MOVED``.
+
+        Args:
+            entity_id: Stable id of the creature.
+            dx: Horizontal delta in tiles.
+            dy: Vertical delta in tiles.
+
+        Returns:
+            The new ``Position`` after the delta is applied.
+
+        Raises:
+            ValueError: If ``self.spatial`` is None, or the destination is
+                blocking / occupied per ``SpatialIndex``.
+            KeyError: If ``entity_id`` is not currently placed.
+        """
+        if self.spatial is None:
+            raise ValueError(
+                "GameState.spatial is not initialized; assign a SpatialIndex "
+                "(built from a Map) before calling move_creature"
+            )
+        current = self.spatial.position_of(entity_id)
+        if current is None:
+            raise KeyError(entity_id)
+        destination = Position(current.x + dx, current.y + dy)
+        self.spatial.move(entity_id, destination)
+        self.event_bus.emit(
+            Event(
+                type=EventType.CREATURE_MOVED,
+                data={
+                    "entity_id": entity_id,
+                    "from": current,
+                    "to": destination,
+                },
+            )
+        )
+        return destination
+
+    def remove_creature_position(self, entity_id: str) -> None:
+        """Remove an entity from the spatial index, emitting ``CREATURE_REMOVED``.
+
+        No-op (and no event) if the entity is not currently placed —
+        matches ``SpatialIndex.remove``'s contract so cleanup paths can
+        call this unconditionally.
+
+        Raises:
+            ValueError: If ``self.spatial`` is None.
+        """
+        if self.spatial is None:
+            raise ValueError(
+                "GameState.spatial is not initialized; assign a SpatialIndex "
+                "(built from a Map) before calling remove_creature_position"
+            )
+        current = self.spatial.position_of(entity_id)
+        if current is None:
+            return
+        self.spatial.remove(entity_id)
+        self.event_bus.emit(
+            Event(
+                type=EventType.CREATURE_REMOVED,
+                data={"entity_id": entity_id, "position": current},
+            )
+        )
 
     def start(self) -> None:
         """
