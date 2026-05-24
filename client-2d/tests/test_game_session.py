@@ -459,7 +459,7 @@ class TestSessionCombatMoveSpatialDelegation:
         # Use the session's existing RoomLayout to seed the engine Map.
         game_state = session.engine.game_state
         engine_map = Map.from_room_layout(session.room_layout)
-        game_state.bootstrap_spatial(engine_map)
+        game_state.bootstrap_spatial(engine_map, replace=True)
 
         # Place the current PC at the session's player tile.
         current = session.engine.get_current_combatant()
@@ -533,7 +533,7 @@ class TestSessionCombatMoveSpatialDelegation:
         }
         engine_map = Map(width=3, height=3, tiles=tiles)
         game_state = session.engine.game_state
-        game_state.bootstrap_spatial(engine_map)
+        game_state.bootstrap_spatial(engine_map, replace=True)
         pc = session.engine.party.characters[0]
         entity_id = f"pc_{pc.name.lower().replace(' ', '_')}"
         game_state.set_position(entity_id, target_x, target_y)
@@ -566,7 +566,7 @@ class TestSessionCombatMoveSpatialDelegation:
         # Bootstrap spatial but DO NOT call set_position for the PC.
         game_state = session.engine.game_state
         engine_map = Map.from_room_layout(session.room_layout)
-        game_state.bootstrap_spatial(engine_map)
+        game_state.bootstrap_spatial(engine_map, replace=True)
         current = session.engine.get_current_combatant()
         entity_id = f"pc_{current['creature'].name.lower().replace(' ', '_')}"
         assert game_state.spatial.position_of(entity_id) is None
@@ -621,7 +621,7 @@ class TestSessionCombatMoveSpatialDelegation:
         # the new goblin).
         game_state = session.engine.game_state
         engine_map = Map.from_room_layout(session.room_layout)
-        game_state.bootstrap_spatial(engine_map)
+        game_state.bootstrap_spatial(engine_map, replace=True)
         pc = session.engine.party.characters[0]
         entity_id = f"pc_{pc.name.lower().replace(' ', '_')}"
         game_state.set_position(entity_id, target_x, target_y)
@@ -658,7 +658,7 @@ class TestSessionCombatMoveSpatialDelegation:
 
         game_state = session.engine.game_state
         engine_map = Map.from_room_layout(session.room_layout)
-        game_state.bootstrap_spatial(engine_map)
+        game_state.bootstrap_spatial(engine_map, replace=True)
         current = session.engine.get_current_combatant()
         entity_id = f"pc_{current['creature'].name.lower().replace(' ', '_')}"
         game_state.set_position(entity_id, target_x, target_y)
@@ -682,3 +682,146 @@ class TestSessionCombatMoveSpatialDelegation:
         assert result == "Cannot move: prone"
         # PC must not have moved on the unknown rejection.
         assert (session.player_x, session.player_y) == (target_x, target_y)
+
+
+class TestSessionBootstrapForCombat:
+    """Plan-03 P7 — session-side wiring that activates the engine combat
+    path in production. ``_bootstrap_spatial_for_combat`` builds an
+    engine ``Map`` from the visual ``RoomLayout`` and seeds the
+    SpatialIndex with every EntityManager entity so the first turn has
+    accurate spatial truth."""
+
+    def test_bootstrap_places_party_members(self, session) -> None:
+        """Every PartyMemberEntity with grid coords lands in spatial."""
+        from dnd_engine.core.position import Position
+
+        # Sanity: fixture loaded a party member.
+        party = session.entity_manager.get_party_members()
+        assert party, "scenario fixture must populate at least one PC"
+        pc_entity = party[0]
+
+        placed = session._bootstrap_spatial_for_combat()
+
+        # PC ended up in spatial at its EntityManager coords.
+        spatial = session.engine.game_state.spatial
+        assert spatial is not None
+        assert (
+            spatial.occupant_at(Position(pc_entity.grid_x, pc_entity.grid_y))
+            == pc_entity.entity_id
+        )
+        assert placed >= 1
+
+    def test_bootstrap_places_monsters(self, session) -> None:
+        """Every MonsterEntity with grid coords lands in spatial."""
+        from dnd_engine.core.position import Position
+
+        monsters = session.entity_manager.get_monsters()
+        assert monsters, "scenario fixture must populate at least one monster"
+        monster = monsters[0]
+
+        session._bootstrap_spatial_for_combat()
+
+        spatial = session.engine.game_state.spatial
+        assert (
+            spatial.occupant_at(Position(monster.grid_x, monster.grid_y))
+            == monster.entity_id
+        )
+
+    def test_bootstrap_silently_skips_blocking_entities(self, session) -> None:
+        """An entity sitting on what the engine Map treats as a wall must
+        not crash the bootstrap — it is silently skipped while the rest
+        of the placements succeed."""
+        from dnd_engine.core.position import Position
+
+        # Find a wall tile in the room layout — any blocking position
+        # works as the engine Map mirrors RoomLayout walkability.
+        wall_xy = None
+        for y in range(session.room_layout.height):
+            for x in range(session.room_layout.width):
+                if session.room_layout.is_blocking(x, y):
+                    wall_xy = (x, y)
+                    break
+            if wall_xy is not None:
+                break
+        assert wall_xy is not None, "room layout must have at least one wall"
+
+        # Park a monster on the wall (entity_manager allows any coord;
+        # spatial bootstrap must tolerate the divergence).
+        monsters = session.entity_manager.get_monsters()
+        assert monsters
+        monster = monsters[0]
+        monster.grid_x, monster.grid_y = wall_xy
+
+        # No crash; monster simply absent from spatial afterward.
+        placed = session._bootstrap_spatial_for_combat()
+
+        spatial = session.engine.game_state.spatial
+        assert spatial.occupant_at(Position(*wall_xy)) is None
+        # Returned count reflects only successfully placed entities.
+        assert placed >= 0
+
+    def test_bootstrap_returns_count_of_placements(self, session) -> None:
+        """Count == number of entities successfully placed in spatial."""
+        placed = session._bootstrap_spatial_for_combat()
+
+        spatial = session.engine.game_state.spatial
+        assert placed == len(spatial.occupants())
+
+    def test_combat_move_uses_engine_path_after_bootstrap(self, session) -> None:
+        """End-to-end: after ``_bootstrap_spatial_for_combat`` the next
+        ``combat_move`` runs through the engine (``attempt_combat_step``)
+        and surfaces the same wire format the engine-path tests pin."""
+        _force_player_turn(session)
+
+        # Move the PC to a tile with empty space around for a clean step.
+        target_x, target_y = 5, 5
+        session.player_x = target_x
+        session.player_y = target_y
+        for ent in session.entity_manager.get_party_members():
+            ent.grid_x = target_x
+            ent.grid_y = target_y
+
+        # Wire spatial via the session helper — production seam.
+        session._bootstrap_spatial_for_combat()
+        starting_movement = session.engine.get_current_turn_state().movement_remaining
+
+        result = session.combat_move("north")
+
+        expected_first_line = (
+            f"Moved north. Movement remaining: {starting_movement - 5} ft."
+        )
+        assert result.startswith(expected_first_line + "\n"), (
+            f"engine wire format not surfaced: got {result.splitlines()[0]!r}"
+        )
+
+    def test_load_scenario_bootstraps_spatial(self, session) -> None:
+        """Combat-start via ``load_scenario`` (the scenario fixture's
+        path) must leave spatial populated so the next combat_move runs
+        through the engine path with no additional setup."""
+        from dnd_engine.core.position import Position
+
+        # The session fixture loads ranged_attack_basic via load_scenario,
+        # which is a combat-start path; spatial should already be wired.
+        spatial = session.engine.game_state.spatial
+        assert spatial is not None, "load_scenario must bootstrap spatial"
+
+        # At least one party member is present in spatial at its
+        # EntityManager-recorded tile.
+        party = session.entity_manager.get_party_members()
+        assert party
+        pc = party[0]
+        assert spatial.occupant_at(Position(pc.grid_x, pc.grid_y)) == pc.entity_id
+
+    def test_spawn_monster_from_exploration_bootstraps_spatial(self, session) -> None:
+        """Dev-mode ``spawn_monster`` flipping EXPLORATION -> COMBAT is a
+        combat-start path; spatial must be wired afterward so the move
+        validation surface is ready for the first turn."""
+        from client_2d.core.constants import GameMode
+
+        session.clear_enemies()
+        assert session.current_mode == GameMode.EXPLORATION
+
+        session.spawn_monster("goblin", 12, 5)
+
+        assert session.engine.game_state.spatial is not None
+        assert session.current_mode == GameMode.COMBAT

@@ -184,6 +184,7 @@ class GameSession:
             print(f"  Combat started! Enemies: {', '.join(start_info['enemies'])}")
             self.current_mode = GameMode.COMBAT
             self._spread_party_for_combat()
+            self._bootstrap_spatial_for_combat()
             self._add_combat_log(f"Combat begins! {len(start_info['enemies'])} enemies!")
             current = self.engine.get_current_combatant()
             if current:
@@ -295,6 +296,46 @@ class GameSession:
         self.lighting.update_party_lights(light_positions, "torch")
         lit_tiles = self.lighting.calculate_lighting()
         self.fog.apply_lighting(lit_tiles)
+
+    def _bootstrap_spatial_for_combat(self) -> int:
+        """Wire ``GameState.spatial`` for an encounter starting now.
+
+        Builds an engine ``Map`` from the current ``RoomLayout`` via the
+        engine adapter, then walks every ``EntityManager`` entity that
+        has an entity_id and pushes its visual ``(grid_x, grid_y)`` into
+        the SpatialIndex via ``engine.set_position``. Entities the engine
+        rejects (blocking tile or already occupied) are silently skipped
+        — the visual layer remains authoritative for them until the next
+        successful placement.
+
+        Called from every combat-start path (initial start, room
+        transition, dev spawn, scenario load) so the first turn's call
+        to ``GameState.attempt_combat_step`` sees an accurate spatial
+        model.
+
+        Returns:
+            Count of entities successfully placed in the SpatialIndex.
+            Caller can compare against ``EntityManager`` totals to spot
+            divergences during debugging.
+        """
+        if self.engine.game_state is None or self.room_layout is None:
+            return 0
+
+        self.engine.bootstrap_spatial_from_layout(self.room_layout)
+
+        placed = 0
+        for entity in self.entity_manager.get_all():
+            entity_id = getattr(entity, "entity_id", None)
+            if not entity_id:
+                continue
+            if entity.grid_x is None or entity.grid_y is None:
+                continue
+            result = self.engine.set_position(
+                entity_id, entity.grid_x, entity.grid_y
+            )
+            if "error" not in result:
+                placed += 1
+        return placed
 
     def _spread_party_for_combat(self) -> None:
         """Spread party into formation around current position."""
@@ -453,6 +494,7 @@ class GameSession:
                 enemies = [e.name for e in game_state.active_enemies]
                 self.current_mode = GameMode.COMBAT
                 self._spread_party_for_combat()
+                self._bootstrap_spatial_for_combat()
                 self._add_combat_log(f"Combat! {len(enemies)} enemies: {', '.join(enemies)}")
                 current = self.engine.get_current_combatant()
                 if current:
@@ -1269,6 +1311,9 @@ class GameSession:
             # placed PCs via spawn_character / load_scenario.
             if not self.entity_manager.get_party_members():
                 self._spread_party_for_combat()
+            # Combat-start hook: wire spatial so engine-owned movement
+            # validation has a Map + populated SpatialIndex from turn 1.
+            self._bootstrap_spatial_for_combat()
 
         return (
             f"Spawned {result['name']} at ({x},{y}) as {result['entity_id']}. " + self.get_state()
@@ -1440,6 +1485,9 @@ class GameSession:
 
         if game_state.in_combat:
             self.current_mode = GameMode.COMBAT
+            # Combat-start hook: wire spatial so engine-owned movement
+            # validation has a Map + populated SpatialIndex from turn 1.
+            self._bootstrap_spatial_for_combat()
         else:
             self.current_mode = GameMode.EXPLORATION
 

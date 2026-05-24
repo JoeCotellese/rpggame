@@ -230,3 +230,60 @@ class TestRemoveCreaturePositionAdapter:
 
         with pytest.raises(ValueError, match="initialize_game"):
             EngineAdapter().remove_creature_position("goblin_0")
+
+
+class TestBootstrapSpatialFromLayout:
+    """Plan-03 P7 — adapter-side hook that turns a visual RoomLayout into
+    an engine Map and installs a SpatialIndex on GameState. This is the
+    single seam combat-start uses to wire up engine-owned movement."""
+
+    def _make_room_layout(self, width: int = 6, height: int = 5):
+        """A small all-floor RoomLayout suitable for Map.from_room_layout."""
+        from client_2d.integration.layout_schema import (
+            RoomLayout,
+            SpawnPoints,
+            TileType,
+        )
+
+        tiles = [[int(TileType.FLOOR) for _ in range(width)] for _ in range(height)]
+        return RoomLayout(
+            width=width,
+            height=height,
+            tiles=tiles,
+            spawn_points=SpawnPoints(player=(1, 1)),
+        )
+
+    def test_bootstrap_spatial_from_layout_returns_status_dict(
+        self, initialized_adapter
+    ) -> None:
+        """Returns a status dict carrying the new Map's dimensions."""
+        layout = self._make_room_layout(width=7, height=4)
+
+        result = initialized_adapter.bootstrap_spatial_from_layout(layout)
+
+        assert result == {"status": "bootstrapped", "width": 7, "height": 4}
+        assert initialized_adapter.game_state.spatial is not None
+
+    def test_bootstrap_spatial_from_layout_replaces_existing(
+        self, adapter_with_spatial
+    ) -> None:
+        """A second call replaces the existing SpatialIndex (replace=True)."""
+        # First bootstrap was via the fixture's 20x20 map.
+        assert adapter_with_spatial.game_state.spatial is not None
+        original_index = adapter_with_spatial.game_state.spatial
+
+        layout = self._make_room_layout(width=8, height=6)
+        result = adapter_with_spatial.bootstrap_spatial_from_layout(layout)
+
+        assert result == {"status": "bootstrapped", "width": 8, "height": 6}
+        # New SpatialIndex object — the old one was discarded.
+        assert adapter_with_spatial.game_state.spatial is not original_index
+
+    def test_bootstrap_spatial_from_layout_raises_without_game_state(self) -> None:
+        """Init guard mirrors the other adapter primitives."""
+        from client_2d.integration.engine_adapter import EngineAdapter
+
+        with pytest.raises(ValueError, match="initialize_game"):
+            EngineAdapter().bootstrap_spatial_from_layout(
+                self._make_room_layout(),
+            )

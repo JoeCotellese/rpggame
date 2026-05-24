@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from client_2d.integration.layout_schema import RoomLayout
     from dnd_engine.core.character import Character
 
 # Default party size cap. When no explicit character_ids are passed to
@@ -241,6 +242,43 @@ class EngineAdapter:
         return {
             "in_combat": self._game_state.in_combat,
             "enemies": [e.name for e in self._game_state.active_enemies],
+        }
+
+    def bootstrap_spatial_from_layout(
+        self, room_layout: RoomLayout
+    ) -> dict[str, Any]:
+        """Build an engine ``Map`` from the visual ``RoomLayout`` and
+        bootstrap ``GameState.spatial``.
+
+        Single seam the session calls at combat start so the engine-owned
+        movement validation path (``GameState.attempt_combat_step``) has a
+        Map + SpatialIndex to operate against. Idempotent in spirit: if a
+        SpatialIndex is already installed, this replaces it
+        (``replace=True``) so a new encounter or room transition gets a
+        fresh, accurate Map.
+
+        Args:
+            room_layout: The session's current visual layout. Translated
+                tile-by-tile via ``Map.from_room_layout``.
+
+        Returns:
+            ``{"status": "bootstrapped", "width": int, "height": int}`` so
+            callers (and any future MCP/script consumer) can confirm the
+            wire.
+
+        Raises:
+            ValueError: If ``initialize_game()`` has not been called yet.
+        """
+        if self._game_state is None:
+            raise ValueError("Must call initialize_game() first")
+        from dnd_engine.core.map import Map
+
+        engine_map = Map.from_room_layout(room_layout)
+        self._game_state.bootstrap_spatial(engine_map, replace=True)
+        return {
+            "status": "bootstrapped",
+            "width": engine_map.width,
+            "height": engine_map.height,
         }
 
     @property
