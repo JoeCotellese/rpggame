@@ -1314,8 +1314,59 @@ class GameSession:
 
     # ========== Public dev/MCP API (gated upstream by dev_mode) ==========
 
+    def _reject_spawn_if_occupied(self, x: int, y: int) -> str | None:
+        """Return a rejection message if ``(x, y)`` is unsuitable for a
+        new creature spawn, else ``None``.
+
+        Consults four sources because each owns part of the truth during
+        the plan-03 transition:
+          * Room walls via ``room_layout.is_blocking`` — engine spatial
+            may not be bootstrapped yet for legacy room flows.
+          * ``entity_manager`` — owns the visible party + monster grid
+            positions before they're written into ``SpatialIndex``.
+          * Session ``player_x`` / ``player_y`` — the ``@`` marker is
+            tracked separately from party-member entities in some
+            scenarios (issue #568 repro).
+          * ``GameState.spatial.occupant_at`` — authoritative once
+            placements have been mirrored into it.
+        """
+        if self.room_layout is not None:
+            if not (0 <= x < self.room_layout.width and 0 <= y < self.room_layout.height):
+                return f"Cannot spawn at ({x},{y}): out of bounds."
+            if self.room_layout.is_blocking(x, y):
+                return f"Cannot spawn at ({x},{y}): tile is blocking (wall)."
+
+        if (x, y) == (self.player_x, self.player_y):
+            return f"Cannot spawn at ({x},{y}): tile is occupied by the player."
+
+        existing = self.entity_manager.get_at_position(x, y)
+        if existing is not None:
+            blocker_id = getattr(existing, "entity_id", "") or ""
+            name = self._resolve_blocker_name(blocker_id) if blocker_id else "an entity"
+            return f"Cannot spawn at ({x},{y}): tile is occupied by {name}."
+
+        game_state = self.engine.game_state
+        if game_state is not None and game_state.spatial is not None:
+            from dnd_engine.core.position import Position
+
+            occupant = game_state.spatial.occupant_at(Position(x, y))
+            if occupant is not None:
+                name = self._resolve_blocker_name(occupant) if occupant else "an entity"
+                return f"Cannot spawn at ({x},{y}): tile is occupied by {name}."
+        return None
+
     def spawn_monster(self, monster_id: str, x: int, y: int) -> str:
         """Spawn a monster via engine + visual entity manager."""
+        # Occupancy gate (#568): reject placements on the player marker,
+        # any entity-manager occupant, a wall, or a spatial-index
+        # occupant before the engine adds the creature to active_enemies
+        # / initiative. Without this gate the engine adapter writes to
+        # SpatialIndex (which would also reject) only AFTER appending to
+        # active_enemies, leaving a ghost monster with no spatial
+        # coordinate — visible in combat but invisible on the map.
+        rejection = self._reject_spawn_if_occupied(x, y)
+        if rejection is not None:
+            return rejection
         result = self.engine.spawn_monster(monster_id, x, y)
         enemy_index = len(self.engine.game_state.active_enemies) - 1
         creature_ref = self.engine.game_state.active_enemies[enemy_index]

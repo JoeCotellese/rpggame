@@ -1087,3 +1087,89 @@ class TestSessionSpawnMonsterDrainGate:
         session.spawn_monster("goblin", session.player_x + 5, session.player_y)
 
         assert session.processing_enemy_turn is False
+
+
+class TestSessionSpawnMonsterOccupancy:
+    """Regression tests for #568.
+
+    ``spawn_monster()`` previously placed a monster on any tile,
+    including tiles already occupied by the player marker ``@``, a
+    party member, an existing monster, or a wall. The fix rejects the
+    spawn with a clear error and leaves engine + entity manager + the
+    SpatialIndex untouched so the dev can retry at a free tile.
+    """
+
+    def test_spawn_monster_on_player_marker_tile_rejected(self, session) -> None:
+        """Spawning on the ``@`` marker's tile must fail without mutating
+        state. This is the literal reproducer from #568 — goblin was
+        invisible because it was placed under ``@``."""
+        before_enemies = list(session.engine.game_state.active_enemies)
+        before_monsters = {
+            e.entity_id: (e.grid_x, e.grid_y) for e in session.entity_manager.get_monsters()
+        }
+
+        result = session.spawn_monster("goblin", session.player_x, session.player_y)
+
+        assert "occupied" in result.lower() or "blocked" in result.lower(), (
+            f"expected occupancy rejection, got: {result!r}"
+        )
+        # Engine state untouched: no new enemy entry.
+        assert session.engine.game_state.active_enemies == before_enemies
+        # Entity manager untouched: no new monster entity.
+        after_monsters = {
+            e.entity_id: (e.grid_x, e.grid_y) for e in session.entity_manager.get_monsters()
+        }
+        assert after_monsters == before_monsters
+
+    def test_spawn_monster_on_party_member_tile_rejected(self, session) -> None:
+        """Spawning on a party member's tile must fail with no state
+        mutation, regardless of whether ``@`` happens to share that tile."""
+        party = session.entity_manager.get_party_members()
+        assert party, "fixture should populate at least one party member"
+        pm = party[0]
+        before_enemies = list(session.engine.game_state.active_enemies)
+        before_monsters = {
+            e.entity_id: (e.grid_x, e.grid_y) for e in session.entity_manager.get_monsters()
+        }
+
+        result = session.spawn_monster("goblin", pm.grid_x, pm.grid_y)
+
+        assert "occupied" in result.lower() or "blocked" in result.lower(), (
+            f"expected occupancy rejection, got: {result!r}"
+        )
+        assert session.engine.game_state.active_enemies == before_enemies
+        after_monsters = {
+            e.entity_id: (e.grid_x, e.grid_y) for e in session.entity_manager.get_monsters()
+        }
+        assert after_monsters == before_monsters
+
+    def test_spawn_monster_on_existing_monster_tile_rejected(self, session) -> None:
+        """A second spawn on a tile already holding a monster must fail."""
+        monsters = session.entity_manager.get_monsters()
+        assert monsters, "fixture should populate at least one monster"
+        m = monsters[0]
+        before_enemies = list(session.engine.game_state.active_enemies)
+
+        result = session.spawn_monster("goblin", m.grid_x, m.grid_y)
+
+        assert "occupied" in result.lower() or "blocked" in result.lower(), (
+            f"expected occupancy rejection, got: {result!r}"
+        )
+        assert session.engine.game_state.active_enemies == before_enemies
+
+    def test_spawn_monster_on_free_tile_still_succeeds(self, session) -> None:
+        """Sanity check — the occupancy gate must not block legitimate
+        spawns on empty tiles."""
+        gx, gy = session.player_x + 3, session.player_y
+        # Confirm the target tile is genuinely free in this fixture.
+        assert session.entity_manager.get_at_position(gx, gy) is None
+        assert (gx, gy) != (session.player_x, session.player_y)
+
+        result = session.spawn_monster("giant_rat", gx, gy)
+
+        assert "occupied" not in result.lower()
+        assert "blocked" not in result.lower()
+        # Monster reached the entity manager at the requested tile.
+        ent = session.entity_manager.get_at_position(gx, gy)
+        assert ent is not None
+        assert ent.sub_type == "giant_rat"
