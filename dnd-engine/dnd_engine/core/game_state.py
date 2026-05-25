@@ -11,6 +11,7 @@ from dnd_engine.core.character import Character
 from dnd_engine.core.combat import AttackResult, CombatEngine
 from dnd_engine.core.creature import Creature
 from dnd_engine.core.dice import DiceRoller, format_dice_with_modifier
+from dnd_engine.core.entity_ids import pc_entity_id
 from dnd_engine.core.map import Map
 from dnd_engine.core.move_result import MoveResult
 from dnd_engine.core.npc_manager import NPCManager
@@ -19,7 +20,7 @@ from dnd_engine.core.position import Position
 from dnd_engine.core.quest import QuestManager
 from dnd_engine.core.room_registry import RoomRegistry
 from dnd_engine.rules.loader import DataLoader
-from dnd_engine.systems.action_economy import ActionType, Terrain
+from dnd_engine.systems.action_economy import ActionType, Terrain, cost_for
 from dnd_engine.systems.ai import EnemyAI
 from dnd_engine.systems.condition_manager import ConditionManager
 from dnd_engine.systems.initiative import InitiativeTracker
@@ -705,9 +706,8 @@ class GameState:
         """
         # PC path: pc_<name_lower_underscored>
         if entity_id.startswith("pc_"):
-            target_key = entity_id[len("pc_") :]
             for character in self.party.characters:
-                if character.name.lower().replace(" ", "_") == target_key:
+                if pc_entity_id(character.name) == entity_id:
                     return character
             return None
         # Monster path: <monster_id>_<index>
@@ -960,7 +960,7 @@ class GameState:
             )
 
         destination = Position(current.x + dx, current.y + dy)
-        spatial_map = self.spatial._map
+        spatial_map = self.spatial.map
 
         turn_state = (
             self.initiative_tracker.get_current_turn_state()
@@ -1022,7 +1022,12 @@ class GameState:
             else spatial_map.terrain_at(destination.x, destination.y)
         )
 
-        if not turn_state.consume_movement(5, terrain=actual_terrain):
+        # Pre-validate the actual cost against the budget before doing any
+        # state mutation. Difficult Terrain doubles the per-foot cost so
+        # the budget< 5 short-circuit above isn't sufficient when the
+        # destination is difficult.
+        cost = cost_for(5, actual_terrain)
+        if budget < cost:
             return MoveResult(
                 ok=False,
                 reason="no movement remaining",
@@ -1031,8 +1036,19 @@ class GameState:
             )
 
         # All preconditions satisfied; commit the move (emits CREATURE_MOVED
-        # and syncs Creature.position).
+        # and syncs Creature.position) BEFORE deducting from the budget so a
+        # subscriber crash on CREATURE_MOVED leaves the pool untouched
+        # rather than silently consuming the cost of a move that never
+        # happened.
         self.move_creature(entity_id, dx, dy)
+        consumed = turn_state.consume_movement(5, terrain=actual_terrain)
+        # The cost was pre-validated against the budget; the consume call
+        # must succeed. An assertion documents the invariant for future
+        # readers.
+        assert consumed, (
+            f"consume_movement rejected pre-validated cost "
+            f"(budget={budget}, cost={cost}, terrain={actual_terrain})"
+        )
         return MoveResult(
             ok=True,
             reason=None,

@@ -37,6 +37,7 @@ from client_2d.systems.fog_of_war import FogOfWarSystem
 from client_2d.systems.lighting import LightingSystem
 from client_2d.testing.state_renderer import Entity as StateEntity
 from client_2d.testing.state_renderer import StateRenderer
+from dnd_engine.core.entity_ids import pc_entity_id
 
 if TYPE_CHECKING:
     from client_2d.embedded_mcp_server import EmbeddedMCPServer
@@ -1161,8 +1162,8 @@ class GameSession:
 
         entity_at_dest = self.entity_manager.get_at_position(new_x, new_y)
         if entity_at_dest is not None and entity_at_dest in self.entity_manager.get_monsters():
-            if entity_at_dest._creature_ref:
-                name = entity_at_dest._creature_ref.name
+            if entity_at_dest.creature is not None:
+                name = entity_at_dest.creature.name
             else:
                 name = entity_at_dest.sub_type.replace("_", " ").title()
             return f"Path blocked! {name} is in the way."
@@ -1203,7 +1204,7 @@ class GameSession:
         creature = current["creature"]
         # The plan-03 spatial convention for PC entity ids mirrors
         # GameState._find_creature_by_id and EngineAdapter.spawn_character.
-        entity_id = f"pc_{creature.name.lower().replace(' ', '_')}"
+        entity_id = pc_entity_id(creature.name)
         game_state = self.engine.game_state
         if game_state.spatial.position_of(entity_id) is None:
             # Spatial is bootstrapped but the PC is not yet placed — seed
@@ -1286,16 +1287,26 @@ class GameSession:
         blocking entity at the destination tile.
 
         Prefers the engine creature's name when available; falls back
-        to the entity's ``sub_type`` titled and space-separated.
+        to the entity's ``sub_type`` titled and space-separated, then
+        to a humanized form of the raw entity id (split on ``_`` and
+        title-cased) so players never see internal ids like
+        ``goblin_0`` or ``pc_hero`` in MCP responses.
         """
         ent = self.entity_manager.get_by_id(blocker_entity_id)
         if ent is not None:
-            if getattr(ent, "_creature_ref", None):
-                return ent._creature_ref.name
+            if ent.creature is not None:
+                return ent.creature.name
             sub_type = getattr(ent, "sub_type", "") or ""
             if sub_type:
                 return sub_type.replace("_", " ").title()
-        return blocker_entity_id
+        # Humanize the id rather than leak the raw spatial key. Strips
+        # the "pc_" prefix and the trailing monster index so a missed
+        # entity-manager lookup still produces readable output.
+        humanized = blocker_entity_id.removeprefix("pc_")
+        parts = humanized.split("_")
+        if parts and parts[-1].isdigit():
+            parts = parts[:-1]
+        return " ".join(parts).title() if parts else blocker_entity_id
 
     def attack(self, target: int | str) -> str:
         """Attack a target enemy by index or entity ID."""
@@ -1715,12 +1726,11 @@ class GameSession:
 
         game_state = self.engine.game_state
         for entity_id, (x, y) in result["party_positions"].items():
-            expected = entity_id.removeprefix("pc_")
             character = next(
                 (
                     c
                     for c in game_state.party.characters
-                    if c.name.lower().replace(" ", "_") == expected
+                    if pc_entity_id(c.name) == entity_id
                 ),
                 None,
             )

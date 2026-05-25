@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from dnd_engine.core.entity_ids import pc_entity_id
+
 if TYPE_CHECKING:
     from dnd_engine.core.character import Character
 
@@ -869,7 +871,7 @@ class EngineAdapter:
         if self._game_state.in_combat and self._game_state.initiative_tracker is not None:
             self._game_state.initiative_tracker.add_combatant(character)
 
-        entity_id = f"pc_{character.name.lower().replace(' ', '_')}"
+        entity_id = pc_entity_id(character.name)
         response: dict[str, Any] = {
             "entity_id": entity_id,
             "name": character.name,

@@ -123,6 +123,17 @@ class SpatialIndex:
     # Queries
     # ------------------------------------------------------------------ #
 
+    @property
+    def map(self) -> Map:
+        """Read-only access to the underlying ``Map``.
+
+        Consumers that need terrain or blocking queries against the same
+        Map this index was built from should reach through this property
+        rather than ``self._map`` — the underscore form is private to the
+        index and may be replaced with a snapshot wrapper in future.
+        """
+        return self._map
+
     def position_of(self, entity_id: str) -> Position | None:
         """Return the placed position of ``entity_id``, or ``None``."""
         return self._by_entity.get(entity_id)
