@@ -1648,6 +1648,7 @@ def _enemy_turn_stub(**overrides) -> dict:
         "concentration_broken": None,
         "turn_start_effects": [],
         "turn_end_effects": [],
+        "error": None,
     }
     base.update(overrides)
     return base
@@ -1746,6 +1747,30 @@ class TestEnemyTurnActionTypes:
             f"missing no-usable-attack line:\n{events}"
         )
         assert "takes no action" not in joined
+
+    def test_no_valid_attack_surfaces_engine_error_when_present(self, session) -> None:
+        """The engine sets ``EnemyTurnResult.error`` when the AI failed
+        for a specific reason (e.g. ``"No monster data or actions
+        found"``). The adapter passes it through and the session
+        appends it to the NO_VALID_ATTACK line so MCP consumers can
+        diagnose the cause — not just see a generic 'no usable attack'
+        for every variant."""
+        events = self._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                action="NO_VALID_ATTACK",
+                hit=None,
+                damage=0,
+                error="No monster data or actions found",
+            ),
+        )
+        joined = " | ".join(events)
+        assert "no usable attack" in joined.lower(), (
+            f"missing base line:\n{events}"
+        )
+        assert "No monster data or actions found" in joined, (
+            f"engine error diagnostic not surfaced:\n{events}"
+        )
 
     def test_condition_removal_emits_message(self, session) -> None:
         """When the goblin uses its turn to shake off a condition, the

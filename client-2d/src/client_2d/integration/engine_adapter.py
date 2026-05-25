@@ -761,6 +761,11 @@ class EngineAdapter:
                 "concentration_broken": getattr(result, "concentration_broken", None),
                 "turn_start_effects": turn_start_effects,
                 "turn_end_effects": turn_end_effects,
+                # Engine diagnostic for NO_VALID_ATTACK / similar
+                # non-attack paths (e.g. "No monster data or actions
+                # found"). Surfaces to MCP consumers so a stalling
+                # enemy is debuggable from the response alone (#570).
+                "error": getattr(result, "error", None),
             }
         except Exception as e:
             return {"success": False, "error": str(e)}

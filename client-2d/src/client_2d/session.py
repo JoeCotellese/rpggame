@@ -623,7 +623,11 @@ class GameSession:
             return
 
         if action == "NO_VALID_ATTACK":
-            self._add_combat_log(f"{enemy} has no usable attack.")
+            line = f"{enemy} has no usable attack."
+            error = result.get("error")
+            if error:
+                line += f" ({error})"
+            self._add_combat_log(line)
             return
 
         if action == "CONDITION_REMOVAL":
