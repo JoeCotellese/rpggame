@@ -973,6 +973,54 @@ class TestSessionDrainEnemyTurns:
         assert session._pending_combat_events == []
         assert session._consume_pending_events() == []
 
+    def test_drain_capture_survives_combat_log_buffer_cap(self, session) -> None:
+        """Regression: the per-turn emit can produce 5+ lines (start
+        effects + attack roll + save + concentration + down + end
+        effects). ``_add_combat_log`` caps ``combat_log`` at 10. If the
+        drain mirrored events via ``combat_log[log_before:]`` it would
+        silently lose the oldest just-emitted lines whenever the cap
+        truncated the buffer mid-turn — re-introducing the exact
+        symptom #570 is fixing.
+        """
+        # Pre-fill combat_log so it sits near the cap before the drain.
+        # Any drain that emits more lines than (10 - len(combat_log))
+        # would trigger the bounded-buffer truncation under the old
+        # slice-based mirror.
+        session.combat_log = [f"warmup line {i}" for i in range(8)]
+        session._pending_combat_events.clear()
+
+        # Monkeypatch one enemy turn that emits five lines: turn-start
+        # effect + attack-roll + save + concentration + turn-end. Drain
+        # the FSM forward through exactly one turn.
+        five_line_stub = _enemy_turn_stub(
+            hit=True,
+            damage=4,
+            saving_throw_triggered=True,
+            save_ability="Constitution",
+            save_dc=11,
+            save_succeeded=False,
+            conditions_applied=["poisoned"],
+            concentration_broken={
+                "was_concentrating": True,
+                "concentration_broken": True,
+                "spell_name": "bless",
+                "dc": 10,
+            },
+            turn_start_effects=["Goblin takes 1 fire damage at start of turn."],
+            turn_end_effects=["POISONED on Goblin has expired!"],
+        )
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session, five_line_stub
+        )
+
+        # The drain must surface every emitted line — independent of how
+        # many warmup lines were already in combat_log.
+        assert any("fire damage" in line for line in events), events
+        assert any("Goblin attacks" in line for line in events), events
+        assert any("Constitution save" in line for line in events), events
+        assert any("concentration" in line.lower() for line in events), events
+        assert any("expired" in line.lower() for line in events), events
+
 
 class TestSessionMCPResponseSurfacesCombatEvents:
     """Plan #570 fix Phase 2: surface drained enemy-turn events in MCP responses.

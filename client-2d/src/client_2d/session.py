@@ -147,6 +147,13 @@ class GameSession:
         # because that buffer is bounded (10 lines) for the windowed
         # HUD; this one is per-call and reset by ``_consume_pending_events``.
         self._pending_combat_events: list[str] = []
+        # Raised by ``_drain_enemy_turns`` while it owns the FSM. When
+        # set, ``_add_combat_log`` mirrors each appended line directly
+        # into ``_pending_combat_events``. Replaces the prior
+        # ``combat_log[log_before:]`` slice mirror, which silently lost
+        # lines whenever the 10-line cap truncated the windowed HUD
+        # buffer mid-turn (#570 follow-up).
+        self._capturing_drain_events: bool = False
 
         # MCP plumbing.
         self._mcp_bridge: MCPBridge | None = None
@@ -289,38 +296,51 @@ class GameSession:
     # ========== Combat log helper ==========
 
     def _add_combat_log(self, message: str) -> None:
-        """Add a message to the combat log (capped at 10)."""
+        """Add a message to the combat log (capped at 10).
+
+        While ``_drain_enemy_turns`` owns the FSM, each appended message
+        is also mirrored into ``_pending_combat_events`` for the MCP
+        response. Mirroring at the append site (rather than via a
+        post-iteration ``combat_log[log_before:]`` slice) means the
+        bounded 10-line HUD buffer can truncate freely without dropping
+        events the MCP caller hasn't seen yet (#570 follow-up).
+        """
         self.combat_log.append(message)
         if len(self.combat_log) > 10:
             self.combat_log = self.combat_log[-10:]
+        if self._capturing_drain_events:
+            self._pending_combat_events.append(message)
 
     def _drain_enemy_turns(self) -> None:
         """Run the FSM forward through every non-player turn.
 
         Wraps the synchronous drain loop used by ``attack`` / ``wait``
-        so the MCP path can see what happened during the drain. Every
-        line the per-turn handler appends to ``combat_log`` is mirrored
-        into ``_pending_combat_events`` for later surfacing via
-        ``_consume_pending_events`` (#570).
+        so the MCP path can see what happened during the drain. Each
+        ``_add_combat_log`` call inside the loop mirrors directly into
+        ``_pending_combat_events`` via ``_capturing_drain_events`` —
+        the windowed HUD's 10-line cap can truncate freely without the
+        MCP response losing lines (#570).
 
         Mirrors ``tick``'s branching so an unconscious PC's death-save
         turn processes inside the same drain rather than being deferred
         until the next tick.
         """
-        while self.processing_enemy_turn:
-            log_before = len(self.combat_log)
-            if self.engine.is_current_combatant_unconscious():
-                self._process_unconscious_turn()
-            elif not self.engine.is_player_turn():
-                self._process_enemy_turn()
-            else:
-                # FSM contract: when the current combatant is a
-                # conscious PC, ``processing_enemy_turn`` should already
-                # be False. Guard against drift so a misconfigured state
-                # can't spin this loop forever.
-                self.processing_enemy_turn = False
-                break
-            self._pending_combat_events.extend(self.combat_log[log_before:])
+        self._capturing_drain_events = True
+        try:
+            while self.processing_enemy_turn:
+                if self.engine.is_current_combatant_unconscious():
+                    self._process_unconscious_turn()
+                elif not self.engine.is_player_turn():
+                    self._process_enemy_turn()
+                else:
+                    # FSM contract: when the current combatant is a
+                    # conscious PC, ``processing_enemy_turn`` should
+                    # already be False. Guard against drift so a
+                    # misconfigured state can't spin this loop forever.
+                    self.processing_enemy_turn = False
+                    break
+        finally:
+            self._capturing_drain_events = False
 
     def _consume_pending_events(self) -> list[str]:
         """Return and clear the per-call combat event buffer."""
