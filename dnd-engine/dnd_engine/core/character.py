@@ -849,6 +849,13 @@ class Character(Creature):
         skill_info = skills_data[skill]
         modifier = self.get_skill_modifier(skill, skills_data)
 
+        # SRD § Actions › Help: a creature receiving Help rolls its
+        # next ability check with Advantage; the one-shot grant is
+        # consumed here whether the check succeeds or fails.
+        if self.pending_help_from is not None:
+            advantage = True
+            self.pending_help_from = None
+
         # Roll the d20
         dice_roll = self._dice_roller.roll("1d20", advantage=advantage, disadvantage=disadvantage)
 

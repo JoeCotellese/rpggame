@@ -349,28 +349,141 @@ class TestAction_Help:
     > administer first aid.
     """
 
-    def test_help_grants_advantage_on_helped_creatures_next_check_or_attack(self) -> None:
-        pytest.skip(
-            "GAP: Help is not a playable action. There is no helper "
-            "registration, no 'helped_by' flag, and no plumbing that "
-            "grants advantage on the helped creature's next ability "
-            "check or attack roll. The combat engine's "
-            "advantage/disadvantage parameter would be the consumption "
-            "site (dnd_engine/core/combat.py:122) but nothing sets it "
-            "via Help. Tracked by issue #441."
+    def test_help_grants_advantage_on_helped_creatures_next_check_or_attack(
+        self,
+    ) -> None:
+        """Help grants the ally advantage on their next attack roll
+        (SRD: 'Help another creature's ... attack roll'). The grant is
+        consumed on first use."""
+        from dnd_engine.systems.actions import help_action
+
+        engine, helper, ally = _make_engine_and_combatants()
+        target = Creature(
+            name="Target",
+            max_hp=10,
+            ac=13,
+            abilities=Abilities(10, 10, 10, 10, 10, 10),
+        )
+        helper_turn = TurnState()
+        helper_turn.reset(speed=helper.speed)
+
+        ok, _ = help_action(helper, ally, helper_turn)
+        assert ok is True
+        assert ally.pending_help_from is helper
+        assert helper_turn.action_available is False
+
+        result = engine.resolve_attack(
+            attacker=ally,
+            defender=target,
+            attack_bonus=5,
+            damage_dice="1d8+3",
         )
 
-    def test_help_first_aid_stabilizes_a_zero_hp_ally(self) -> None:
-        pytest.skip(
-            "GAP: stabilization plumbing exists "
-            "(dnd_engine/core/character.py:1330-1380 — death saves "
-            "auto-stabilize on 3 successes, and the healer's kit item "
-            "description in items.json names stabilization as an "
-            "action) but no Help-action handler invokes it. A teammate "
-            "cannot take the Help action to stabilize a downed ally. "
-            "Tracked by issue #441; see also #352 (2D Client: "
-            "stabilize ally)."
+        assert result.advantage is True
+        assert ally.pending_help_from is None  # Consumed.
+
+    def test_help_grants_advantage_on_helped_characters_skill_check(self) -> None:
+        """Help grants the ally advantage on their next ability check
+        (SRD: 'Help another creature's ability check')."""
+        from dnd_engine.core.character import Character, CharacterClass
+        from dnd_engine.systems.actions import help_action
+
+        abilities = Abilities(10, 14, 10, 10, 10, 10)
+        helper = Creature("Helper", max_hp=10, ac=12, abilities=abilities)
+        ally = Character(
+            name="Ally",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=abilities,
+            max_hp=12,
+            ac=14,
         )
+        helper_turn = TurnState()
+        helper_turn.reset(speed=helper.speed)
+
+        ok, _ = help_action(helper, ally, helper_turn)
+        assert ok is True
+
+        skills_data = json.loads(SKILLS_JSON.read_text())
+        captured: dict[str, bool] = {}
+        original_roll = ally._dice_roller.roll
+
+        def spy(dice, advantage=False, disadvantage=False, **kwargs):
+            captured["advantage"] = advantage
+            captured["disadvantage"] = disadvantage
+            return original_roll(
+                dice, advantage=advantage, disadvantage=disadvantage, **kwargs
+            )
+
+        ally._dice_roller.roll = spy  # type: ignore[method-assign]
+
+        ally.make_skill_check("athletics", dc=10, skills_data=skills_data)
+
+        assert captured.get("advantage") is True
+        assert ally.pending_help_from is None  # Consumed.
+
+    def test_help_first_aid_stabilizes_a_zero_hp_ally(self) -> None:
+        """When the ally is at 0 HP, Help administers first aid: the
+        ally becomes Stabilized (SRD: 'or administer first aid')."""
+        from dnd_engine.core.character import Character, CharacterClass
+        from dnd_engine.systems.actions import help_action
+
+        abilities = Abilities(10, 10, 10, 10, 10, 10)
+        helper = Creature("Helper", max_hp=10, ac=12, abilities=abilities)
+        ally = Character(
+            name="Downed Ally",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=abilities,
+            max_hp=12,
+            ac=14,
+        )
+        ally.take_damage(ally.max_hp)  # Drop to 0 HP.
+        assert ally.current_hp == 0
+        assert ally.stabilized is False
+
+        helper_turn = TurnState()
+        helper_turn.reset(speed=helper.speed)
+
+        ok, _ = help_action(helper, ally, helper_turn)
+
+        assert ok is True
+        assert ally.stabilized is True
+        assert ally.current_hp == 0  # First aid stops death saves; HP unchanged.
+        assert helper_turn.action_available is False
+        # First-aid path does NOT also set the help-grant flag.
+        assert ally.pending_help_from is None
+
+    def test_help_grant_expires_at_start_of_helpers_next_turn(self) -> None:
+        """An unused help grant expires when the helper's own next
+        turn starts (SRD: 'by the start of your next turn')."""
+        from dnd_engine.systems.actions import help_action
+        from dnd_engine.systems.initiative import InitiativeTracker
+
+        abilities = Abilities(10, 10, 10, 10, 10, 10)
+        helper = Creature("Helper", max_hp=10, ac=12, abilities=abilities)
+        ally = Creature("Ally", max_hp=10, ac=12, abilities=abilities)
+        tracker = InitiativeTracker(DiceRoller(seed=7))
+        tracker.add_combatant(helper)
+        tracker.add_combatant(ally)
+
+        # Advance to the helper's turn.
+        while tracker.get_current_combatant().creature is not helper:
+            tracker.next_turn()
+
+        ok, _ = help_action(helper, ally, tracker.turn_states[helper])
+        assert ok is True
+        assert ally.pending_help_from is helper
+
+        # Walk through one full round back to helper.
+        tracker.next_turn()
+        # Help grant still pending — ally hasn't acted.
+        assert ally.pending_help_from is helper
+
+        # Helper's own next turn — grant expires.
+        tracker.next_turn()
+        assert tracker.get_current_combatant().creature is helper
+        assert ally.pending_help_from is None
 
 
 class TestAction_Hide:

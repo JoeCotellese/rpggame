@@ -350,6 +350,13 @@ class CombatEngine:
         ):
             disadvantage = True
 
+        # SRD § Actions › Help: a creature receiving Help rolls its
+        # next attack with Advantage; the one-shot grant is consumed
+        # here whether or not the attack lands.
+        if getattr(attacker, "pending_help_from", None) is not None:
+            advantage = True
+            attacker.pending_help_from = None
+
         # Roll attack (1d20 + bonus)
         attack_roll_result = self.dice_roller.roll(
             "1d20", advantage=advantage, disadvantage=disadvantage

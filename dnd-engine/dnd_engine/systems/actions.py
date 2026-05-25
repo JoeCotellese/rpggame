@@ -119,6 +119,45 @@ def dodge(creature: Creature, turn_state: TurnState) -> ActionResult:
     return True, None
 
 
+def help_action(helper: Creature, ally: Creature, turn_state: TurnState) -> ActionResult:
+    """Take the Help action.
+
+    SRD § Actions › Help: "Help another creature's ability check or
+    attack roll, or administer first aid."
+
+    Two modes, auto-selected from the ally's state:
+
+    - **First aid** when the ally is a downed Character (``current_hp``
+      is 0 and the ``stabilize_character`` method is present): the
+      ally is Stabilized in place (death saves stop). HP is not
+      restored — that requires healing.
+    - **Grant advantage** otherwise: ``ally.pending_help_from`` is set
+      to the helper. The grant is consumed on the ally's next attack
+      roll (``CombatEngine.resolve_attack``) or ability check
+      (``Character.make_skill_check``), or expires at the start of the
+      helper's own next turn via ``InitiativeTracker.next_turn``.
+
+    Named ``help_action`` (not ``help``) to avoid shadowing Python's
+    built-in ``help()``.
+
+    Args:
+        helper: The actor taking Help.
+        ally: The creature receiving Help.
+        turn_state: The helper's TurnState.
+
+    Returns:
+        ``(True, None)`` on success. ``(False, "no action available")``
+        when the helper's Action slot is already consumed.
+    """
+    if not turn_state.consume_action(ActionType.ACTION):
+        return False, "no action available"
+    if hasattr(ally, "stabilize_character") and ally.current_hp == 0:
+        ally.stabilize_character()
+        return True, None
+    ally.pending_help_from = helper
+    return True, None
+
+
 def stand_up(creature: Creature, turn_state: TurnState) -> ActionResult:
     """Stand up from prone, consuming half the actor's Speed.
 
