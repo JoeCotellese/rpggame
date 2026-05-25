@@ -1817,3 +1817,86 @@ class TestEnemyTurnAttackRollDetail:
         assert attack_lines, f"missing attack-roll line:\n{events}"
         assert "None" not in attack_lines[0], attack_lines[0]
         assert "attack" in attack_lines[0].lower(), attack_lines[0]
+
+
+class TestEnemyTurnEffectMessages:
+    """Plan #570 fix Phase 6: surface per-turn effect messages.
+
+    ``EnemyTurnResult`` carries ``turn_start_effects`` (e.g. ongoing
+    poison damage at start of turn) and ``turn_end_effects`` (e.g.
+    POISONED condition expired). Both were silent in the response;
+    players could not see why an enemy's HP changed or why a condition
+    they'd applied vanished mid-fight.
+    """
+
+    def test_turn_start_effect_messages_surface(self, session) -> None:
+        """Start-of-turn effect strings appear before the action line."""
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                turn_start_effects=[
+                    "Goblin takes 2 poison damage at start of turn."
+                ],
+            ),
+        )
+        assert any(
+            "2 poison damage" in line for line in events
+        ), f"missing turn-start effect line:\n{events}"
+
+    def test_turn_end_effect_messages_surface(self, session) -> None:
+        """End-of-turn effect strings appear after the action line."""
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                turn_end_effects=[
+                    "POISONED on Goblin has expired!",
+                ],
+            ),
+        )
+        assert any(
+            "expired" in line.lower() for line in events
+        ), f"missing turn-end effect line:\n{events}"
+
+    def test_effect_messages_preserve_order_around_action_line(self, session) -> None:
+        """Start effects come before the attack line; end effects come
+        after. Order matters because effects narrate the timing of when
+        damage / conditions resolved (start of turn vs end of turn)."""
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                turn_start_effects=["Goblin takes 2 poison damage at start of turn."],
+                turn_end_effects=["POISONED on Goblin has expired!"],
+            ),
+        )
+        start_idx = next(
+            (i for i, line in enumerate(events) if "poison damage" in line), -1
+        )
+        attack_idx = next(
+            (i for i, line in enumerate(events) if "Goblin attacks Archy" in line), -1
+        )
+        end_idx = next(
+            (i for i, line in enumerate(events) if "expired" in line.lower()), -1
+        )
+        assert start_idx != -1 and attack_idx != -1 and end_idx != -1, (
+            f"missing one of start/attack/end lines:\n{events}"
+        )
+        assert start_idx < attack_idx < end_idx, (
+            f"line order wrong (start={start_idx}, attack={attack_idx}, "
+            f"end={end_idx}):\n{events}"
+        )
+
+    def test_effect_messages_surface_even_when_no_attack(self, session) -> None:
+        """A stunned goblin with a turn-start poison tick produces both
+        the poison line and the "cannot act" line."""
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                action="INCAPACITATED",
+                hit=None,
+                damage=0,
+                incapacitating_conditions=["STUNNED"],
+                turn_start_effects=["Goblin takes 1 fire damage at start of turn."],
+            ),
+        )
+        assert any("fire damage" in line for line in events), events
+        assert any("cannot act" in line.lower() for line in events), events

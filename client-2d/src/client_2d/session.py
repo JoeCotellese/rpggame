@@ -559,6 +559,11 @@ class GameSession:
     def _emit_enemy_turn_log(self, result: dict[str, Any]) -> None:
         """Render a per-turn combat-log block for one enemy turn.
 
+        Layout, in narrative order:
+          1. turn_start_effects (poison tick, etc.)
+          2. action line(s) — branched on the ``action`` enum name
+          3. turn_end_effects (condition expired, etc.)
+
         Branches on the engine adapter's ``action`` enum name so each
         action type emits a distinguishing line — players seeing an
         enemy do nothing should learn WHY (died at start of turn,
@@ -566,6 +571,16 @@ class GameSession:
         rather than the generic "<enemy> takes no action" the
         pre-#570-fix code emitted for all five paths.
         """
+        for message in result.get("turn_start_effects") or []:
+            self._add_combat_log(message)
+
+        self._emit_enemy_turn_action_line(result)
+
+        for message in result.get("turn_end_effects") or []:
+            self._add_combat_log(message)
+
+    def _emit_enemy_turn_action_line(self, result: dict[str, Any]) -> None:
+        """Emit the action-specific line (ATTACK / INCAPACITATED / ...)."""
         action = result.get("action")
         enemy = result.get("enemy_name", "Enemy")
 
