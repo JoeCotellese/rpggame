@@ -2015,6 +2015,62 @@ class TestEnemyTurnSavingThrowLine:
             f"unexpected save line:\n{events}"
         )
 
+    def test_save_dc_none_does_not_render_literal_none(self, session) -> None:
+        """When the engine sets ``save_dc=None`` (monster JSON omits
+        ``dc``), the save line must not interpolate the literal string
+        ``"None"`` — players see ``"DC ? Constitution save: ..."`` or
+        the line is omitted entirely."""
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                hit=True,
+                damage=4,
+                saving_throw_triggered=True,
+                save_ability="Constitution",
+                save_dc=None,
+                save_succeeded=False,
+                conditions_applied=["poisoned"],
+            ),
+        )
+        save_lines = [line for line in events if "save" in line.lower()]
+        assert save_lines, f"expected save line:\n{events}"
+        for line in save_lines:
+            assert "DC None" not in line, (
+                f"literal 'DC None' leaked into save line:\n{line}"
+            )
+
+    def test_save_succeeded_none_omits_outcome_rather_than_fabricates(
+        self, session
+    ) -> None:
+        """When ``saving_throw_triggered=True`` but ``save_succeeded``
+        is ``None`` (engine left it undetermined — e.g. target lacks
+        active_conditions attr), the line must NOT claim FAILED. Either
+        omit the save line or render an explicit unresolved marker.
+        Today's engine always sets save_succeeded when triggered, but
+        the surface must not fabricate a deterministic outcome from a
+        ``None``.
+        """
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                hit=True,
+                damage=4,
+                saving_throw_triggered=True,
+                save_ability="Constitution",
+                save_dc=11,
+                save_succeeded=None,
+                conditions_applied=[],
+            ),
+        )
+        save_lines = [line for line in events if "save" in line.lower()]
+        for line in save_lines:
+            assert "FAILED" not in line, (
+                f"None outcome rendered as FAILED:\n{line}"
+            )
+            assert "SUCCEEDED" not in line, (
+                f"None outcome rendered as SUCCEEDED:\n{line}"
+            )
+
 
 class TestEnemyTurnConcentrationBroken:
     """Plan #570 fix Phase 8: surface concentration breaks.

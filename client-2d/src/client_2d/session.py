@@ -679,7 +679,9 @@ class GameSession:
         self._add_combat_log(line)
 
         if result.get("saving_throw_triggered"):
-            self._add_combat_log(self._format_save_line(target, result))
+            save_line = self._format_save_line(target, result)
+            if save_line is not None:
+                self._add_combat_log(save_line)
 
         concentration = result.get("concentration_broken")
         if concentration:
@@ -692,14 +694,25 @@ class GameSession:
             self._add_combat_log(f"{target} is down!")
 
     @staticmethod
-    def _format_save_line(target: str, result: dict[str, Any]) -> str:
+    def _format_save_line(target: str, result: dict[str, Any]) -> str | None:
         """Format the saving-throw outcome line that accompanies an
-        enemy attack with a save rider (e.g. goblin bite + poison)."""
+        enemy attack with a save rider (e.g. goblin bite + poison).
+
+        Returns ``None`` when the outcome is undetermined
+        (``save_succeeded is None``) so the caller can skip the line
+        rather than fabricate a SUCCEEDED/FAILED verdict. A missing
+        ``save_dc`` renders as ``"DC ?"`` rather than the literal
+        ``"None"`` string an unguarded f-string would produce.
+        """
+        succeeded = result.get("save_succeeded")
+        if succeeded is None:
+            return None
+
         ability = result.get("save_ability") or "Unknown"
         dc = result.get("save_dc")
-        succeeded = result.get("save_succeeded")
+        dc_text = str(dc) if dc is not None else "?"
         outcome = "SUCCEEDED" if succeeded else "FAILED"
-        line = f"{target} DC {dc} {ability} save: {outcome}"
+        line = f"{target} DC {dc_text} {ability} save: {outcome}"
         conditions = result.get("conditions_applied") or []
         if conditions and not succeeded:
             applied = ", ".join(c.upper() for c in conditions)
