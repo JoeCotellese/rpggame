@@ -2008,3 +2008,67 @@ class TestEnemyTurnConcentrationBroken:
         assert not any(
             "concentration" in line.lower() for line in events
         ), f"unexpected concentration line:\n{events}"
+
+
+class TestIssue570Reproduction:
+    """End-to-end acceptance for the #570 bug report.
+
+    Recreates the reporter's trace as faithfully as the test fixtures
+    allow: spawn an adjacent goblin, pin its turn, and call ``wait()``.
+    The response string must contain the ``Between turns:`` header
+    AND an attack-roll-detail line (``roll X+Y=Z vs AC W``) — without
+    that the caller has no way to audit the 14→0 HP TPK the reporter
+    saw.
+    """
+
+    def test_wait_response_contains_attack_roll_detail(self, session) -> None:
+        adjacent_x = session.player_x + 1
+        adjacent_y = session.player_y
+        session.spawn_monster("goblin", adjacent_x, adjacent_y)
+
+        goblin = session.engine.game_state.active_enemies[-1]
+        _force_combatant_turn(session, goblin)
+        session.processing_enemy_turn = False
+        session.set_seed(42)
+
+        response = session.wait()
+
+        assert "Between turns:" in response, (
+            f"missing Between turns header:\n{response}"
+        )
+        # Attack-roll-detail line is the acceptance criterion — without
+        # it the caller can't audit the goblin's roll vs. AC or know
+        # what action was used.
+        assert "Goblin attacks" in response, (
+            f"missing 'Goblin attacks' phrasing:\n{response}"
+        )
+        assert " vs AC " in response, (
+            f"missing AC annotation:\n{response}"
+        )
+        assert " roll " in response, (
+            f"missing roll annotation:\n{response}"
+        )
+        # And one of HIT/MISS/CRITICAL HIT must be present.
+        assert any(
+            tok in response for tok in ("HIT", "MISS", "CRITICAL HIT")
+        ), f"missing outcome token:\n{response}"
+
+    def test_wait_response_includes_hp_or_damage_detail(self, session) -> None:
+        """On a hit the response includes the damage. On a miss the
+        attack-roll line itself carries the AC vs. roll detail. Either
+        way the caller can tell what happened to the party."""
+        adjacent_x = session.player_x + 1
+        adjacent_y = session.player_y
+        session.spawn_monster("goblin", adjacent_x, adjacent_y)
+
+        goblin = session.engine.game_state.active_enemies[-1]
+        _force_combatant_turn(session, goblin)
+        session.processing_enemy_turn = False
+        session.set_seed(42)
+
+        response = session.wait()
+
+        # Either a damage annotation (hit) or the explicit "MISS" form.
+        assert " damage" in response or "MISS" in response, (
+            f"response carries neither damage nor MISS:\n{response}"
+        )
