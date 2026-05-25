@@ -81,6 +81,14 @@ class TurnState:
     reaction_available: bool = True
     free_object_interaction_used: bool = False
     movement_remaining: int = 30  # Movement in feet (5 ft = 1 grid square)
+    speed: int = 30  # Cached effective Speed for this turn (feet). Used by
+    # actions that scale to Speed: Dash adds it to the movement pool,
+    # Stand Up costs half of it, Drop Prone is forbidden when it is 0.
+    disengaged_this_turn: bool = False  # Set by the Disengage action;
+    # consulted by the Opportunity Attack handler to suppress reactions
+    # the actor's movement would otherwise provoke. Cleared by reset()
+    # at the start of the actor's next turn — the SRD's "rest of the
+    # turn" window naturally ends there.
 
     def consume_action(self, action_type: ActionType) -> bool:
         """
@@ -200,6 +208,8 @@ class TurnState:
         self.reaction_available = True
         self.free_object_interaction_used = False
         self.movement_remaining = speed
+        self.speed = speed
+        self.disengaged_this_turn = False
 
     def has_any_action(self) -> bool:
         """

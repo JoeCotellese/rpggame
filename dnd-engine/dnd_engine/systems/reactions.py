@@ -106,6 +106,17 @@ class ReactionDispatcher:
         self._tracker = tracker
         self._subs: list[_Subscription] = []
 
+    @property
+    def tracker(self) -> InitiativeTracker:
+        """The initiative tracker this dispatcher is bound to.
+
+        Exposed read-only so trigger publishers (e.g.,
+        ``publish_movement_provoke``) and integration code can consult
+        per-actor turn state without reaching into the private
+        ``_tracker`` field.
+        """
+        return self._tracker
+
     def register(
         self,
         creature: Creature,
