@@ -25,6 +25,11 @@ from dnd_engine.systems.ai import EnemyAI
 from dnd_engine.systems.condition_manager import ConditionManager
 from dnd_engine.systems.initiative import InitiativeTracker
 from dnd_engine.systems.inventory import EquipmentSlot
+from dnd_engine.systems.opportunity_attacks import (
+    publish_movement_provoke,
+    register_default_opportunity_attack,
+)
+from dnd_engine.systems.reactions import ReactionDispatcher
 from dnd_engine.systems.spatial_index import SpatialIndex
 from dnd_engine.systems.time_manager import ActiveEffect, EffectType, TimeManager
 from dnd_engine.utils.events import Event, EventBus, EventType
@@ -630,6 +635,14 @@ class GameState:
         # Combat state
         self.in_combat = False
         self.initiative_tracker: InitiativeTracker | None = None
+        # Per-combat router for trigger → Reaction handlers. Lives only
+        # while combat is in progress; constructed in ``_start_combat``
+        # alongside the initiative tracker and torn down by
+        # ``_end_combat`` / ``flee_combat``. Opportunity Attack handlers
+        # are auto-registered for every combatant whose entity is placed
+        # on the spatial index at combat start; see
+        # ``_register_default_opportunity_attacks``.
+        self.reaction_dispatcher: ReactionDispatcher | None = None
         self.active_enemies: list[Creature] = []
         self.combat_engine = CombatEngine(self.dice_roller)
         self.combat_history: list[CombatEvent] = []
@@ -888,6 +901,7 @@ class GameState:
         dy: int,
         *,
         terrain: Terrain | None = None,
+        involuntary: bool = False,
     ) -> MoveResult:
         """Engine-owned single-tile combat move with validation.
 
@@ -922,6 +936,13 @@ class GameState:
                 terrain. When ``None`` (the default), the destination
                 terrain is read from ``Map.terrain_at`` so map geometry
                 drives cost.
+            involuntary: When ``True``, suppress the
+                ``OPPORTUNITY_PROVOKED`` publish at the end of a
+                successful step. Honors the SRD exception for movement
+                that doesn't use the mover's own action economy
+                (Teleport, Shoved, Hurled by Explosion). Callers
+                scripting forced movement pass ``True``; normal player
+                / AI step inputs leave the default.
 
         Returns:
             A :class:`MoveResult` describing the outcome. On failure the
@@ -1067,12 +1088,150 @@ class GameState:
                 f"(budget={budget}, cost={cost}, terrain={actual_terrain})"
             )
         self.move_creature(entity_id, dx, dy)
+
+        # Publish OPPORTUNITY_PROVOKED for the step we just committed.
+        # Order matters: the move has already been written to the
+        # spatial index, so the mover's tile reads ``destination``
+        # while the reactor's reach geometry is computed against the
+        # ``current`` / ``destination`` payload, not the live index.
+        # Involuntary movement (Teleport, Shoved, Hurled) skips the
+        # publish per the SRD exception.
+        if not involuntary:
+            self._publish_movement_opportunity(entity_id, current, destination)
+
         return MoveResult(
             ok=True,
             reason=None,
             position=destination,
             movement_remaining=turn_state.movement_remaining,
         )
+
+    def _publish_movement_opportunity(
+        self,
+        mover_entity_id: str,
+        from_position: Position,
+        to_position: Position,
+    ) -> None:
+        """Fire OPPORTUNITY_PROVOKED for a successful tactical step.
+
+        Resolves the mover's ``Creature`` from the entity_id, publishes
+        the trigger via the per-combat ``ReactionDispatcher``, then
+        for each handler that actually reacted, resolves the real
+        melee attack against the mover using the same monster-action
+        lookup that ``flee_combat`` uses for its OA fan-out.
+
+        Silent no-op when:
+            - ``reaction_dispatcher`` is None (no active combat),
+            - the entity_id doesn't resolve to a live Creature (unit
+              fixtures with synthetic ids), or
+            - the mover is no longer alive (rare; defensive).
+
+        Visibility:
+            Reactors that cannot see the mover at ``from_position`` do
+            not provoke. The check uses ``SpatialIndex.has_line_of_sight``
+            — a geometric (wall-blocking) check. Invisibility /
+            blinded / heavy obscurement gates land with plan-05's
+            perception primitives. Document the limitation here; do
+            not silently widen it.
+        """
+        if self.reaction_dispatcher is None or self.spatial is None:
+            return
+
+        mover = self._find_creature_by_id(mover_entity_id)
+        if mover is None or not mover.is_alive:
+            return
+
+        outcomes = publish_movement_provoke(
+            self.reaction_dispatcher,
+            mover,
+            from_position,
+            to_position,
+        )
+        for outcome in outcomes:
+            self._resolve_opportunity_attack_outcome(outcome, from_position)
+
+    def _resolve_opportunity_attack_outcome(
+        self,
+        outcome: Any,
+        mover_from_position: Position,
+    ) -> None:
+        """Resolve one OA ReactionOutcome into an actual melee attack.
+
+        The dispatcher has already consumed the reactor's Reaction
+        slot — this method is purely about turning the
+        ``{attacker, target, attack_kind}`` payload into a real
+        ``combat_engine.resolve_attack`` call and emitting the
+        corresponding ``DAMAGE_DEALT`` event so logs / UI can surface
+        the hit.
+
+        The SRD "creature you can see" clause is enforced upstream by
+        the ``can_see`` closure passed into
+        ``register_default_opportunity_attack``; an outcome here means
+        the handler already cleared visibility, reach, and slot
+        availability. ``mover_from_position`` is retained for any
+        future "the attack occurs right before it leaves your reach"
+        positional shenanigans but is not consulted today.
+
+        Currently only resolves outcomes whose attacker is in
+        ``active_enemies`` — PC-side OAs require active reaction-choice
+        UI (weapon select, etc.) and land in a later slice. PC reactor
+        outcomes are dropped silently with no damage applied; the slot
+        consumption alone matches the dispatcher contract.
+        """
+        del mover_from_position  # reserved for the SRD "right before" hook.
+        attacker = outcome.data.get("attacker")
+        target = outcome.data.get("target")
+        if attacker is None or target is None:
+            return
+        if not attacker.is_alive or not target.is_alive:
+            return
+
+        # PC-as-reactor is deferred to a later slice. Monster reactors
+        # have a well-defined "primary melee action" — the first action
+        # entry with an ``attack_bonus`` — so we use the same lookup as
+        # ``flee_combat``.
+        if attacker not in self.active_enemies:
+            return
+
+        monsters = self.data_loader.load_monsters()
+        monster_data = None
+        for _monster_id, mdata in monsters.items():
+            if mdata["name"] == attacker.name:
+                monster_data = mdata
+                break
+        if monster_data is None or not monster_data.get("actions"):
+            return
+
+        action = None
+        for act in monster_data["actions"]:
+            if "attack_bonus" in act:
+                action = act
+                break
+        if action is None:
+            return
+
+        result = self.combat_engine.resolve_attack(
+            attacker=attacker,
+            defender=target,
+            attack_bonus=action["attack_bonus"],
+            damage_dice=action["damage"],
+            apply_damage=True,
+            game_state=self,
+        )
+
+        if result.hit:
+            self.event_bus.emit(
+                Event(
+                    type=EventType.DAMAGE_DEALT,
+                    data={
+                        "attacker": attacker.name,
+                        "defender": target.name,
+                        "damage": result.damage,
+                        "opportunity_attack": True,
+                    },
+                )
+            )
+
 
     def start(self) -> None:
         """
@@ -3670,6 +3829,7 @@ class GameState:
         """Initialize combat with current enemies, checking for surprise."""
         self.in_combat = True
         self.initiative_tracker = InitiativeTracker(self.dice_roller, self.time_manager)
+        self.reaction_dispatcher = ReactionDispatcher(self.initiative_tracker)
 
         # Check for surprise
         surprise_result = self._check_for_surprise()
@@ -3722,6 +3882,71 @@ class GameState:
                 },
             )
         )
+
+        # Auto-register the default 5-ft Opportunity Attack handler for
+        # every combatant that already has a spatial placement. Done
+        # after the COMBAT_START emit so any subscriber that needs to
+        # alter placements first runs against a quiescent dispatcher.
+        # Combats that never bootstrap ``spatial`` (legacy room-scoped
+        # encounters) simply skip OA wiring — ``attempt_combat_step``
+        # raises before any publish could occur, so the dispatcher
+        # stays empty and harmless.
+        self._register_default_opportunity_attacks()
+
+    def _register_default_opportunity_attacks(self) -> None:
+        """Subscribe every placed combatant to ``OPPORTUNITY_PROVOKED``.
+
+        Walks the spatial index for placed entities, resolves each back
+        to a live ``Creature`` via ``_find_creature_by_id``, and
+        registers the default 5-ft handler from
+        ``opportunity_attacks.register_default_opportunity_attack``. The
+        ``get_position`` closure captures the entity_id (not the
+        Creature) so subsequent moves are honored — handlers always
+        re-query the index when a trigger fires.
+
+        Skips silently when ``spatial``, ``initiative_tracker``, or
+        ``reaction_dispatcher`` is missing: a unit test that constructs
+        a minimal GameState without combat plumbing still gets a
+        no-op rather than a spurious AttributeError.
+        """
+        if (
+            self.spatial is None
+            or self.initiative_tracker is None
+            or self.reaction_dispatcher is None
+        ):
+            return
+
+        spatial = self.spatial
+        for entity_id in list(spatial.occupants().keys()):
+            creature = self._find_creature_by_id(entity_id)
+            if creature is None:
+                continue
+            # Bind ``entity_id`` via default arg to dodge Python's
+            # late-binding closure behavior — without this, every
+            # registered handler would re-query the index for the
+            # *last* entity_id seen in this loop.
+            def _position_lookup(
+                eid: str = entity_id,
+                _spatial: SpatialIndex = spatial,
+            ) -> Position | None:
+                return _spatial.position_of(eid)
+
+            def _can_see(
+                target: Position,
+                eid: str = entity_id,
+                _spatial: SpatialIndex = spatial,
+            ) -> bool:
+                origin = _spatial.position_of(eid)
+                if origin is None:
+                    return False
+                return _spatial.has_line_of_sight(origin, target)
+
+            register_default_opportunity_attack(
+                self.reaction_dispatcher,
+                creature,
+                get_position=_position_lookup,
+                can_see=_can_see,
+            )
 
     def _check_combat_end(self) -> None:
         """Check if combat should end and handle cleanup."""
@@ -3783,6 +4008,7 @@ class GameState:
         # Clear combat state
         self.in_combat = False
         self.initiative_tracker = None
+        self.reaction_dispatcher = None
 
         # Remove defeated enemies from room only on victory
         room = self.get_current_room()
@@ -4890,6 +5116,7 @@ class GameState:
         # Clear combat state (no XP awarded for fleeing)
         self.in_combat = False
         self.initiative_tracker = None
+        self.reaction_dispatcher = None
         self.clear_combat_history()
 
         # Enemies remain in room (can encounter them again)
