@@ -116,6 +116,22 @@ class TestRemove:
         # Must not raise.
         index.remove("never_placed")
 
+    def test_round_trip_place_remove_replace_at_same_tile(
+        self, index: SpatialIndex
+    ) -> None:
+        # Place, remove, then place a DIFFERENT entity at the same tile.
+        # Catches forgotten reverse-dict cleanup in ``remove`` — if the
+        # reverse mapping still pointed at the original id, the re-place
+        # would raise ``"occupied by goblin"`` even though goblin was
+        # removed.
+        tile = Position(2, 2)
+        index.place("goblin", tile)
+        index.remove("goblin")
+        index.place("orc", tile)
+        assert index.position_of("orc") == tile
+        assert index.occupant_at(tile) == "orc"
+        assert index.position_of("goblin") is None
+
 
 class TestQueries:
     """position_of / occupant_at default to None when empty."""
