@@ -82,31 +82,88 @@ class TestReaction_TriggerResponse:
     """
 
     def test_reaction_can_fire_outside_the_reactors_turn(self) -> None:
-        pytest.skip(
-            "GAP: The engine has no general 'trigger -> reaction' "
-            "dispatch. The only Reaction-shaped fan-out today is "
-            "`GameState.flee_combat()` "
-            "(dnd_engine/core/game_state.py:4194), which fires for "
-            "every living enemy when the *party* attempts to retreat. "
-            "There is no event-bus subscription model that lets a "
-            "creature register a reaction to fire on an arbitrary "
-            "trigger during another creature's turn (e.g., Shield in "
-            "response to being hit, Counterspell in response to a "
-            "cast). Tracked by issue #429 (depends on #412 reaction "
-            "economy); see also #413 for per-creature OAs on tactical "
-            "movement."
+        """A Reaction subscribed to a trigger fires regardless of whose turn it is.
+
+        Wizard is second in initiative. Goblin (whose turn it is)
+        provokes ``OPPORTUNITY_PROVOKED``; Wizard's handler fires
+        even though it is the Goblin's turn, and the Wizard's
+        Reaction slot is consumed. Closes #429.
+        """
+        from dnd_engine.core.creature import Abilities, Creature
+        from dnd_engine.core.dice import DiceRoller
+        from dnd_engine.systems.initiative import InitiativeTracker
+        from dnd_engine.systems.reactions import (
+            ReactionDispatcher,
+            ReactionOutcome,
+            Trigger,
+            TriggerContext,
         )
 
-    def test_reaction_can_fire_during_the_reactors_own_turn(self) -> None:
-        pytest.skip(
-            "GAP: same root cause as above — no trigger -> reaction "
-            "dispatch exists. The SRD explicitly carves out that a "
-            "Reaction may occur on the reactor's own turn (e.g., "
-            "Opportunity Attack provoked by another creature's "
-            "movement that happens to fall in your turn's window), "
-            "but with no reaction model at all this exception is "
-            "moot. Tracked by issue #429."
+        abilities = Abilities(10, 10, 10, 10, 10, 10)
+        goblin = Creature("Goblin", max_hp=10, ac=15, abilities=abilities)
+        wizard = Creature("Wizard", max_hp=10, ac=15, abilities=abilities)
+        tracker = InitiativeTracker(DiceRoller(seed=1))
+        tracker.add_combatant(goblin)
+        tracker.add_combatant(wizard)
+        # Pin Goblin first in initiative deterministically.
+        for entry in tracker.combatants:
+            entry.initiative_roll = 20 if entry.creature is goblin else 10
+        tracker._sort_initiative()
+        tracker.current_turn_index = 0
+        # Sanity: the Goblin is the active turn, Wizard is the reactor.
+        assert tracker.get_current_combatant().creature is goblin
+
+        dispatcher = ReactionDispatcher(tracker)
+        dispatcher.register(
+            wizard,
+            Trigger.OPPORTUNITY_PROVOKED,
+            lambda ctx: ReactionOutcome(reacted=True, description="OA"),
         )
+
+        outcomes = dispatcher.publish(
+            TriggerContext(trigger=Trigger.OPPORTUNITY_PROVOKED, source=goblin)
+        )
+
+        assert len(outcomes) == 1
+        assert tracker.turn_states[wizard].reaction_available is False
+
+    def test_reaction_can_fire_during_the_reactors_own_turn(self) -> None:
+        """A reactor may consume its Reaction on its own turn.
+
+        The SRD explicitly allows this (e.g., an OA provoked during
+        your turn by another creature's forced movement). The
+        dispatcher gates only on ``reaction_available``, not on whose
+        turn it is. Closes #429.
+        """
+        from dnd_engine.core.creature import Abilities, Creature
+        from dnd_engine.core.dice import DiceRoller
+        from dnd_engine.systems.initiative import InitiativeTracker
+        from dnd_engine.systems.reactions import (
+            ReactionDispatcher,
+            ReactionOutcome,
+            Trigger,
+            TriggerContext,
+        )
+
+        abilities = Abilities(10, 10, 10, 10, 10, 10)
+        fighter = Creature("Fighter", max_hp=10, ac=15, abilities=abilities)
+        tracker = InitiativeTracker(DiceRoller(seed=1))
+        tracker.add_combatant(fighter)
+        assert tracker.get_current_combatant().creature is fighter
+
+        dispatcher = ReactionDispatcher(tracker)
+        dispatcher.register(
+            fighter,
+            Trigger.OPPORTUNITY_PROVOKED,
+            lambda ctx: ReactionOutcome(reacted=True, description="OA"),
+        )
+
+        outcomes = dispatcher.publish(
+            TriggerContext(trigger=Trigger.OPPORTUNITY_PROVOKED)
+        )
+
+        assert len(outcomes) == 1
+        assert tracker.turn_states[fighter].reaction_available is False
 
 
 class TestReaction_OpportunityAttackIsMostCommon:
@@ -229,31 +286,52 @@ class TestReaction_TimingDefault:
     """
 
     def test_reaction_resolves_immediately_after_trigger_by_default(self) -> None:
-        pytest.skip(
-            "GAP: No trigger-bound Reaction dispatcher exists. The "
-            "engine has no concept of 'this Reaction is bound to "
-            "trigger X and fires immediately after X resolves'. "
-            "`flee_combat()` resolves its attack fan-out inline in "
-            "the same call (game_state.py:4238-4304), which is "
-            "incidentally 'immediately after' but is not gated on a "
-            "named trigger — every flee fires every enemy's "
-            "pseudo-OA regardless of any reaction state. A real "
-            "implementation needs (a) named triggers (movement-out-"
-            "of-reach, attacked, spell-cast-nearby, etc.) and (b) a "
-            "default resolve-immediately policy unless the Reaction "
-            "carves out 'before' / 'after' timing. Tracked by issue "
-            "#429 (depends on #412 reaction economy)."
+        """``ReactionDispatcher.publish`` resolves Reactions inline.
+
+        The default-timing rule is "Reactions resolve immediately
+        after their trigger." The dispatcher honors this by invoking
+        handlers synchronously inside ``publish`` — when control
+        returns to the caller, all eligible Reactions have already
+        run. Closes #429.
+        """
+        from dnd_engine.core.creature import Abilities, Creature
+        from dnd_engine.core.dice import DiceRoller
+        from dnd_engine.systems.initiative import InitiativeTracker
+        from dnd_engine.systems.reactions import (
+            ReactionDispatcher,
+            ReactionOutcome,
+            Trigger,
+            TriggerContext,
         )
+
+        abilities = Abilities(10, 10, 10, 10, 10, 10)
+        reactor = Creature("Reactor", max_hp=10, ac=15, abilities=abilities)
+        tracker = InitiativeTracker(DiceRoller(seed=1))
+        tracker.add_combatant(reactor)
+        dispatcher = ReactionDispatcher(tracker)
+
+        call_order: list[str] = []
+
+        def handler(ctx: TriggerContext) -> ReactionOutcome:
+            call_order.append("handler")
+            return ReactionOutcome(reacted=True)
+
+        dispatcher.register(reactor, Trigger.WOULD_BE_HIT, handler)
+        call_order.append("before_publish")
+        dispatcher.publish(TriggerContext(trigger=Trigger.WOULD_BE_HIT))
+        call_order.append("after_publish")
+
+        assert call_order == ["before_publish", "handler", "after_publish"]
 
     def test_reaction_description_can_override_default_timing(self) -> None:
         pytest.skip(
-            "GAP: depends on the trigger/dispatch model in the test "
-            "above. The SRD's 'unless the Reaction's description says "
-            "otherwise' clause requires per-reaction timing metadata "
-            "(e.g., Shield resolves *before* the triggering hit is "
-            "applied so its AC bonus counts against that very "
-            "attack). spells.json carries `casting_time: '1 reaction'` "
-            "but no engine field encoding *which* trigger or *when* "
-            "relative to the trigger. Tracked under issue #429 as a "
-            "sub-clause of the dispatcher acceptance criteria."
+            "GAP: per-handler timing metadata (before / after trigger) "
+            "is not yet modeled. The dispatcher's default is "
+            "'immediately after trigger' (verified by the test above); "
+            "the SRD carve-out for handlers that resolve *before* the "
+            "trigger (e.g., Shield's AC bonus must apply to the very "
+            "attack that triggered it) requires either a `timing` "
+            "field on registration or a two-phase publish. Tracked "
+            "under issue #429 as a follow-up to the base dispatcher; "
+            "scheduled for the Shield implementation slice."
         )
