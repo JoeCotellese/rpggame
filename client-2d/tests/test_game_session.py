@@ -973,6 +973,54 @@ class TestSessionDrainEnemyTurns:
         assert session._pending_combat_events == []
         assert session._consume_pending_events() == []
 
+    def test_drain_capture_survives_combat_log_buffer_cap(self, session) -> None:
+        """Regression: the per-turn emit can produce 5+ lines (start
+        effects + attack roll + save + concentration + down + end
+        effects). ``_add_combat_log`` caps ``combat_log`` at 10. If the
+        drain mirrored events via ``combat_log[log_before:]`` it would
+        silently lose the oldest just-emitted lines whenever the cap
+        truncated the buffer mid-turn — re-introducing the exact
+        symptom #570 is fixing.
+        """
+        # Pre-fill combat_log so it sits near the cap before the drain.
+        # Any drain that emits more lines than (10 - len(combat_log))
+        # would trigger the bounded-buffer truncation under the old
+        # slice-based mirror.
+        session.combat_log = [f"warmup line {i}" for i in range(8)]
+        session._pending_combat_events.clear()
+
+        # Monkeypatch one enemy turn that emits five lines: turn-start
+        # effect + attack-roll + save + concentration + turn-end. Drain
+        # the FSM forward through exactly one turn.
+        five_line_stub = _enemy_turn_stub(
+            hit=True,
+            damage=4,
+            saving_throw_triggered=True,
+            save_ability="Constitution",
+            save_dc=11,
+            save_succeeded=False,
+            conditions_applied=["poisoned"],
+            concentration_broken={
+                "was_concentrating": True,
+                "concentration_broken": True,
+                "spell_name": "bless",
+                "dc": 10,
+            },
+            turn_start_effects=["Goblin takes 1 fire damage at start of turn."],
+            turn_end_effects=["POISONED on Goblin has expired!"],
+        )
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session, five_line_stub
+        )
+
+        # The drain must surface every emitted line — independent of how
+        # many warmup lines were already in combat_log.
+        assert any("fire damage" in line for line in events), events
+        assert any("Goblin attacks" in line for line in events), events
+        assert any("Constitution save" in line for line in events), events
+        assert any("concentration" in line.lower() for line in events), events
+        assert any("expired" in line.lower() for line in events), events
+
 
 class TestSessionMCPResponseSurfacesCombatEvents:
     """Plan #570 fix Phase 2: surface drained enemy-turn events in MCP responses.
@@ -1003,10 +1051,11 @@ class TestSessionMCPResponseSurfacesCombatEvents:
         assert "Goblin" in response, (
             f"goblin not named anywhere in wait() reply:\n{response}"
         )
-        # ``_process_enemy_turn`` writes either a hit / miss / no-action
-        # line. All three carry a recognisable verb; one of them must
-        # be present for the reporter to know what happened.
-        verbs = ("hits", "misses", "takes no action")
+        # ``_process_enemy_turn`` writes either an attack-roll-detail
+        # line (HIT/MISS/CRITICAL HIT) or a non-attack action line.
+        # One of those tokens must be present for the reporter to know
+        # what happened during the drain (#570).
+        verbs = ("HIT", "MISS", "takes no action", "has no", "cannot act")
         assert any(v in response for v in verbs), (
             f"no enemy-action verb in wait() reply:\n{response}"
         )
@@ -1151,7 +1200,10 @@ class TestSessionWaitOnEnemyTurn:
         response = session.wait()
 
         # Goblin's per-turn handler must have produced an action line.
-        verbs = ("hits", "misses", "takes no action")
+        # Post-#570 the attack outcome appears as HIT/MISS/CRITICAL HIT
+        # inside an attack-roll-detail line; the legacy hits/misses
+        # tokens are gone.
+        verbs = ("HIT", "MISS", "takes no action", "has no", "cannot act")
         assert any(v in response for v in verbs), (
             f"no enemy-action verb in wait() reply "
             f"(goblin turn was skipped):\n{response}"
@@ -1450,4 +1502,733 @@ class TestSessionEnemyTurnSingleAdvance:
             f"{new_current.creature.name} movement_remaining is "
             f"{new_turn_state.movement_remaining}, expected "
             f"{new_current.creature.speed}"
+        )
+
+
+class TestEngineAdapterEnemyTurnRichFields:
+    """Plan #570 fix Phase 3: pass through rich ``EnemyTurnResult`` fields.
+
+    The engine returns an ``EnemyTurnResult`` dataclass packed with attack
+    roll details, saving throw outcomes, turn-effect messages, and the
+    distinguishing ``action_taken`` enum. Before this fix the engine
+    adapter flattened the result to seven fields, dropping everything the
+    MCP-facing session layer needs to render an informative ``Between
+    turns:`` block. The session then collapsed all five "no attack" action
+    paths to a single ``"<enemy> takes no action."`` line — so a goblin
+    that died before its turn looked identical to one that's stunned or
+    out of targets (#570).
+    """
+
+    def test_adapter_passes_attack_roll_details(self, session) -> None:
+        """When the goblin attacks, the adapter dict must include
+        ``attack_roll``, ``attack_bonus``, ``target_ac``, and ``critical``
+        so the session can render the same ``roll X+Y=Z vs AC W`` line PC
+        attacks already produce."""
+        adjacent_x = session.player_x + 1
+        adjacent_y = session.player_y
+        session.spawn_monster("goblin", adjacent_x, adjacent_y)
+
+        goblin = session.engine.game_state.active_enemies[-1]
+        _force_combatant_turn(session, goblin)
+        session.set_seed(42)
+
+        result = session.engine.process_enemy_turn()
+
+        assert result["success"] is True
+        assert result["action"] == "ATTACK"
+        # Attack-resolution fields land regardless of hit/miss.
+        assert "attack_roll" in result and isinstance(result["attack_roll"], int)
+        assert "attack_bonus" in result and isinstance(result["attack_bonus"], int)
+        assert "target_ac" in result and isinstance(result["target_ac"], int)
+        assert "critical" in result and isinstance(result["critical"], bool)
+
+    def test_adapter_passes_turn_effect_messages_as_strings(self, session) -> None:
+        """``turn_start_effects`` / ``turn_end_effects`` arrive as lists
+        of plain strings — the session layer must not need to import
+        engine dataclasses to render them. Even on a vanilla goblin turn
+        with no effects, the keys are present and empty."""
+        adjacent_x = session.player_x + 1
+        adjacent_y = session.player_y
+        session.spawn_monster("goblin", adjacent_x, adjacent_y)
+
+        goblin = session.engine.game_state.active_enemies[-1]
+        _force_combatant_turn(session, goblin)
+        session.set_seed(42)
+
+        result = session.engine.process_enemy_turn()
+
+        assert "turn_start_effects" in result
+        assert isinstance(result["turn_start_effects"], list)
+        assert all(isinstance(m, str) for m in result["turn_start_effects"])
+        assert "turn_end_effects" in result
+        assert isinstance(result["turn_end_effects"], list)
+        assert all(isinstance(m, str) for m in result["turn_end_effects"])
+
+    def test_adapter_passes_saving_throw_fields(self, session) -> None:
+        """Saving throw fields are present (with ``None`` defaults when
+        the attack didn't trigger one) so the session's save-line emitter
+        can branch on ``saving_throw_triggered`` without ``KeyError``."""
+        adjacent_x = session.player_x + 1
+        adjacent_y = session.player_y
+        session.spawn_monster("goblin", adjacent_x, adjacent_y)
+
+        goblin = session.engine.game_state.active_enemies[-1]
+        _force_combatant_turn(session, goblin)
+        session.set_seed(42)
+
+        result = session.engine.process_enemy_turn()
+
+        assert "saving_throw_triggered" in result
+        assert isinstance(result["saving_throw_triggered"], bool)
+        # save_ability / save_dc / save_succeeded may be None when not
+        # triggered, but the keys must be present.
+        assert "save_ability" in result
+        assert "save_dc" in result
+        assert "save_succeeded" in result
+        assert "conditions_applied" in result
+        assert isinstance(result["conditions_applied"], list)
+
+    def test_adapter_passes_misc_rich_fields(self, session) -> None:
+        """``incapacitating_conditions``, ``condition_removal_message``,
+        and ``concentration_broken`` round out the surface the session
+        needs. All present with safe defaults when not applicable."""
+        adjacent_x = session.player_x + 1
+        adjacent_y = session.player_y
+        session.spawn_monster("goblin", adjacent_x, adjacent_y)
+
+        goblin = session.engine.game_state.active_enemies[-1]
+        _force_combatant_turn(session, goblin)
+        session.set_seed(42)
+
+        result = session.engine.process_enemy_turn()
+
+        assert "incapacitating_conditions" in result
+        assert isinstance(result["incapacitating_conditions"], list)
+        assert "condition_removal_message" in result
+        # ``None`` when no condition-removal attempt was made.
+        assert result["condition_removal_message"] is None or isinstance(
+            result["condition_removal_message"], str
+        )
+        assert "concentration_broken" in result
+        # ``None`` when no concentration check fired.
+        assert result["concentration_broken"] is None or isinstance(
+            result["concentration_broken"], dict
+        )
+
+
+def _enemy_turn_stub(**overrides) -> dict:
+    """Build a baseline adapter ``process_enemy_turn`` result dict.
+
+    Monkeypatch helper for the action-type / rich-detail surface tests
+    below: pass only the keys that differ from a vanilla goblin attack
+    and the rest fill in with safe defaults that mirror the real
+    adapter's shape (#570).
+    """
+    base = {
+        "success": True,
+        "action": "ATTACK",
+        "enemy_name": "Goblin",
+        "target_name": "Archy",
+        "hit": True,
+        "damage": 4,
+        "target_killed": False,
+        "combat_ended": False,
+        "attack_roll": 15,
+        "attack_bonus": 4,
+        "target_ac": 12,
+        "critical": False,
+        "action_name": "Bite",
+        "saving_throw_triggered": False,
+        "save_ability": None,
+        "save_dc": None,
+        "save_succeeded": None,
+        "conditions_applied": [],
+        "incapacitating_conditions": [],
+        "condition_removal_message": None,
+        "concentration_broken": None,
+        "turn_start_effects": [],
+        "turn_end_effects": [],
+        "error": None,
+    }
+    base.update(overrides)
+    return base
+
+
+class TestEnemyTurnActionTypes:
+    """Plan #570 fix Phase 4: distinguish the five non-ATTACK action types.
+
+    ``GameSession._process_enemy_turn`` previously collapsed every
+    non-attack path to ``"<enemy> takes no action."`` — a goblin that
+    died before its turn looked identical to one that's stunned, has no
+    targets, has no usable attack, or is shaking off a condition. The
+    fix branches on ``result["action"]`` and emits a distinguishing line
+    so the MCP-facing ``Between turns:`` block tells the player WHY
+    combat is stalling.
+    """
+
+    def _drain_one_enemy_turn(self, session, stub_result: dict) -> list[str]:
+        """Run the drain through a single monkeypatched enemy turn and
+        return the resulting per-turn event lines.
+
+        Pins is_player_turn to ``False`` for the first drain iteration
+        (so ``_process_enemy_turn`` runs against the stubbed adapter)
+        and ``True`` for every subsequent iteration (so the drain
+        exits cleanly after one step regardless of the real initiative
+        state).
+        """
+        session.engine.process_enemy_turn = lambda: stub_result  # type: ignore[assignment]
+        session.engine.is_current_combatant_unconscious = lambda: False  # type: ignore[assignment]
+
+        calls = {"n": 0}
+
+        def enemy_then_player() -> bool:
+            calls["n"] += 1
+            return calls["n"] > 1
+
+        session.engine.is_player_turn = enemy_then_player  # type: ignore[assignment]
+        session.processing_enemy_turn = True
+        session._pending_combat_events.clear()
+        session._drain_enemy_turns()
+        return list(session._pending_combat_events)
+
+    def test_died_start_of_turn_emits_distinct_line(self, session) -> None:
+        """A goblin that drops dead from start-of-turn poison damage
+        produces a line that names the cause, not the generic
+        ``"takes no action"``."""
+        events = self._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(action="DIED_START_OF_TURN", hit=None, damage=0),
+        )
+        joined = " | ".join(events).lower()
+        assert "died before its turn" in joined, (
+            f"missing died-start-of-turn line:\n{events}"
+        )
+        assert "takes no action" not in joined
+
+    def test_incapacitated_emits_distinct_line(self, session) -> None:
+        """A stunned / paralyzed goblin produces a line that names the
+        incapacitating condition."""
+        events = self._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                action="INCAPACITATED",
+                hit=None,
+                damage=0,
+                incapacitating_conditions=["STUNNED"],
+            ),
+        )
+        joined = " | ".join(events).lower()
+        assert "cannot act" in joined, f"missing cannot-act line:\n{events}"
+        assert "stunned" in joined, f"missing condition name:\n{events}"
+        assert "takes no action" not in joined
+
+    def test_no_targets_emits_distinct_line(self, session) -> None:
+        """When the AI finds no valid target the response says so —
+        otherwise the player has no idea why combat is stalling."""
+        events = self._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(action="NO_TARGETS", hit=None, damage=0, target_name=None),
+        )
+        joined = " | ".join(events).lower()
+        assert "no valid targets" in joined, (
+            f"missing no-valid-targets line:\n{events}"
+        )
+        assert "takes no action" not in joined
+
+    def test_no_valid_attack_emits_distinct_line(self, session) -> None:
+        """Distinct from NO_TARGETS — the AI sees the PC but has no
+        weapon/action that reaches them."""
+        events = self._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(action="NO_VALID_ATTACK", hit=None, damage=0),
+        )
+        joined = " | ".join(events).lower()
+        assert "no usable attack" in joined, (
+            f"missing no-usable-attack line:\n{events}"
+        )
+        assert "takes no action" not in joined
+
+    def test_no_valid_attack_surfaces_engine_error_when_present(self, session) -> None:
+        """The engine sets ``EnemyTurnResult.error`` when the AI failed
+        for a specific reason (e.g. ``"No monster data or actions
+        found"``). The adapter passes it through and the session
+        appends it to the NO_VALID_ATTACK line so MCP consumers can
+        diagnose the cause — not just see a generic 'no usable attack'
+        for every variant."""
+        events = self._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                action="NO_VALID_ATTACK",
+                hit=None,
+                damage=0,
+                error="No monster data or actions found",
+            ),
+        )
+        joined = " | ".join(events)
+        assert "no usable attack" in joined.lower(), (
+            f"missing base line:\n{events}"
+        )
+        assert "No monster data or actions found" in joined, (
+            f"engine error diagnostic not surfaced:\n{events}"
+        )
+
+    def test_condition_removal_emits_message(self, session) -> None:
+        """When the goblin uses its turn to shake off a condition, the
+        engine's removal message surfaces in the response — players see
+        why the AI didn't attack this round."""
+        events = self._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                action="CONDITION_REMOVAL",
+                hit=None,
+                damage=0,
+                condition_removal_message=(
+                    "Goblin attempts to shake off POISONED - SUCCESS!"
+                ),
+            ),
+        )
+        assert any(
+            "shake off POISONED" in line for line in events
+        ), f"missing condition-removal message:\n{events}"
+
+
+class TestEnemyTurnAttackRollDetail:
+    """Plan #570 fix Phase 5: attack-roll detail parity with PC attacks.
+
+    PC attacks render ``roll X+Y=Z vs AC W -> HIT/MISS`` in the response
+    so the player can audit the math. Enemy attacks used to render only
+    ``"Goblin hits Abe for 4 damage!"`` — the player saw HP drop without
+    knowing the roll or AC, and couldn't tell whether the AI was rolling
+    above-average. This phase brings enemy attacks to parity.
+    """
+
+    HIT_LINE_PREFIX = "Goblin attacks Archy with Bite:"
+
+    def test_hit_line_includes_roll_bonus_and_ac(self, session) -> None:
+        """Hit line carries the d20, bonus, total, AC, and damage."""
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                hit=True,
+                attack_roll=15,
+                attack_bonus=4,
+                target_ac=12,
+                damage=5,
+            ),
+        )
+        attack_lines = [line for line in events if "Goblin attacks Archy" in line]
+        assert attack_lines, f"missing attack-roll line:\n{events}"
+        line = attack_lines[0]
+        assert "roll 15+4=19" in line, line
+        assert "AC 12" in line, line
+        assert "HIT" in line, line
+        assert "5 damage" in line, line
+
+    def test_miss_line_includes_roll_bonus_and_ac(self, session) -> None:
+        """Miss line carries the same detail so the player sees why."""
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                hit=False,
+                damage=0,
+                attack_roll=3,
+                attack_bonus=4,
+                target_ac=15,
+            ),
+        )
+        attack_lines = [line for line in events if "Goblin attacks Archy" in line]
+        assert attack_lines, f"missing attack-roll line:\n{events}"
+        line = attack_lines[0]
+        assert "roll 3+4=7" in line, line
+        assert "AC 15" in line, line
+        assert "MISS" in line, line
+
+    def test_critical_hit_annotated(self, session) -> None:
+        """A nat-20 must annotate the line as a CRITICAL HIT."""
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                hit=True,
+                critical=True,
+                attack_roll=20,
+                attack_bonus=4,
+                target_ac=12,
+                damage=9,
+            ),
+        )
+        attack_lines = [line for line in events if "Goblin attacks Archy" in line]
+        assert attack_lines, f"missing attack-roll line:\n{events}"
+        assert "CRITICAL HIT" in attack_lines[0], attack_lines[0]
+
+    def test_target_down_line_still_emitted_on_killing_blow(self, session) -> None:
+        """The ``"<target> is down!"`` line still surfaces alongside the
+        attack-roll line on a killing blow."""
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                hit=True,
+                target_killed=True,
+                damage=8,
+                attack_roll=18,
+                attack_bonus=4,
+                target_ac=12,
+            ),
+        )
+        assert any("is down" in line for line in events), (
+            f"missing down line:\n{events}"
+        )
+
+    def test_unnamed_action_falls_back_to_attack(self, session) -> None:
+        """When the engine omits ``action_name`` (e.g. legacy data), the
+        line still renders sensibly using ``"attack"`` rather than
+        ``"None"``."""
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(hit=True, action_name=None),
+        )
+        attack_lines = [line for line in events if "Goblin attacks Archy" in line]
+        assert attack_lines, f"missing attack-roll line:\n{events}"
+        assert "None" not in attack_lines[0], attack_lines[0]
+        assert "attack" in attack_lines[0].lower(), attack_lines[0]
+
+
+class TestEnemyTurnEffectMessages:
+    """Plan #570 fix Phase 6: surface per-turn effect messages.
+
+    ``EnemyTurnResult`` carries ``turn_start_effects`` (e.g. ongoing
+    poison damage at start of turn) and ``turn_end_effects`` (e.g.
+    POISONED condition expired). Both were silent in the response;
+    players could not see why an enemy's HP changed or why a condition
+    they'd applied vanished mid-fight.
+    """
+
+    def test_turn_start_effect_messages_surface(self, session) -> None:
+        """Start-of-turn effect strings appear before the action line."""
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                turn_start_effects=[
+                    "Goblin takes 2 poison damage at start of turn."
+                ],
+            ),
+        )
+        assert any(
+            "2 poison damage" in line for line in events
+        ), f"missing turn-start effect line:\n{events}"
+
+    def test_turn_end_effect_messages_surface(self, session) -> None:
+        """End-of-turn effect strings appear after the action line."""
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                turn_end_effects=[
+                    "POISONED on Goblin has expired!",
+                ],
+            ),
+        )
+        assert any(
+            "expired" in line.lower() for line in events
+        ), f"missing turn-end effect line:\n{events}"
+
+    def test_effect_messages_preserve_order_around_action_line(self, session) -> None:
+        """Start effects come before the attack line; end effects come
+        after. Order matters because effects narrate the timing of when
+        damage / conditions resolved (start of turn vs end of turn)."""
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                turn_start_effects=["Goblin takes 2 poison damage at start of turn."],
+                turn_end_effects=["POISONED on Goblin has expired!"],
+            ),
+        )
+        start_idx = next(
+            (i for i, line in enumerate(events) if "poison damage" in line), -1
+        )
+        attack_idx = next(
+            (i for i, line in enumerate(events) if "Goblin attacks Archy" in line), -1
+        )
+        end_idx = next(
+            (i for i, line in enumerate(events) if "expired" in line.lower()), -1
+        )
+        assert start_idx != -1 and attack_idx != -1 and end_idx != -1, (
+            f"missing one of start/attack/end lines:\n{events}"
+        )
+        assert start_idx < attack_idx < end_idx, (
+            f"line order wrong (start={start_idx}, attack={attack_idx}, "
+            f"end={end_idx}):\n{events}"
+        )
+
+    def test_effect_messages_surface_even_when_no_attack(self, session) -> None:
+        """A stunned goblin with a turn-start poison tick produces both
+        the poison line and the "cannot act" line."""
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                action="INCAPACITATED",
+                hit=None,
+                damage=0,
+                incapacitating_conditions=["STUNNED"],
+                turn_start_effects=["Goblin takes 1 fire damage at start of turn."],
+            ),
+        )
+        assert any("fire damage" in line for line in events), events
+        assert any("cannot act" in line.lower() for line in events), events
+
+
+class TestEnemyTurnSavingThrowLine:
+    """Plan #570 fix Phase 7: surface saving throws triggered by enemy attacks.
+
+    A goblin's poison-bite or a stirge's blood-drain can force the
+    target to make a saving throw. ``EnemyTurnResult`` carries
+    ``saving_throw_triggered`` + ability + DC + outcome + conditions
+    applied, but the session dropped all of it. The target's player saw
+    bite damage land but had no idea a condition was about to be
+    applied or that they passed the save.
+    """
+
+    def test_failed_save_emits_line_with_condition_applied(self, session) -> None:
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                hit=True,
+                damage=4,
+                saving_throw_triggered=True,
+                save_ability="Constitution",
+                save_dc=11,
+                save_succeeded=False,
+                conditions_applied=["poisoned"],
+            ),
+        )
+        save_lines = [line for line in events if "save" in line.lower()]
+        assert save_lines, f"missing save line:\n{events}"
+        line = save_lines[0]
+        assert "DC 11" in line, line
+        assert "Constitution" in line, line
+        assert "FAILED" in line, line
+        assert "POISONED" in line, line
+
+    def test_successful_save_emits_line_without_condition(self, session) -> None:
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                hit=True,
+                damage=4,
+                saving_throw_triggered=True,
+                save_ability="Constitution",
+                save_dc=11,
+                save_succeeded=True,
+                conditions_applied=[],
+            ),
+        )
+        save_lines = [line for line in events if "save" in line.lower()]
+        assert save_lines, f"missing save line:\n{events}"
+        line = save_lines[0]
+        assert "DC 11" in line, line
+        assert "Constitution" in line, line
+        assert "SUCCEEDED" in line, line
+        # No condition applied on a successful save.
+        assert "POISONED" not in line, line
+
+    def test_no_save_line_when_save_not_triggered(self, session) -> None:
+        """A vanilla bite that didn't trigger a save produces NO save
+        line — the line is gated on ``saving_throw_triggered``."""
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(hit=True, damage=4, saving_throw_triggered=False),
+        )
+        assert not any("save" in line.lower() for line in events), (
+            f"unexpected save line:\n{events}"
+        )
+
+    def test_save_dc_none_does_not_render_literal_none(self, session) -> None:
+        """When the engine sets ``save_dc=None`` (monster JSON omits
+        ``dc``), the save line must not interpolate the literal string
+        ``"None"`` — players see ``"DC ? Constitution save: ..."`` or
+        the line is omitted entirely."""
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                hit=True,
+                damage=4,
+                saving_throw_triggered=True,
+                save_ability="Constitution",
+                save_dc=None,
+                save_succeeded=False,
+                conditions_applied=["poisoned"],
+            ),
+        )
+        save_lines = [line for line in events if "save" in line.lower()]
+        assert save_lines, f"expected save line:\n{events}"
+        for line in save_lines:
+            assert "DC None" not in line, (
+                f"literal 'DC None' leaked into save line:\n{line}"
+            )
+
+    def test_save_succeeded_none_omits_outcome_rather_than_fabricates(
+        self, session
+    ) -> None:
+        """When ``saving_throw_triggered=True`` but ``save_succeeded``
+        is ``None`` (engine left it undetermined — e.g. target lacks
+        active_conditions attr), the line must NOT claim FAILED. Either
+        omit the save line or render an explicit unresolved marker.
+        Today's engine always sets save_succeeded when triggered, but
+        the surface must not fabricate a deterministic outcome from a
+        ``None``.
+        """
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                hit=True,
+                damage=4,
+                saving_throw_triggered=True,
+                save_ability="Constitution",
+                save_dc=11,
+                save_succeeded=None,
+                conditions_applied=[],
+            ),
+        )
+        save_lines = [line for line in events if "save" in line.lower()]
+        for line in save_lines:
+            assert "FAILED" not in line, (
+                f"None outcome rendered as FAILED:\n{line}"
+            )
+            assert "SUCCEEDED" not in line, (
+                f"None outcome rendered as SUCCEEDED:\n{line}"
+            )
+
+
+class TestEnemyTurnConcentrationBroken:
+    """Plan #570 fix Phase 8: surface concentration breaks.
+
+    When an enemy attack damages a concentrating spellcaster and the
+    target fails the resulting Constitution save, ``EnemyTurnResult``
+    sets ``concentration_broken`` with the spell name + DC. The session
+    dropped this entirely, so a wizard's bless or hold-person silently
+    ended mid-fight with no log line — the caster's player had to
+    notice from a missing buff bar.
+    """
+
+    def test_concentration_broken_line_surfaces(self, session) -> None:
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                hit=True,
+                damage=8,
+                concentration_broken={
+                    "was_concentrating": True,
+                    "concentration_broken": True,
+                    "spell_name": "bless",
+                    "dc": 10,
+                    "save_result": {"success": False, "total": 7},
+                },
+            ),
+        )
+        conc_lines = [line for line in events if "concentration" in line.lower()]
+        assert conc_lines, f"missing concentration-broken line:\n{events}"
+        line = conc_lines[0]
+        assert "Archy" in line, line
+        # Engine returns the bare spell ID; the session title-cases it
+        # for display so the response matches surrounding combat log
+        # conventions.
+        assert "Bless" in line, line
+
+    def test_no_concentration_line_when_payload_absent(self, session) -> None:
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(hit=True, damage=4, concentration_broken=None),
+        )
+        assert not any(
+            "concentration" in line.lower() for line in events
+        ), f"unexpected concentration line:\n{events}"
+
+    def test_concentration_spell_name_rendered_as_display_text(self, session) -> None:
+        """Engine returns the bare spell ID (``"bless"``,
+        ``"hold_person"``) — the response line must render the display
+        form (``"Bless"``, ``"Hold Person"``) so the surface matches
+        how spell names appear elsewhere in the log."""
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                hit=True,
+                damage=4,
+                concentration_broken={
+                    "was_concentrating": True,
+                    "concentration_broken": True,
+                    "spell_name": "hold_person",
+                    "dc": 10,
+                },
+            ),
+        )
+        conc_lines = [line for line in events if "concentration" in line.lower()]
+        assert conc_lines, f"missing concentration line:\n{events}"
+        line = conc_lines[0]
+        assert "Hold Person" in line, (
+            f"spell name not title-cased / underscores not replaced:\n{line}"
+        )
+        assert "hold_person" not in line, (
+            f"raw spell ID leaked into rendered line:\n{line}"
+        )
+
+
+class TestIssue570Reproduction:
+    """End-to-end acceptance for the #570 bug report.
+
+    Recreates the reporter's trace as faithfully as the test fixtures
+    allow: spawn an adjacent goblin, pin its turn, and call ``wait()``.
+    The response string must contain the ``Between turns:`` header
+    AND an attack-roll-detail line (``roll X+Y=Z vs AC W``) — without
+    that the caller has no way to audit the 14→0 HP TPK the reporter
+    saw.
+    """
+
+    def test_wait_response_contains_attack_roll_detail(self, session) -> None:
+        adjacent_x = session.player_x + 1
+        adjacent_y = session.player_y
+        session.spawn_monster("goblin", adjacent_x, adjacent_y)
+
+        goblin = session.engine.game_state.active_enemies[-1]
+        _force_combatant_turn(session, goblin)
+        session.processing_enemy_turn = False
+        session.set_seed(42)
+
+        response = session.wait()
+
+        assert "Between turns:" in response, (
+            f"missing Between turns header:\n{response}"
+        )
+        # Attack-roll-detail line is the acceptance criterion — without
+        # it the caller can't audit the goblin's roll vs. AC or know
+        # what action was used.
+        assert "Goblin attacks" in response, (
+            f"missing 'Goblin attacks' phrasing:\n{response}"
+        )
+        assert " vs AC " in response, (
+            f"missing AC annotation:\n{response}"
+        )
+        assert " roll " in response, (
+            f"missing roll annotation:\n{response}"
+        )
+        # And one of HIT/MISS/CRITICAL HIT must be present.
+        assert any(
+            tok in response for tok in ("HIT", "MISS", "CRITICAL HIT")
+        ), f"missing outcome token:\n{response}"
+
+    def test_wait_response_includes_hp_or_damage_detail(self, session) -> None:
+        """On a hit the response includes the damage. On a miss the
+        attack-roll line itself carries the AC vs. roll detail. Either
+        way the caller can tell what happened to the party."""
+        adjacent_x = session.player_x + 1
+        adjacent_y = session.player_y
+        session.spawn_monster("goblin", adjacent_x, adjacent_y)
+
+        goblin = session.engine.game_state.active_enemies[-1]
+        _force_combatant_turn(session, goblin)
+        session.processing_enemy_turn = False
+        session.set_seed(42)
+
+        response = session.wait()
+
+        # Either a damage annotation (hit) or the explicit "MISS" form.
+        assert " damage" in response or "MISS" in response, (
+            f"response carries neither damage nor MISS:\n{response}"
         )

@@ -147,6 +147,13 @@ class GameSession:
         # because that buffer is bounded (10 lines) for the windowed
         # HUD; this one is per-call and reset by ``_consume_pending_events``.
         self._pending_combat_events: list[str] = []
+        # Raised by ``_drain_enemy_turns`` while it owns the FSM. When
+        # set, ``_add_combat_log`` mirrors each appended line directly
+        # into ``_pending_combat_events``. Replaces the prior
+        # ``combat_log[log_before:]`` slice mirror, which silently lost
+        # lines whenever the 10-line cap truncated the windowed HUD
+        # buffer mid-turn (#570 follow-up).
+        self._capturing_drain_events: bool = False
 
         # MCP plumbing.
         self._mcp_bridge: MCPBridge | None = None
@@ -289,38 +296,51 @@ class GameSession:
     # ========== Combat log helper ==========
 
     def _add_combat_log(self, message: str) -> None:
-        """Add a message to the combat log (capped at 10)."""
+        """Add a message to the combat log (capped at 10).
+
+        While ``_drain_enemy_turns`` owns the FSM, each appended message
+        is also mirrored into ``_pending_combat_events`` for the MCP
+        response. Mirroring at the append site (rather than via a
+        post-iteration ``combat_log[log_before:]`` slice) means the
+        bounded 10-line HUD buffer can truncate freely without dropping
+        events the MCP caller hasn't seen yet (#570 follow-up).
+        """
         self.combat_log.append(message)
         if len(self.combat_log) > 10:
             self.combat_log = self.combat_log[-10:]
+        if self._capturing_drain_events:
+            self._pending_combat_events.append(message)
 
     def _drain_enemy_turns(self) -> None:
         """Run the FSM forward through every non-player turn.
 
         Wraps the synchronous drain loop used by ``attack`` / ``wait``
-        so the MCP path can see what happened during the drain. Every
-        line the per-turn handler appends to ``combat_log`` is mirrored
-        into ``_pending_combat_events`` for later surfacing via
-        ``_consume_pending_events`` (#570).
+        so the MCP path can see what happened during the drain. Each
+        ``_add_combat_log`` call inside the loop mirrors directly into
+        ``_pending_combat_events`` via ``_capturing_drain_events`` —
+        the windowed HUD's 10-line cap can truncate freely without the
+        MCP response losing lines (#570).
 
         Mirrors ``tick``'s branching so an unconscious PC's death-save
         turn processes inside the same drain rather than being deferred
         until the next tick.
         """
-        while self.processing_enemy_turn:
-            log_before = len(self.combat_log)
-            if self.engine.is_current_combatant_unconscious():
-                self._process_unconscious_turn()
-            elif not self.engine.is_player_turn():
-                self._process_enemy_turn()
-            else:
-                # FSM contract: when the current combatant is a
-                # conscious PC, ``processing_enemy_turn`` should already
-                # be False. Guard against drift so a misconfigured state
-                # can't spin this loop forever.
-                self.processing_enemy_turn = False
-                break
-            self._pending_combat_events.extend(self.combat_log[log_before:])
+        self._capturing_drain_events = True
+        try:
+            while self.processing_enemy_turn:
+                if self.engine.is_current_combatant_unconscious():
+                    self._process_unconscious_turn()
+                elif not self.engine.is_player_turn():
+                    self._process_enemy_turn()
+                else:
+                    # FSM contract: when the current combatant is a
+                    # conscious PC, ``processing_enemy_turn`` should
+                    # already be False. Guard against drift so a
+                    # misconfigured state can't spin this loop forever.
+                    self.processing_enemy_turn = False
+                    break
+        finally:
+            self._capturing_drain_events = False
 
     def _consume_pending_events(self) -> list[str]:
         """Return and clear the per-call combat event buffer."""
@@ -536,18 +556,7 @@ class GameSession:
         result = self.engine.process_enemy_turn()
 
         if result["success"]:
-            if result.get("hit") is not None:
-                if result["hit"]:
-                    self._add_combat_log(
-                        f"{result['enemy_name']} hits {result['target_name']} "
-                        f"for {result['damage']} damage!"
-                    )
-                    if result.get("target_killed"):
-                        self._add_combat_log(f"{result['target_name']} is down!")
-                else:
-                    self._add_combat_log(f"{result['enemy_name']} misses {result['target_name']}!")
-            else:
-                self._add_combat_log(f"{result['enemy_name']} takes no action.")
+            self._emit_enemy_turn_log(result)
 
         self.entity_manager.sync_from_engine(self.engine)
         self.entity_manager.update_party_turn_status(self.engine)
@@ -566,6 +575,156 @@ class GameSession:
                 self._process_unconscious_turn()
             else:
                 self.processing_enemy_turn = False
+
+    def _emit_enemy_turn_log(self, result: dict[str, Any]) -> None:
+        """Render a per-turn combat-log block for one enemy turn.
+
+        Layout, in narrative order:
+          1. turn_start_effects (poison tick, etc.)
+          2. action line(s) — branched on the ``action`` enum name
+          3. turn_end_effects (condition expired, etc.)
+
+        Branches on the engine adapter's ``action`` enum name so each
+        action type emits a distinguishing line — players seeing an
+        enemy do nothing should learn WHY (died at start of turn,
+        stunned, no targets, no usable attack, shaking off a condition)
+        rather than the generic "<enemy> takes no action" the
+        pre-#570-fix code emitted for all five paths.
+        """
+        for message in result.get("turn_start_effects") or []:
+            self._add_combat_log(message)
+
+        self._emit_enemy_turn_action_line(result)
+
+        for message in result.get("turn_end_effects") or []:
+            self._add_combat_log(message)
+
+    def _emit_enemy_turn_action_line(self, result: dict[str, Any]) -> None:
+        """Emit the action-specific line (ATTACK / INCAPACITATED / ...)."""
+        action = result.get("action")
+        enemy = result.get("enemy_name", "Enemy")
+
+        if action == "ATTACK":
+            self._emit_enemy_attack_log(result)
+            return
+
+        if action == "DIED_START_OF_TURN":
+            self._add_combat_log(f"{enemy} died before its turn.")
+            return
+
+        if action == "INCAPACITATED":
+            conditions = result.get("incapacitating_conditions") or []
+            label = ", ".join(c.upper() for c in conditions) if conditions else "incapacitated"
+            self._add_combat_log(f"{enemy} cannot act ({label}).")
+            return
+
+        if action == "NO_TARGETS":
+            self._add_combat_log(f"{enemy} has no valid targets.")
+            return
+
+        if action == "NO_VALID_ATTACK":
+            line = f"{enemy} has no usable attack."
+            error = result.get("error")
+            if error:
+                line += f" ({error})"
+            self._add_combat_log(line)
+            return
+
+        if action == "CONDITION_REMOVAL":
+            message = result.get("condition_removal_message")
+            if message:
+                self._add_combat_log(message)
+            else:
+                self._add_combat_log(f"{enemy} attempts to remove a condition.")
+            return
+
+        # Unknown action — fall back to the legacy generic line rather
+        # than swallow the turn silently. Reaching this branch indicates
+        # a new EnemyTurnAction enum value the session doesn't yet
+        # render explicitly.
+        self._add_combat_log(f"{enemy} takes no action.")
+
+    def _emit_enemy_attack_log(self, result: dict[str, Any]) -> None:
+        """Render the line(s) for an ATTACK action.
+
+        Mirrors the PC attack report format
+        (``<attacker> attacks <target> with <weapon>: roll X+Y=Z vs AC W
+        -> HIT/MISS/CRITICAL HIT for N damage``) so MCP consumers can
+        audit the math the same way they can for player attacks (#570).
+        """
+        if result.get("hit") is None:
+            self._add_combat_log(f"{result['enemy_name']} takes no action.")
+            return
+
+        attacker = result["enemy_name"]
+        target = result["target_name"]
+        action_name = result.get("action_name") or "attack"
+        attack_roll = result.get("attack_roll", 0)
+        attack_bonus = result.get("attack_bonus", 0)
+        target_ac = result.get("target_ac", 0)
+        total = attack_roll + attack_bonus
+        bonus_text = f"+{attack_bonus}" if attack_bonus >= 0 else str(attack_bonus)
+
+        if result.get("critical"):
+            outcome = "CRITICAL HIT"
+        elif result["hit"]:
+            outcome = "HIT"
+        else:
+            outcome = "MISS"
+
+        line = (
+            f"{attacker} attacks {target} with {action_name}: "
+            f"roll {attack_roll}{bonus_text}={total} vs AC {target_ac} -> "
+            f"{outcome}"
+        )
+        if result["hit"]:
+            line += f" for {result.get('damage', 0)} damage"
+
+        self._add_combat_log(line)
+
+        if result.get("saving_throw_triggered"):
+            save_line = self._format_save_line(target, result)
+            if save_line is not None:
+                self._add_combat_log(save_line)
+
+        concentration = result.get("concentration_broken")
+        if concentration:
+            spell_id = concentration.get("spell_name")
+            spell_display = (
+                spell_id.replace("_", " ").title() if spell_id else "their spell"
+            )
+            self._add_combat_log(
+                f"{target}'s concentration on {spell_display} is broken!"
+            )
+
+        if result.get("target_killed"):
+            self._add_combat_log(f"{target} is down!")
+
+    @staticmethod
+    def _format_save_line(target: str, result: dict[str, Any]) -> str | None:
+        """Format the saving-throw outcome line that accompanies an
+        enemy attack with a save rider (e.g. goblin bite + poison).
+
+        Returns ``None`` when the outcome is undetermined
+        (``save_succeeded is None``) so the caller can skip the line
+        rather than fabricate a SUCCEEDED/FAILED verdict. A missing
+        ``save_dc`` renders as ``"DC ?"`` rather than the literal
+        ``"None"`` string an unguarded f-string would produce.
+        """
+        succeeded = result.get("save_succeeded")
+        if succeeded is None:
+            return None
+
+        ability = result.get("save_ability") or "Unknown"
+        dc = result.get("save_dc")
+        dc_text = str(dc) if dc is not None else "?"
+        outcome = "SUCCEEDED" if succeeded else "FAILED"
+        line = f"{target} DC {dc_text} {ability} save: {outcome}"
+        conditions = result.get("conditions_applied") or []
+        if conditions and not succeeded:
+            applied = ", ".join(c.upper() for c in conditions)
+            line += f" — {applied} applied"
+        return line
 
     def _process_unconscious_turn(self) -> None:
         """Process an unconscious character's death saving throw turn."""
