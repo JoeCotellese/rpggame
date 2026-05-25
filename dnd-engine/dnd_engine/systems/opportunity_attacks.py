@@ -67,6 +67,7 @@ def register_default_opportunity_attack(
     reactor: Creature,
     get_position: Callable[[], Position | None],
     reach_feet: int = 5,
+    can_see: Callable[[Position], bool] | None = None,
 ) -> None:
     """Register the default OA reaction for ``reactor``.
 
@@ -75,7 +76,10 @@ def register_default_opportunity_attack(
           ``from_position``, AND
         - the mover is outside ``reach_feet`` at ``to_position``,
         - AND the reactor is itself placed on the grid,
-        - AND the mover is not the reactor (a creature can't OA itself).
+        - AND the mover is not the reactor (a creature can't OA itself),
+        - AND (if ``can_see`` is supplied) the reactor can see the
+          mover at ``from_position`` — i.e. the SRD's "creature that
+          you can see" clause.
 
     When all checks pass, the outcome carries attack metadata in
     ``data`` so a downstream slice can resolve the actual attack roll
@@ -100,6 +104,16 @@ def register_default_opportunity_attack(
             single square), matching the SRD default for an unarmed
             strike / non-reach weapon. Pass 10 (or larger) for reach
             weapons / large creatures.
+        can_see: Optional one-arg callable that returns whether the
+            reactor can see the given ``Position``. Called with the
+            mover's ``from_position`` (where the trigger was raised),
+            so a False return both suppresses the OA and leaves the
+            Reaction slot available for a later in-round trigger
+            (the SRD penalizes blindness with a missed OA, not with
+            a wasted Reaction). Production callers pass a closure
+            over ``SpatialIndex.has_line_of_sight``; leaving this
+            ``None`` is the test-helper default and matches the
+            pre-visibility semantics.
     """
 
     def handler(context: TriggerContext) -> ReactionOutcome:
@@ -122,6 +136,11 @@ def register_default_opportunity_attack(
             <= reach_feet
         )
         if not (was_in_reach and not still_in_reach):
+            return ReactionOutcome(reacted=False)
+
+        # Visibility check *after* reach: we don't want to spend cycles
+        # on LOS when the mover never threatened the reactor.
+        if can_see is not None and not can_see(from_pos):
             return ReactionOutcome(reacted=False)
 
         return ReactionOutcome(

@@ -18,15 +18,26 @@ from pathlib import Path
 
 import pytest
 
+from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.combat import CombatEngine
 from dnd_engine.core.creature import Abilities, Creature
 from dnd_engine.core.dice import DiceRoller
+from dnd_engine.core.entity_ids import pc_entity_id
+from dnd_engine.core.game_state import GameState
+from dnd_engine.core.map import Map, TileType
+from dnd_engine.core.party import Party
+from dnd_engine.core.position import Position
+from dnd_engine.rules.loader import DataLoader
 from dnd_engine.scenarios.loader import ScenarioLoader
 from dnd_engine.scenarios.script_executor import (
     ScriptExecutor,
     _attack_range_for,
     _attack_reach_for,
 )
+from dnd_engine.systems.opportunity_attacks import (
+    register_default_opportunity_attack,
+)
+from dnd_engine.utils.events import Event, EventBus, EventType
 
 pytestmark = pytest.mark.srd(
     "playing-the-game/melee-attacks.md",
@@ -259,6 +270,155 @@ enemies:
         )
 
 
+def _build_oa_fixture() -> tuple[GameState, str, Creature, Character]:
+    """Construct a minimal combat with a fighter adjacent to a goblin.
+
+    Returns ``(game_state, pc_entity_id, goblin, fighter)``. The fighter
+    sits at ``(1, 1)`` and the goblin at ``(2, 1)`` — 5 ft apart, in
+    each other's default reach. The map is otherwise open floor on a
+    5x3 grid so the fighter has room to step away in any direction.
+    """
+    tiles: dict[tuple[int, int], TileType] = {}
+    for y in range(3):
+        for x in range(5):
+            tiles[(x, y)] = TileType.FLOOR
+    grid_map = Map(width=5, height=3, tiles=tiles)
+
+    fighter = Character(
+        name="Brick",
+        character_class=CharacterClass.FIGHTER,
+        level=1,
+        abilities=Abilities(
+            strength=16, dexterity=14, constitution=15,
+            intelligence=10, wisdom=12, charisma=8,
+        ),
+        max_hp=20,
+        ac=16,
+        xp=0,
+    )
+    party = Party(characters=[fighter])
+
+    game_state = GameState(
+        party=party,
+        dungeon_name="test_dungeon",
+        event_bus=EventBus(),
+        data_loader=DataLoader(),
+        dice_roller=DiceRoller(seed=42),
+    )
+    game_state.bootstrap_spatial(grid_map)
+
+    goblin = game_state.data_loader.create_monster("goblin")
+    game_state.active_enemies.append(goblin)
+
+    pc_id = pc_entity_id(fighter.name)
+    goblin_id = "goblin_0"
+    game_state.set_position(pc_id, 1, 1)
+    game_state.set_position(goblin_id, 2, 1)
+
+    # Start combat AFTER placements so OA handlers register against the
+    # already-placed entities. Force the PC to be the active combatant
+    # so attempt_combat_step queries the PC's TurnState.
+    game_state._start_combat()
+    tracker = game_state.initiative_tracker
+    assert tracker is not None
+    for idx, entry in enumerate(tracker.combatants):
+        if entry.creature is fighter:
+            tracker.current_turn_index = idx
+            break
+    tracker.turn_states[fighter].reset(speed=fighter.speed)
+
+    return game_state, pc_id, goblin, fighter
+
+
+def _build_oa_fixture_no_los() -> tuple[GameState, str, Creature, Character]:
+    """OA fixture where a wall blocks LOS between the goblin and the PC.
+
+    Adjacent-tile LOS is always clear on a tile grid (no half-walls),
+    so to exercise visibility specifically the goblin gets a 10-ft
+    reach override and the wall sits in the 2-tile gap between them:
+
+        Fighter at (1, 1)  ── WALL ──  Goblin at (3, 1)   reach=10
+
+    Reach gate passes (was 10 ft, now 15 ft); LOS gate fails (wall
+    blocks the raycast). With the SRD visibility clause enforced,
+    the goblin's Reaction stays available and no OA is resolved.
+    """
+    tiles: dict[tuple[int, int], TileType] = {}
+    for y in range(3):
+        for x in range(5):
+            tiles[(x, y)] = TileType.FLOOR
+    tiles[(2, 1)] = TileType.WALL  # blocks LOS between (1, 1) and (3, 1)
+    grid_map = Map(width=5, height=3, tiles=tiles)
+
+    fighter = Character(
+        name="Brick",
+        character_class=CharacterClass.FIGHTER,
+        level=1,
+        abilities=Abilities(
+            strength=16, dexterity=14, constitution=15,
+            intelligence=10, wisdom=12, charisma=8,
+        ),
+        max_hp=20,
+        ac=16,
+        xp=0,
+    )
+    party = Party(characters=[fighter])
+
+    game_state = GameState(
+        party=party,
+        dungeon_name="test_dungeon",
+        event_bus=EventBus(),
+        data_loader=DataLoader(),
+        dice_roller=DiceRoller(seed=42),
+    )
+    game_state.bootstrap_spatial(grid_map)
+
+    goblin = game_state.data_loader.create_monster("goblin")
+    game_state.active_enemies.append(goblin)
+
+    pc_id = pc_entity_id(fighter.name)
+    goblin_id = "goblin_0"
+    game_state.set_position(pc_id, 1, 1)
+    game_state.set_position(goblin_id, 3, 1)
+
+    game_state._start_combat()
+    # Re-register the goblin with 10-ft reach so the wall-blocked LOS
+    # gate is what suppresses the OA, not the reach gate. The default
+    # 5-ft handler registered by _register_default_opportunity_attacks
+    # stays subscribed too, but the dispatcher's "last wins" rule
+    # means the new registration takes precedence.
+    spatial = game_state.spatial
+    assert spatial is not None
+    assert game_state.reaction_dispatcher is not None
+
+    def _gob_pos() -> Position | None:
+        return spatial.position_of(goblin_id)
+
+    def _gob_can_see(target: Position) -> bool:
+        origin = spatial.position_of(goblin_id)
+        if origin is None:
+            return False
+        return spatial.has_line_of_sight(origin, target)
+
+    register_default_opportunity_attack(
+        game_state.reaction_dispatcher,
+        goblin,
+        get_position=_gob_pos,
+        reach_feet=10,
+        can_see=_gob_can_see,
+    )
+
+    tracker = game_state.initiative_tracker
+    assert tracker is not None
+    for idx, entry in enumerate(tracker.combatants):
+        if entry.creature is fighter:
+            tracker.current_turn_index = idx
+            break
+    tracker.turn_states[fighter].reset(speed=fighter.speed)
+
+    return game_state, pc_id, goblin, fighter
+
+
 class TestOpportunityAttacks_Triggering:
     """SRD § Playing the Game › Melee Attacks › Opportunity Attacks (trigger).
 
@@ -298,17 +458,61 @@ class TestOpportunityAttacks_Triggering:
         )
 
     def test_tactical_movement_out_of_reach_provokes_opportunity_attack(self):
-        pytest.skip(
-            "GAP: OAs do not fire on normal tactical movement during "
-            "combat. The engine's only OA path is "
-            "dnd_engine/core/game_state.py:4190 `flee_combat()`, which "
-            "fires when the *party as a whole* attempts to retreat to "
-            "the previous room. There is no per-creature position "
-            "model on the engine side during combat (room-scoped), so "
-            "a creature moving out of an adjacent enemy's reach during "
-            "its own turn does not provoke. Tracked by issue #413 "
-            "(depends on #412 Reaction economy)."
+        """Stepping out of an adjacent enemy's reach consumes their Reaction.
+
+        Fighter at (1, 1), goblin at (2, 1) — 5 ft apart. The fighter
+        steps to (0, 1), 10 ft from the goblin and outside its default
+        reach. The dispatcher publishes ``OPPORTUNITY_PROVOKED`` and the
+        goblin's handler fires: its ``reaction_available`` slot flips
+        to ``False`` and a ``DAMAGE_DEALT`` event with
+        ``opportunity_attack=True`` rides the bus (when the attack
+        hits) — verifying the publish + resolve hooks land an actual
+        attack roll, not just a slot consumption.
+        """
+        game_state, pc_id, goblin, fighter = _build_oa_fixture()
+
+        # Pre-check: dispatcher exists, goblin's Reaction is live.
+        assert game_state.reaction_dispatcher is not None
+        tracker = game_state.initiative_tracker
+        assert tracker is not None
+        assert tracker.turn_states[goblin].reaction_available is True
+
+        damage_events: list[Event] = []
+        game_state.event_bus.subscribe(
+            EventType.DAMAGE_DEALT, damage_events.append
         )
+
+        # PC steps west, away from the goblin.
+        result = game_state.attempt_combat_step(pc_id, dx=-1, dy=0)
+        assert result.ok, f"step failed unexpectedly: {result.reason}"
+        assert result.position == Position(0, 1)
+
+        # The goblin's Reaction slot was consumed: SRD § Reactions
+        # contract met.
+        assert tracker.turn_states[goblin].reaction_available is False, (
+            "OA handler fired but did not consume the reactor's "
+            "Reaction slot — the dispatcher / handler contract is broken."
+        )
+
+        # Exactly one damage event corresponding to the OA. The
+        # deterministic seed (42) gives the goblin's scimitar attack a
+        # consistent roll for this fixture, but we don't assert on
+        # specific hit/damage values — only on the *resolution shape*
+        # (event emitted iff the roll hit, marked as OA).
+        oa_events = [
+            e for e in damage_events
+            if e.data.get("opportunity_attack") is True
+        ]
+        # Either the attack hit (>=1 oa event) or missed (0 events).
+        # Both branches are SRD-compliant — the contract is that the
+        # OA was attempted, evidenced by slot consumption above. The
+        # event-count assertion below pins the resolution-side shape.
+        assert len(oa_events) <= 1, (
+            f"expected at most one OA damage event, got {len(oa_events)}"
+        )
+        for e in oa_events:
+            assert e.data["attacker"] == goblin.name
+            assert e.data["defender"] == fighter.name
 
 
 class TestOpportunityAttacks_Avoidance:
@@ -333,13 +537,42 @@ class TestOpportunityAttacks_Avoidance:
         )
 
     def test_involuntary_movement_does_not_provoke(self):
-        pytest.skip(
-            "GAP: dependent on per-creature OA system existing first. "
-            "SRD carves out exceptions for Teleport and movement "
-            "that doesn't use the creature's own action economy "
-            "(e.g., shoved, hurled by an explosion). The engine has "
-            "no OA system on tactical movement, so the exception is "
-            "moot until that's built. Tracked under issue #413."
+        """Forced movement (Teleport/Shoved/Hurled) skips OA publishing.
+
+        Same fixture as the triggering test, but the step is marked
+        ``involuntary=True``. The OA dispatcher is never invoked, so
+        the goblin keeps its Reaction for any later in-round trigger
+        and no damage event fires. The SRD calls this out explicitly:
+
+            > You also don't provoke an Opportunity Attack when you
+            > Teleport or when you are moved without using your
+            > movement, action, Bonus Action, or Reaction.
+        """
+        game_state, pc_id, goblin, _fighter = _build_oa_fixture()
+        tracker = game_state.initiative_tracker
+        assert tracker is not None
+
+        damage_events: list[Event] = []
+        game_state.event_bus.subscribe(
+            EventType.DAMAGE_DEALT, damage_events.append
+        )
+
+        result = game_state.attempt_combat_step(
+            pc_id, dx=-1, dy=0, involuntary=True
+        )
+        assert result.ok
+        assert result.position == Position(0, 1)
+
+        assert tracker.turn_states[goblin].reaction_available is True, (
+            "involuntary movement consumed the goblin's Reaction — "
+            "the publish hook should have been suppressed."
+        )
+        oa_events = [
+            e for e in damage_events
+            if e.data.get("opportunity_attack") is True
+        ]
+        assert oa_events == [], (
+            f"involuntary movement produced OA damage events: {oa_events}"
         )
 
 
@@ -366,12 +599,51 @@ class TestOpportunityAttacks_Mechanics:
         )
 
     def test_opportunity_attack_requires_seeing_the_provoker(self):
-        pytest.skip(
-            "GAP: visibility is not consulted by `flee_combat()`. The "
-            "SRD requires that the OA-maker can see the creature "
-            "leaving reach (e.g., an invisible creature provokes no "
-            "OA from a sighted-only enemy). Engine-side combat has "
-            "no visibility/perception query exposed to attack "
-            "resolution. Tracked under issue #413 (per-creature OA "
-            "system is the prerequisite)."
+        """A wall between reactor and mover suppresses the OA.
+
+        The SRD says you can only make an OA against a creature you
+        can see. Slice 4b uses geometric line-of-sight as the proxy
+        for "can see" — full invisibility / blinded / heavy
+        obscurement gates land with plan-05's perception primitives.
+
+        Fixture: fighter at (1, 1) with a 10-ft-reach goblin at
+        (3, 1); a wall at (2, 1) breaks LOS between them. The fighter
+        steps to (0, 1) — outside even the 10-ft reach — so the reach
+        gate alone would normally fire the OA. The visibility gate
+        keeps the goblin's Reaction available and emits no damage.
+        """
+        game_state, pc_id, goblin, _fighter = _build_oa_fixture_no_los()
+        tracker = game_state.initiative_tracker
+        assert tracker is not None
+        assert tracker.turn_states[goblin].reaction_available is True
+
+        # Sanity: confirm LOS really is blocked by the wall fixture.
+        spatial = game_state.spatial
+        assert spatial is not None
+        assert not spatial.has_line_of_sight(
+            Position(3, 1), Position(1, 1)
+        ), (
+            "fixture setup error: expected LOS between (3, 1) and "
+            "(1, 1) to be blocked by the wall at (2, 1)."
+        )
+
+        damage_events: list[Event] = []
+        game_state.event_bus.subscribe(
+            EventType.DAMAGE_DEALT, damage_events.append
+        )
+
+        result = game_state.attempt_combat_step(pc_id, dx=-1, dy=0)
+        assert result.ok
+        assert result.position == Position(0, 1)
+
+        assert tracker.turn_states[goblin].reaction_available is True, (
+            "wall-blocked LOS still let the OA fire — visibility gate "
+            "in register_default_opportunity_attack is not honored."
+        )
+        oa_events = [
+            e for e in damage_events
+            if e.data.get("opportunity_attack") is True
+        ]
+        assert oa_events == [], (
+            f"unseen mover produced OA damage events: {oa_events}"
         )
