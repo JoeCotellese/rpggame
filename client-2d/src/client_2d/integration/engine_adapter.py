@@ -726,7 +726,12 @@ class EngineAdapter:
 
             return {
                 "success": True,
-                "action": result.action_taken.name if hasattr(result, "action_taken") else "attack",
+                # Uppercase fallback matches the session's branch keys
+                # (which compare against the engine's enum .name form).
+                # A lowercase fallback would mis-route a non-canonical
+                # result to the unknown-action "takes no action" line
+                # — the regression #570 was written to prevent (#570).
+                "action": result.action_taken.name if hasattr(result, "action_taken") else "ATTACK",
                 "enemy_name": result.enemy_display_name if hasattr(result, "enemy_display_name") else current["name"],
                 "target_name": getattr(result, "target_name", None),
                 "hit": attack_result.hit if attack_result else None,
