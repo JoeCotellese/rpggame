@@ -1003,10 +1003,11 @@ class TestSessionMCPResponseSurfacesCombatEvents:
         assert "Goblin" in response, (
             f"goblin not named anywhere in wait() reply:\n{response}"
         )
-        # ``_process_enemy_turn`` writes either a hit / miss / no-action
-        # line. All three carry a recognisable verb; one of them must
-        # be present for the reporter to know what happened.
-        verbs = ("hits", "misses", "takes no action")
+        # ``_process_enemy_turn`` writes either an attack-roll-detail
+        # line (HIT/MISS/CRITICAL HIT) or a non-attack action line.
+        # One of those tokens must be present for the reporter to know
+        # what happened during the drain (#570).
+        verbs = ("HIT", "MISS", "takes no action", "has no", "cannot act")
         assert any(v in response for v in verbs), (
             f"no enemy-action verb in wait() reply:\n{response}"
         )
@@ -1151,7 +1152,10 @@ class TestSessionWaitOnEnemyTurn:
         response = session.wait()
 
         # Goblin's per-turn handler must have produced an action line.
-        verbs = ("hits", "misses", "takes no action")
+        # Post-#570 the attack outcome appears as HIT/MISS/CRITICAL HIT
+        # inside an attack-roll-detail line; the legacy hits/misses
+        # tokens are gone.
+        verbs = ("HIT", "MISS", "takes no action", "has no", "cannot act")
         assert any(v in response for v in verbs), (
             f"no enemy-action verb in wait() reply "
             f"(goblin turn was skipped):\n{response}"
@@ -1713,3 +1717,103 @@ class TestEnemyTurnActionTypes:
         assert any(
             "shake off POISONED" in line for line in events
         ), f"missing condition-removal message:\n{events}"
+
+
+class TestEnemyTurnAttackRollDetail:
+    """Plan #570 fix Phase 5: attack-roll detail parity with PC attacks.
+
+    PC attacks render ``roll X+Y=Z vs AC W -> HIT/MISS`` in the response
+    so the player can audit the math. Enemy attacks used to render only
+    ``"Goblin hits Abe for 4 damage!"`` — the player saw HP drop without
+    knowing the roll or AC, and couldn't tell whether the AI was rolling
+    above-average. This phase brings enemy attacks to parity.
+    """
+
+    HIT_LINE_PREFIX = "Goblin attacks Archy with Bite:"
+
+    def test_hit_line_includes_roll_bonus_and_ac(self, session) -> None:
+        """Hit line carries the d20, bonus, total, AC, and damage."""
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                hit=True,
+                attack_roll=15,
+                attack_bonus=4,
+                target_ac=12,
+                damage=5,
+            ),
+        )
+        attack_lines = [line for line in events if "Goblin attacks Archy" in line]
+        assert attack_lines, f"missing attack-roll line:\n{events}"
+        line = attack_lines[0]
+        assert "roll 15+4=19" in line, line
+        assert "AC 12" in line, line
+        assert "HIT" in line, line
+        assert "5 damage" in line, line
+
+    def test_miss_line_includes_roll_bonus_and_ac(self, session) -> None:
+        """Miss line carries the same detail so the player sees why."""
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                hit=False,
+                damage=0,
+                attack_roll=3,
+                attack_bonus=4,
+                target_ac=15,
+            ),
+        )
+        attack_lines = [line for line in events if "Goblin attacks Archy" in line]
+        assert attack_lines, f"missing attack-roll line:\n{events}"
+        line = attack_lines[0]
+        assert "roll 3+4=7" in line, line
+        assert "AC 15" in line, line
+        assert "MISS" in line, line
+
+    def test_critical_hit_annotated(self, session) -> None:
+        """A nat-20 must annotate the line as a CRITICAL HIT."""
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                hit=True,
+                critical=True,
+                attack_roll=20,
+                attack_bonus=4,
+                target_ac=12,
+                damage=9,
+            ),
+        )
+        attack_lines = [line for line in events if "Goblin attacks Archy" in line]
+        assert attack_lines, f"missing attack-roll line:\n{events}"
+        assert "CRITICAL HIT" in attack_lines[0], attack_lines[0]
+
+    def test_target_down_line_still_emitted_on_killing_blow(self, session) -> None:
+        """The ``"<target> is down!"`` line still surfaces alongside the
+        attack-roll line on a killing blow."""
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                hit=True,
+                target_killed=True,
+                damage=8,
+                attack_roll=18,
+                attack_bonus=4,
+                target_ac=12,
+            ),
+        )
+        assert any("is down" in line for line in events), (
+            f"missing down line:\n{events}"
+        )
+
+    def test_unnamed_action_falls_back_to_attack(self, session) -> None:
+        """When the engine omits ``action_name`` (e.g. legacy data), the
+        line still renders sensibly using ``"attack"`` rather than
+        ``"None"``."""
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(hit=True, action_name=None),
+        )
+        attack_lines = [line for line in events if "Goblin attacks Archy" in line]
+        assert attack_lines, f"missing attack-roll line:\n{events}"
+        assert "None" not in attack_lines[0], attack_lines[0]
+        assert "attack" in attack_lines[0].lower(), attack_lines[0]

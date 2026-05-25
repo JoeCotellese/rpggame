@@ -608,22 +608,43 @@ class GameSession:
     def _emit_enemy_attack_log(self, result: dict[str, Any]) -> None:
         """Render the line(s) for an ATTACK action.
 
-        Wording matches the pre-#570 hit/miss surface; subsequent tasks
-        in #570 expand this with attack-roll detail, save outcomes, and
-        concentration-break annotations.
+        Mirrors the PC attack report format
+        (``<attacker> attacks <target> with <weapon>: roll X+Y=Z vs AC W
+        -> HIT/MISS/CRITICAL HIT for N damage``) so MCP consumers can
+        audit the math the same way they can for player attacks (#570).
         """
-        if result.get("hit") is not None:
-            if result["hit"]:
-                self._add_combat_log(
-                    f"{result['enemy_name']} hits {result['target_name']} "
-                    f"for {result['damage']} damage!"
-                )
-                if result.get("target_killed"):
-                    self._add_combat_log(f"{result['target_name']} is down!")
-            else:
-                self._add_combat_log(f"{result['enemy_name']} misses {result['target_name']}!")
-        else:
+        if result.get("hit") is None:
             self._add_combat_log(f"{result['enemy_name']} takes no action.")
+            return
+
+        attacker = result["enemy_name"]
+        target = result["target_name"]
+        action_name = result.get("action_name") or "attack"
+        attack_roll = result.get("attack_roll", 0)
+        attack_bonus = result.get("attack_bonus", 0)
+        target_ac = result.get("target_ac", 0)
+        total = attack_roll + attack_bonus
+        bonus_text = f"+{attack_bonus}" if attack_bonus >= 0 else str(attack_bonus)
+
+        if result.get("critical"):
+            outcome = "CRITICAL HIT"
+        elif result["hit"]:
+            outcome = "HIT"
+        else:
+            outcome = "MISS"
+
+        line = (
+            f"{attacker} attacks {target} with {action_name}: "
+            f"roll {attack_roll}{bonus_text}={total} vs AC {target_ac} -> "
+            f"{outcome}"
+        )
+        if result["hit"]:
+            line += f" for {result.get('damage', 0)} damage"
+
+        self._add_combat_log(line)
+
+        if result.get("target_killed"):
+            self._add_combat_log(f"{target} is down!")
 
     def _process_unconscious_turn(self) -> None:
         """Process an unconscious character's death saving throw turn."""
