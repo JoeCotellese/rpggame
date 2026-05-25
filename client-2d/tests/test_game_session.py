@@ -1900,3 +1900,69 @@ class TestEnemyTurnEffectMessages:
         )
         assert any("fire damage" in line for line in events), events
         assert any("cannot act" in line.lower() for line in events), events
+
+
+class TestEnemyTurnSavingThrowLine:
+    """Plan #570 fix Phase 7: surface saving throws triggered by enemy attacks.
+
+    A goblin's poison-bite or a stirge's blood-drain can force the
+    target to make a saving throw. ``EnemyTurnResult`` carries
+    ``saving_throw_triggered`` + ability + DC + outcome + conditions
+    applied, but the session dropped all of it. The target's player saw
+    bite damage land but had no idea a condition was about to be
+    applied or that they passed the save.
+    """
+
+    def test_failed_save_emits_line_with_condition_applied(self, session) -> None:
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                hit=True,
+                damage=4,
+                saving_throw_triggered=True,
+                save_ability="Constitution",
+                save_dc=11,
+                save_succeeded=False,
+                conditions_applied=["poisoned"],
+            ),
+        )
+        save_lines = [line for line in events if "save" in line.lower()]
+        assert save_lines, f"missing save line:\n{events}"
+        line = save_lines[0]
+        assert "DC 11" in line, line
+        assert "Constitution" in line, line
+        assert "FAILED" in line, line
+        assert "POISONED" in line, line
+
+    def test_successful_save_emits_line_without_condition(self, session) -> None:
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                hit=True,
+                damage=4,
+                saving_throw_triggered=True,
+                save_ability="Constitution",
+                save_dc=11,
+                save_succeeded=True,
+                conditions_applied=[],
+            ),
+        )
+        save_lines = [line for line in events if "save" in line.lower()]
+        assert save_lines, f"missing save line:\n{events}"
+        line = save_lines[0]
+        assert "DC 11" in line, line
+        assert "Constitution" in line, line
+        assert "SUCCEEDED" in line, line
+        # No condition applied on a successful save.
+        assert "POISONED" not in line, line
+
+    def test_no_save_line_when_save_not_triggered(self, session) -> None:
+        """A vanilla bite that didn't trigger a save produces NO save
+        line — the line is gated on ``saving_throw_triggered``."""
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(hit=True, damage=4, saving_throw_triggered=False),
+        )
+        assert not any("save" in line.lower() for line in events), (
+            f"unexpected save line:\n{events}"
+        )

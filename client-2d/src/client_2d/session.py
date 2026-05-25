@@ -658,8 +658,26 @@ class GameSession:
 
         self._add_combat_log(line)
 
+        if result.get("saving_throw_triggered"):
+            self._add_combat_log(self._format_save_line(target, result))
+
         if result.get("target_killed"):
             self._add_combat_log(f"{target} is down!")
+
+    @staticmethod
+    def _format_save_line(target: str, result: dict[str, Any]) -> str:
+        """Format the saving-throw outcome line that accompanies an
+        enemy attack with a save rider (e.g. goblin bite + poison)."""
+        ability = result.get("save_ability") or "Unknown"
+        dc = result.get("save_dc")
+        succeeded = result.get("save_succeeded")
+        outcome = "SUCCEEDED" if succeeded else "FAILED"
+        line = f"{target} DC {dc} {ability} save: {outcome}"
+        conditions = result.get("conditions_applied") or []
+        if conditions and not succeeded:
+            applied = ", ".join(c.upper() for c in conditions)
+            line += f" — {applied} applied"
+        return line
 
     def _process_unconscious_turn(self) -> None:
         """Process an unconscious character's death saving throw turn."""
