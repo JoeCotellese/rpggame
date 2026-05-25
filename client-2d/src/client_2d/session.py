@@ -1291,7 +1291,17 @@ class GameSession:
         to a humanized form of the raw entity id (split on ``_`` and
         title-cased) so players never see internal ids like
         ``goblin_0`` or ``pc_hero`` in MCP responses.
+
+        An empty or whitespace-only id renders as ``"something"`` rather
+        than producing the malformed wire string
+        ``"Path blocked!  is in the way."`` Trailing-index stripping is
+        restricted to monster ids (``<monster>_<index>``); PC ids whose
+        name ends in a digit (e.g. ``"pc_warrior_2"``) preserve the
+        full name segment.
         """
+        if not blocker_entity_id or not blocker_entity_id.strip():
+            return "something"
+
         ent = self.entity_manager.get_by_id(blocker_entity_id)
         if ent is not None:
             if ent.creature is not None:
@@ -1299,14 +1309,18 @@ class GameSession:
             sub_type = getattr(ent, "sub_type", "") or ""
             if sub_type:
                 return sub_type.replace("_", " ").title()
-        # Humanize the id rather than leak the raw spatial key. Strips
-        # the "pc_" prefix and the trailing monster index so a missed
-        # entity-manager lookup still produces readable output.
+        # Humanize the id rather than leak the raw spatial key. Only
+        # the monster-id convention (``<monster_id>_<index>``) carries a
+        # trailing numeric suffix to strip — PC ids use the ``pc_``
+        # prefix and may legitimately end in a digit (e.g. a name like
+        # "Warrior 2" folds to ``"pc_warrior_2"``).
+        is_pc = blocker_entity_id.startswith("pc_")
         humanized = blocker_entity_id.removeprefix("pc_")
         parts = humanized.split("_")
-        if parts and parts[-1].isdigit():
+        if parts and not is_pc and parts[-1].isdigit():
             parts = parts[:-1]
-        return " ".join(parts).title() if parts else blocker_entity_id
+        joined = " ".join(p for p in parts if p)
+        return joined.title() if joined else blocker_entity_id
 
     def attack(self, target: int | str) -> str:
         """Attack a target enemy by index or entity ID."""

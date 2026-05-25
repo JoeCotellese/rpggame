@@ -959,15 +959,29 @@ class GameState:
                 movement_remaining=None,
             )
 
-        destination = Position(current.x + dx, current.y + dy)
-        spatial_map = self.spatial.map
-
         turn_state = (
             self.initiative_tracker.get_current_turn_state()
             if self.initiative_tracker
             else None
         )
         budget = turn_state.movement_remaining if turn_state is not None else 0
+
+        # A zero-delta call asks for a "step" that doesn't change tiles.
+        # Return success without touching the budget so the contract
+        # stays honest: no movement happened, so no cost was incurred.
+        # Falling through into the cost path would otherwise charge 5 ft
+        # (10 ft on difficult terrain) for a no-op, silently draining
+        # the player's pool.
+        if dx == 0 and dy == 0:
+            return MoveResult(
+                ok=True,
+                reason=None,
+                position=current,
+                movement_remaining=budget,
+            )
+
+        destination = Position(current.x + dx, current.y + dy)
+        spatial_map = self.spatial.map
 
         # Read budget first to short-circuit on exhausted movement BEFORE
         # evaluating the destination tile. Mirrors the legacy combat_move
@@ -1035,20 +1049,24 @@ class GameState:
                 movement_remaining=budget,
             )
 
-        # All preconditions satisfied; commit the move (emits CREATURE_MOVED
-        # and syncs Creature.position) BEFORE deducting from the budget so a
-        # subscriber crash on CREATURE_MOVED leaves the pool untouched
-        # rather than silently consuming the cost of a move that never
-        # happened.
-        self.move_creature(entity_id, dx, dy)
+        # All preconditions satisfied. Deduct from the budget BEFORE
+        # committing the move so the pool reflects the spend that's
+        # about to happen when CREATURE_MOVED fires. Subscribers that
+        # query ``turn_state.movement_remaining`` from inside the event
+        # handler then see the post-move budget rather than a stale
+        # pre-deduction value — and if a subscriber crashes, the pool
+        # state is already consistent with the spatial mutation (the
+        # player paid for the step that landed). Cost was pre-validated
+        # against the budget above, so consume_movement must succeed;
+        # an explicit RuntimeError (not ``assert``) keeps the invariant
+        # enforced under ``python -O``.
         consumed = turn_state.consume_movement(5, terrain=actual_terrain)
-        # The cost was pre-validated against the budget; the consume call
-        # must succeed. An assertion documents the invariant for future
-        # readers.
-        assert consumed, (
-            f"consume_movement rejected pre-validated cost "
-            f"(budget={budget}, cost={cost}, terrain={actual_terrain})"
-        )
+        if not consumed:
+            raise RuntimeError(
+                f"consume_movement rejected pre-validated cost "
+                f"(budget={budget}, cost={cost}, terrain={actual_terrain})"
+            )
+        self.move_creature(entity_id, dx, dy)
         return MoveResult(
             ok=True,
             reason=None,

@@ -428,6 +428,43 @@ def _force_player_turn(session) -> None:
     raise AssertionError("party member missing from initiative tracker")
 
 
+class TestSessionResolveBlockerName:
+    """Direct coverage for ``GameSession._resolve_blocker_name`` — the
+    humanizer used when a blocking entity is not registered in the
+    EntityManager. Players never see raw spatial ids in MCP responses.
+    """
+
+    def test_empty_id_returns_sentinel_not_raw_string(self, session) -> None:
+        """An empty id used to fall through and render as
+        ``"Path blocked!  is in the way."`` Sentinel keeps the
+        wire string grammatical."""
+        assert session._resolve_blocker_name("") == "something"
+
+    def test_whitespace_id_returns_sentinel(self, session) -> None:
+        assert session._resolve_blocker_name("   ") == "something"
+
+    def test_pc_id_with_trailing_digit_preserves_name(self, session) -> None:
+        """Regression for #1: the humanizer used to strip the trailing
+        digit segment from any id ending in digits — including PC ids
+        like ``"pc_warrior_2"`` (from a PC named "Warrior 2"). PCs
+        legitimately keep digits in their names; only the monster-id
+        ``<monster>_<index>`` convention should drop the trailing
+        numeric suffix."""
+        # Unknown to entity_manager, so the humanizer fallback runs.
+        assert session._resolve_blocker_name("pc_warrior_2") == "Warrior 2"
+
+    def test_monster_id_strips_trailing_index(self, session) -> None:
+        """Counterpart to the PC-digit case: monster ids DO drop their
+        trailing index. Unknown to entity_manager so the fallback runs."""
+        assert session._resolve_blocker_name("goblin_3") == "Goblin"
+
+    def test_pc_id_without_digit_humanizes_underscores(self, session) -> None:
+        assert session._resolve_blocker_name("pc_hero_of_legend") == "Hero Of Legend"
+
+    def test_monster_id_without_index_humanizes_as_is(self, session) -> None:
+        assert session._resolve_blocker_name("dire_wolf") == "Dire Wolf"
+
+
 class TestSessionCombatMoveBlockedByMonster:
     """Regression tests for #339.
 

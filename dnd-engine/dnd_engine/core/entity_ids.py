@@ -17,5 +17,13 @@ def pc_entity_id(name: str) -> str:
     yield ``"pc_hero"``) cannot be distinguished by the spatial index.
     Uniqueness enforcement at character-creation time is filed
     separately — this helper does not validate.
+
+    Raises:
+        ValueError: If ``name`` is empty or whitespace-only. Without this
+            guard the helper happily emits the ambiguous id ``"pc_"`` (or
+            ``"pc____"``) and silently collides with every other unnamed
+            PC in the spatial index.
     """
+    if not name or not name.strip():
+        raise ValueError("pc_entity_id requires a non-empty character name")
     return f"pc_{name.lower().replace(' ', '_')}"
