@@ -27,10 +27,17 @@ class SpatialIndex:
     not require either position to be a placed occupant.
     """
 
-    def __init__(self, map: Map) -> None:
-        self._map = map
+    def __init__(self, grid_map: Map) -> None:
+        # Parameter is ``grid_map`` rather than ``map`` to avoid shadowing the
+        # ``map`` builtin within this scope — future maintenance that calls
+        # ``list(map(...))`` inside the class would otherwise hit
+        # ``TypeError: 'Map' object is not callable``.
+        self._map = grid_map
         self._by_entity: dict[str, Position] = {}
         self._by_position: dict[Position, str] = {}
+        self._occupants_view: MappingProxyType[str, Position] = MappingProxyType(
+            self._by_entity
+        )
 
     # ------------------------------------------------------------------ #
     # Mutations
@@ -109,12 +116,18 @@ class SpatialIndex:
         return self._by_position.get(position)
 
     def occupants(self) -> Mapping[str, Position]:
-        """Read-only view of all placements.
+        """Read-only LIVE view of all placements.
 
-        Returns a ``MappingProxyType`` so callers cannot mutate the internal
-        registry through the returned mapping.
+        Returns the same cached ``MappingProxyType`` on every call (so
+        identity comparisons hold), backed directly by the internal
+        ``_by_entity`` dict. Reflects subsequent mutations — callers that
+        need a stable snapshot must materialize one with ``dict(view)``.
+        Iterating the view while a separate code path mutates the index
+        raises ``RuntimeError: dictionary changed size during iteration``;
+        do not subscribe to events that may mutate the index while holding
+        an active iterator over this view.
         """
-        return MappingProxyType(self._by_entity)
+        return self._occupants_view
 
     def distance(self, a: Position, b: Position) -> int:
         """Chebyshev distance in tiles (D&D 5E grid rule)."""
