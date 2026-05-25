@@ -48,8 +48,15 @@ def publish_movement_provoke(
     Returns:
         The list of ReactionOutcomes from handlers that actually
         reacted, in initiative order. Empty when no eligible reactor
-        threatened the mover at ``from_position``.
+        threatened the mover at ``from_position`` or when the mover
+        has taken the Disengage action this turn (SRD: "Your movement
+        doesn't provoke Opportunity Attacks for the rest of the
+        turn"). Suppression at the publish boundary preserves the
+        reactor's Reaction slot — no handler runs, no slot consumed.
     """
+    mover_turn = dispatcher.tracker.turn_states.get(mover)
+    if mover_turn is not None and mover_turn.disengaged_this_turn:
+        return []
     return dispatcher.publish(
         TriggerContext(
             trigger=Trigger.OPPORTUNITY_PROVOKED,

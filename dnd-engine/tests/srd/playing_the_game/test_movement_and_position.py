@@ -350,34 +350,48 @@ class TestDroppingProne_FreeOnYourTurn:
     """
 
     def test_drop_prone_action_exists(self) -> None:
-        pytest.skip(
-            "GAP: no `drop_prone` action handler. `Creature.add_condition('prone')` "
-            "(dnd_engine/core/creature.py:242) is the only way to apply "
-            "the Prone condition, and it's used by spell/trap effects "
-            "(e.g., the `caltrops` item rolls a DC 10 DEX save to "
-            "knock the target prone). There is no scenario script "
-            "action, MCP tool, or client UI for a creature to "
-            "voluntarily drop prone on its own turn. Tracked by "
-            "issue #439."
-        )
+        """A voluntary drop-prone handler exists and applies the Prone
+        condition to the actor."""
+        from dnd_engine.systems.actions import drop_prone
+
+        abilities = Abilities(10, 10, 10, 10, 10, 10)
+        actor = Creature("Hero", max_hp=20, ac=15, abilities=abilities, speed=30)
+        turn = TurnState()
+        turn.reset(speed=30)
+
+        ok, _ = drop_prone(actor, turn)
+
+        assert ok is True
+        assert actor.has_condition("prone") is True
 
     def test_drop_prone_does_not_consume_action_or_movement(self) -> None:
-        pytest.skip(
-            "GAP: dependent on a drop-prone action existing (#439). "
-            "Per SRD it must not consume the actor's action, bonus "
-            "action, or any of its Speed pool. Once the action handler "
-            "lands, it must call neither `consume_action` nor "
-            "`consume_movement`."
-        )
+        """SRD: 'without using an action or any of your Speed'."""
+        from dnd_engine.systems.actions import drop_prone
+
+        abilities = Abilities(10, 10, 10, 10, 10, 10)
+        actor = Creature("Hero", max_hp=20, ac=15, abilities=abilities, speed=30)
+        turn = TurnState()
+        turn.reset(speed=30)
+
+        drop_prone(actor, turn)
+
+        assert turn.action_available is True
+        assert turn.bonus_action_available is True
+        assert turn.movement_remaining == 30
 
     def test_drop_prone_forbidden_when_speed_is_zero(self) -> None:
-        pytest.skip(
-            "GAP: dependent on a drop-prone action existing (#439). "
-            "SRD carve-out: a creature with Speed 0 (e.g., grappled, "
-            "restrained, or zero-Speed condition) cannot voluntarily "
-            "drop prone. The handler must read the creature's current "
-            "effective Speed before allowing the transition."
-        )
+        """SRD carve-out: cannot voluntarily drop prone when Speed is 0."""
+        from dnd_engine.systems.actions import drop_prone
+
+        abilities = Abilities(10, 10, 10, 10, 10, 10)
+        actor = Creature("Hero", max_hp=20, ac=15, abilities=abilities, speed=0)
+        turn = TurnState()
+        turn.reset(speed=0)
+
+        ok, _ = drop_prone(actor, turn)
+
+        assert ok is False
+        assert actor.has_condition("prone") is False
 
 
 class TestStandingUpFromProne_HalfSpeedCost:
@@ -390,12 +404,21 @@ class TestStandingUpFromProne_HalfSpeedCost:
     """
 
     def test_stand_up_from_prone_costs_half_speed(self) -> None:
-        pytest.skip(
-            "GAP: no `stand_up` action handler. Per Rules Glossary "
-            "(Prone): standing up costs half the creature's Speed. No "
-            "engine code consumes half of `TurnState.movement_remaining` "
-            "to clear the Prone condition. Tracked by issue #439."
-        )
+        """Rules Glossary (Prone): standing up costs half the
+        creature's Speed."""
+        from dnd_engine.systems.actions import stand_up
+
+        abilities = Abilities(10, 10, 10, 10, 10, 10)
+        actor = Creature("Hero", max_hp=20, ac=15, abilities=abilities, speed=30)
+        actor.add_condition("prone")
+        turn = TurnState()
+        turn.reset(speed=30)
+
+        ok, _ = stand_up(actor, turn)
+
+        assert ok is True
+        assert actor.has_condition("prone") is False
+        assert turn.movement_remaining == 15  # 30 - (30 // 2)
 
 
 class TestCreatureSize_SpaceFromSizeCategory:

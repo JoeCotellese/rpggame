@@ -143,6 +143,22 @@ class TestTurnState:
         assert turn.reaction_available is True
         assert turn.free_object_interaction_used is False
 
+    def test_initial_speed_and_disengaged_defaults(self):
+        """New TurnState carries speed=30 and is not disengaged."""
+        turn = TurnState()
+        assert turn.speed == 30
+        assert turn.disengaged_this_turn is False
+
+    def test_reset_caches_speed_and_clears_disengaged(self):
+        """reset(speed) updates the cached speed and clears the
+        per-turn Disengage flag (the SRD's 'rest of the turn' window
+        ends with the actor's turn)."""
+        turn = TurnState()
+        turn.disengaged_this_turn = True
+        turn.reset(speed=25)  # Dwarf
+        assert turn.speed == 25
+        assert turn.disengaged_this_turn is False
+
     def test_has_any_action(self):
         """Test checking if any actions remain"""
         turn = TurnState()

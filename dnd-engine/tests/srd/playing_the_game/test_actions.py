@@ -137,18 +137,19 @@ class TestAction_Dash:
     """
 
     def test_dash_action_doubles_movement_for_the_turn(self) -> None:
-        pytest.skip(
-            "GAP: Dash is not a playable action. The string 'Dash' "
-            "appears only as flavor text in "
-            "dnd_engine/data/srd/classes.json (rogue Cunning Action: "
-            "'You can take a bonus action to Dash, Disengage, or Hide.') "
-            "and dnd_engine/data/srd/monsters.json (spy bonus action). "
-            "There is no action handler, no `TurnState` method that "
-            "grants extra movement equal to Speed, and the scenario "
-            "script executor (dnd_engine/scenarios/script_executor.py:"
-            "200-224) only dispatches 'wait', 'attack', and "
-            "'monster_attack'. Tracked by issue #435."
-        )
+        """Dash consumes the Action and adds the actor's Speed to the
+        remaining movement pool for the rest of the turn (SRD: 'For
+        the rest of the turn, give yourself extra movement equal to
+        your Speed')."""
+        from dnd_engine.systems.actions import dash
+
+        turn = TurnState()
+        turn.reset(speed=30)
+        ok, _ = dash(turn)
+
+        assert ok is True
+        assert turn.action_available is False
+        assert turn.movement_remaining == 60  # 30 base + 30 from Dash
 
 
 class TestAction_Disengage:
@@ -159,15 +160,43 @@ class TestAction_Disengage:
     """
 
     def test_disengage_action_suppresses_opportunity_attacks_this_turn(self) -> None:
-        pytest.skip(
-            "GAP: Disengage is not a playable action. 'Disengage' "
-            "appears only as flavor text in "
-            "dnd_engine/data/srd/classes.json (rogue cunning action) "
-            "and dnd_engine/data/srd/monsters.json (goblin Nimble "
-            "Escape, spy). No action handler, dispatcher entry, or "
-            "movement flag is wired up. Tracked by issue #414 (depends "
-            "on #413 per-creature OAs)."
+        """Disengage consumes the Action and sets the per-turn flag
+        the OA publish path consults; while the flag is set, the
+        actor's movement does not provoke Opportunity Attacks (SRD:
+        'Your movement doesn't provoke Opportunity Attacks for the
+        rest of the turn')."""
+        from dnd_engine.core.position import Position
+        from dnd_engine.systems.actions import disengage
+        from dnd_engine.systems.initiative import InitiativeTracker
+        from dnd_engine.systems.opportunity_attacks import (
+            publish_movement_provoke,
+            register_default_opportunity_attack,
         )
+        from dnd_engine.systems.reactions import ReactionDispatcher
+
+        abilities = Abilities(10, 10, 10, 10, 10, 10)
+        reactor = Creature("Fighter", max_hp=20, ac=15, abilities=abilities)
+        mover = Creature("Goblin", max_hp=20, ac=15, abilities=abilities)
+        tracker = InitiativeTracker(DiceRoller(seed=1))
+        tracker.add_combatant(reactor)
+        tracker.add_combatant(mover)
+        dispatcher = ReactionDispatcher(tracker)
+        register_default_opportunity_attack(
+            dispatcher, reactor, get_position=lambda: Position(5, 5)
+        )
+
+        ok, _ = disengage(tracker.turn_states[mover])
+        assert ok is True
+
+        outcomes = publish_movement_provoke(
+            dispatcher,
+            mover=mover,
+            from_position=Position(6, 5),
+            to_position=Position(8, 5),
+        )
+
+        assert outcomes == []
+        assert tracker.turn_states[reactor].reaction_available is True
 
 
 class TestAction_Dodge:
