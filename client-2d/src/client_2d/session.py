@@ -37,6 +37,7 @@ from client_2d.systems.fog_of_war import FogOfWarSystem
 from client_2d.systems.lighting import LightingSystem
 from client_2d.testing.state_renderer import Entity as StateEntity
 from client_2d.testing.state_renderer import StateRenderer
+from dnd_engine.core.entity_ids import pc_entity_id
 
 if TYPE_CHECKING:
     from client_2d.embedded_mcp_server import EmbeddedMCPServer
@@ -1140,6 +1141,14 @@ class GameSession:
             if engine_result is not None:
                 return engine_result
 
+        # Legacy ``RoomLayout`` path. This branch runs ONLY when
+        # ``GameState.spatial`` has not been bootstrapped, so by
+        # construction no consumer of ``CREATURE_MOVED`` can have anything
+        # to act on — opportunity-attack detection (plan-01) requires the
+        # spatial index that's missing here. We deliberately do NOT emit
+        # ``CREATURE_MOVED`` from this path; if a future feature needs the
+        # event in legacy mode, bootstrap spatial instead of teaching the
+        # legacy path to fire half-formed events.
         new_x = self.player_x + dx
         new_y = self.player_y + dy
 
@@ -1153,8 +1162,8 @@ class GameSession:
 
         entity_at_dest = self.entity_manager.get_at_position(new_x, new_y)
         if entity_at_dest is not None and entity_at_dest in self.entity_manager.get_monsters():
-            if entity_at_dest._creature_ref:
-                name = entity_at_dest._creature_ref.name
+            if entity_at_dest.creature is not None:
+                name = entity_at_dest.creature.name
             else:
                 name = entity_at_dest.sub_type.replace("_", " ").title()
             return f"Path blocked! {name} is in the way."
@@ -1195,7 +1204,7 @@ class GameSession:
         creature = current["creature"]
         # The plan-03 spatial convention for PC entity ids mirrors
         # GameState._find_creature_by_id and EngineAdapter.spawn_character.
-        entity_id = f"pc_{creature.name.lower().replace(' ', '_')}"
+        entity_id = pc_entity_id(creature.name)
         game_state = self.engine.game_state
         if game_state.spatial.position_of(entity_id) is None:
             # Spatial is bootstrapped but the PC is not yet placed — seed
@@ -1232,11 +1241,10 @@ class GameSession:
                 return "Path blocked! Cannot move outside room."
             if result.reason == "blocking":
                 return "Path blocked! Wall in the way."
-            if result.reason and result.reason.startswith("occupied"):
+            if result.blocker_entity_id is not None:
                 # Match the legacy phrasing so MCP consumers see the same
                 # "Path blocked! <Name> is in the way." string they rely on.
-                blocker_entity_id = result.reason[len("occupied by ") :]
-                name = self._resolve_blocker_name(blocker_entity_id)
+                name = self._resolve_blocker_name(result.blocker_entity_id)
                 return f"Path blocked! {name} is in the way."
             if result.reason == "no movement remaining":
                 speed = creature.speed
@@ -1254,7 +1262,13 @@ class GameSession:
 
         # Engine accepted the move; mirror the destination into the
         # session/entity-manager state so the rest of the system
-        # (lighting, fog, renderer) sees the new position.
+        # (lighting, fog, renderer) sees the new position. On the
+        # success path the MoveResult contract guarantees a non-None
+        # position and movement_remaining — only the "not placed"
+        # soft-fail leaves them None, and that path is unreachable here
+        # because we auto-placed above.
+        assert result.position is not None
+        assert result.movement_remaining is not None
         self.player_x = result.position.x
         self.player_y = result.position.y
         self._update_lighting()
@@ -1273,16 +1287,40 @@ class GameSession:
         blocking entity at the destination tile.
 
         Prefers the engine creature's name when available; falls back
-        to the entity's ``sub_type`` titled and space-separated.
+        to the entity's ``sub_type`` titled and space-separated, then
+        to a humanized form of the raw entity id (split on ``_`` and
+        title-cased) so players never see internal ids like
+        ``goblin_0`` or ``pc_hero`` in MCP responses.
+
+        An empty or whitespace-only id renders as ``"something"`` rather
+        than producing the malformed wire string
+        ``"Path blocked!  is in the way."`` Trailing-index stripping is
+        restricted to monster ids (``<monster>_<index>``); PC ids whose
+        name ends in a digit (e.g. ``"pc_warrior_2"``) preserve the
+        full name segment.
         """
+        if not blocker_entity_id or not blocker_entity_id.strip():
+            return "something"
+
         ent = self.entity_manager.get_by_id(blocker_entity_id)
         if ent is not None:
-            if getattr(ent, "_creature_ref", None):
-                return ent._creature_ref.name
+            if ent.creature is not None:
+                return ent.creature.name
             sub_type = getattr(ent, "sub_type", "") or ""
             if sub_type:
                 return sub_type.replace("_", " ").title()
-        return blocker_entity_id
+        # Humanize the id rather than leak the raw spatial key. Only
+        # the monster-id convention (``<monster_id>_<index>``) carries a
+        # trailing numeric suffix to strip — PC ids use the ``pc_``
+        # prefix and may legitimately end in a digit (e.g. a name like
+        # "Warrior 2" folds to ``"pc_warrior_2"``).
+        is_pc = blocker_entity_id.startswith("pc_")
+        humanized = blocker_entity_id.removeprefix("pc_")
+        parts = humanized.split("_")
+        if parts and not is_pc and parts[-1].isdigit():
+            parts = parts[:-1]
+        joined = " ".join(p for p in parts if p)
+        return joined.title() if joined else blocker_entity_id
 
     def attack(self, target: int | str) -> str:
         """Attack a target enemy by index or entity ID."""
@@ -1702,12 +1740,11 @@ class GameSession:
 
         game_state = self.engine.game_state
         for entity_id, (x, y) in result["party_positions"].items():
-            expected = entity_id.removeprefix("pc_")
             character = next(
                 (
                     c
                     for c in game_state.party.characters
-                    if c.name.lower().replace(" ", "_") == expected
+                    if pc_entity_id(c.name) == entity_id
                 ),
                 None,
             )

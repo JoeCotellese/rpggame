@@ -11,6 +11,7 @@ from dnd_engine.core.character import Character
 from dnd_engine.core.combat import AttackResult, CombatEngine
 from dnd_engine.core.creature import Creature
 from dnd_engine.core.dice import DiceRoller, format_dice_with_modifier
+from dnd_engine.core.entity_ids import pc_entity_id
 from dnd_engine.core.map import Map
 from dnd_engine.core.move_result import MoveResult
 from dnd_engine.core.npc_manager import NPCManager
@@ -19,7 +20,7 @@ from dnd_engine.core.position import Position
 from dnd_engine.core.quest import QuestManager
 from dnd_engine.core.room_registry import RoomRegistry
 from dnd_engine.rules.loader import DataLoader
-from dnd_engine.systems.action_economy import ActionType, Terrain
+from dnd_engine.systems.action_economy import ActionType, Terrain, cost_for
 from dnd_engine.systems.ai import EnemyAI
 from dnd_engine.systems.condition_manager import ConditionManager
 from dnd_engine.systems.initiative import InitiativeTracker
@@ -705,9 +706,8 @@ class GameState:
         """
         # PC path: pc_<name_lower_underscored>
         if entity_id.startswith("pc_"):
-            target_key = entity_id[len("pc_") :]
             for character in self.party.characters:
-                if character.name.lower().replace(" ", "_") == target_key:
+                if pc_entity_id(character.name) == entity_id:
                     return character
             return None
         # Monster path: <monster_id>_<index>
@@ -778,7 +778,7 @@ class GameState:
                     type=EventType.CREATURE_MOVED,
                     data={
                         "entity_id": entity_id,
-                        "from": existing,
+                        "origin": existing,
                         "to": destination,
                     },
                 )
@@ -833,7 +833,7 @@ class GameState:
                 type=EventType.CREATURE_MOVED,
                 data={
                     "entity_id": entity_id,
-                    "from": current,
+                    "origin": current,
                     "to": destination,
                 },
             )
@@ -949,15 +949,15 @@ class GameState:
 
         current = self.spatial.position_of(entity_id)
         if current is None:
+            # Soft-fail: no current position exists and no turn state was
+            # consulted, so both fields are None rather than zero/origin
+            # sentinels that would collide with legitimate values.
             return MoveResult(
                 ok=False,
                 reason="not placed",
-                position=Position(0, 0),
-                movement_remaining=0,
+                position=None,
+                movement_remaining=None,
             )
-
-        destination = Position(current.x + dx, current.y + dy)
-        spatial_map = self.spatial._map
 
         turn_state = (
             self.initiative_tracker.get_current_turn_state()
@@ -965,6 +965,23 @@ class GameState:
             else None
         )
         budget = turn_state.movement_remaining if turn_state is not None else 0
+
+        # A zero-delta call asks for a "step" that doesn't change tiles.
+        # Return success without touching the budget so the contract
+        # stays honest: no movement happened, so no cost was incurred.
+        # Falling through into the cost path would otherwise charge 5 ft
+        # (10 ft on difficult terrain) for a no-op, silently draining
+        # the player's pool.
+        if dx == 0 and dy == 0:
+            return MoveResult(
+                ok=True,
+                reason=None,
+                position=current,
+                movement_remaining=budget,
+            )
+
+        destination = Position(current.x + dx, current.y + dy)
+        spatial_map = self.spatial.map
 
         # Read budget first to short-circuit on exhausted movement BEFORE
         # evaluating the destination tile. Mirrors the legacy combat_move
@@ -1009,6 +1026,7 @@ class GameState:
                 reason=f"occupied by {occupant}",
                 position=current,
                 movement_remaining=budget,
+                blocker_entity_id=occupant,
             )
 
         # Map drives terrain by default; explicit kwarg wins when supplied.
@@ -1018,7 +1036,12 @@ class GameState:
             else spatial_map.terrain_at(destination.x, destination.y)
         )
 
-        if not turn_state.consume_movement(5, terrain=actual_terrain):
+        # Pre-validate the actual cost against the budget before doing any
+        # state mutation. Difficult Terrain doubles the per-foot cost so
+        # the budget< 5 short-circuit above isn't sufficient when the
+        # destination is difficult.
+        cost = cost_for(5, actual_terrain)
+        if budget < cost:
             return MoveResult(
                 ok=False,
                 reason="no movement remaining",
@@ -1026,8 +1049,23 @@ class GameState:
                 movement_remaining=budget,
             )
 
-        # All preconditions satisfied; commit the move (emits CREATURE_MOVED
-        # and syncs Creature.position).
+        # All preconditions satisfied. Deduct from the budget BEFORE
+        # committing the move so the pool reflects the spend that's
+        # about to happen when CREATURE_MOVED fires. Subscribers that
+        # query ``turn_state.movement_remaining`` from inside the event
+        # handler then see the post-move budget rather than a stale
+        # pre-deduction value — and if a subscriber crashes, the pool
+        # state is already consistent with the spatial mutation (the
+        # player paid for the step that landed). Cost was pre-validated
+        # against the budget above, so consume_movement must succeed;
+        # an explicit RuntimeError (not ``assert``) keeps the invariant
+        # enforced under ``python -O``.
+        consumed = turn_state.consume_movement(5, terrain=actual_terrain)
+        if not consumed:
+            raise RuntimeError(
+                f"consume_movement rejected pre-validated cost "
+                f"(budget={budget}, cost={cost}, terrain={actual_terrain})"
+            )
         self.move_creature(entity_id, dx, dy)
         return MoveResult(
             ok=True,

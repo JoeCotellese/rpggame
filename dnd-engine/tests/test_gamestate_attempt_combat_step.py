@@ -132,7 +132,7 @@ class TestAttemptCombatStepSuccessNormal:
         assert len(moved) == 1
         assert moved[0].data == {
             "entity_id": entity_id,
-            "from": Position(1, 1),
+            "origin": Position(1, 1),
             "to": Position(1, 2),
         }
 
@@ -195,6 +195,8 @@ class TestAttemptCombatStepOccupied:
         assert result.reason is not None
         assert result.reason.startswith("occupied")
         assert "goblin" in result.reason
+        # Structured blocker id frees consumers from string-slicing the reason.
+        assert result.blocker_entity_id == "goblin"
         assert result.position == Position(1, 1)
         assert result.movement_remaining == starting
 
@@ -241,9 +243,12 @@ class TestAttemptCombatStepNotPlaced:
 
         assert result.ok is False
         assert result.reason == "not placed"
-        # Soft-fail position contract per the plan: Position(0, 0).
-        assert result.position == Position(0, 0)
-        assert result.movement_remaining == 0
+        # Soft-fail contract: no current position exists and no turn state
+        # was consulted, so both fields are None rather than zero/origin
+        # sentinels that would collide with legitimate values.
+        assert result.position is None
+        assert result.movement_remaining is None
+        assert result.blocker_entity_id is None
 
 
 class TestAttemptCombatStepOutOfBounds:
@@ -330,3 +335,94 @@ class TestAttemptCombatStepWaterTileSRDDifficultTerrain:
         assert result.position == Position(3, 0)
         # SRD-correct: 5 ft step on Difficult Terrain costs 10 ft.
         assert result.movement_remaining == starting - 10
+
+
+class TestAttemptCombatStepZeroDelta:
+    """A zero-delta call asks for a step that doesn't change tiles.
+    The engine must NOT deduct movement for a no-op — falling through
+    to the cost path would charge 5 ft (or 10 ft on difficult terrain)
+    for a move that never happened, silently draining the budget.
+    """
+
+    def test_zero_delta_returns_success_without_moving(
+        self, game_state, entity_id
+    ) -> None:
+        game_state.set_position(entity_id, 1, 1)
+        starting = _current_turn_state(game_state).movement_remaining
+
+        result = game_state.attempt_combat_step(entity_id, 0, 0)
+
+        assert result.ok is True
+        assert result.reason is None
+        assert result.position == Position(1, 1)
+        assert result.movement_remaining == starting
+        # Spatial unchanged.
+        assert game_state.spatial.position_of(entity_id) == Position(1, 1)
+
+    def test_zero_delta_emits_no_creature_moved_event(
+        self, game_state, entity_id
+    ) -> None:
+        game_state.set_position(entity_id, 1, 1)
+        moved = _capture(game_state.event_bus, EventType.CREATURE_MOVED)
+
+        game_state.attempt_combat_step(entity_id, 0, 0)
+
+        assert moved == []
+
+    def test_zero_delta_on_difficult_terrain_does_not_deduct(
+        self, game_state, entity_id
+    ) -> None:
+        """The bug was reachable on difficult terrain too: cost_for(5,
+        DIFFICULT) returns 10, so a zero-delta call would have stolen
+        10 ft from the pool while standing still on water."""
+        game_state.set_position(entity_id, 3, 0)  # WATER tile
+        starting = _current_turn_state(game_state).movement_remaining
+
+        result = game_state.attempt_combat_step(entity_id, 0, 0)
+
+        assert result.ok is True
+        assert result.movement_remaining == starting
+
+
+class TestAttemptCombatStepAtomicity:
+    """Budget deduction and spatial commit must stay consistent so a
+    CREATURE_MOVED subscriber inspecting ``turn_state.movement_remaining``
+    sees the post-deduction value rather than a stale pre-move budget.
+    """
+
+    def test_subscriber_sees_deducted_budget_when_creature_moved_fires(
+        self, game_state, entity_id
+    ) -> None:
+        game_state.set_position(entity_id, 1, 1)
+        ts = _current_turn_state(game_state)
+        starting = ts.movement_remaining
+
+        observed: list[int] = []
+
+        def observe(_event):
+            observed.append(ts.movement_remaining)
+
+        game_state.event_bus.subscribe(EventType.CREATURE_MOVED, observe)
+
+        result = game_state.attempt_combat_step(entity_id, 0, 1)
+
+        assert result.ok is True
+        # Subscriber fired exactly once and saw the post-deduction budget.
+        assert len(observed) == 1
+        assert observed[0] == starting - 5
+        assert observed[0] == result.movement_remaining
+
+    def test_failed_consume_raises_runtime_error_not_assert(
+        self, game_state, entity_id, monkeypatch
+    ) -> None:
+        """The post-validation invariant must hold under ``python -O``.
+        Force consume_movement to refuse to verify the helper raises a
+        regular RuntimeError (not a stripped ``assert``)."""
+        game_state.set_position(entity_id, 1, 1)
+        ts = _current_turn_state(game_state)
+        # Force the consume to fail. RuntimeError must surface; under
+        # an assert this branch would silently succeed in -O mode.
+        monkeypatch.setattr(ts, "consume_movement", lambda *a, **kw: False)
+
+        with pytest.raises(RuntimeError, match="pre-validated cost"):
+            game_state.attempt_combat_step(entity_id, 0, 1)

@@ -124,6 +124,7 @@ class ScenarioLoader:
 
         from dnd_engine.core.character_factory import CharacterFactory
         from dnd_engine.core.dice import DiceRoller
+        from dnd_engine.core.entity_ids import pc_entity_id
         from dnd_engine.core.game_state import GameState
         from dnd_engine.core.party import Party
         from dnd_engine.rules.loader import DataLoader
@@ -169,7 +170,7 @@ class ScenarioLoader:
                     character.inventory.equip_item(weapon_id, EquipmentSlot.WEAPON)
 
             characters.append(character)
-            entity_id = f"pc_{character.name.lower().replace(' ', '_')}"
+            entity_id = pc_entity_id(character.name)
             x, y = member["position"]
             party_positions[entity_id] = (int(x), int(y))
 

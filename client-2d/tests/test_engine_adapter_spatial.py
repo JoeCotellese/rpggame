@@ -230,3 +230,40 @@ class TestRemoveCreaturePositionAdapter:
 
         with pytest.raises(ValueError, match="initialize_game"):
             EngineAdapter().remove_creature_position("goblin_0")
+
+
+class TestPartyCharacterPositionSync:
+    """End-to-end check: a real party Character's ``position`` field
+    must mirror the spatial index after ``engine_adapter.set_position``.
+
+    Unit tests cover the synthetic-creature mirror path; this test
+    closes the gap by routing through the actual adapter -> GameState
+    -> SpatialIndex -> ``_find_creature_by_id`` chain so a future
+    refactor that breaks the PC lookup convention surfaces here.
+    """
+
+    def test_party_character_position_field_updates_through_adapter(
+        self, adapter_with_spatial
+    ) -> None:
+        from dnd_engine.core.entity_ids import pc_entity_id
+        from dnd_engine.core.position import Position
+
+        adapter = adapter_with_spatial
+        # The fixture's party has one character named "Tester".
+        character = adapter.game_state.party.characters[0]
+        assert character.position is None  # pre-condition: not yet placed
+
+        entity_id = pc_entity_id(character.name)
+        result = adapter.set_position(entity_id, 3, 4)
+
+        assert "error" not in result
+        assert result["position"] == [3, 4]
+        # The mirror write must reach the actual party Character —
+        # this is the contract the prior unit test only covered for
+        # a synthetic Character. A regression in ``pc_entity_id``
+        # routing or ``_find_creature_by_id`` would leave this None.
+        assert character.position == Position(3, 4)
+
+        # A follow-up move through the same path also syncs.
+        adapter.set_position(entity_id, 6, 7)
+        assert character.position == Position(6, 7)

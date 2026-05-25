@@ -116,6 +116,22 @@ class TestRemove:
         # Must not raise.
         index.remove("never_placed")
 
+    def test_round_trip_place_remove_replace_at_same_tile(
+        self, index: SpatialIndex
+    ) -> None:
+        # Place, remove, then place a DIFFERENT entity at the same tile.
+        # Catches forgotten reverse-dict cleanup in ``remove`` — if the
+        # reverse mapping still pointed at the original id, the re-place
+        # would raise ``"occupied by goblin"`` even though goblin was
+        # removed.
+        tile = Position(2, 2)
+        index.place("goblin", tile)
+        index.remove("goblin")
+        index.place("orc", tile)
+        assert index.position_of("orc") == tile
+        assert index.occupant_at(tile) == "orc"
+        assert index.position_of("goblin") is None
+
 
 class TestQueries:
     """position_of / occupant_at default to None when empty."""
@@ -261,6 +277,38 @@ class TestLineOfSight:
         m = Map(width=4, height=2, tiles=tiles)
         si = SpatialIndex(m)
         assert si.has_line_of_sight(Position(0, 0), Position(3, 1)) is False
+
+    def test_has_line_of_sight_short_circuits_on_first_blocker(self) -> None:
+        # An early blocker on a long segment must not cost O(length) tile
+        # inspections. We wrap is_blocking to count calls and assert the
+        # generator stops walking once the first interior blocker rejects
+        # LoS.
+        width, height = 1000, 1
+        tiles: dict[tuple[int, int], TileType] = {
+            (x, 0): TileType.FLOOR for x in range(width)
+        }
+        tiles[(2, 0)] = TileType.WALL  # blocker very close to the start
+        m = Map(width=width, height=height, tiles=tiles)
+
+        call_count = 0
+        original_is_blocking = m.is_blocking
+
+        def counting_is_blocking(x: int, y: int) -> bool:
+            nonlocal call_count
+            call_count += 1
+            return original_is_blocking(x, y)
+
+        m.is_blocking = counting_is_blocking  # type: ignore[method-assign]
+        si = SpatialIndex(m)
+        assert (
+            si.has_line_of_sight(Position(0, 0), Position(width - 1, 0)) is False
+        )
+        # Two endpoint guards + a small number of interior probes before the
+        # early blocker rejects. A non-short-circuiting implementation would
+        # call is_blocking ~width times.
+        assert call_count < 10, (
+            f"expected short-circuit before ~10 probes, got {call_count}"
+        )
 
 
 class TestCornerCuttingDiagonal:

@@ -136,7 +136,7 @@ class TestSetPosition:
         assert len(moved) == 1
         assert moved[0].data == {
             "entity_id": "goblin",
-            "from": Position(0, 0),
+            "origin": Position(0, 0),
             "to": Position(1, 0),
         }
         assert game_state.spatial.position_of("goblin") == Position(1, 0)
@@ -167,7 +167,7 @@ class TestMoveCreature:
         assert len(moved) == 1
         assert moved[0].data == {
             "entity_id": "goblin",
-            "from": Position(0, 0),
+            "origin": Position(0, 0),
             "to": Position(1, 0),
         }
 
@@ -332,3 +332,41 @@ class TestBootstrapSpatial:
 
         assert second is not first
         assert game_state.spatial is second
+
+
+class TestCreatureMovedPayloadConsistency:
+    """CREATURE_MOVED payload shape must be identical across every emit path.
+
+    Two GameState methods emit ``CREATURE_MOVED``: ``set_position`` (on
+    the non-first call, when the entity is being moved rather than
+    placed) and ``move_creature`` (delta moves). ``attempt_combat_step``
+    delegates to ``move_creature`` so it shares the same emit site.
+    Subscribers wired to ``CREATURE_MOVED`` should never need to branch
+    on the emitter — same keys, same value types — so a single test
+    pins the contract across both.
+    """
+
+    def test_payload_shape_identical_across_emit_paths(
+        self, game_state: GameState, map_5x5: Map
+    ) -> None:
+        game_state.bootstrap_spatial(map_5x5)
+        moved = _capture(game_state.event_bus, EventType.CREATURE_MOVED)
+
+        # Seed an initial placement so set_position's next call goes
+        # down the MOVED branch rather than the PLACED branch.
+        game_state.set_position("goblin", 0, 0)
+        # Path 1: set_position emits CREATURE_MOVED.
+        game_state.set_position("goblin", 1, 0)
+        # Path 2: move_creature emits CREATURE_MOVED.
+        game_state.move_creature("goblin", 1, 0)
+
+        assert len(moved) == 2, (
+            f"expected one CREATURE_MOVED per emit path, got {len(moved)}"
+        )
+        for event in moved:
+            assert set(event.data.keys()) == {"entity_id", "origin", "to"}
+            assert isinstance(event.data["entity_id"], str)
+            assert isinstance(event.data["origin"], Position)
+            assert isinstance(event.data["to"], Position)
+            # ``from`` is a Python reserved word; payload must NOT use it.
+            assert "from" not in event.data
