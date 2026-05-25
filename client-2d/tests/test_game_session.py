@@ -1451,3 +1451,114 @@ class TestSessionEnemyTurnSingleAdvance:
             f"{new_turn_state.movement_remaining}, expected "
             f"{new_current.creature.speed}"
         )
+
+
+class TestEngineAdapterEnemyTurnRichFields:
+    """Plan #570 fix Phase 3: pass through rich ``EnemyTurnResult`` fields.
+
+    The engine returns an ``EnemyTurnResult`` dataclass packed with attack
+    roll details, saving throw outcomes, turn-effect messages, and the
+    distinguishing ``action_taken`` enum. Before this fix the engine
+    adapter flattened the result to seven fields, dropping everything the
+    MCP-facing session layer needs to render an informative ``Between
+    turns:`` block. The session then collapsed all five "no attack" action
+    paths to a single ``"<enemy> takes no action."`` line — so a goblin
+    that died before its turn looked identical to one that's stunned or
+    out of targets (#570).
+    """
+
+    def test_adapter_passes_attack_roll_details(self, session) -> None:
+        """When the goblin attacks, the adapter dict must include
+        ``attack_roll``, ``attack_bonus``, ``target_ac``, and ``critical``
+        so the session can render the same ``roll X+Y=Z vs AC W`` line PC
+        attacks already produce."""
+        adjacent_x = session.player_x + 1
+        adjacent_y = session.player_y
+        session.spawn_monster("goblin", adjacent_x, adjacent_y)
+
+        goblin = session.engine.game_state.active_enemies[-1]
+        _force_combatant_turn(session, goblin)
+        session.set_seed(42)
+
+        result = session.engine.process_enemy_turn()
+
+        assert result["success"] is True
+        assert result["action"] == "ATTACK"
+        # Attack-resolution fields land regardless of hit/miss.
+        assert "attack_roll" in result and isinstance(result["attack_roll"], int)
+        assert "attack_bonus" in result and isinstance(result["attack_bonus"], int)
+        assert "target_ac" in result and isinstance(result["target_ac"], int)
+        assert "critical" in result and isinstance(result["critical"], bool)
+
+    def test_adapter_passes_turn_effect_messages_as_strings(self, session) -> None:
+        """``turn_start_effects`` / ``turn_end_effects`` arrive as lists
+        of plain strings — the session layer must not need to import
+        engine dataclasses to render them. Even on a vanilla goblin turn
+        with no effects, the keys are present and empty."""
+        adjacent_x = session.player_x + 1
+        adjacent_y = session.player_y
+        session.spawn_monster("goblin", adjacent_x, adjacent_y)
+
+        goblin = session.engine.game_state.active_enemies[-1]
+        _force_combatant_turn(session, goblin)
+        session.set_seed(42)
+
+        result = session.engine.process_enemy_turn()
+
+        assert "turn_start_effects" in result
+        assert isinstance(result["turn_start_effects"], list)
+        assert all(isinstance(m, str) for m in result["turn_start_effects"])
+        assert "turn_end_effects" in result
+        assert isinstance(result["turn_end_effects"], list)
+        assert all(isinstance(m, str) for m in result["turn_end_effects"])
+
+    def test_adapter_passes_saving_throw_fields(self, session) -> None:
+        """Saving throw fields are present (with ``None`` defaults when
+        the attack didn't trigger one) so the session's save-line emitter
+        can branch on ``saving_throw_triggered`` without ``KeyError``."""
+        adjacent_x = session.player_x + 1
+        adjacent_y = session.player_y
+        session.spawn_monster("goblin", adjacent_x, adjacent_y)
+
+        goblin = session.engine.game_state.active_enemies[-1]
+        _force_combatant_turn(session, goblin)
+        session.set_seed(42)
+
+        result = session.engine.process_enemy_turn()
+
+        assert "saving_throw_triggered" in result
+        assert isinstance(result["saving_throw_triggered"], bool)
+        # save_ability / save_dc / save_succeeded may be None when not
+        # triggered, but the keys must be present.
+        assert "save_ability" in result
+        assert "save_dc" in result
+        assert "save_succeeded" in result
+        assert "conditions_applied" in result
+        assert isinstance(result["conditions_applied"], list)
+
+    def test_adapter_passes_misc_rich_fields(self, session) -> None:
+        """``incapacitating_conditions``, ``condition_removal_message``,
+        and ``concentration_broken`` round out the surface the session
+        needs. All present with safe defaults when not applicable."""
+        adjacent_x = session.player_x + 1
+        adjacent_y = session.player_y
+        session.spawn_monster("goblin", adjacent_x, adjacent_y)
+
+        goblin = session.engine.game_state.active_enemies[-1]
+        _force_combatant_turn(session, goblin)
+        session.set_seed(42)
+
+        result = session.engine.process_enemy_turn()
+
+        assert "incapacitating_conditions" in result
+        assert isinstance(result["incapacitating_conditions"], list)
+        assert "condition_removal_message" in result
+        # ``None`` when no condition-removal attempt was made.
+        assert result["condition_removal_message"] is None or isinstance(
+            result["condition_removal_message"], str
+        )
+        assert "concentration_broken" in result
+        # ``None`` when no concentration check fired.
+        assert result["concentration_broken"] is None or isinstance(
+            result["concentration_broken"], dict
+        )

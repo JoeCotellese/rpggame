@@ -712,15 +712,50 @@ class EngineAdapter:
             if result is None:
                 return {"success": True, "action": "skipped", "reason": "No valid action"}
 
+            attack_result = getattr(result, "attack_result", None)
+            condition_removal = getattr(result, "condition_removal", None)
+            # Flatten TurnEffectResult lists to plain strings so MCP-facing
+            # callers don't import engine dataclasses. The session layer
+            # renders these verbatim into the ``Between turns:`` block (#570).
+            turn_start_effects = [
+                effect.message for effect in getattr(result, "turn_start_effects", []) or []
+            ]
+            turn_end_effects = [
+                effect.message for effect in getattr(result, "turn_end_effects", []) or []
+            ]
+
             return {
                 "success": True,
                 "action": result.action_taken.name if hasattr(result, "action_taken") else "attack",
                 "enemy_name": result.enemy_display_name if hasattr(result, "enemy_display_name") else current["name"],
                 "target_name": getattr(result, "target_name", None),
-                "hit": result.attack_result.hit if hasattr(result, "attack_result") and result.attack_result else None,
-                "damage": result.attack_result.damage if hasattr(result, "attack_result") and result.attack_result else 0,
+                "hit": attack_result.hit if attack_result else None,
+                "damage": attack_result.damage if attack_result else 0,
                 "target_killed": getattr(result, "target_killed", False),
                 "combat_ended": getattr(result, "combat_ended", False),
+                # Attack-roll detail surfaced so the session can match PC
+                # attack reports (roll X+Y=Z vs AC W) and annotate crits.
+                "attack_roll": attack_result.attack_roll if attack_result else 0,
+                "attack_bonus": attack_result.attack_bonus if attack_result else 0,
+                "target_ac": attack_result.target_ac if attack_result else 0,
+                "critical": attack_result.critical_hit if attack_result else False,
+                "action_name": (result.action_data or {}).get("name") if getattr(result, "action_data", None) else None,
+                # Saving throw outcome (e.g., goblin bite forcing Abe to
+                # save vs poison). All four fields travel together so the
+                # session emitter can branch on saving_throw_triggered.
+                "saving_throw_triggered": getattr(result, "saving_throw_triggered", False),
+                "save_ability": getattr(result, "save_ability", None),
+                "save_dc": getattr(result, "save_dc", None),
+                "save_succeeded": getattr(result, "save_succeeded", None),
+                "conditions_applied": list(getattr(result, "conditions_applied", []) or []),
+                # Why the enemy couldn't attack (when action != ATTACK).
+                "incapacitating_conditions": list(
+                    getattr(result, "incapacitating_conditions", []) or []
+                ),
+                "condition_removal_message": condition_removal.message if condition_removal else None,
+                "concentration_broken": getattr(result, "concentration_broken", None),
+                "turn_start_effects": turn_start_effects,
+                "turn_end_effects": turn_end_effects,
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
