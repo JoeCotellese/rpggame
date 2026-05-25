@@ -685,9 +685,12 @@ class GameSession:
 
         concentration = result.get("concentration_broken")
         if concentration:
-            spell_name = concentration.get("spell_name") or "their spell"
+            spell_id = concentration.get("spell_name")
+            spell_display = (
+                spell_id.replace("_", " ").title() if spell_id else "their spell"
+            )
             self._add_combat_log(
-                f"{target}'s concentration on {spell_name} is broken!"
+                f"{target}'s concentration on {spell_display} is broken!"
             )
 
         if result.get("target_killed"):

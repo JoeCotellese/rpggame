@@ -2102,7 +2102,10 @@ class TestEnemyTurnConcentrationBroken:
         assert conc_lines, f"missing concentration-broken line:\n{events}"
         line = conc_lines[0]
         assert "Archy" in line, line
-        assert "bless" in line, line
+        # Engine returns the bare spell ID; the session title-cases it
+        # for display so the response matches surrounding combat log
+        # conventions.
+        assert "Bless" in line, line
 
     def test_no_concentration_line_when_payload_absent(self, session) -> None:
         events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
@@ -2112,6 +2115,34 @@ class TestEnemyTurnConcentrationBroken:
         assert not any(
             "concentration" in line.lower() for line in events
         ), f"unexpected concentration line:\n{events}"
+
+    def test_concentration_spell_name_rendered_as_display_text(self, session) -> None:
+        """Engine returns the bare spell ID (``"bless"``,
+        ``"hold_person"``) — the response line must render the display
+        form (``"Bless"``, ``"Hold Person"``) so the surface matches
+        how spell names appear elsewhere in the log."""
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                hit=True,
+                damage=4,
+                concentration_broken={
+                    "was_concentrating": True,
+                    "concentration_broken": True,
+                    "spell_name": "hold_person",
+                    "dc": 10,
+                },
+            ),
+        )
+        conc_lines = [line for line in events if "concentration" in line.lower()]
+        assert conc_lines, f"missing concentration line:\n{events}"
+        line = conc_lines[0]
+        assert "Hold Person" in line, (
+            f"spell name not title-cased / underscores not replaced:\n{line}"
+        )
+        assert "hold_person" not in line, (
+            f"raw spell ID leaked into rendered line:\n{line}"
+        )
 
 
 class TestIssue570Reproduction:
