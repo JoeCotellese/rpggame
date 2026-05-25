@@ -15,6 +15,7 @@ class TestActionType:
         """Test that all required action types are defined"""
         assert ActionType.ACTION
         assert ActionType.BONUS_ACTION
+        assert ActionType.REACTION
         assert ActionType.FREE_OBJECT
         assert ActionType.NO_ACTION
 
@@ -22,6 +23,7 @@ class TestActionType:
         """Test that action types have correct string values"""
         assert ActionType.ACTION.value == "action"
         assert ActionType.BONUS_ACTION.value == "bonus_action"
+        assert ActionType.REACTION.value == "reaction"
         assert ActionType.FREE_OBJECT.value == "free_object"
         assert ActionType.NO_ACTION.value == "no_action"
 
@@ -35,6 +37,7 @@ class TestTurnState:
 
         assert turn.action_available is True
         assert turn.bonus_action_available is True
+        assert turn.reaction_available is True
         assert turn.free_object_interaction_used is False
 
     def test_consume_action(self):
@@ -61,6 +64,19 @@ class TestTurnState:
 
         # Second consumption should fail
         result = turn.consume_action(ActionType.BONUS_ACTION)
+        assert result is False
+
+    def test_consume_reaction(self):
+        """Test consuming the reaction slot"""
+        turn = TurnState()
+
+        # First consumption should succeed
+        result = turn.consume_action(ActionType.REACTION)
+        assert result is True
+        assert turn.reaction_available is False
+
+        # Second consumption should fail (one Reaction per round)
+        result = turn.consume_action(ActionType.REACTION)
         assert result is False
 
     def test_consume_free_object(self):
@@ -92,6 +108,7 @@ class TestTurnState:
         # All actions available initially
         assert turn.is_action_available(ActionType.ACTION) is True
         assert turn.is_action_available(ActionType.BONUS_ACTION) is True
+        assert turn.is_action_available(ActionType.REACTION) is True
         assert turn.is_action_available(ActionType.FREE_OBJECT) is True
         assert turn.is_action_available(ActionType.NO_ACTION) is True
 
@@ -99,6 +116,7 @@ class TestTurnState:
         turn.consume_action(ActionType.ACTION)
         assert turn.is_action_available(ActionType.ACTION) is False
         assert turn.is_action_available(ActionType.BONUS_ACTION) is True  # Still available
+        assert turn.is_action_available(ActionType.REACTION) is True  # Still available
 
     def test_reset(self):
         """Test resetting all actions"""
@@ -107,11 +125,13 @@ class TestTurnState:
         # Consume all actions
         turn.consume_action(ActionType.ACTION)
         turn.consume_action(ActionType.BONUS_ACTION)
+        turn.consume_action(ActionType.REACTION)
         turn.consume_action(ActionType.FREE_OBJECT)
 
         # Verify all consumed
         assert turn.action_available is False
         assert turn.bonus_action_available is False
+        assert turn.reaction_available is False
         assert turn.free_object_interaction_used is True
 
         # Reset
@@ -120,6 +140,7 @@ class TestTurnState:
         # Verify all available again
         assert turn.action_available is True
         assert turn.bonus_action_available is True
+        assert turn.reaction_available is True
         assert turn.free_object_interaction_used is False
 
     def test_has_any_action(self):
@@ -160,11 +181,13 @@ class TestTurnState:
         str_repr = str(turn)
         assert "Action" in str_repr
         assert "Bonus Action" in str_repr
+        assert "Reaction" in str_repr
         assert "Free Object" in str_repr
 
         # After consuming everything
         turn.consume_action(ActionType.ACTION)
         turn.consume_action(ActionType.BONUS_ACTION)
+        turn.consume_action(ActionType.REACTION)
         turn.consume_action(ActionType.FREE_OBJECT)
 
         str_repr = str(turn)
@@ -304,6 +327,32 @@ class TestInitiativeTrackerActions:
 
         turn_state = tracker.get_current_turn_state()
         assert turn_state is None
+
+    def test_reaction_resets_when_creatures_turn_comes_around(self):
+        """Reaction slot resets on the reactor's own next turn (SRD)."""
+        tracker = InitiativeTracker()
+        abilities = Abilities(10, 10, 10, 10, 10, 10)
+
+        hero = Creature("Hero", max_hp=20, ac=15, abilities=abilities)
+        enemy = Creature("Goblin", max_hp=7, ac=15, abilities=abilities)
+
+        tracker.add_combatant(hero)
+        tracker.add_combatant(enemy)
+
+        # Consume reaction on whichever creature is up first.
+        first_state = tracker.get_current_turn_state()
+        assert first_state.consume_action(ActionType.REACTION) is True
+        assert first_state.reaction_available is False
+
+        # Advancing to the *other* creature must not refill our slot.
+        tracker.next_turn()
+        # The reference to first_state is the same instance held in
+        # tracker.turn_states[first_creature]; it must still be empty.
+        assert first_state.reaction_available is False
+
+        # Round-trip back to the original creature; reset must refill it.
+        tracker.next_turn()
+        assert first_state.reaction_available is True
 
 
 class TestMovementTracking:
