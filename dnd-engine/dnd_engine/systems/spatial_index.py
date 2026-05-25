@@ -25,6 +25,22 @@ class SpatialIndex:
     `are_adjacent_tiles`, `tiles_in_range`, `has_line_of_sight`) are pure
     functions over the supplied positions and the underlying map; they do
     not require either position to be a placed occupant.
+
+    Mutation failure-mode contract (deliberately asymmetric):
+
+    - ``place(eid, pos)`` raises ``ValueError`` on conflict (already
+      placed, blocking tile, occupied).
+    - ``move(eid, pos)`` raises ``KeyError`` on a missing entity and
+      ``ValueError`` on a blocking/occupied destination — the missing-
+      entity case is a programmer error (you can't move what you haven't
+      placed), distinct from the runtime "no path" cases.
+    - ``remove(eid)`` is silent on a missing entity by design, so cleanup
+      paths (game over, scenario reset, error handlers) can call it
+      unconditionally without guarding.
+
+    Consumers writing "teleport"-style helpers (remove-then-place) lose
+    the missing-entity signal that ``move`` would surface — prefer
+    ``move`` directly when the entity is known to be placed.
     """
 
     def __init__(self, grid_map: Map) -> None:
