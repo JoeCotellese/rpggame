@@ -1,5 +1,5 @@
 # ABOUTME: Core action handlers for the SRD's missing combat-turn actions
-# ABOUTME: Dash, Disengage, Drop Prone, Stand Up — slice 5a of plan-01
+# ABOUTME: Dash, Disengage, Drop Prone, Stand Up, Dodge, Help — plan-01 slices 5a/5b
 
 from __future__ import annotations
 
@@ -78,6 +78,44 @@ def drop_prone(creature: Creature, turn_state: TurnState) -> ActionResult:
     if turn_state.speed == 0:
         return False, "speed is 0"
     creature.add_condition("prone")
+    return True, None
+
+
+def dodge(creature: Creature, turn_state: TurnState) -> ActionResult:
+    """Take the Dodge action.
+
+    SRD § Actions › Dodge: "Until the start of your next turn, attack
+    rolls against you have Disadvantage, and you make Dexterity saving
+    throws with Advantage. You lose this benefit if you have the
+    Incapacitated condition or if your Speed is 0."
+
+    The benefit is exposed via ``Creature.is_dodging`` and consulted at
+    the consumption sites (``CombatEngine.resolve_attack`` for incoming
+    attacks; ``make_saving_throw`` for DEX saves). Those sites re-check
+    the Incapacitated / Speed-0 revocation triple each time, so the
+    flag itself stays True for the duration; revocation is computed
+    live. The flag is cleared by ``InitiativeTracker.next_turn`` at
+    the start of the dodger's own next turn.
+
+    Args:
+        creature: The actor taking Dodge.
+        turn_state: The actor's TurnState. ``speed`` is consulted for
+            the Speed-0 carve-out.
+
+    Returns:
+        ``(True, None)`` on success. ``(False, "speed is 0")`` when
+        the actor's effective Speed is 0. ``(False, "incapacitated")``
+        when the actor is Incapacitated at decision time.
+        ``(False, "no action available")`` when the Action slot is
+        already consumed.
+    """
+    if turn_state.speed == 0:
+        return False, "speed is 0"
+    if creature.is_incapacitated():
+        return False, "incapacitated"
+    if not turn_state.consume_action(ActionType.ACTION):
+        return False, "no action available"
+    creature.is_dodging = True
     return True, None
 
 

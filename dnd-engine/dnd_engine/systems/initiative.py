@@ -149,6 +149,7 @@ class InitiativeTracker:
         current = self.get_current_combatant()
         if current and current.creature in self.turn_states:
             self.turn_states[current.creature].reset(speed=current.creature.speed)
+            self._expire_per_turn_action_state(current.creature)
 
     def get_current_combatant(self) -> InitiativeEntry | None:
         """
@@ -205,6 +206,26 @@ class InitiativeTracker:
         current = self.get_current_combatant()
         if current and current.creature in self.turn_states:
             self.turn_states[current.creature].reset(speed=current.creature.speed)
+            self._expire_per_turn_action_state(current.creature)
+
+    def _expire_per_turn_action_state(self, actor: Creature) -> None:
+        """Expire SRD "until the start of your next turn" benefits.
+
+        Called when ``actor``'s own next turn begins. Two cleanups:
+
+        - Dodge (SRD § Actions › Dodge): the dodger's ``is_dodging``
+          flag is cleared. The benefit's window ends here regardless
+          of whether any incoming attack consumed it.
+        - Help (SRD § Actions › Help): any ally still carrying
+          ``pending_help_from is actor`` (i.e., a help grant from this
+          actor that the ally never spent on an attack or ability
+          check) is cleared. Matches the SRD cap of "by the start of
+          your next turn."
+        """
+        actor.is_dodging = False
+        for entry in self.combatants:
+            if entry.creature.pending_help_from is actor:
+                entry.creature.pending_help_from = None
 
     def pause_for_reaction(self, reactor: Creature) -> None:
         """

@@ -339,6 +339,17 @@ class CombatEngine:
         Returns:
             AttackResult containing full attack details including sneak attack if applicable
         """
+        # SRD § Actions › Dodge: a dodging defender imposes Disadvantage
+        # on incoming attacks, unless they are Incapacitated or their
+        # Speed is 0. Recomputed each call so revocation conditions are
+        # honored live.
+        if (
+            getattr(defender, "is_dodging", False)
+            and not defender.is_incapacitated()
+            and defender.speed > 0
+        ):
+            disadvantage = True
+
         # Roll attack (1d20 + bonus)
         attack_roll_result = self.dice_roller.roll(
             "1d20", advantage=advantage, disadvantage=disadvantage

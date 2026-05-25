@@ -335,6 +335,16 @@ class Character(Creature):
         else:
             raise ValueError(f"Invalid ability name: {ability}")
 
+        # SRD § Actions › Dodge: a dodging creature rolls DEX saves with
+        # Advantage, unless they are Incapacitated or their Speed is 0.
+        if (
+            ability_short == "dex"
+            and self.is_dodging
+            and not self.is_incapacitated()
+            and self.speed > 0
+        ):
+            advantage = True
+
         # Roll the saving throw
         roller = DiceRoller()
         roll_result = roller.roll("d20", advantage=advantage, disadvantage=disadvantage)
