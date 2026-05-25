@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from types import MappingProxyType
 
 from dnd_engine.core.distance import chebyshev_distance, is_adjacent
@@ -202,20 +202,34 @@ class SpatialIndex:
             return False
         if a == b:
             return True
-        # Endpoints are guaranteed non-blocking by the guard above, so we
-        # only need to inspect the intermediate tiles of the line.
-        for x, y in _supercover_line(a.x, a.y, b.x, b.y)[1:-1]:
-            if self._map.is_blocking(x, y):
+        # Iterate the supercover lazily so we short-circuit on the first
+        # blocking interior tile rather than materializing the whole path.
+        # Endpoints are guaranteed non-blocking by the guard above; skip
+        # the first (start) and stop short of the last (end) tile.
+        line = _supercover_line(a.x, a.y, b.x, b.y)
+        next(line, None)  # discard start endpoint
+        previous: tuple[int, int] | None = None
+        for tile in line:
+            if previous is not None and self._map.is_blocking(*previous):
                 return False
+            previous = tile
+        # ``previous`` is the end endpoint; already validated non-blocking.
         return True
 
 
-def _supercover_line(x0: int, y0: int, x1: int, y1: int) -> list[tuple[int, int]]:
-    """Supercover line traversal — every tile the segment from (x0,y0) to
-    (x1,y1) geometrically touches, inclusive of both endpoints. Unlike
-    standard Bresenham this never skips tiles the line clips through.
+def _supercover_line(
+    x0: int, y0: int, x1: int, y1: int
+) -> Iterator[tuple[int, int]]:
+    """Supercover line traversal — yields every tile the segment from
+    ``(x0, y0)`` to ``(x1, y1)`` geometrically touches, inclusive of both
+    endpoints. Unlike standard Bresenham this never skips tiles the line
+    clips through.
 
-    Algorithm: take exactly 1 + dx + dy steps, advancing one axis per
+    Implemented as a generator so callers (notably
+    :meth:`SpatialIndex.has_line_of_sight`) can short-circuit on the
+    first blocking tile without building the full path list.
+
+    Algorithm: take exactly ``1 + dx + dy`` steps, advancing one axis per
     step based on accumulated error. Visits the cells in a manner
     equivalent to a 2D DDA / Amanatides-Woo grid traversal for
     integer endpoints.
@@ -229,13 +243,11 @@ def _supercover_line(x0: int, y0: int, x1: int, y1: int) -> list[tuple[int, int]
     error = dx - dy
     dx2 = dx * 2
     dy2 = dy * 2
-    points: list[tuple[int, int]] = []
     for _ in range(n):
-        points.append((x, y))
+        yield (x, y)
         if error > 0:
             x += x_inc
             error -= dy2
         else:
             y += y_inc
             error += dx2
-    return points
