@@ -700,6 +700,12 @@ class Creature:
         ):
             advantage = True
 
+        # SRD: advantage and disadvantage cancel. The dice roller
+        # raises on both-set, so cancel here before delegating.
+        if advantage and disadvantage:
+            advantage = False
+            disadvantage = False
+
         # Get ability modifier
         if ability_full == "strength":
             modifier = self.abilities.str_mod

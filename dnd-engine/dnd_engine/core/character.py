@@ -345,6 +345,12 @@ class Character(Creature):
         ):
             advantage = True
 
+        # SRD: advantage and disadvantage cancel. The dice roller
+        # raises on both-set, so cancel here before delegating.
+        if advantage and disadvantage:
+            advantage = False
+            disadvantage = False
+
         # Roll the saving throw
         roller = DiceRoller()
         roll_result = roller.roll("d20", advantage=advantage, disadvantage=disadvantage)
@@ -855,6 +861,12 @@ class Character(Creature):
         if self.pending_help_from is not None:
             advantage = True
             self.pending_help_from = None
+
+        # SRD: advantage and disadvantage cancel. The dice roller
+        # raises on both-set, so cancel here before delegating.
+        if advantage and disadvantage:
+            advantage = False
+            disadvantage = False
 
         # Roll the d20
         dice_roll = self._dice_roller.roll("1d20", advantage=advantage, disadvantage=disadvantage)

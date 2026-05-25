@@ -308,6 +308,45 @@ class TestAction_Dodge:
         assert reason == "incapacitated"
         assert defender_turn.action_available is True  # Not consumed on rejection.
 
+    def test_dodge_and_attacker_advantage_cancel_without_crashing(self) -> None:
+        """When an attacker has Advantage (e.g., via Help) and the
+        defender is dodging, the two cancel and the attack rolls
+        normally — the dice roller raises if both flags arrive set,
+        so cancellation must happen at the consumption site."""
+        from dnd_engine.systems.actions import dodge, help_action
+
+        engine, attacker, defender = _make_engine_and_combatants()
+        defender_turn = TurnState()
+        defender_turn.reset(speed=defender.speed)
+        ok, _ = dodge(defender, defender_turn)
+        assert ok is True
+
+        # Stage Help-granted advantage on the attacker.
+        ally = Creature(
+            name="Ally",
+            max_hp=10,
+            ac=12,
+            abilities=Abilities(10, 10, 10, 10, 10, 10),
+        )
+        ally_turn = TurnState()
+        ally_turn.reset(speed=ally.speed)
+        ok, _ = help_action(ally, attacker, ally_turn)
+        assert ok is True
+        assert attacker.pending_help_from is ally
+
+        # Both flags fire inside resolve_attack — must cancel.
+        result = engine.resolve_attack(
+            attacker=attacker,
+            defender=defender,
+            attack_bonus=5,
+            damage_dice="1d8+3",
+        )
+
+        assert result.advantage is False
+        assert result.disadvantage is False
+        # Help grant consumed even when cancelled by Dodge.
+        assert attacker.pending_help_from is None
+
     def test_dodge_benefit_ends_at_start_of_dodgers_next_turn(self) -> None:
         """The dodge flag clears when the dodger's own next turn
         starts via ``InitiativeTracker.next_turn`` (SRD: 'Until the

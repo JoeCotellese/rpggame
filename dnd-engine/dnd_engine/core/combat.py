@@ -357,6 +357,14 @@ class CombatEngine:
             advantage = True
             attacker.pending_help_from = None
 
+        # SRD: "If circumstances cause a roll to have both advantage
+        # and disadvantage, you're considered to have neither of them"
+        # — they cancel. The dice roller raises on both-set, so the
+        # cancellation must happen here before delegating.
+        if advantage and disadvantage:
+            advantage = False
+            disadvantage = False
+
         # Roll attack (1d20 + bonus)
         attack_roll_result = self.dice_roller.roll(
             "1d20", advantage=advantage, disadvantage=disadvantage
