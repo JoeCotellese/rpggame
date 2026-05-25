@@ -60,16 +60,18 @@ class TestReaction_Definition:
         )
 
     def test_reaction_action_type_is_modeled_in_action_economy(self) -> None:
-        pytest.skip(
-            "GAP: `ActionType` in dnd_engine/systems/action_economy.py "
-            "enumerates ACTION, BONUS_ACTION, FREE_OBJECT, NO_ACTION but "
-            "not REACTION. The TurnState dataclass tracks "
-            "action_available / bonus_action_available / "
-            "free_object_interaction_used / movement_remaining with no "
-            "reaction-equivalent field. The SRD's 'special action called "
-            "a Reaction' has no first-class model on the engine side. "
-            "Tracked by issue #412 (Reaction economy)."
-        )
+        """ActionType enumerates REACTION; TurnState tracks reaction_available.
+
+        SRD requires the "special action called a Reaction" to be a
+        first-class member of the action economy. Closes the original
+        gap captured under issue #412.
+        """
+        from dnd_engine.systems.action_economy import ActionType
+
+        assert ActionType.REACTION.value == "reaction"
+        turn = TurnState()
+        assert hasattr(turn, "reaction_available")
+        assert turn.reaction_available is True
 
 
 class TestReaction_TriggerResponse:
@@ -145,55 +147,54 @@ class TestReaction_OncePerRound:
     > start of your next turn.
     """
 
-    def test_turn_state_has_no_reaction_slot(self) -> None:
-        """Source-level guard: `TurnState` does not track a reaction.
+    def test_turn_state_tracks_reaction_slot(self) -> None:
+        """`TurnState` exposes a `reaction_available` field.
 
-        The SRD's "you can't take another one until the start of your
-        next turn" requires per-creature state that records 'did this
-        creature already use its Reaction this round?'. `TurnState`
-        currently exposes only `action_available`,
-        `bonus_action_available`, `free_object_interaction_used`, and
-        `movement_remaining`. This test pins the absence so that the
-        moment a `reaction_available` field is added, the test will
-        flip to xfail/fail and prompt removing the skip on
-        `test_reaction_consumed_blocks_a_second_reaction_same_round`
-        below.
+        SRD requires per-creature state that records "did this
+        creature already use its Reaction this round?". `TurnState`
+        now carries `reaction_available` alongside the existing
+        action / bonus_action / free-object / movement slots.
 
-        Closing this gap is issue #412.
+        Closes the original gap captured under issue #412.
         """
         turn = TurnState()
-        assert not hasattr(turn, "reaction_available"), (
-            "TurnState now has a `reaction_available` field — the "
-            "Reaction economy gap (#412) appears to be closing. Flip "
-            "this audit test to a real assertion that the field is "
-            "consumed on Reaction-use and reset on `TurnState.reset()`."
-        )
+        assert hasattr(turn, "reaction_available")
+        assert turn.reaction_available is True
 
     def test_reaction_consumed_blocks_a_second_reaction_same_round(self) -> None:
-        pytest.skip(
-            "GAP: Reaction economy is not modeled. With no "
-            "`reaction_available` flag on TurnState and no "
-            "Reaction-consuming code path, two Reactions in the same "
-            "round cannot be detected, let alone rejected. "
-            "`flee_combat()` (dnd_engine/core/game_state.py:4194) "
-            "fans out one attack per living enemy on every flee with "
-            "no per-creature once-per-round guard. Tracked by issue "
-            "#412."
-        )
+        """Consuming the Reaction slot blocks a second Reaction this round.
+
+        SRD: "When you take a Reaction, you can't take another one
+        until the start of your next turn." A second
+        ``consume_action(REACTION)`` in the same turn must return
+        ``False``.
+        """
+        from dnd_engine.systems.action_economy import ActionType
+
+        turn = TurnState()
+        assert turn.consume_action(ActionType.REACTION) is True
+        assert turn.reaction_available is False
+        assert turn.consume_action(ActionType.REACTION) is False
+        assert turn.is_action_available(ActionType.REACTION) is False
 
     def test_reaction_resets_at_start_of_next_turn(self) -> None:
-        pytest.skip(
-            "GAP: `TurnState.reset()` (action_economy.py:125) resets "
-            "`action_available`, `bonus_action_available`, "
-            "`free_object_interaction_used`, and `movement_remaining` "
-            "but has no reaction slot to reset. The SRD's 'until the "
-            "start of your next turn' phrasing requires a reaction "
-            "flag that is cleared by the same path that resets the "
-            "rest of the action economy. `InitiativeTracker.next_turn` "
-            "(systems/initiative.py:199-202) invokes `.reset()` on "
-            "the incoming combatant; the reaction flag must be reset "
-            "there once it exists. Tracked by issue #412."
-        )
+        """`TurnState.reset()` restores the Reaction slot.
+
+        SRD's "until the start of your next turn" phrasing requires a
+        reaction flag that is cleared by the same path that resets
+        the rest of the action economy. ``InitiativeTracker.next_turn``
+        invokes ``.reset()`` on the incoming combatant, so resetting
+        the reaction flag there enforces the once-per-round rule.
+        """
+        from dnd_engine.systems.action_economy import ActionType
+
+        turn = TurnState()
+        turn.consume_action(ActionType.REACTION)
+        assert turn.reaction_available is False
+
+        turn.reset()
+        assert turn.reaction_available is True
+        assert turn.is_action_available(ActionType.REACTION) is True
 
 
 class TestReaction_InterruptedTurnContinuation:

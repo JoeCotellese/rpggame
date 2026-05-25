@@ -12,12 +12,16 @@ class ActionType(Enum):
     Each turn, a character can take:
     - One ACTION (attack, cast spell, use item, etc.)
     - One BONUS_ACTION (if they have an ability that uses it)
+    - One REACTION (Shield, Counterspell, Opportunity Attack, etc.) —
+      fired in response to a trigger; one per round, resets at the
+      start of the reactor's next turn
     - One FREE_OBJECT interaction (draw weapon, open door, etc.)
     - Any number of NO_ACTION activities (dropping items, speaking, etc.)
     """
 
     ACTION = "action"
     BONUS_ACTION = "bonus_action"
+    REACTION = "reaction"
     FREE_OBJECT = "free_object"
     NO_ACTION = "no_action"
 
@@ -59,14 +63,22 @@ class TurnState:
     Tracks available actions for a single combat turn.
 
     D&D 5E action economy rules:
-    - Each turn gets: 1 action, 1 bonus action, 1 free object interaction
+    - Each turn gets: 1 action, 1 bonus action, 1 reaction, 1 free
+      object interaction
     - Actions are consumed when used
-    - All actions reset at the start of the next turn
+    - The Reaction slot is per-round, not per-turn: it resets only
+      when the reactor's own turn comes around again (SRD: "you can't
+      take another one until the start of your next turn"). Because
+      TurnState.reset() is invoked by InitiativeTracker.next_turn at
+      the start of each creature's own turn, resetting the reaction
+      slot there honors the once-per-round rule.
+    - All other actions reset at the start of the next turn
     - Movement is tracked per turn (typically 30 ft, varies by creature speed)
     """
 
     action_available: bool = True
     bonus_action_available: bool = True
+    reaction_available: bool = True
     free_object_interaction_used: bool = False
     movement_remaining: int = 30  # Movement in feet (5 ft = 1 grid square)
 
@@ -96,6 +108,12 @@ class TurnState:
         elif action_type == ActionType.BONUS_ACTION:
             if self.bonus_action_available:
                 self.bonus_action_available = False
+                return True
+            return False
+
+        elif action_type == ActionType.REACTION:
+            if self.reaction_available:
+                self.reaction_available = False
                 return True
             return False
 
@@ -159,6 +177,8 @@ class TurnState:
             return self.action_available
         elif action_type == ActionType.BONUS_ACTION:
             return self.bonus_action_available
+        elif action_type == ActionType.REACTION:
+            return self.reaction_available
         elif action_type == ActionType.FREE_OBJECT:
             return not self.free_object_interaction_used
         elif action_type == ActionType.NO_ACTION:
@@ -177,6 +197,7 @@ class TurnState:
         """
         self.action_available = True
         self.bonus_action_available = True
+        self.reaction_available = True
         self.free_object_interaction_used = False
         self.movement_remaining = speed
 
@@ -196,6 +217,8 @@ class TurnState:
             parts.append("Action")
         if self.bonus_action_available:
             parts.append("Bonus Action")
+        if self.reaction_available:
+            parts.append("Reaction")
         if not self.free_object_interaction_used:
             parts.append("Free Object")
 
