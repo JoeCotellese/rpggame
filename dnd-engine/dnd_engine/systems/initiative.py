@@ -73,6 +73,11 @@ class InitiativeTracker:
         self.turn_states: dict[
             Creature, TurnState
         ] = {}  # Maps creature instance to their turn state
+        # LIFO stack of suspended turn indices. Pushed by
+        # pause_for_reaction so that a Reaction firing mid-turn can
+        # treat the reactor as the current combatant for the duration
+        # of its handler, then resume the interrupted turn.
+        self._pause_stack: list[int] = []
 
     def add_combatant(self, creature: Creature) -> InitiativeEntry:
         """
@@ -200,6 +205,60 @@ class InitiativeTracker:
         current = self.get_current_combatant()
         if current and current.creature in self.turn_states:
             self.turn_states[current.creature].reset(speed=current.creature.speed)
+
+    def pause_for_reaction(self, reactor: Creature) -> None:
+        """
+        Suspend the current turn so a Reaction can resolve as ``reactor``.
+
+        Pushes ``current_turn_index`` onto the pause stack and points
+        the tracker at ``reactor``'s entry. Unlike ``next_turn``, this
+        does NOT call ``TurnState.reset()`` — the SRD guarantees the
+        reactor consumes only their Reaction slot, not a fresh turn,
+        and the interrupted creature must resume on the same
+        ``TurnState`` they had before the pause.
+
+        Args:
+            reactor: The creature whose Reaction is firing. Must be
+                in the initiative order.
+
+        Raises:
+            ValueError: ``reactor`` is not a registered combatant.
+        """
+        reactor_index = next(
+            (i for i, e in enumerate(self.combatants) if e.creature is reactor),
+            None,
+        )
+        if reactor_index is None:
+            raise ValueError(
+                f"Cannot pause for reaction: {reactor.name!r} is not in initiative."
+            )
+
+        self._pause_stack.append(self.current_turn_index)
+        self.current_turn_index = reactor_index
+
+    def resume_paused_turn(self) -> None:
+        """
+        Restore the turn that was suspended by ``pause_for_reaction``.
+
+        Pops the pause stack and restores ``current_turn_index``. Does
+        not touch the resumed creature's ``TurnState`` — they pick
+        back up wherever the Reaction interrupted them.
+
+        Raises:
+            RuntimeError: ``resume_paused_turn`` was called without a
+                matching ``pause_for_reaction``.
+        """
+        if not self._pause_stack:
+            raise RuntimeError(
+                "resume_paused_turn called without a matching "
+                "pause_for_reaction (pause stack is empty)."
+            )
+        self.current_turn_index = self._pause_stack.pop()
+
+    @property
+    def is_paused_for_reaction(self) -> bool:
+        """True while at least one turn is suspended for a Reaction."""
+        return bool(self._pause_stack)
 
     def get_all_combatants(self) -> list[InitiativeEntry]:
         """

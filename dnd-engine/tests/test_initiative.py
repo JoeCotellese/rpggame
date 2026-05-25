@@ -1,6 +1,8 @@
 # ABOUTME: Unit tests for the initiative system
 # ABOUTME: Tests turn order tracking, round management, and combatant removal
 
+import pytest
+
 from dnd_engine.core.creature import Abilities, Creature
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.systems.initiative import InitiativeEntry, InitiativeTracker
@@ -327,6 +329,103 @@ class TestInitiativeTracker:
         assert goblin1 not in self.tracker.turn_states
         assert goblin2 in self.tracker.turn_states
         assert self.tracker.combatants[0].creature == goblin2
+
+
+class TestReactionPauseResume:
+    """Test pause_for_reaction / resume_paused_turn used by Reactions."""
+
+    def setup_method(self):
+        self.tracker = InitiativeTracker(DiceRoller(seed=42))
+        abilities = Abilities(10, 10, 10, 10, 10, 10)
+        self.goblin = Creature("Goblin", 7, 15, abilities)
+        self.wizard = Creature("Wizard", 12, 12, abilities)
+        self.tracker.add_combatant(self.goblin)
+        self.tracker.add_combatant(self.wizard)
+        # Pin Goblin first deterministically.
+        for entry in self.tracker.combatants:
+            entry.initiative_roll = 20 if entry.creature is self.goblin else 10
+        self.tracker._sort_initiative()
+        self.tracker.current_turn_index = 0
+
+    def test_pause_swaps_current_combatant_to_reactor(self):
+        assert self.tracker.get_current_combatant().creature is self.goblin
+        self.tracker.pause_for_reaction(self.wizard)
+        assert self.tracker.get_current_combatant().creature is self.wizard
+
+    def test_pause_does_not_reset_reactor_turn_state(self):
+        """Pausing for a Reaction must not refresh the reactor's TurnState.
+
+        The reactor consumes only their Reaction slot, not a fresh
+        turn — any partially-spent movement / bonus action must
+        survive the pause.
+        """
+        self.tracker.turn_states[self.wizard].action_available = False
+        self.tracker.turn_states[self.wizard].movement_remaining = 5
+
+        self.tracker.pause_for_reaction(self.wizard)
+
+        assert self.tracker.turn_states[self.wizard].action_available is False
+        assert self.tracker.turn_states[self.wizard].movement_remaining == 5
+
+    def test_pause_does_not_reset_interrupted_turn_state(self):
+        """The interrupted creature's TurnState is untouched by pause/resume."""
+        self.tracker.turn_states[self.goblin].action_available = False
+        self.tracker.turn_states[self.goblin].movement_remaining = 10
+
+        self.tracker.pause_for_reaction(self.wizard)
+        self.tracker.resume_paused_turn()
+
+        assert self.tracker.turn_states[self.goblin].action_available is False
+        assert self.tracker.turn_states[self.goblin].movement_remaining == 10
+
+    def test_resume_restores_prior_current_combatant(self):
+        self.tracker.pause_for_reaction(self.wizard)
+        self.tracker.resume_paused_turn()
+        assert self.tracker.get_current_combatant().creature is self.goblin
+
+    def test_is_paused_flag_tracks_stack_state(self):
+        assert self.tracker.is_paused_for_reaction is False
+        self.tracker.pause_for_reaction(self.wizard)
+        assert self.tracker.is_paused_for_reaction is True
+        self.tracker.resume_paused_turn()
+        assert self.tracker.is_paused_for_reaction is False
+
+    def test_nested_pauses_unwind_lifo(self):
+        """A pause stack lets reactions trigger further reactions cleanly.
+
+        Slice 2's dispatcher doesn't nest, but the stack design must
+        not preclude it — if a Reaction handler itself publishes a
+        trigger that fires another Reaction, the inner pause must
+        unwind before the outer one.
+        """
+        abilities = Abilities(10, 10, 10, 10, 10, 10)
+        cleric = Creature("Cleric", 10, 14, abilities)
+        self.tracker.add_combatant(cleric)
+        # Re-pin so order is Goblin, Wizard, Cleric.
+        order = {self.goblin: 20, self.wizard: 15, cleric: 10}
+        for entry in self.tracker.combatants:
+            entry.initiative_roll = order[entry.creature]
+        self.tracker._sort_initiative()
+        self.tracker.current_turn_index = 0
+
+        self.tracker.pause_for_reaction(self.wizard)
+        self.tracker.pause_for_reaction(cleric)
+        assert self.tracker.get_current_combatant().creature is cleric
+        self.tracker.resume_paused_turn()
+        assert self.tracker.get_current_combatant().creature is self.wizard
+        self.tracker.resume_paused_turn()
+        assert self.tracker.get_current_combatant().creature is self.goblin
+        assert self.tracker.is_paused_for_reaction is False
+
+    def test_resume_without_pause_raises(self):
+        with pytest.raises(RuntimeError, match="pause stack is empty"):
+            self.tracker.resume_paused_turn()
+
+    def test_pause_for_non_combatant_raises(self):
+        abilities = Abilities(10, 10, 10, 10, 10, 10)
+        bystander = Creature("Bystander", 10, 10, abilities)
+        with pytest.raises(ValueError, match="not in initiative"):
+            self.tracker.pause_for_reaction(bystander)
 
 
 class TestInitiativeEntry:

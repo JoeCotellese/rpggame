@@ -307,5 +307,110 @@ class TestTriggerContext:
         assert observed[0].payload == {"spell_id": "fireball", "level": 3}
 
 
+class TestMidTurnPauseAndResume:
+    """Reactions firing on someone else's turn pause the active turn.
+
+    SRD § Reactions › Interrupted-turn continuation:
+    > If the reaction interrupts another creature's turn, that
+    > creature can continue its turn right after the Reaction.
+    """
+
+    def test_handler_observes_reactor_as_current_combatant(self):
+        goblin = _make_creature("Goblin")
+        wizard = _make_creature("Wizard")
+        # Goblin first in initiative — its turn is current.
+        tracker = _make_tracker(goblin, wizard, initiatives=[20, 10])
+        dispatcher = ReactionDispatcher(tracker)
+        assert tracker.get_current_combatant().creature is goblin
+
+        observed: list[Creature] = []
+
+        def handler(ctx: TriggerContext) -> ReactionOutcome:
+            observed.append(tracker.get_current_combatant().creature)
+            return ReactionOutcome(reacted=True)
+
+        dispatcher.register(wizard, Trigger.WOULD_BE_HIT, handler)
+        dispatcher.publish(
+            TriggerContext(trigger=Trigger.WOULD_BE_HIT, source=goblin)
+        )
+
+        assert observed == [wizard]
+
+    def test_current_combatant_restored_after_publish(self):
+        goblin = _make_creature("Goblin")
+        wizard = _make_creature("Wizard")
+        tracker = _make_tracker(goblin, wizard, initiatives=[20, 10])
+        dispatcher = ReactionDispatcher(tracker)
+
+        dispatcher.register(wizard, Trigger.WOULD_BE_HIT, _reacts_with("Shield"))
+        dispatcher.publish(TriggerContext(trigger=Trigger.WOULD_BE_HIT))
+
+        assert tracker.get_current_combatant().creature is goblin
+        assert tracker.is_paused_for_reaction is False
+
+    def test_interrupted_creature_turn_state_unchanged(self):
+        """The interrupted creature must resume on the same TurnState."""
+        goblin = _make_creature("Goblin")
+        wizard = _make_creature("Wizard")
+        tracker = _make_tracker(goblin, wizard, initiatives=[20, 10])
+        dispatcher = ReactionDispatcher(tracker)
+        # Goblin mid-turn: action spent, half movement spent.
+        tracker.turn_states[goblin].consume_action(ActionType.ACTION)
+        tracker.turn_states[goblin].consume_movement(15)
+
+        dispatcher.register(wizard, Trigger.WOULD_BE_HIT, _reacts_with("Shield"))
+        dispatcher.publish(TriggerContext(trigger=Trigger.WOULD_BE_HIT))
+
+        assert tracker.turn_states[goblin].action_available is False
+        assert tracker.turn_states[goblin].movement_remaining == 15
+
+    def test_no_pause_when_reactor_is_current_combatant(self):
+        """A reactor on their own turn doesn't trigger a pause swap.
+
+        Slice spec: pause only when reactor != current actor. Without
+        this guard the dispatcher would self-pause and the stack would
+        grow even for own-turn reactions.
+        """
+        fighter = _make_creature("Fighter")
+        tracker = _make_tracker(fighter)
+        dispatcher = ReactionDispatcher(tracker)
+        assert tracker.get_current_combatant().creature is fighter
+
+        observed_paused: list[bool] = []
+
+        def handler(ctx: TriggerContext) -> ReactionOutcome:
+            observed_paused.append(tracker.is_paused_for_reaction)
+            return ReactionOutcome(reacted=True)
+
+        dispatcher.register(fighter, Trigger.OPPORTUNITY_PROVOKED, handler)
+        dispatcher.publish(TriggerContext(trigger=Trigger.OPPORTUNITY_PROVOKED))
+
+        assert observed_paused == [False]
+        assert tracker.is_paused_for_reaction is False
+
+    def test_pause_released_even_when_handler_raises(self):
+        """Pause stack must unwind even when a handler errors out.
+
+        Without try/finally, a buggy reactor would strand the tracker
+        in a paused state, corrupting all subsequent
+        get_current_combatant calls.
+        """
+        goblin = _make_creature("Goblin")
+        wizard = _make_creature("Wizard")
+        tracker = _make_tracker(goblin, wizard, initiatives=[20, 10])
+        dispatcher = ReactionDispatcher(tracker)
+
+        def boom(ctx: TriggerContext) -> ReactionOutcome:
+            raise RuntimeError("handler exploded")
+
+        dispatcher.register(wizard, Trigger.WOULD_BE_HIT, boom)
+
+        with pytest.raises(RuntimeError, match="handler exploded"):
+            dispatcher.publish(TriggerContext(trigger=Trigger.WOULD_BE_HIT))
+
+        assert tracker.is_paused_for_reaction is False
+        assert tracker.get_current_combatant().creature is goblin
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

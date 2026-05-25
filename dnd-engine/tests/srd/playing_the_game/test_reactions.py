@@ -262,20 +262,62 @@ class TestReaction_InterruptedTurnContinuation:
     """
 
     def test_interrupted_turn_resumes_after_reaction_resolves(self) -> None:
-        pytest.skip(
-            "GAP: There is no interruption model in the turn loop. "
-            "`InitiativeTracker.next_turn` "
-            "(dnd_engine/systems/initiative.py:173) advances the "
-            "turn index monotonically; nothing pauses the active "
-            "turn to resolve a Reaction triggered mid-action and "
-            "then resume the original turn. Because no Reactions "
-            "fire mid-turn today (see TestReaction_TriggerResponse), "
-            "this rule has nothing to enforce, but the SRD's "
-            "continuation guarantee will need a mid-turn pause/"
-            "resume mechanism once Reactions are wired up. Tracked "
-            "by issue #430 (depends on #412 reaction economy and "
-            "#429 trigger->reaction dispatcher)."
+        """The interrupted creature resumes on the same TurnState.
+
+        Goblin is mid-turn: their Action has been spent, their
+        Movement is half-consumed. A WOULD_BE_HIT trigger fires the
+        Wizard's Shield reaction. After the dispatcher returns:
+
+        - the Wizard's Reaction slot is consumed,
+        - the Goblin remains the current combatant,
+        - the Goblin's TurnState (action + movement) is unchanged,
+        - the pause stack is empty.
+
+        Closes #430.
+        """
+        from dnd_engine.core.creature import Abilities, Creature
+        from dnd_engine.core.dice import DiceRoller
+        from dnd_engine.systems.action_economy import ActionType
+        from dnd_engine.systems.initiative import InitiativeTracker
+        from dnd_engine.systems.reactions import (
+            ReactionDispatcher,
+            ReactionOutcome,
+            Trigger,
+            TriggerContext,
         )
+
+        abilities = Abilities(10, 10, 10, 10, 10, 10)
+        goblin = Creature("Goblin", max_hp=10, ac=15, abilities=abilities)
+        wizard = Creature("Wizard", max_hp=10, ac=15, abilities=abilities)
+        tracker = InitiativeTracker(DiceRoller(seed=1))
+        tracker.add_combatant(goblin)
+        tracker.add_combatant(wizard)
+        for entry in tracker.combatants:
+            entry.initiative_roll = 20 if entry.creature is goblin else 10
+        tracker._sort_initiative()
+        tracker.current_turn_index = 0
+        # Goblin is mid-turn: action spent, half movement spent.
+        tracker.turn_states[goblin].consume_action(ActionType.ACTION)
+        tracker.turn_states[goblin].consume_movement(15)
+
+        dispatcher = ReactionDispatcher(tracker)
+        observed_current: list[str] = []
+
+        def shield(ctx: TriggerContext) -> ReactionOutcome:
+            observed_current.append(tracker.get_current_combatant().creature.name)
+            return ReactionOutcome(reacted=True, description="Shield")
+
+        dispatcher.register(wizard, Trigger.WOULD_BE_HIT, shield)
+        dispatcher.publish(
+            TriggerContext(trigger=Trigger.WOULD_BE_HIT, source=goblin)
+        )
+
+        assert observed_current == ["Wizard"]
+        assert tracker.get_current_combatant().creature is goblin
+        assert tracker.is_paused_for_reaction is False
+        assert tracker.turn_states[goblin].action_available is False
+        assert tracker.turn_states[goblin].movement_remaining == 15
+        assert tracker.turn_states[wizard].reaction_available is False
 
 
 class TestReaction_TimingDefault:

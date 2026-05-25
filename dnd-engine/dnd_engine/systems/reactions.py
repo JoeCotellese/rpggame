@@ -146,6 +146,15 @@ class ReactionDispatcher:
         Reaction slot; ``reacted=False`` leaves the slot intact for a
         later trigger in the same round.
 
+        When the reactor is not the currently-active combatant, the
+        tracker is paused (``InitiativeTracker.pause_for_reaction``)
+        for the duration of the handler call so that downstream code
+        reading ``get_current_combatant()`` sees the reactor, not the
+        interrupted creature. The pause is released before the next
+        handler runs, so reactor ordering remains pure initiative
+        order and the interrupted creature's ``TurnState`` is never
+        touched.
+
         Returns the outcomes from handlers that actually reacted, in
         resolution order. An empty list means no one reacted (either
         no subscribers or every subscriber declined / was ineligible).
@@ -157,7 +166,17 @@ class ReactionDispatcher:
                 continue
             if not creature.is_alive:
                 continue
-            outcome = handler(context)
+
+            current = self._tracker.get_current_combatant()
+            interrupts_another_turn = current is not None and current.creature is not creature
+            if interrupts_another_turn:
+                self._tracker.pause_for_reaction(creature)
+            try:
+                outcome = handler(context)
+            finally:
+                if interrupts_another_turn:
+                    self._tracker.resume_paused_turn()
+
             if outcome.reacted:
                 turn_state.consume_action(ActionType.REACTION)
                 outcomes.append(outcome)
