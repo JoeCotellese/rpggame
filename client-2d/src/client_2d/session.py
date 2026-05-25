@@ -661,6 +661,13 @@ class GameSession:
         if result.get("saving_throw_triggered"):
             self._add_combat_log(self._format_save_line(target, result))
 
+        concentration = result.get("concentration_broken")
+        if concentration:
+            spell_name = concentration.get("spell_name") or "their spell"
+            self._add_combat_log(
+                f"{target}'s concentration on {spell_name} is broken!"
+            )
+
         if result.get("target_killed"):
             self._add_combat_log(f"{target} is down!")
 

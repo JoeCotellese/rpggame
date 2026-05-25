@@ -1966,3 +1966,45 @@ class TestEnemyTurnSavingThrowLine:
         assert not any("save" in line.lower() for line in events), (
             f"unexpected save line:\n{events}"
         )
+
+
+class TestEnemyTurnConcentrationBroken:
+    """Plan #570 fix Phase 8: surface concentration breaks.
+
+    When an enemy attack damages a concentrating spellcaster and the
+    target fails the resulting Constitution save, ``EnemyTurnResult``
+    sets ``concentration_broken`` with the spell name + DC. The session
+    dropped this entirely, so a wizard's bless or hold-person silently
+    ended mid-fight with no log line — the caster's player had to
+    notice from a missing buff bar.
+    """
+
+    def test_concentration_broken_line_surfaces(self, session) -> None:
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                hit=True,
+                damage=8,
+                concentration_broken={
+                    "was_concentrating": True,
+                    "concentration_broken": True,
+                    "spell_name": "bless",
+                    "dc": 10,
+                    "save_result": {"success": False, "total": 7},
+                },
+            ),
+        )
+        conc_lines = [line for line in events if "concentration" in line.lower()]
+        assert conc_lines, f"missing concentration-broken line:\n{events}"
+        line = conc_lines[0]
+        assert "Archy" in line, line
+        assert "bless" in line, line
+
+    def test_no_concentration_line_when_payload_absent(self, session) -> None:
+        events = TestEnemyTurnActionTypes()._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(hit=True, damage=4, concentration_broken=None),
+        )
+        assert not any(
+            "concentration" in line.lower() for line in events
+        ), f"unexpected concentration line:\n{events}"
