@@ -1562,3 +1562,154 @@ class TestEngineAdapterEnemyTurnRichFields:
         assert result["concentration_broken"] is None or isinstance(
             result["concentration_broken"], dict
         )
+
+
+def _enemy_turn_stub(**overrides) -> dict:
+    """Build a baseline adapter ``process_enemy_turn`` result dict.
+
+    Monkeypatch helper for the action-type / rich-detail surface tests
+    below: pass only the keys that differ from a vanilla goblin attack
+    and the rest fill in with safe defaults that mirror the real
+    adapter's shape (#570).
+    """
+    base = {
+        "success": True,
+        "action": "ATTACK",
+        "enemy_name": "Goblin",
+        "target_name": "Archy",
+        "hit": True,
+        "damage": 4,
+        "target_killed": False,
+        "combat_ended": False,
+        "attack_roll": 15,
+        "attack_bonus": 4,
+        "target_ac": 12,
+        "critical": False,
+        "action_name": "Bite",
+        "saving_throw_triggered": False,
+        "save_ability": None,
+        "save_dc": None,
+        "save_succeeded": None,
+        "conditions_applied": [],
+        "incapacitating_conditions": [],
+        "condition_removal_message": None,
+        "concentration_broken": None,
+        "turn_start_effects": [],
+        "turn_end_effects": [],
+    }
+    base.update(overrides)
+    return base
+
+
+class TestEnemyTurnActionTypes:
+    """Plan #570 fix Phase 4: distinguish the five non-ATTACK action types.
+
+    ``GameSession._process_enemy_turn`` previously collapsed every
+    non-attack path to ``"<enemy> takes no action."`` — a goblin that
+    died before its turn looked identical to one that's stunned, has no
+    targets, has no usable attack, or is shaking off a condition. The
+    fix branches on ``result["action"]`` and emits a distinguishing line
+    so the MCP-facing ``Between turns:`` block tells the player WHY
+    combat is stalling.
+    """
+
+    def _drain_one_enemy_turn(self, session, stub_result: dict) -> list[str]:
+        """Run the drain through a single monkeypatched enemy turn and
+        return the resulting per-turn event lines.
+
+        Pins is_player_turn to ``False`` for the first drain iteration
+        (so ``_process_enemy_turn`` runs against the stubbed adapter)
+        and ``True`` for every subsequent iteration (so the drain
+        exits cleanly after one step regardless of the real initiative
+        state).
+        """
+        session.engine.process_enemy_turn = lambda: stub_result  # type: ignore[assignment]
+        session.engine.is_current_combatant_unconscious = lambda: False  # type: ignore[assignment]
+
+        calls = {"n": 0}
+
+        def enemy_then_player() -> bool:
+            calls["n"] += 1
+            return calls["n"] > 1
+
+        session.engine.is_player_turn = enemy_then_player  # type: ignore[assignment]
+        session.processing_enemy_turn = True
+        session._pending_combat_events.clear()
+        session._drain_enemy_turns()
+        return list(session._pending_combat_events)
+
+    def test_died_start_of_turn_emits_distinct_line(self, session) -> None:
+        """A goblin that drops dead from start-of-turn poison damage
+        produces a line that names the cause, not the generic
+        ``"takes no action"``."""
+        events = self._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(action="DIED_START_OF_TURN", hit=None, damage=0),
+        )
+        joined = " | ".join(events).lower()
+        assert "died before its turn" in joined, (
+            f"missing died-start-of-turn line:\n{events}"
+        )
+        assert "takes no action" not in joined
+
+    def test_incapacitated_emits_distinct_line(self, session) -> None:
+        """A stunned / paralyzed goblin produces a line that names the
+        incapacitating condition."""
+        events = self._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                action="INCAPACITATED",
+                hit=None,
+                damage=0,
+                incapacitating_conditions=["STUNNED"],
+            ),
+        )
+        joined = " | ".join(events).lower()
+        assert "cannot act" in joined, f"missing cannot-act line:\n{events}"
+        assert "stunned" in joined, f"missing condition name:\n{events}"
+        assert "takes no action" not in joined
+
+    def test_no_targets_emits_distinct_line(self, session) -> None:
+        """When the AI finds no valid target the response says so —
+        otherwise the player has no idea why combat is stalling."""
+        events = self._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(action="NO_TARGETS", hit=None, damage=0, target_name=None),
+        )
+        joined = " | ".join(events).lower()
+        assert "no valid targets" in joined, (
+            f"missing no-valid-targets line:\n{events}"
+        )
+        assert "takes no action" not in joined
+
+    def test_no_valid_attack_emits_distinct_line(self, session) -> None:
+        """Distinct from NO_TARGETS — the AI sees the PC but has no
+        weapon/action that reaches them."""
+        events = self._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(action="NO_VALID_ATTACK", hit=None, damage=0),
+        )
+        joined = " | ".join(events).lower()
+        assert "no usable attack" in joined, (
+            f"missing no-usable-attack line:\n{events}"
+        )
+        assert "takes no action" not in joined
+
+    def test_condition_removal_emits_message(self, session) -> None:
+        """When the goblin uses its turn to shake off a condition, the
+        engine's removal message surfaces in the response — players see
+        why the AI didn't attack this round."""
+        events = self._drain_one_enemy_turn(
+            session,
+            _enemy_turn_stub(
+                action="CONDITION_REMOVAL",
+                hit=None,
+                damage=0,
+                condition_removal_message=(
+                    "Goblin attempts to shake off POISONED - SUCCESS!"
+                ),
+            ),
+        )
+        assert any(
+            "shake off POISONED" in line for line in events
+        ), f"missing condition-removal message:\n{events}"
