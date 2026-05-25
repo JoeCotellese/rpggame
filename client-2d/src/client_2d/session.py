@@ -1140,6 +1140,14 @@ class GameSession:
             if engine_result is not None:
                 return engine_result
 
+        # Legacy ``RoomLayout`` path. This branch runs ONLY when
+        # ``GameState.spatial`` has not been bootstrapped, so by
+        # construction no consumer of ``CREATURE_MOVED`` can have anything
+        # to act on — opportunity-attack detection (plan-01) requires the
+        # spatial index that's missing here. We deliberately do NOT emit
+        # ``CREATURE_MOVED`` from this path; if a future feature needs the
+        # event in legacy mode, bootstrap spatial instead of teaching the
+        # legacy path to fire half-formed events.
         new_x = self.player_x + dx
         new_y = self.player_y + dy
 
@@ -1232,11 +1240,10 @@ class GameSession:
                 return "Path blocked! Cannot move outside room."
             if result.reason == "blocking":
                 return "Path blocked! Wall in the way."
-            if result.reason and result.reason.startswith("occupied"):
+            if result.blocker_entity_id is not None:
                 # Match the legacy phrasing so MCP consumers see the same
                 # "Path blocked! <Name> is in the way." string they rely on.
-                blocker_entity_id = result.reason[len("occupied by ") :]
-                name = self._resolve_blocker_name(blocker_entity_id)
+                name = self._resolve_blocker_name(result.blocker_entity_id)
                 return f"Path blocked! {name} is in the way."
             if result.reason == "no movement remaining":
                 speed = creature.speed
@@ -1254,7 +1261,13 @@ class GameSession:
 
         # Engine accepted the move; mirror the destination into the
         # session/entity-manager state so the rest of the system
-        # (lighting, fog, renderer) sees the new position.
+        # (lighting, fog, renderer) sees the new position. On the
+        # success path the MoveResult contract guarantees a non-None
+        # position and movement_remaining — only the "not placed"
+        # soft-fail leaves them None, and that path is unreachable here
+        # because we auto-placed above.
+        assert result.position is not None
+        assert result.movement_remaining is not None
         self.player_x = result.position.x
         self.player_y = result.position.y
         self._update_lighting()

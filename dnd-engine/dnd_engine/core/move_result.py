@@ -22,15 +22,23 @@ class MoveResult:
     Fields:
         ok: True if the step landed; False if any precondition rejected.
         reason: Human-readable failure reason (``"blocking"``, ``"occupied
-            by <id>"``, ``"no movement remaining"``, ``"not placed"``).
-            ``None`` on success.
+            by <id>"``, ``"out of bounds"``, ``"no movement remaining"``,
+            ``"not placed"``). ``None`` on success.
         position: The entity's position after the attempt. On failure
-            this is the entity's CURRENT position (the move did not
-            happen); on success it is the new destination.
+            this is the entity's CURRENT position when known; ``None``
+            for the ``"not placed"`` path where no current position
+            exists. On success it is the new destination.
         movement_remaining: Feet remaining in the current TurnState
             after the attempt. On failure this reflects the pool as it
             stood at rejection time — the cost is NOT deducted when the
-            move is rejected.
+            move is rejected. ``None`` for the ``"not placed"`` path
+            where no turn state was consulted, distinguishing the
+            soft-fail from a legitimate "pool exhausted" zero.
+        blocker_entity_id: Entity id of the occupant that blocked the
+            step. Populated only on the ``"occupied by <id>"`` failure
+            path so consumers can route to entity-aware rendering
+            without string-slicing ``reason``. ``None`` on every other
+            outcome including success.
 
     Immutability (``frozen=True``) and ``slots=True`` keep the
     structure cheap to create per-step and safe to share across event
@@ -39,5 +47,6 @@ class MoveResult:
 
     ok: bool
     reason: str | None
-    position: Position
-    movement_remaining: int
+    position: Position | None
+    movement_remaining: int | None
+    blocker_entity_id: str | None = None

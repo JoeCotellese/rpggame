@@ -778,7 +778,7 @@ class GameState:
                     type=EventType.CREATURE_MOVED,
                     data={
                         "entity_id": entity_id,
-                        "from": existing,
+                        "origin": existing,
                         "to": destination,
                     },
                 )
@@ -833,7 +833,7 @@ class GameState:
                 type=EventType.CREATURE_MOVED,
                 data={
                     "entity_id": entity_id,
-                    "from": current,
+                    "origin": current,
                     "to": destination,
                 },
             )
@@ -949,11 +949,14 @@ class GameState:
 
         current = self.spatial.position_of(entity_id)
         if current is None:
+            # Soft-fail: no current position exists and no turn state was
+            # consulted, so both fields are None rather than zero/origin
+            # sentinels that would collide with legitimate values.
             return MoveResult(
                 ok=False,
                 reason="not placed",
-                position=Position(0, 0),
-                movement_remaining=0,
+                position=None,
+                movement_remaining=None,
             )
 
         destination = Position(current.x + dx, current.y + dy)
@@ -1009,6 +1012,7 @@ class GameState:
                 reason=f"occupied by {occupant}",
                 position=current,
                 movement_remaining=budget,
+                blocker_entity_id=occupant,
             )
 
         # Map drives terrain by default; explicit kwarg wins when supplied.

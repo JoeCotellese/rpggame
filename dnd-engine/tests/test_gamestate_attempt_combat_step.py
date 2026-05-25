@@ -132,7 +132,7 @@ class TestAttemptCombatStepSuccessNormal:
         assert len(moved) == 1
         assert moved[0].data == {
             "entity_id": entity_id,
-            "from": Position(1, 1),
+            "origin": Position(1, 1),
             "to": Position(1, 2),
         }
 
@@ -195,6 +195,8 @@ class TestAttemptCombatStepOccupied:
         assert result.reason is not None
         assert result.reason.startswith("occupied")
         assert "goblin" in result.reason
+        # Structured blocker id frees consumers from string-slicing the reason.
+        assert result.blocker_entity_id == "goblin"
         assert result.position == Position(1, 1)
         assert result.movement_remaining == starting
 
@@ -241,9 +243,12 @@ class TestAttemptCombatStepNotPlaced:
 
         assert result.ok is False
         assert result.reason == "not placed"
-        # Soft-fail position contract per the plan: Position(0, 0).
-        assert result.position == Position(0, 0)
-        assert result.movement_remaining == 0
+        # Soft-fail contract: no current position exists and no turn state
+        # was consulted, so both fields are None rather than zero/origin
+        # sentinels that would collide with legitimate values.
+        assert result.position is None
+        assert result.movement_remaining is None
+        assert result.blocker_entity_id is None
 
 
 class TestAttemptCombatStepOutOfBounds:

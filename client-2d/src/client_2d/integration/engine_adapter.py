@@ -972,6 +972,11 @@ class EngineAdapter:
         """
         if self._game_state is None:
             raise ValueError("Must call initialize_game() first")
+        # ``isinstance(b, int)`` returns True for ``bool`` because ``bool``
+        # subclasses ``int``; that would let ``set_position(eid, True, False)``
+        # build a ``Position(True, False)``. Tighten with explicit bool rejection.
+        if isinstance(x, bool) or isinstance(y, bool):
+            raise TypeError("x and y must be integers, not bool")
         if not isinstance(x, int) or not isinstance(y, int):
             raise TypeError("x and y must be integers")
         if self._game_state.spatial is not None:
@@ -1013,6 +1018,10 @@ class EngineAdapter:
         """
         if self._game_state is None:
             raise ValueError("Must call initialize_game() first")
+        # Reject bool ahead of the int check — see ``set_position`` for the
+        # ``bool`` ⊂ ``int`` rationale.
+        if isinstance(dx, bool) or isinstance(dy, bool):
+            raise TypeError("dx and dy must be integers, not bool")
         if not isinstance(dx, int) or not isinstance(dy, int):
             raise TypeError("dx and dy must be integers")
         if self._game_state.spatial is not None:

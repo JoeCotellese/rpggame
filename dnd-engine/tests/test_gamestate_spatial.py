@@ -136,7 +136,7 @@ class TestSetPosition:
         assert len(moved) == 1
         assert moved[0].data == {
             "entity_id": "goblin",
-            "from": Position(0, 0),
+            "origin": Position(0, 0),
             "to": Position(1, 0),
         }
         assert game_state.spatial.position_of("goblin") == Position(1, 0)
@@ -167,7 +167,7 @@ class TestMoveCreature:
         assert len(moved) == 1
         assert moved[0].data == {
             "entity_id": "goblin",
-            "from": Position(0, 0),
+            "origin": Position(0, 0),
             "to": Position(1, 0),
         }
 
