@@ -209,32 +209,176 @@ class TestAction_Dodge:
     """
 
     def test_dodging_creature_imposes_disadvantage_on_attackers(self) -> None:
-        pytest.skip(
-            "GAP: Dodge is not a playable action. The combat engine "
-            "supports advantage/disadvantage on attack rolls "
-            "(dnd_engine/core/combat.py:122-132) but there is no "
-            "'dodging' flag on Creature/Character and no mechanism for "
-            "a defender to project disadvantage onto attackers' rolls. "
-            "Tracked by issue #438."
+        """A dodging defender forces attack rolls against them to
+        disadvantage (SRD: 'attack rolls against you have
+        Disadvantage')."""
+        from dnd_engine.systems.actions import dodge
+
+        engine, attacker, defender = _make_engine_and_combatants()
+        defender_turn = TurnState()
+        defender_turn.reset(speed=defender.speed)
+        ok, _ = dodge(defender, defender_turn)
+        assert ok is True
+
+        result = engine.resolve_attack(
+            attacker=attacker,
+            defender=defender,
+            attack_bonus=5,
+            damage_dice="1d8+3",
         )
 
-    def test_dodging_creature_rolls_dex_saves_with_advantage(self) -> None:
-        pytest.skip(
-            "GAP: see above. The advantage/disadvantage plumbing "
-            "exists on `make_skill_check` and `resolve_attack` but no "
-            "Dodge action sets a flag on the dodger that flips DEX "
-            "saves to advantage until the start of their next turn. "
-            "Tracked by issue #438."
-        )
+        assert result.disadvantage is True
+
+    def test_dodging_creature_rolls_dex_saves_with_advantage(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A dodging creature rolls DEX saves with advantage (SRD:
+        'you make Dexterity saving throws with Advantage')."""
+        from dnd_engine.core.dice import DiceRoller
+        from dnd_engine.systems.actions import dodge
+
+        _, _, defender = _make_engine_and_combatants()
+        defender_turn = TurnState()
+        defender_turn.reset(speed=defender.speed)
+        ok, _ = dodge(defender, defender_turn)
+        assert ok is True
+
+        captured: dict[str, bool] = {}
+        original_roll = DiceRoller.roll
+
+        def spy(self, dice, advantage=False, disadvantage=False, **kwargs):
+            captured["advantage"] = advantage
+            captured["disadvantage"] = disadvantage
+            return original_roll(
+                self, dice, advantage=advantage, disadvantage=disadvantage, **kwargs
+            )
+
+        monkeypatch.setattr(DiceRoller, "roll", spy)
+
+        defender.make_saving_throw("dex", dc=10)
+
+        assert captured.get("advantage") is True
+        assert captured.get("disadvantage") is False
 
     def test_dodge_benefit_ends_with_incapacitated_or_speed_zero(self) -> None:
-        pytest.skip(
-            "GAP: the Dodge benefit and its termination conditions are "
-            "not implemented (no dodge state to terminate). The "
-            "Incapacitated condition exists in the conditions catalog "
-            "but nothing consults it as a dodge revocation trigger. "
-            "Tracked by issue #438."
+        """The dodge benefit is suppressed if the dodger is
+        Incapacitated or their effective Speed is 0 (SRD: 'You lose
+        this benefit if you have the Incapacitated condition or if
+        your Speed is 0'). Also: taking Dodge while already
+        incapacitated fails outright."""
+        from dnd_engine.systems.actions import dodge
+
+        # (a) Incapacitated dodger: attackers do NOT get disadvantage.
+        engine, attacker, defender = _make_engine_and_combatants()
+        defender_turn = TurnState()
+        defender_turn.reset(speed=defender.speed)
+        ok, _ = dodge(defender, defender_turn)
+        assert ok is True
+        defender.add_condition("stunned")  # Stunned imposes Incapacitated.
+        result = engine.resolve_attack(
+            attacker=attacker,
+            defender=defender,
+            attack_bonus=5,
+            damage_dice="1d8+3",
         )
+        assert result.disadvantage is False
+
+        # (b) Speed-zero dodger: benefit suppressed.
+        engine, attacker, defender = _make_engine_and_combatants()
+        defender_turn = TurnState()
+        defender_turn.reset(speed=defender.speed)
+        ok, _ = dodge(defender, defender_turn)
+        assert ok is True
+        defender.speed = 0
+        result = engine.resolve_attack(
+            attacker=attacker,
+            defender=defender,
+            attack_bonus=5,
+            damage_dice="1d8+3",
+        )
+        assert result.disadvantage is False
+
+        # (c) Cannot take Dodge while already Incapacitated.
+        _, _, defender = _make_engine_and_combatants()
+        defender.add_condition("paralyzed")
+        defender_turn = TurnState()
+        defender_turn.reset(speed=defender.speed)
+        ok, reason = dodge(defender, defender_turn)
+        assert ok is False
+        assert reason == "incapacitated"
+        assert defender_turn.action_available is True  # Not consumed on rejection.
+
+    def test_dodge_and_attacker_advantage_cancel_without_crashing(self) -> None:
+        """When an attacker has Advantage (e.g., via Help) and the
+        defender is dodging, the two cancel and the attack rolls
+        normally — the dice roller raises if both flags arrive set,
+        so cancellation must happen at the consumption site."""
+        from dnd_engine.systems.actions import dodge, help_action
+
+        engine, attacker, defender = _make_engine_and_combatants()
+        defender_turn = TurnState()
+        defender_turn.reset(speed=defender.speed)
+        ok, _ = dodge(defender, defender_turn)
+        assert ok is True
+
+        # Stage Help-granted advantage on the attacker.
+        ally = Creature(
+            name="Ally",
+            max_hp=10,
+            ac=12,
+            abilities=Abilities(10, 10, 10, 10, 10, 10),
+        )
+        ally_turn = TurnState()
+        ally_turn.reset(speed=ally.speed)
+        ok, _ = help_action(ally, attacker, ally_turn)
+        assert ok is True
+        assert attacker.pending_help_from is ally
+
+        # Both flags fire inside resolve_attack — must cancel.
+        result = engine.resolve_attack(
+            attacker=attacker,
+            defender=defender,
+            attack_bonus=5,
+            damage_dice="1d8+3",
+        )
+
+        assert result.advantage is False
+        assert result.disadvantage is False
+        # Help grant consumed even when cancelled by Dodge.
+        assert attacker.pending_help_from is None
+
+    def test_dodge_benefit_ends_at_start_of_dodgers_next_turn(self) -> None:
+        """The dodge flag clears when the dodger's own next turn
+        starts via ``InitiativeTracker.next_turn`` (SRD: 'Until the
+        start of your next turn')."""
+        from dnd_engine.systems.actions import dodge
+        from dnd_engine.systems.initiative import InitiativeTracker
+
+        abilities = Abilities(10, 10, 10, 10, 10, 10)
+        dodger = Creature("Dodger", max_hp=10, ac=12, abilities=abilities)
+        other = Creature("Other", max_hp=10, ac=12, abilities=abilities)
+        tracker = InitiativeTracker(DiceRoller(seed=1))
+        tracker.add_combatant(dodger)
+        tracker.add_combatant(other)
+
+        # Advance to the dodger's turn (initiative order is rolled and
+        # order-agnostic for this test).
+        while tracker.get_current_combatant().creature is not dodger:
+            tracker.next_turn()
+
+        ok, _ = dodge(dodger, tracker.turn_states[dodger])
+        assert ok is True
+        assert dodger.is_dodging is True
+
+        # Next combatant's turn — dodge still active.
+        tracker.next_turn()
+        assert tracker.get_current_combatant().creature is not dodger
+        assert dodger.is_dodging is True
+
+        # Back to dodger — benefit ends at the start of their next turn.
+        tracker.next_turn()
+        assert tracker.get_current_combatant().creature is dodger
+        assert dodger.is_dodging is False
 
 
 class TestAction_Help:
@@ -244,28 +388,141 @@ class TestAction_Help:
     > administer first aid.
     """
 
-    def test_help_grants_advantage_on_helped_creatures_next_check_or_attack(self) -> None:
-        pytest.skip(
-            "GAP: Help is not a playable action. There is no helper "
-            "registration, no 'helped_by' flag, and no plumbing that "
-            "grants advantage on the helped creature's next ability "
-            "check or attack roll. The combat engine's "
-            "advantage/disadvantage parameter would be the consumption "
-            "site (dnd_engine/core/combat.py:122) but nothing sets it "
-            "via Help. Tracked by issue #441."
+    def test_help_grants_advantage_on_helped_creatures_next_check_or_attack(
+        self,
+    ) -> None:
+        """Help grants the ally advantage on their next attack roll
+        (SRD: 'Help another creature's ... attack roll'). The grant is
+        consumed on first use."""
+        from dnd_engine.systems.actions import help_action
+
+        engine, helper, ally = _make_engine_and_combatants()
+        target = Creature(
+            name="Target",
+            max_hp=10,
+            ac=13,
+            abilities=Abilities(10, 10, 10, 10, 10, 10),
+        )
+        helper_turn = TurnState()
+        helper_turn.reset(speed=helper.speed)
+
+        ok, _ = help_action(helper, ally, helper_turn)
+        assert ok is True
+        assert ally.pending_help_from is helper
+        assert helper_turn.action_available is False
+
+        result = engine.resolve_attack(
+            attacker=ally,
+            defender=target,
+            attack_bonus=5,
+            damage_dice="1d8+3",
         )
 
-    def test_help_first_aid_stabilizes_a_zero_hp_ally(self) -> None:
-        pytest.skip(
-            "GAP: stabilization plumbing exists "
-            "(dnd_engine/core/character.py:1330-1380 — death saves "
-            "auto-stabilize on 3 successes, and the healer's kit item "
-            "description in items.json names stabilization as an "
-            "action) but no Help-action handler invokes it. A teammate "
-            "cannot take the Help action to stabilize a downed ally. "
-            "Tracked by issue #441; see also #352 (2D Client: "
-            "stabilize ally)."
+        assert result.advantage is True
+        assert ally.pending_help_from is None  # Consumed.
+
+    def test_help_grants_advantage_on_helped_characters_skill_check(self) -> None:
+        """Help grants the ally advantage on their next ability check
+        (SRD: 'Help another creature's ability check')."""
+        from dnd_engine.core.character import Character, CharacterClass
+        from dnd_engine.systems.actions import help_action
+
+        abilities = Abilities(10, 14, 10, 10, 10, 10)
+        helper = Creature("Helper", max_hp=10, ac=12, abilities=abilities)
+        ally = Character(
+            name="Ally",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=abilities,
+            max_hp=12,
+            ac=14,
         )
+        helper_turn = TurnState()
+        helper_turn.reset(speed=helper.speed)
+
+        ok, _ = help_action(helper, ally, helper_turn)
+        assert ok is True
+
+        skills_data = json.loads(SKILLS_JSON.read_text())
+        captured: dict[str, bool] = {}
+        original_roll = ally._dice_roller.roll
+
+        def spy(dice, advantage=False, disadvantage=False, **kwargs):
+            captured["advantage"] = advantage
+            captured["disadvantage"] = disadvantage
+            return original_roll(
+                dice, advantage=advantage, disadvantage=disadvantage, **kwargs
+            )
+
+        ally._dice_roller.roll = spy  # type: ignore[method-assign]
+
+        ally.make_skill_check("athletics", dc=10, skills_data=skills_data)
+
+        assert captured.get("advantage") is True
+        assert ally.pending_help_from is None  # Consumed.
+
+    def test_help_first_aid_stabilizes_a_zero_hp_ally(self) -> None:
+        """When the ally is at 0 HP, Help administers first aid: the
+        ally becomes Stabilized (SRD: 'or administer first aid')."""
+        from dnd_engine.core.character import Character, CharacterClass
+        from dnd_engine.systems.actions import help_action
+
+        abilities = Abilities(10, 10, 10, 10, 10, 10)
+        helper = Creature("Helper", max_hp=10, ac=12, abilities=abilities)
+        ally = Character(
+            name="Downed Ally",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=abilities,
+            max_hp=12,
+            ac=14,
+        )
+        ally.take_damage(ally.max_hp)  # Drop to 0 HP.
+        assert ally.current_hp == 0
+        assert ally.stabilized is False
+
+        helper_turn = TurnState()
+        helper_turn.reset(speed=helper.speed)
+
+        ok, _ = help_action(helper, ally, helper_turn)
+
+        assert ok is True
+        assert ally.stabilized is True
+        assert ally.current_hp == 0  # First aid stops death saves; HP unchanged.
+        assert helper_turn.action_available is False
+        # First-aid path does NOT also set the help-grant flag.
+        assert ally.pending_help_from is None
+
+    def test_help_grant_expires_at_start_of_helpers_next_turn(self) -> None:
+        """An unused help grant expires when the helper's own next
+        turn starts (SRD: 'by the start of your next turn')."""
+        from dnd_engine.systems.actions import help_action
+        from dnd_engine.systems.initiative import InitiativeTracker
+
+        abilities = Abilities(10, 10, 10, 10, 10, 10)
+        helper = Creature("Helper", max_hp=10, ac=12, abilities=abilities)
+        ally = Creature("Ally", max_hp=10, ac=12, abilities=abilities)
+        tracker = InitiativeTracker(DiceRoller(seed=7))
+        tracker.add_combatant(helper)
+        tracker.add_combatant(ally)
+
+        # Advance to the helper's turn.
+        while tracker.get_current_combatant().creature is not helper:
+            tracker.next_turn()
+
+        ok, _ = help_action(helper, ally, tracker.turn_states[helper])
+        assert ok is True
+        assert ally.pending_help_from is helper
+
+        # Walk through one full round back to helper.
+        tracker.next_turn()
+        # Help grant still pending — ally hasn't acted.
+        assert ally.pending_help_from is helper
+
+        # Helper's own next turn — grant expires.
+        tracker.next_turn()
+        assert tracker.get_current_combatant().creature is helper
+        assert ally.pending_help_from is None
 
 
 class TestAction_Hide:

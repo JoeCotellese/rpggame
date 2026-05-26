@@ -177,6 +177,20 @@ class Creature:
         self._alt_base_ac_formulas: dict[str, Callable[[Creature], int]] = {}
         self.active_base_ac_formula: str | None = None
 
+        # SRD § Actions › Dodge: while True, attack rolls against this
+        # creature have Disadvantage and their DEX saves have Advantage,
+        # unless they are Incapacitated or their Speed is 0. Set by the
+        # ``dodge`` action handler; cleared by ``InitiativeTracker.next_turn``
+        # at the start of the dodger's own next turn.
+        self.is_dodging: bool = False
+
+        # SRD § Actions › Help: when non-None, names the helper whose
+        # Help action grants this creature advantage on its next attack
+        # roll or ability check. Cleared on first consumption (one-shot)
+        # or by ``InitiativeTracker.next_turn`` at the start of the
+        # helper's own next turn.
+        self.pending_help_from: Creature | None = None
+
     @property
     def is_alive(self) -> bool:
         """Check if the creature is alive (HP > 0)"""
@@ -675,6 +689,22 @@ class Creature:
             ability_full = ability_lower
         else:
             raise ValueError(f"Invalid ability name: {ability}")
+
+        # SRD § Actions › Dodge: a dodging creature rolls DEX saves with
+        # Advantage, unless they are Incapacitated or their Speed is 0.
+        if (
+            ability_short == "dex"
+            and self.is_dodging
+            and not self.is_incapacitated()
+            and self.speed > 0
+        ):
+            advantage = True
+
+        # SRD: advantage and disadvantage cancel. The dice roller
+        # raises on both-set, so cancel here before delegating.
+        if advantage and disadvantage:
+            advantage = False
+            disadvantage = False
 
         # Get ability modifier
         if ability_full == "strength":

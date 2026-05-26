@@ -335,6 +335,22 @@ class Character(Creature):
         else:
             raise ValueError(f"Invalid ability name: {ability}")
 
+        # SRD § Actions › Dodge: a dodging creature rolls DEX saves with
+        # Advantage, unless they are Incapacitated or their Speed is 0.
+        if (
+            ability_short == "dex"
+            and self.is_dodging
+            and not self.is_incapacitated()
+            and self.speed > 0
+        ):
+            advantage = True
+
+        # SRD: advantage and disadvantage cancel. The dice roller
+        # raises on both-set, so cancel here before delegating.
+        if advantage and disadvantage:
+            advantage = False
+            disadvantage = False
+
         # Roll the saving throw
         roller = DiceRoller()
         roll_result = roller.roll("d20", advantage=advantage, disadvantage=disadvantage)
@@ -838,6 +854,19 @@ class Character(Creature):
 
         skill_info = skills_data[skill]
         modifier = self.get_skill_modifier(skill, skills_data)
+
+        # SRD § Actions › Help: a creature receiving Help rolls its
+        # next ability check with Advantage; the one-shot grant is
+        # consumed here whether the check succeeds or fails.
+        if self.pending_help_from is not None:
+            advantage = True
+            self.pending_help_from = None
+
+        # SRD: advantage and disadvantage cancel. The dice roller
+        # raises on both-set, so cancel here before delegating.
+        if advantage and disadvantage:
+            advantage = False
+            disadvantage = False
 
         # Roll the d20
         dice_roll = self._dice_roller.roll("1d20", advantage=advantage, disadvantage=disadvantage)

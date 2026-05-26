@@ -339,6 +339,32 @@ class CombatEngine:
         Returns:
             AttackResult containing full attack details including sneak attack if applicable
         """
+        # SRD § Actions › Dodge: a dodging defender imposes Disadvantage
+        # on incoming attacks, unless they are Incapacitated or their
+        # Speed is 0. Recomputed each call so revocation conditions are
+        # honored live.
+        if (
+            getattr(defender, "is_dodging", False)
+            and not defender.is_incapacitated()
+            and defender.speed > 0
+        ):
+            disadvantage = True
+
+        # SRD § Actions › Help: a creature receiving Help rolls its
+        # next attack with Advantage; the one-shot grant is consumed
+        # here whether or not the attack lands.
+        if getattr(attacker, "pending_help_from", None) is not None:
+            advantage = True
+            attacker.pending_help_from = None
+
+        # SRD: "If circumstances cause a roll to have both advantage
+        # and disadvantage, you're considered to have neither of them"
+        # — they cancel. The dice roller raises on both-set, so the
+        # cancellation must happen here before delegating.
+        if advantage and disadvantage:
+            advantage = False
+            disadvantage = False
+
         # Roll attack (1d20 + bonus)
         attack_roll_result = self.dice_roller.roll(
             "1d20", advantage=advantage, disadvantage=disadvantage
