@@ -42,6 +42,7 @@
         },
         {
           "name": "Second Wind",
+          "feature_id": "fighter.second_wind",
           "description": "You have a limited well of stamina. Once per short rest, you can use a bonus action to regain 1d10 + fighter level HP.",
           "resource": {
             "pool": "second_wind",
@@ -53,6 +54,7 @@
       "2": [
         {
           "name": "Action Surge",
+          "feature_id": "fighter.action_surge",
           "description": "You can push yourself beyond your normal limits. Once per short rest, you can take one additional action on your turn.",
           "resource": {
             "pool": "action_surge",
@@ -202,6 +204,7 @@
         },
         {
           "name": "Arcane Recovery",
+          "feature_id": "wizard.arcane_recovery",
           "description": "You can regain some of your magical energy by studying your spellbook. Once per day when you finish a short rest, you can choose expended spell slots to recover.",
           "resource": {
             "pool": "arcane_recovery",
