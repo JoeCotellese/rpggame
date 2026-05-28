@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from dnd_engine.core.creature import Creature
 from dnd_engine.core.dice import DiceRoller
-from dnd_engine.rules.damage import apply_damage_modifiers
+from dnd_engine.rules.damage import apply_damage_modifiers, is_immune
 from dnd_engine.utils.events import Event, EventBus, EventType
 
 if TYPE_CHECKING:
@@ -200,11 +200,13 @@ def _apply_damage_effect(
     # source of truth for the resulting number.
     damage_amount = apply_damage_modifiers(target, damage_roll.total, damage_type, environment)
 
-    # Display-only: note whether the target carries a matching Resistance
-    # condition, used solely to phrase the message/event below. This does
-    # not affect the number (the pipeline already applied it).
-    resistance_condition = f"has_resistance_{damage_type}"
-    has_resistance = target.has_condition(resistance_condition)
+    # Display-only: describe what the pipeline actually did by comparing the
+    # rolled total to the applied amount, so catalog Immunity / Resistance /
+    # Vulnerability are reflected just like the condition-flag forms. This
+    # does not affect the number (the pipeline already applied it).
+    target_is_immune = is_immune(target, damage_type)
+    has_resistance = not target_is_immune and damage_amount < damage_roll.total
+    is_vulnerable = damage_amount > damage_roll.total
 
     # Apply damage
     hp_before = target.current_hp
@@ -234,15 +236,20 @@ def _apply_damage_effect(
     damage_roll_str = f"rolled {damage_dice}: {damage_roll.total}"
 
     if actual_damage == 0:
-        # Show resistance if it caused the damage to be 0
-        if has_resistance and damage_roll.total > 0:
+        # Explain a zero result: Immunity zeroes outright; Resistance can
+        # also floor a low roll to zero.
+        if target_is_immune and damage_roll.total > 0:
+            message = f"{target.name} takes no damage (immune to {damage_type})"
+        elif has_resistance and damage_roll.total > 0:
             message = f"{target.name} takes no damage ({damage_roll_str}, halved by resistance)"
         else:
             message = f"{target.name} takes no damage"
     else:
-        # If resistance was applied, show the halving
+        # Annotate the modifier the pipeline applied, if any.
         if has_resistance:
             message = f"{target.name} takes {actual_damage} {damage_type} damage ({damage_roll_str}, halved by resistance)"
+        elif is_vulnerable:
+            message = f"{target.name} takes {actual_damage} {damage_type} damage ({damage_roll_str}, doubled by vulnerability)"
         else:
             message = (
                 f"{target.name} takes {actual_damage} {damage_type} damage ({damage_roll_str})"

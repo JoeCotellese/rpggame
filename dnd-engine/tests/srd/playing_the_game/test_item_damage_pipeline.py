@@ -72,6 +72,53 @@ class TestItemDamageVulnerability:
         assert target.current_hp == 80
 
 
+class TestItemDamageMessageReflectsPipeline:
+    """The result message/event must describe what the pipeline actually did.
+
+    The displayed annotation historically keyed off a per-type Resistance
+    *condition* only, so catalog Resistance/Immunity/Vulnerability — now
+    honored by the pipeline — produced messages that under- or mis-described
+    the applied number. The annotation must instead derive from the real
+    outcome.
+    """
+
+    def test_catalog_resistance_message_notes_halving(self) -> None:
+        target = _make_target()
+        target.damage_resistances = ["fire"]
+
+        result = _throw_fire(target)
+
+        assert result.amount == 5
+        assert "halved by resistance" in result.message
+
+    def test_catalog_vulnerability_message_notes_doubling(self) -> None:
+        target = _make_target()
+        target.damage_vulnerabilities = ["fire"]
+
+        result = _throw_fire(target)
+
+        assert result.amount == 20
+        assert "doubled by vulnerability" in result.message
+
+    def test_catalog_immunity_message_notes_immunity(self) -> None:
+        target = _make_target()
+        target.damage_immunities = ["fire"]
+
+        result = _throw_fire(target)
+
+        assert result.amount == 0
+        assert "immune" in result.message
+
+    def test_condition_resistance_still_notes_halving(self) -> None:
+        target = _make_target()
+        target.add_condition("has_resistance_fire")
+
+        result = _throw_fire(target)
+
+        assert result.amount == 5
+        assert "halved by resistance" in result.message
+
+
 class TestItemDamageEnvironment:
     """SRD § Underwater Combat: anything underwater has Resistance to Fire."""
 

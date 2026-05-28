@@ -64,6 +64,34 @@ def apply_damage_adjustments(target: Creature, damage: int, damage_type: str) ->
     return max(adjusted, 0)
 
 
+def is_immune(target: Creature, damage_type: str | None) -> bool:
+    """
+    Report whether the target is Immune to the given damage type.
+
+    Single source of truth for the Immunity stage, shared by
+    `apply_damage_modifiers` (which zeroes the damage) and by display
+    callers that need to describe *why* a hit dealt no damage without
+    re-deriving the modifier rules. Honors both the condition-flag form
+    (`has_immunity_{type}`) and the monster-catalog form
+    (`damage_immunities`).
+
+    Args:
+        target: The creature taking the damage.
+        damage_type: SRD damage type, or None. Untyped damage is never
+            Immune-able, so None returns False.
+
+    Returns:
+        True if the target is Immune to `damage_type`.
+    """
+    if damage_type is None:
+        return False
+    normalized_type = damage_type.lower()
+    catalog_immunities = [t.lower() for t in (getattr(target, "damage_immunities", None) or [])]
+    return target.has_condition(f"has_immunity_{normalized_type}") or (
+        normalized_type in catalog_immunities
+    )
+
+
 def apply_damage_modifiers(
     target: Creature,
     raw_damage: int,
@@ -155,9 +183,7 @@ def apply_damage_modifiers(
     # condition-flag form and the catalog-field form are honored.
     # Placed first because Immunity is absolute ("you don't take
     # damage of that type"), not a multiplier — see method docstring.
-    immunity_condition = f"has_immunity_{normalized_type}"
-    catalog_immunities = [t.lower() for t in (getattr(target, "damage_immunities", None) or [])]
-    if target.has_condition(immunity_condition) or normalized_type in catalog_immunities:
+    if is_immune(target, normalized_type):
         return 0
 
     # --- Adjustments stage ----------------------------------------------
