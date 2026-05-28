@@ -391,8 +391,6 @@ class CombatEngine:
         # Reconstruct the notation
         return f"{doubled_count}d{sides}{modifier_part}"
 
-
-
     def _process_saving_throw_effect(
         self, saving_throw_data: dict, attacker: Creature, defender: Creature, event_bus=None
     ) -> dict | None:

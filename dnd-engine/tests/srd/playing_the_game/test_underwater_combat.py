@@ -38,13 +38,7 @@ pytestmark = pytest.mark.srd(
 )
 
 
-ITEMS_JSON = (
-    Path(__file__).resolve().parents[3]
-    / "dnd_engine"
-    / "data"
-    / "srd"
-    / "items.json"
-)
+ITEMS_JSON = Path(__file__).resolve().parents[3] / "dnd_engine" / "data" / "srd" / "items.json"
 
 
 def _make_creature(name: str = "Subject", hp: int = 50) -> Creature:
@@ -122,9 +116,7 @@ class TestUnderwaterCombat_ImpededMelee:
         items = json.loads(ITEMS_JSON.read_text())
         weapons = _all_weapon_entries(items)
         piercing = [w for w in weapons if w["damage_type"] == "piercing"]
-        non_piercing = [
-            w for w in weapons if w["damage_type"] in {"slashing", "bludgeoning"}
-        ]
+        non_piercing = [w for w in weapons if w["damage_type"] in {"slashing", "bludgeoning"}]
         assert piercing, (
             "Expected at least one weapon with damage_type='piercing' "
             "in items.json so the SRD's underwater piercing carve-out "

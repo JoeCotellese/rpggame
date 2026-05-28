@@ -522,9 +522,7 @@ class TestApplyDamageModifiers:
     def test_condition_flag_vulnerability_doubles_damage(self):
         """`has_vulnerability_{type}` condition doubles matching damage."""
         self.target.add_condition("has_vulnerability_fire")
-        result = self.engine._apply_damage_modifiers(
-            self.target, raw_damage=10, damage_type="fire"
-        )
+        result = self.engine._apply_damage_modifiers(self.target, raw_damage=10, damage_type="fire")
         assert result == 20
 
     def test_condition_flag_vulnerability_is_per_type(self):
@@ -552,9 +550,7 @@ class TestApplyDamageModifiers:
         """Condition flag + catalog field combined still double once."""
         self.target.add_condition("has_vulnerability_fire")
         self.target.damage_vulnerabilities = ["fire"]
-        result = self.engine._apply_damage_modifiers(
-            self.target, raw_damage=10, damage_type="fire"
-        )
+        result = self.engine._apply_damage_modifiers(self.target, raw_damage=10, damage_type="fire")
         assert result == 20
 
     def test_immunity_takes_precedence_over_vulnerability(self):
@@ -562,9 +558,7 @@ class TestApplyDamageModifiers:
         Immunity, then Resistance, then Vulnerability)."""
         self.target.damage_immunities = ["fire"]
         self.target.add_condition("has_vulnerability_fire")
-        result = self.engine._apply_damage_modifiers(
-            self.target, raw_damage=10, damage_type="fire"
-        )
+        result = self.engine._apply_damage_modifiers(self.target, raw_damage=10, damage_type="fire")
         assert result == 0
 
     def test_vulnerability_damage_type_is_normalized_case_insensitively(self):
@@ -602,25 +596,19 @@ class TestDamageAdjustmentsStage:
 
     def test_no_adjustments_returns_damage_unchanged(self):
         """A target with no adjustments attribute passes damage through."""
-        result = self.engine._apply_damage_adjustments(
-            self.target, damage=10, damage_type="fire"
-        )
+        result = self.engine._apply_damage_adjustments(self.target, damage=10, damage_type="fire")
         assert result == 10
 
     def test_damage_taken_reduction_subtracts_flat_amount(self):
         """`damage_taken_reduction = 5` subtracts 5 from damage."""
         self.target.damage_taken_reduction = 5
-        result = self.engine._apply_damage_adjustments(
-            self.target, damage=20, damage_type="fire"
-        )
+        result = self.engine._apply_damage_adjustments(self.target, damage=20, damage_type="fire")
         assert result == 15
 
     def test_damage_taken_reduction_clamps_at_zero(self):
         """Adjustment can't drive damage below 0 (SRD: no negative damage)."""
         self.target.damage_taken_reduction = 10
-        result = self.engine._apply_damage_adjustments(
-            self.target, damage=3, damage_type="fire"
-        )
+        result = self.engine._apply_damage_adjustments(self.target, damage=3, damage_type="fire")
         assert result == 0
 
     def test_adjustments_apply_before_resistance(self):
@@ -632,9 +620,7 @@ class TestDamageAdjustmentsStage:
         """
         self.target.add_condition("has_resistance_fire")
         self.target.damage_taken_reduction = 5
-        result = self.engine._apply_damage_modifiers(
-            self.target, raw_damage=20, damage_type="fire"
-        )
+        result = self.engine._apply_damage_modifiers(self.target, raw_damage=20, damage_type="fire")
         assert result == 7
 
     def test_adjustments_do_not_run_when_immune(self):
@@ -647,9 +633,7 @@ class TestDamageAdjustmentsStage:
         """
         self.target.damage_immunities = ["fire"]
         self.target.damage_taken_reduction = 5
-        result = self.engine._apply_damage_modifiers(
-            self.target, raw_damage=20, damage_type="fire"
-        )
+        result = self.engine._apply_damage_modifiers(self.target, raw_damage=20, damage_type="fire")
         assert result == 0
 
     def test_adjustments_combine_with_resistance_and_vulnerability(self):
@@ -661,9 +645,7 @@ class TestDamageAdjustmentsStage:
         self.target.damage_resistances = ["all"]
         self.target.add_condition("has_vulnerability_fire")
         self.target.damage_taken_reduction = 5
-        result = self.engine._apply_damage_modifiers(
-            self.target, raw_damage=28, damage_type="fire"
-        )
+        result = self.engine._apply_damage_modifiers(self.target, raw_damage=28, damage_type="fire")
         assert result == 22
 
 
@@ -690,8 +672,7 @@ class TestBlanketResistance:
         """`has_resistance_all` halves damage of every type."""
         self.target.add_condition("has_resistance_all")
         assert (
-            self.engine._apply_damage_modifiers(self.target, raw_damage=10, damage_type="fire")
-            == 5
+            self.engine._apply_damage_modifiers(self.target, raw_damage=10, damage_type="fire") == 5
         )
         assert (
             self.engine._apply_damage_modifiers(
@@ -704,8 +685,7 @@ class TestBlanketResistance:
         """`damage_resistances: ["all"]` halves damage of every type."""
         self.target.damage_resistances = ["all"]
         assert (
-            self.engine._apply_damage_modifiers(self.target, raw_damage=10, damage_type="fire")
-            == 5
+            self.engine._apply_damage_modifiers(self.target, raw_damage=10, damage_type="fire") == 5
         )
         assert (
             self.engine._apply_damage_modifiers(
@@ -718,18 +698,14 @@ class TestBlanketResistance:
         """No Stacking: blanket + per-type resistance still halves once."""
         self.target.add_condition("has_resistance_fire")
         self.target.damage_resistances = ["all"]
-        result = self.engine._apply_damage_modifiers(
-            self.target, raw_damage=10, damage_type="fire"
-        )
+        result = self.engine._apply_damage_modifiers(self.target, raw_damage=10, damage_type="fire")
         assert result == 5
 
     def test_blanket_resistance_does_not_block_immunity(self):
         """Immunity still zeros even when blanket resistance is set."""
         self.target.add_condition("has_resistance_all")
         self.target.damage_immunities = ["fire"]
-        result = self.engine._apply_damage_modifiers(
-            self.target, raw_damage=10, damage_type="fire"
-        )
+        result = self.engine._apply_damage_modifiers(self.target, raw_damage=10, damage_type="fire")
         assert result == 0
 
     def test_blanket_resistance_interacts_with_vulnerability(self):
@@ -740,9 +716,7 @@ class TestBlanketResistance:
         """
         self.target.damage_resistances = ["all"]
         self.target.add_condition("has_vulnerability_fire")
-        result = self.engine._apply_damage_modifiers(
-            self.target, raw_damage=21, damage_type="fire"
-        )
+        result = self.engine._apply_damage_modifiers(self.target, raw_damage=21, damage_type="fire")
         assert result == 20
 
 
@@ -846,9 +820,7 @@ class TestResolveAttackDamageType:
         attacker_abilities = Abilities(
             strength=16, dexterity=14, constitution=15, intelligence=10, wisdom=12, charisma=8
         )
-        self.attacker = Creature(
-            name="Attacker", max_hp=20, ac=16, abilities=attacker_abilities
-        )
+        self.attacker = Creature(name="Attacker", max_hp=20, ac=16, abilities=attacker_abilities)
         defender_abilities = Abilities(
             strength=10, dexterity=10, constitution=10, intelligence=10, wisdom=10, charisma=10
         )
