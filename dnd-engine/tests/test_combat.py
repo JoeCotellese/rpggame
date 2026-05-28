@@ -1096,30 +1096,12 @@ class TestDamageRollClampAtZero:
         # then "tops up" partway.
         assert result.damage == 0
 
-    def test_resolve_saving_throw_effect_clamps_negative_damage(self):
-        """`resolve_saving_throw_effect` uses `_calculate_damage` and inherits the clamp.
+    def test_calculate_damage_clamps_negative_damage(self):
+        """`_calculate_damage` clamps a net-negative roll to 0, never negative.
 
-        A spell-effect with a contrived negative-modifier damage_dice
-        must report 0 damage taken, not negative.
+        SRD § Playing the Game › Damage Rolls: a penalty can reduce
+        damage to 0 but not below. This is the clamp source consumed by
+        every live damage path (resolve_attack, resolve_spell_save).
         """
-        target = Character(
-            name="Target",
-            character_class=CharacterClass.FIGHTER,
-            level=1,
-            abilities=self.abilities,
-            max_hp=20,
-            ac=10,
-        )
-        starting_hp = target.current_hp
-        effect = {"damage_dice": "1d4-5"}
-        result = self.engine.resolve_saving_throw_effect(
-            target=target,
-            save_ability="dex",
-            dc=1,  # always succeeds
-            effect=effect,
-            apply_damage=True,
-        )
-        assert result["damage"] == 0
-        assert result["damage_taken"] == 0
-        # Crucially: target's HP did not increase from negative damage.
-        assert target.current_hp == starting_hp
+        # "1d4-5" can only yield -4..-1 before clamping → must report 0.
+        assert self.engine._calculate_damage("1d4-5", critical_hit=False) == 0
