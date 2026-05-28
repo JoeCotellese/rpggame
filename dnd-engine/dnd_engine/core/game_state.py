@@ -19,6 +19,7 @@ from dnd_engine.core.party import Party
 from dnd_engine.core.position import Position
 from dnd_engine.core.quest import QuestManager
 from dnd_engine.core.room_registry import RoomRegistry
+from dnd_engine.rules.damage import apply_damage_modifiers
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.systems.action_economy import ActionType, Terrain, cost_for
 from dnd_engine.systems.ai import EnemyAI
@@ -3187,6 +3188,17 @@ class GameState:
 
             # Apply damage if there's a target
             if target and hasattr(target, "take_damage"):
+                # Route through the canonical damage pipeline so the
+                # target's Immunity / Resistance / Vulnerability (and any
+                # environment-granted Resistance) apply to auto-hit spell
+                # damage such as Magic Missile's force darts. #595
+                damage = apply_damage_modifiers(
+                    target,
+                    damage,
+                    damage_data.get("damage_type"),
+                    self.creature_environment(target),
+                )
+
                 import inspect
 
                 sig = inspect.signature(target.take_damage)
