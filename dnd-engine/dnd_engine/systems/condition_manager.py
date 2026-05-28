@@ -8,6 +8,7 @@ from typing import Any
 
 from dnd_engine.core.creature import Creature
 from dnd_engine.core.dice import DiceRoller
+from dnd_engine.rules.damage import apply_damage_modifiers
 from dnd_engine.utils.events import Event, EventBus, EventType
 
 
@@ -185,7 +186,12 @@ class ConditionManager:
 
         # Roll damage
         damage_roll = self.dice_roller.roll(damage_dice)
-        damage_amount = damage_roll.total
+        # Route the rolled damage through the canonical pipeline so
+        # Immunity, Resistance, and Vulnerability apply to recurring
+        # condition damage (e.g. a fire-immune creature does not burn).
+        # No environment context is available at the condition layer, so
+        # environment-granted Resistance is not consulted here.
+        damage_amount = apply_damage_modifiers(creature, damage_roll.total, damage_type)
 
         # Apply damage
         creature.take_damage(damage_amount)
