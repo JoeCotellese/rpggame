@@ -1282,7 +1282,14 @@ class GameState:
             The room's `environment` value (e.g. `"underwater"`) or
             `None` when the current room declares no environment tag.
         """
-        room = self.get_current_room()
+        # Best-effort: unit/combat states that never bootstrapped a
+        # dungeon map have no current room, hence no environment context.
+        # Treat an unresolvable room as "no environment" rather than
+        # raising, since environment-granted carve-outs are optional.
+        try:
+            room = self.get_current_room()
+        except (KeyError, AttributeError, TypeError):
+            return None
         env = room.get("environment")
         if env is None:
             return None
@@ -5511,6 +5518,7 @@ class GameState:
             dice_roller=self.dice_roller,
             event_bus=self.event_bus,
             time_manager=self.time_manager,
+            environment=self.creature_environment(target),
         )
 
         # Track HP after for healing display

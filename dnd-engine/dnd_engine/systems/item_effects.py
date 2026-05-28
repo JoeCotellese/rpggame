@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from dnd_engine.core.creature import Creature
 from dnd_engine.core.dice import DiceRoller
+from dnd_engine.rules.damage import apply_damage_modifiers
 from dnd_engine.utils.events import Event, EventBus, EventType
 
 if TYPE_CHECKING:
@@ -35,6 +36,7 @@ def apply_item_effect(
     dice_roller: DiceRoller | None = None,
     event_bus: EventBus | None = None,
     time_manager: Optional["TimeManager"] = None,
+    environment: str | None = None,
 ) -> ItemEffectResult:
     """
     Apply an item's effect to a target creature.
@@ -71,7 +73,7 @@ def apply_item_effect(
     if effect_type == "healing":
         return _apply_healing_effect(item_info, target, dice_roller, event_bus)
     elif effect_type == "damage":
-        return _apply_damage_effect(item_info, target, dice_roller, event_bus)
+        return _apply_damage_effect(item_info, target, dice_roller, event_bus, environment)
     elif effect_type == "condition_removal":
         return _apply_condition_removal_effect(item_info, target, event_bus)
     elif effect_type == "buff":
@@ -163,7 +165,11 @@ def _apply_healing_effect(
 
 
 def _apply_damage_effect(
-    item_info: dict[str, Any], target: Creature, dice_roller: DiceRoller, event_bus: EventBus | None
+    item_info: dict[str, Any],
+    target: Creature,
+    dice_roller: DiceRoller,
+    event_bus: EventBus | None,
+    environment: str | None = None,
 ) -> ItemEffectResult:
     """
     Apply a damage effect to a target.
@@ -175,6 +181,9 @@ def _apply_damage_effect(
         target: Creature to damage
         dice_roller: DiceRoller for rolling damage dice
         event_bus: Optional event bus for emitting DAMAGE_DEALT event
+        environment: Optional environment tag for the target's room
+            (e.g. "underwater"). Forwarded to the damage pipeline so SRD
+            environment carve-outs (underwater → Fire Resistance) apply.
 
     Returns:
         ItemEffectResult with damage details
@@ -185,15 +194,17 @@ def _apply_damage_effect(
 
     # Roll damage dice
     damage_roll = dice_roller.roll(damage_dice)
-    damage_amount = damage_roll.total
+    # Route the rolled damage through the canonical pipeline so Immunity,
+    # Resistance, Vulnerability, monster catalog fields, and
+    # environment-granted Resistance all apply. The pipeline is the single
+    # source of truth for the resulting number.
+    damage_amount = apply_damage_modifiers(target, damage_roll.total, damage_type, environment)
 
-    # Check for resistance to this damage type
+    # Display-only: note whether the target carries a matching Resistance
+    # condition, used solely to phrase the message/event below. This does
+    # not affect the number (the pipeline already applied it).
     resistance_condition = f"has_resistance_{damage_type}"
     has_resistance = target.has_condition(resistance_condition)
-
-    # Halve damage if resistant
-    if has_resistance:
-        damage_amount = damage_amount // 2  # Integer division for D&D rules
 
     # Apply damage
     hp_before = target.current_hp
@@ -210,7 +221,7 @@ def _apply_damage_effect(
                 "damage_dice": damage_dice,
                 "damage_type": damage_type,
                 "damage_rolled": damage_roll.total,  # Original rolled damage
-                "damage_after_resistance": damage_amount,  # After resistance applied
+                "damage_after_modifiers": damage_amount,  # After the damage pipeline
                 "damage_actual": actual_damage,  # After all reductions
                 "has_resistance": has_resistance,
                 "hp_before": hp_before,
