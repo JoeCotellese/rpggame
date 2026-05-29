@@ -368,6 +368,43 @@ class Creature:
 
         self.current_hp = min(self.max_hp, self.current_hp + amount)
 
+    def set_temporary_hit_points(self, amount: int, *, replace: bool = False) -> int:
+        """
+        Grant Temporary Hit Points to the creature.
+
+        SRD § Playing the Game › Temporary Hit Points › Don't Stack:
+        "Temporary Hit Points can't be added together. If you have
+        Temporary Hit Points and receive more of them, you decide
+        whether to keep the ones you have or to gain the new ones."
+
+        The default resolution keeps the greater of the existing and new
+        pools — the sensible automatic reading of "you decide" when no
+        explicit choice is supplied. A caller honoring a player's choice
+        to take the new pool (even when it is smaller) passes
+        ``replace=True`` to install ``amount`` unconditionally. Either
+        way the pools are never summed.
+
+        This is NOT healing (SRD: "receiving Temporary Hit Points
+        doesn't count as healing"): it never touches `current_hp`,
+        works at full HP, and does not revive a creature at 0 HP. It
+        emits no event and takes no event bus.
+
+        Args:
+            amount: Temp HP to grant. Negative values clamp to 0.
+            replace: When True, install `amount` as the pool even if it
+                is lower than the current value. When False (default),
+                keep whichever pool is greater.
+
+        Returns:
+            The resulting Temporary Hit Points pool.
+        """
+        amount = max(0, amount)
+        if replace:
+            self.temporary_hit_points = amount
+        else:
+            self.temporary_hit_points = max(self.temporary_hit_points, amount)
+        return self.temporary_hit_points
+
     def is_immune_to_condition(self, condition: str) -> bool:
         """
         Check whether this creature is immune to a named condition.

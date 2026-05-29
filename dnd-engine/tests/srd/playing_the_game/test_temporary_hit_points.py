@@ -145,22 +145,28 @@ class TestTempHP_DontStack:
     """
 
     def test_receiving_new_temp_hp_does_not_sum_with_existing(self) -> None:
-        pytest.skip(
-            "GAP: no Temp HP grant API exists. The placeholder buff "
-            "at dnd_engine/systems/item_effects.py:364-368 attaches a "
-            "condition (`has_temporary_hp_buff`) without any amount. "
-            "There is nowhere to test the SRD's worked example "
-            "(10 + 12 = pick one, never 22). Tracked by issue #482."
-        )
+        # SRD worked example: 12 granted over an existing 10 yields 12,
+        # never 22 — Temp HP can't be added together.
+        creature = _make_creature()
+        creature.set_temporary_hit_points(10)
+        creature.set_temporary_hit_points(12)
+        assert creature.temporary_hit_points == 12
+        # A lower grant doesn't shrink the buffer either (keep-greater).
+        creature.set_temporary_hit_points(5)
+        assert creature.temporary_hit_points == 12
 
     def test_caller_chooses_to_keep_or_replace_temp_hp(self) -> None:
-        pytest.skip(
-            "GAP: depends on the grant API. The SRD lets the recipient "
-            "*decide* (keep the old or take the new). A real grant "
-            "API must surface this choice — defaulting to max() is a "
-            "common implementation but the SRD reserves the choice to "
-            "the player. Tracked by issue #482."
-        )
+        # SRD reserves the choice to the recipient. The default
+        # auto-resolves to the greater pool; a caller honoring an
+        # explicit "take the new pool" choice passes replace=True, which
+        # installs the new amount even when it is lower than the old.
+        creature = _make_creature()
+        creature.set_temporary_hit_points(10)
+        creature.set_temporary_hit_points(5)  # default: keep the greater
+        assert creature.temporary_hit_points == 10
+        result = creature.set_temporary_hit_points(5, replace=True)
+        assert creature.temporary_hit_points == 5
+        assert result == 5  # helper returns the resulting pool
 
 
 class TestTempHP_NotHitPointsNotHealing:
@@ -174,38 +180,41 @@ class TestTempHP_NotHitPointsNotHealing:
     """
 
     def test_healing_does_not_restore_temporary_hit_points(self) -> None:
-        pytest.skip(
-            "GAP: depends on the Temp HP pool field. `Creature.heal` "
-            "(dnd_engine/core/creature.py:226-240) and "
-            "`Character.recover_hp` "
-            "(dnd_engine/core/character.py:1150-1174) operate on "
-            "`current_hp` only; there is no Temp HP pool to inadvertently "
-            "modify, but also no way to assert the SRD's negative — "
-            "'healing can't restore them' — until the field exists. "
-            "Tracked by issue #482."
-        )
+        # Drain part of a buffer, then heal: healing restores HP only,
+        # never the depleted Temp HP pool.
+        creature = _make_creature(max_hp=20, current_hp=20)
+        creature.set_temporary_hit_points(5)
+        creature.take_damage(8)  # 5 absorbed, 3 to HP
+        assert creature.temporary_hit_points == 0
+        assert creature.current_hp == 17
+        creature.heal(5)
+        assert creature.current_hp == 20  # capped at max
+        assert creature.temporary_hit_points == 0  # heal can't refill Temp HP
 
     def test_full_hp_creature_can_still_receive_temp_hp(self) -> None:
-        pytest.skip(
-            "GAP: depends on the grant API. SRD: 'a creature can be at "
-            "full Hit Points and receive Temporary Hit Points.' "
-            "`Creature.heal` is a no-op at full HP "
-            "(dnd_engine/core/creature.py:240), which is *correct* for "
-            "healing — but a Temp HP grant must NOT short-circuit on "
-            "full HP. There is no grant path to exercise. Tracked by "
-            "issue #482."
-        )
+        # SRD: 'a creature can be at full Hit Points and receive
+        # Temporary Hit Points.' The grant must not short-circuit on
+        # full HP the way healing does.
+        creature = _make_creature(max_hp=20, current_hp=20)
+        creature.set_temporary_hit_points(7)
+        assert creature.current_hp == 20  # HP untouched
+        assert creature.temporary_hit_points == 7
 
     def test_temp_hp_grant_is_not_a_healing_event(self) -> None:
-        pytest.skip(
-            "GAP: depends on the Temp HP grant API. The SRD calls out "
-            "that 'receiving Temporary Hit Points doesn't count as "
-            "healing' — so a Temp HP grant must NOT emit a HEALING_DONE "
-            "event "
-            "(dnd_engine/utils/events.py) or otherwise be observable as "
-            "a heal. Today no such grant API exists. Tracked by "
-            "issue #482."
+        # 'Receiving Temporary Hit Points doesn't count as healing.' The
+        # grant API is a pure pool operation on Creature — it takes no
+        # event bus and cannot raise HP, so it can never be observed as
+        # a heal (no HEALING_DONE, no current_hp change).
+        import inspect
+
+        sig = inspect.signature(Creature.set_temporary_hit_points)
+        assert "event_bus" not in sig.parameters, (
+            "set_temporary_hit_points must not accept an event bus — a "
+            "Temp HP grant is not a healing event."
         )
+        creature = _make_creature(max_hp=20, current_hp=12)
+        creature.set_temporary_hit_points(6)
+        assert creature.current_hp == 12  # grant did not heal
 
 
 class TestTempHP_ZeroHpInteraction:
