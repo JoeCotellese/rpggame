@@ -21,6 +21,7 @@ from __future__ import annotations
 import pytest
 
 from dnd_engine.core.creature import Abilities, Creature
+from dnd_engine.rules.loader import DataLoader
 from dnd_engine.systems.perception import (
     LightLevel,
     Obscurement,
@@ -29,6 +30,7 @@ from dnd_engine.systems.perception import (
     compute_visibility,
     effective_obscurement,
     observer_senses,
+    parse_senses,
 )
 
 pytestmark = pytest.mark.srd(
@@ -286,3 +288,68 @@ class TestEffectiveObscurement:
     )
     def test_worst_of_light_and_ambient_wins(self, light, ambient, expected):
         assert effective_obscurement(light, ambient) == expected
+
+
+class TestParseSenses:
+    """`parse_senses` reads SRD stat-block `senses` strings."""
+
+    @pytest.mark.parametrize(
+        "text,expected",
+        [
+            ("darkvision 60 ft., passive Perception 9", {Sense.DARKVISION: 60}),
+            ("darkvision 120 ft., passive Perception 10", {Sense.DARKVISION: 120}),
+            (
+                "blindsight 60 ft. (blind beyond this radius), passive Perception 6",
+                {Sense.BLINDSIGHT: 60},
+            ),
+            ("tremorsense 30 ft., passive Perception 11", {Sense.TREMORSENSE: 30}),
+            ("truesight 120 ft., passive Perception 14", {Sense.TRUESIGHT: 120}),
+            (
+                "blindsight 10 ft., darkvision 60 ft., passive Perception 12",
+                {Sense.BLINDSIGHT: 10, Sense.DARKVISION: 60},
+            ),
+            ("passive Perception 13", {}),
+            ("", {}),
+            (None, {}),
+        ],
+    )
+    def test_parses_special_senses_and_ignores_passive_perception(self, text, expected):
+        assert parse_senses(text) == expected
+
+
+class TestMonsterCatalogSenses:
+    """SRD § Special Senses are imported from monsters.json (#495).
+
+    The monster catalog already carries a free-form `senses` stat-block
+    string. `DataLoader.create_monster` now parses it into the canonical
+    `Creature.senses` map so `compute_visibility` works for monsters.
+    """
+
+    def test_goblin_imports_darkvision_60(self):
+        goblin = DataLoader().create_monster("goblin")
+        assert goblin.senses.get(Sense.DARKVISION) == 60
+
+    def test_animated_armor_imports_blindsight_60(self):
+        armor = DataLoader().create_monster("animated_armor")
+        assert armor.senses.get(Sense.BLINDSIGHT) == 60
+
+    def test_bearded_devil_imports_darkvision_120(self):
+        devil = DataLoader().create_monster("bearded_devil")
+        assert devil.senses.get(Sense.DARKVISION) == 120
+
+    def test_imported_senses_drive_visibility_in_the_dark(self):
+        """A blindsight monster Sees a target in darkness within range."""
+        armor = DataLoader().create_monster("animated_armor")
+        target = _creature("Hero")
+        relation = compute_visibility(
+            armor,
+            target,
+            light_level=LightLevel.DARK,
+            distance=30.0,
+        )
+        assert relation == VisibilityRelation.SEEN
+
+    def test_sight_is_never_stored_as_a_special_sense(self):
+        """Ordinary sight is implicit — it is never put in the senses map."""
+        rat = DataLoader().create_monster("giant_rat")
+        assert Sense.SIGHT not in rat.senses

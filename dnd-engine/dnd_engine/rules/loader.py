@@ -7,6 +7,7 @@ from typing import Any
 
 from dnd_engine.core.creature import Abilities, Creature, MovementMode, Size
 from dnd_engine.core.dice import DiceRoller
+from dnd_engine.systems.perception import parse_senses
 
 
 class DataLoader:
@@ -137,6 +138,16 @@ class DataLoader:
         # attachment when the target is immune. SRD: "Immunity to a
         # condition means you aren't affected by it."
         creature.condition_immunities = list(data.get("condition_immunities") or [])
+
+        # Special senses (plan-05 #495). The catalog carries a free-form
+        # SRD stat-block string ("blindsight 60 ft. (blind beyond this
+        # radius), passive Perception 6"); parse it into the canonical
+        # {Sense: range_ft} map consumed by
+        # `dnd_engine.systems.perception.compute_visibility`. Passive
+        # Perception and parenthetical qualifiers are ignored, and
+        # ordinary sight is implicit. Empty when the monster has no
+        # special senses.
+        creature.senses = parse_senses(data.get("senses"))
 
         return creature
 
