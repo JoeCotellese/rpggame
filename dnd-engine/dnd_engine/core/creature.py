@@ -145,6 +145,11 @@ class Creature:
         self.name = name
         self.max_hp = max_hp
         self.current_hp = current_hp if current_hp is not None else max_hp
+        # SRD § Playing the Game › Temporary Hit Points: a buffer pool,
+        # separate from Hit Points, that absorbs damage before HP is
+        # touched. Not Hit Points — healing cannot restore it and a
+        # grant is not a heal. Defaults to 0 (no buffer).
+        self.temporary_hit_points: int = 0
         self._base_ac = ac  # Store base AC (before modifiers from spells/effects)
         self.abilities = abilities
         self.size = size
@@ -322,16 +327,30 @@ class Creature:
         """
         return name in self._alt_base_ac_formulas
 
-    def take_damage(self, amount: int) -> None:
+    def take_damage(self, amount: int) -> int:
         """
         Apply damage to the creature.
 
-        HP cannot go below 0.
+        SRD § Playing the Game › Temporary Hit Points › Lose Temp HP
+        First: Temporary Hit Points are lost first, and any leftover
+        damage carries over to Hit Points (e.g. 5 Temp HP + 7 damage =
+        0 Temp HP, 2 HP lost). HP cannot go below 0.
 
         Args:
             amount: Amount of damage to apply
+
+        Returns:
+            The damage that actually landed on Hit Points — the
+            carryover after the Temp HP buffer absorbed what it could.
+            Equals `amount` when there is no Temp HP. Callers that drive
+            death-save / massive-damage logic should key off this value
+            rather than the raw incoming amount.
         """
-        self.current_hp = max(0, self.current_hp - amount)
+        absorbed = min(self.temporary_hit_points, amount)
+        self.temporary_hit_points -= absorbed
+        carryover = amount - absorbed
+        self.current_hp = max(0, self.current_hp - carryover)
+        return carryover
 
     def heal(self, amount: int) -> None:
         """

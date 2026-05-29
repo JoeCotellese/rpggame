@@ -17,12 +17,35 @@ import inspect
 
 import pytest
 
-from dnd_engine.core.creature import Creature
+from dnd_engine.core.creature import Abilities, Creature
 
 pytestmark = pytest.mark.srd(
     "playing-the-game/temporary-hit-points.md",
     lines="2393-2433",
 )
+
+
+def _make_creature(max_hp: int = 20, current_hp: int | None = None) -> Creature:
+    """Build a bare Creature for Temp HP assertions.
+
+    Ability scores are arbitrary (Temp HP behavior doesn't depend on
+    them); only `max_hp`/`current_hp` matter for the buffer/carryover
+    rules under test.
+    """
+    return Creature(
+        name="Subject",
+        max_hp=max_hp,
+        ac=10,
+        abilities=Abilities(
+            strength=10,
+            dexterity=10,
+            constitution=10,
+            intelligence=10,
+            wisdom=10,
+            charisma=10,
+        ),
+        current_hp=current_hp,
+    )
 
 
 class TestTempHP_Intro:
@@ -33,15 +56,8 @@ class TestTempHP_Intro:
     """
 
     def test_creature_has_a_temporary_hit_points_field(self) -> None:
-        pytest.skip(
-            "GAP: `Creature` (dnd_engine/core/creature.py:57-102) has "
-            "no `temporary_hit_points` (or equivalent) field. The only "
-            "in-engine reference to temp HP is "
-            "dnd_engine/systems/item_effects.py:364-368 which attaches "
-            "a flavor `has_temporary_hp_buff` condition with a TODO "
-            "comment ('Implement proper temporary HP system') — no "
-            "actual pool is tracked. Tracked by issue #482."
-        )
+        creature = _make_creature(max_hp=10)
+        assert creature.temporary_hit_points == 0
 
     def test_item_effects_temporary_hp_buff_placeholder_is_documented(self) -> None:
         """Source-level guard: the placeholder is still labeled TODO.
@@ -72,22 +88,25 @@ class TestTempHP_LoseTempHPFirst:
     """
 
     def test_damage_subtracts_from_temp_hp_before_hp(self) -> None:
-        pytest.skip(
-            "GAP: `Creature.take_damage` "
-            "(dnd_engine/core/creature.py:215-224) subtracts the full "
-            "damage amount from `current_hp` directly. There is no "
-            "Temp HP pool to drain first, so the SRD's worked example "
-            "(5 Temp HP + 7 damage = 0 Temp HP + 2 HP lost) cannot be "
-            "exercised. Tracked by issue #482."
-        )
+        # SRD worked example: 5 Temp HP + 7 damage = 0 Temp HP, 2 HP lost.
+        creature = _make_creature(max_hp=20, current_hp=20)
+        creature.temporary_hit_points = 5
+        carryover = creature.take_damage(7)
+        assert creature.temporary_hit_points == 0
+        assert creature.current_hp == 18
+        # take_damage reports the HP damage that actually landed (the
+        # leftover after the buffer absorbed what it could).
+        assert carryover == 2
 
     def test_damage_exactly_equal_to_temp_hp_leaves_real_hp_untouched(self) -> None:
-        pytest.skip(
-            "GAP: depends on the Temp HP pool field. The SRD example "
-            "implies a clean boundary — 5 damage against 5 Temp HP "
-            "must consume all Temp HP and leave real HP untouched. "
-            "Tracked by issue #482."
-        )
+        # A clean boundary: 5 damage against 5 Temp HP consumes the
+        # whole buffer and leaves real HP untouched.
+        creature = _make_creature(max_hp=20, current_hp=20)
+        creature.temporary_hit_points = 5
+        carryover = creature.take_damage(5)
+        assert creature.temporary_hit_points == 0
+        assert creature.current_hp == 20
+        assert carryover == 0
 
 
 class TestTempHP_Duration:
