@@ -22,6 +22,7 @@ SRD references:
 
 from __future__ import annotations
 
+import re
 from enum import Enum
 from typing import TYPE_CHECKING
 
@@ -120,6 +121,40 @@ def observer_senses(creature: Creature) -> dict[Sense, int]:
     if legacy_darkvision:
         resolved[Sense.DARKVISION] = max(resolved.get(Sense.DARKVISION, 0), legacy_darkvision)
 
+    return resolved
+
+
+# Matches a special sense and its foot range in an SRD stat-block
+# `senses` string, e.g. "blindsight 60 ft. (blind beyond this radius)".
+# Passive Perception and parenthetical qualifiers are not captured.
+_SENSE_RANGE_RE = re.compile(
+    r"\b(darkvision|blindsight|tremorsense|truesight)\b\s+(\d+)\s*ft",
+    re.IGNORECASE,
+)
+
+
+def parse_senses(senses_text: str | None) -> dict[Sense, int]:
+    """Parse an SRD stat-block ``senses`` string into ``{Sense: range_ft}``.
+
+    Recognizes the four ranged special senses (Darkvision, Blindsight,
+    Tremorsense, Truesight). Passive Perception and parenthetical
+    qualifiers such as "(blind beyond this radius)" are ignored, and
+    ordinary sight is implicit so it is never stored. When the same
+    sense appears more than once, the wider range wins.
+
+    Args:
+        senses_text: The catalog ``senses`` value (may be ``None`` or
+            empty for a creature with only ordinary sight).
+
+    Returns:
+        A ``{Sense: range_ft}`` map suitable for ``Creature.senses``.
+    """
+    resolved: dict[Sense, int] = {}
+    if not senses_text:
+        return resolved
+    for keyword, range_ft in _SENSE_RANGE_RE.findall(senses_text):
+        sense = Sense(keyword.lower())
+        resolved[sense] = max(resolved.get(sense, 0), int(range_ft))
     return resolved
 
 
