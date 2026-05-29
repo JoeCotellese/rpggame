@@ -380,10 +380,14 @@ def _apply_buff_effect(
         buff_conditions.append(condition_name)
 
     elif buff_type == "temporary_hp":
-        # TODO: Implement proper temporary HP system
-        # For now, just add a condition indicating they have the buff
-        target.add_condition("has_temporary_hp_buff")
-        buff_conditions.append("has_temporary_hp_buff")
+        # SRD § Playing the Game › Temporary Hit Points: grant a real
+        # buffer pool. The amount comes from the item's `temporary_hp`
+        # field (falling back to `amount`); Temp HP never stack, so the
+        # grant keeps the greater of the existing and new pool. A
+        # missing or non-positive amount grants nothing.
+        temp_hp_amount = int(item_info.get("temporary_hp", item_info.get("amount", 0)) or 0)
+        if temp_hp_amount > 0:
+            target.set_temporary_hit_points(temp_hp_amount)
 
     # Add any extra conditions specified
     extra_conditions = item_info.get("adds_conditions", [])

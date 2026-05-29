@@ -17,12 +17,59 @@ import inspect
 
 import pytest
 
-from dnd_engine.core.creature import Creature
+from dnd_engine.core.creature import Abilities, Creature
 
 pytestmark = pytest.mark.srd(
     "playing-the-game/temporary-hit-points.md",
     lines="2393-2433",
 )
+
+
+def _make_creature(max_hp: int = 20, current_hp: int | None = None) -> Creature:
+    """Build a bare Creature for Temp HP assertions.
+
+    Ability scores are arbitrary (Temp HP behavior doesn't depend on
+    them); only `max_hp`/`current_hp` matter for the buffer/carryover
+    rules under test.
+    """
+    return Creature(
+        name="Subject",
+        max_hp=max_hp,
+        ac=10,
+        abilities=Abilities(
+            strength=10,
+            dexterity=10,
+            constitution=10,
+            intelligence=10,
+            wisdom=10,
+            charisma=10,
+        ),
+        current_hp=current_hp,
+    )
+
+
+def _make_character(max_hp: int = 20, current_hp: int | None = None):
+    """Build a level-1 Fighter for Temp HP assertions that need the
+    full Character rest / death-save machinery (the bare Creature has
+    neither)."""
+    from dnd_engine.core.character import Character, CharacterClass
+
+    return Character(
+        name="Hero",
+        character_class=CharacterClass.FIGHTER,
+        level=1,
+        abilities=Abilities(
+            strength=14,
+            dexterity=12,
+            constitution=13,
+            intelligence=10,
+            wisdom=11,
+            charisma=8,
+        ),
+        max_hp=max_hp,
+        ac=16,
+        current_hp=current_hp,
+    )
 
 
 class TestTempHP_Intro:
@@ -33,32 +80,28 @@ class TestTempHP_Intro:
     """
 
     def test_creature_has_a_temporary_hit_points_field(self) -> None:
-        pytest.skip(
-            "GAP: `Creature` (dnd_engine/core/creature.py:57-102) has "
-            "no `temporary_hit_points` (or equivalent) field. The only "
-            "in-engine reference to temp HP is "
-            "dnd_engine/systems/item_effects.py:364-368 which attaches "
-            "a flavor `has_temporary_hp_buff` condition with a TODO "
-            "comment ('Implement proper temporary HP system') — no "
-            "actual pool is tracked. Tracked by issue #482."
-        )
+        creature = _make_creature(max_hp=10)
+        assert creature.temporary_hit_points == 0
 
-    def test_item_effects_temporary_hp_buff_placeholder_is_documented(self) -> None:
-        """Source-level guard: the placeholder is still labeled TODO.
+    def test_item_effects_temporary_hp_buff_grants_real_pool(self) -> None:
+        """Source-level guard: the catalog branch grants a real pool.
 
-        Until the real Temp HP system lands (issue #482), the engine
-        carries a placeholder buff at
-        `dnd_engine/systems/item_effects.py:364-368`. This test pins
-        that placeholder so it can't silently start claiming Temp-HP
-        semantics without being rewritten.
+        The placeholder that attached a flavor `has_temporary_hp_buff`
+        condition with no amount has been replaced (issue #482). The
+        `temporary_hp` branch now grants a real Temp HP pool via
+        `set_temporary_hit_points`. This guard pins the real grant so
+        the branch can't silently regress to a flavor condition.
         """
         from dnd_engine.systems import item_effects
 
-        src = inspect.getsource(item_effects)
-        assert "TODO: Implement proper temporary HP system" in src, (
-            "Placeholder Temp-HP buff at "
-            "dnd_engine/systems/item_effects.py:364-368 must remain "
-            "labeled TODO until the real system (issue #482) lands."
+        src = inspect.getsource(item_effects._apply_buff_effect)
+        assert "set_temporary_hit_points" in src, (
+            "The `temporary_hp` catalog branch must grant a real pool "
+            "via set_temporary_hit_points (issue #482)."
+        )
+        assert "has_temporary_hp_buff" not in src, (
+            "The flavor `has_temporary_hp_buff` placeholder condition "
+            "must be gone now that the real Temp HP pool exists."
         )
 
 
@@ -72,22 +115,25 @@ class TestTempHP_LoseTempHPFirst:
     """
 
     def test_damage_subtracts_from_temp_hp_before_hp(self) -> None:
-        pytest.skip(
-            "GAP: `Creature.take_damage` "
-            "(dnd_engine/core/creature.py:215-224) subtracts the full "
-            "damage amount from `current_hp` directly. There is no "
-            "Temp HP pool to drain first, so the SRD's worked example "
-            "(5 Temp HP + 7 damage = 0 Temp HP + 2 HP lost) cannot be "
-            "exercised. Tracked by issue #482."
-        )
+        # SRD worked example: 5 Temp HP + 7 damage = 0 Temp HP, 2 HP lost.
+        creature = _make_creature(max_hp=20, current_hp=20)
+        creature.temporary_hit_points = 5
+        carryover = creature.take_damage(7)
+        assert creature.temporary_hit_points == 0
+        assert creature.current_hp == 18
+        # take_damage reports the HP damage that actually landed (the
+        # leftover after the buffer absorbed what it could).
+        assert carryover == 2
 
     def test_damage_exactly_equal_to_temp_hp_leaves_real_hp_untouched(self) -> None:
-        pytest.skip(
-            "GAP: depends on the Temp HP pool field. The SRD example "
-            "implies a clean boundary — 5 damage against 5 Temp HP "
-            "must consume all Temp HP and leave real HP untouched. "
-            "Tracked by issue #482."
-        )
+        # A clean boundary: 5 damage against 5 Temp HP consumes the
+        # whole buffer and leaves real HP untouched.
+        creature = _make_creature(max_hp=20, current_hp=20)
+        creature.temporary_hit_points = 5
+        carryover = creature.take_damage(5)
+        assert creature.temporary_hit_points == 0
+        assert creature.current_hp == 20
+        assert carryover == 0
 
 
 class TestTempHP_Duration:
@@ -98,21 +144,19 @@ class TestTempHP_Duration:
     """
 
     def test_long_rest_clears_temporary_hit_points(self) -> None:
-        pytest.skip(
-            "GAP: `Character.take_long_rest` "
-            "(dnd_engine/core/character.py:1236-1280) restores HP and "
-            "clears expired conditions but has no Temp HP pool to "
-            "zero out. Tracked by issue #482."
-        )
+        # SRD: Temp HP last until depleted or a Long Rest.
+        character = _make_character(max_hp=20, current_hp=15)
+        character.set_temporary_hit_points(8)
+        character.take_long_rest()
+        assert character.temporary_hit_points == 0
 
     def test_short_rest_does_not_clear_temporary_hit_points(self) -> None:
-        pytest.skip(
-            "GAP: depends on the Temp HP pool field. The SRD scopes "
-            "expiry to Long Rest specifically — short rest must NOT "
-            "drain Temp HP. `Character.take_short_rest` "
-            "(dnd_engine/core/character.py:1202-1234) has no Temp HP "
-            "branch to assert against. Tracked by issue #482."
-        )
+        # SRD scopes expiry to a Long Rest specifically — a Short Rest
+        # must leave the buffer intact.
+        character = _make_character(max_hp=20, current_hp=15)
+        character.set_temporary_hit_points(8)
+        character.take_short_rest()
+        assert character.temporary_hit_points == 8
 
 
 class TestTempHP_DontStack:
@@ -126,22 +170,28 @@ class TestTempHP_DontStack:
     """
 
     def test_receiving_new_temp_hp_does_not_sum_with_existing(self) -> None:
-        pytest.skip(
-            "GAP: no Temp HP grant API exists. The placeholder buff "
-            "at dnd_engine/systems/item_effects.py:364-368 attaches a "
-            "condition (`has_temporary_hp_buff`) without any amount. "
-            "There is nowhere to test the SRD's worked example "
-            "(10 + 12 = pick one, never 22). Tracked by issue #482."
-        )
+        # SRD worked example: 12 granted over an existing 10 yields 12,
+        # never 22 — Temp HP can't be added together.
+        creature = _make_creature()
+        creature.set_temporary_hit_points(10)
+        creature.set_temporary_hit_points(12)
+        assert creature.temporary_hit_points == 12
+        # A lower grant doesn't shrink the buffer either (keep-greater).
+        creature.set_temporary_hit_points(5)
+        assert creature.temporary_hit_points == 12
 
     def test_caller_chooses_to_keep_or_replace_temp_hp(self) -> None:
-        pytest.skip(
-            "GAP: depends on the grant API. The SRD lets the recipient "
-            "*decide* (keep the old or take the new). A real grant "
-            "API must surface this choice — defaulting to max() is a "
-            "common implementation but the SRD reserves the choice to "
-            "the player. Tracked by issue #482."
-        )
+        # SRD reserves the choice to the recipient. The default
+        # auto-resolves to the greater pool; a caller honoring an
+        # explicit "take the new pool" choice passes replace=True, which
+        # installs the new amount even when it is lower than the old.
+        creature = _make_creature()
+        creature.set_temporary_hit_points(10)
+        creature.set_temporary_hit_points(5)  # default: keep the greater
+        assert creature.temporary_hit_points == 10
+        result = creature.set_temporary_hit_points(5, replace=True)
+        assert creature.temporary_hit_points == 5
+        assert result == 5  # helper returns the resulting pool
 
 
 class TestTempHP_NotHitPointsNotHealing:
@@ -155,38 +205,41 @@ class TestTempHP_NotHitPointsNotHealing:
     """
 
     def test_healing_does_not_restore_temporary_hit_points(self) -> None:
-        pytest.skip(
-            "GAP: depends on the Temp HP pool field. `Creature.heal` "
-            "(dnd_engine/core/creature.py:226-240) and "
-            "`Character.recover_hp` "
-            "(dnd_engine/core/character.py:1150-1174) operate on "
-            "`current_hp` only; there is no Temp HP pool to inadvertently "
-            "modify, but also no way to assert the SRD's negative — "
-            "'healing can't restore them' — until the field exists. "
-            "Tracked by issue #482."
-        )
+        # Drain part of a buffer, then heal: healing restores HP only,
+        # never the depleted Temp HP pool.
+        creature = _make_creature(max_hp=20, current_hp=20)
+        creature.set_temporary_hit_points(5)
+        creature.take_damage(8)  # 5 absorbed, 3 to HP
+        assert creature.temporary_hit_points == 0
+        assert creature.current_hp == 17
+        creature.heal(5)
+        assert creature.current_hp == 20  # capped at max
+        assert creature.temporary_hit_points == 0  # heal can't refill Temp HP
 
     def test_full_hp_creature_can_still_receive_temp_hp(self) -> None:
-        pytest.skip(
-            "GAP: depends on the grant API. SRD: 'a creature can be at "
-            "full Hit Points and receive Temporary Hit Points.' "
-            "`Creature.heal` is a no-op at full HP "
-            "(dnd_engine/core/creature.py:240), which is *correct* for "
-            "healing — but a Temp HP grant must NOT short-circuit on "
-            "full HP. There is no grant path to exercise. Tracked by "
-            "issue #482."
-        )
+        # SRD: 'a creature can be at full Hit Points and receive
+        # Temporary Hit Points.' The grant must not short-circuit on
+        # full HP the way healing does.
+        creature = _make_creature(max_hp=20, current_hp=20)
+        creature.set_temporary_hit_points(7)
+        assert creature.current_hp == 20  # HP untouched
+        assert creature.temporary_hit_points == 7
 
     def test_temp_hp_grant_is_not_a_healing_event(self) -> None:
-        pytest.skip(
-            "GAP: depends on the Temp HP grant API. The SRD calls out "
-            "that 'receiving Temporary Hit Points doesn't count as "
-            "healing' — so a Temp HP grant must NOT emit a HEALING_DONE "
-            "event "
-            "(dnd_engine/utils/events.py) or otherwise be observable as "
-            "a heal. Today no such grant API exists. Tracked by "
-            "issue #482."
+        # 'Receiving Temporary Hit Points doesn't count as healing.' The
+        # grant API is a pure pool operation on Creature — it takes no
+        # event bus and cannot raise HP, so it can never be observed as
+        # a heal (no HEALING_DONE, no current_hp change).
+        import inspect
+
+        sig = inspect.signature(Creature.set_temporary_hit_points)
+        assert "event_bus" not in sig.parameters, (
+            "set_temporary_hit_points must not accept an event bus — a "
+            "Temp HP grant is not a healing event."
         )
+        creature = _make_creature(max_hp=20, current_hp=12)
+        creature.set_temporary_hit_points(6)
+        assert creature.current_hp == 12  # grant did not heal
 
 
 class TestTempHP_ZeroHpInteraction:
@@ -197,16 +250,63 @@ class TestTempHP_ZeroHpInteraction:
     """
 
     def test_temp_hp_grant_does_not_revive_unconscious_creature(self) -> None:
-        pytest.skip(
-            "GAP: depends on Temp HP grant + Unconscious linkage. "
-            "`Character.recover_hp` "
-            "(dnd_engine/core/character.py:1162-1173) explicitly "
-            "resets death saves when leaving 0 HP — that path is "
-            "*correct* for healing, but the SRD requires a Temp HP "
-            "grant to NOT trigger the same revival. Without a grant "
-            "API the negative cannot be exercised. Tracked by "
-            "issue #482."
+        # SRD: at 0 HP, receiving Temp HP does NOT restore consciousness.
+        from dnd_engine.core.character import Character, CharacterClass
+
+        character = Character(
+            name="Downed",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=Abilities(
+                strength=14,
+                dexterity=12,
+                constitution=13,
+                intelligence=10,
+                wisdom=11,
+                charisma=8,
+            ),
+            max_hp=20,
+            ac=16,
+            current_hp=0,
         )
+        character.death_save_failures = 1
+        character.set_temporary_hit_points(8)
+        assert character.temporary_hit_points == 8
+        assert character.current_hp == 0  # still down — grant is not healing
+        assert character.is_unconscious  # not revived
+        assert character.death_save_failures == 1  # death saves untouched
+
+    def test_temp_hp_absorbs_damage_at_0_hp_without_a_death_save_failure(self) -> None:
+        # A downed creature holding Temp HP that fully absorbs a blow
+        # loses no Hit Points, so it suffers no new death-save failure.
+        # (When the buffer is empty — every existing death-save test —
+        # carryover equals the incoming amount and the failure still
+        # fires, so this path is purely additive.)
+        from dnd_engine.core.character import Character, CharacterClass
+
+        character = Character(
+            name="Downed",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=Abilities(
+                strength=14,
+                dexterity=12,
+                constitution=13,
+                intelligence=10,
+                wisdom=11,
+                charisma=8,
+            ),
+            max_hp=20,
+            ac=16,
+            current_hp=0,
+        )
+        character.death_save_failures = 0
+        character.set_temporary_hit_points(10)
+        character.take_damage(6)  # fully absorbed by the buffer
+        assert character.temporary_hit_points == 4
+        assert character.current_hp == 0
+        assert character.death_save_failures == 0  # no HP lost → no failure
+        assert character.is_unconscious
 
     def test_only_true_healing_revives_a_zero_hp_creature(self) -> None:
         """Healing (not Temp HP) is what revives a downed creature.

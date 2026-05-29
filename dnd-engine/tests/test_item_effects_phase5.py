@@ -348,18 +348,19 @@ class TestBuffEffect:
         assert target_creature.has_condition("has_resistance_fire")
 
     def test_apply_temporary_hp_buff(self, target_creature):
-        """Test applying temporary HP buff"""
+        """Temp HP buff grants a real Temporary Hit Points pool (issue #482)."""
         item_info = {
             "name": "Potion of Heroism",
             "effect_type": "buff",
             "buff_type": "temporary_hp",
+            "temporary_hp": 10,
             "duration_minutes": 60,
         }
 
         result = apply_item_effect(item_info, target_creature)
 
         assert result.success is True
-        assert target_creature.has_condition("has_temporary_hp_buff")
+        assert target_creature.temporary_hit_points == 10
 
     def test_apply_buff_with_extra_conditions(self, target_creature):
         """Test applying buff with additional conditions"""
@@ -367,6 +368,7 @@ class TestBuffEffect:
             "name": "Potion of Heroism",
             "effect_type": "buff",
             "buff_type": "temporary_hp",
+            "temporary_hp": 10,
             "duration_minutes": 60,
             "adds_conditions": ["immune_to_fear"],
         }
@@ -374,7 +376,7 @@ class TestBuffEffect:
         result = apply_item_effect(item_info, target_creature)
 
         assert result.success is True
-        assert target_creature.has_condition("has_temporary_hp_buff")
+        assert target_creature.temporary_hit_points == 10
         assert target_creature.has_condition("immune_to_fear")
 
     def test_buff_emits_event(self, target_creature):
