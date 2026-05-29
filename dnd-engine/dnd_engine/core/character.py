@@ -1244,13 +1244,21 @@ class Character(Creature):
         if self.stabilized:
             self.stabilized = False
 
-        # Apply damage (parent implementation)
-        super().take_damage(amount)
+        # Apply damage (parent implementation). Temporary Hit Points are
+        # drained first; `hp_damage` is the carryover that actually
+        # landed on Hit Points. All death-save / massive-damage rules
+        # below key off `hp_damage`, not the raw incoming `amount`, so a
+        # blow absorbed by the Temp HP buffer doesn't trigger them. When
+        # there is no buffer, `hp_damage == amount` and behavior is
+        # unchanged.
+        hp_damage = super().take_damage(amount)
 
-        # Handle damage while at 0 HP (already-unconscious entry)
-        if was_unconscious:
+        # Handle damage while at 0 HP (already-unconscious entry). If the
+        # Temp HP buffer fully absorbed the blow (`hp_damage == 0`) no
+        # Hit Points were lost, so no death-save failure is incurred.
+        if was_unconscious and hp_damage > 0:
             # Check for massive damage (damage >= max HP = instant death)
-            if amount >= self.max_hp:
+            if hp_damage >= self.max_hp:
                 # Instant death
                 self.death_save_failures = 3
 
@@ -1258,7 +1266,11 @@ class Character(Creature):
                     event_bus.emit(
                         Event(
                             type=EventType.MASSIVE_DAMAGE_DEATH,
-                            data={"character": self.name, "damage": amount, "max_hp": self.max_hp},
+                            data={
+                                "character": self.name,
+                                "damage": hp_damage,
+                                "max_hp": self.max_hp,
+                            },
                         )
                     )
             else:
@@ -1273,7 +1285,7 @@ class Character(Creature):
                             type=EventType.DAMAGE_AT_ZERO_HP,
                             data={
                                 "character": self.name,
-                                "damage": amount,
+                                "damage": hp_damage,
                                 "failures": self.death_save_failures,
                                 "failures_added": failures_added,
                                 "critical_hit": critical_hit,
@@ -1283,12 +1295,12 @@ class Character(Creature):
         elif pre_hp > 0 and self.current_hp == 0:
             # Positive HP → 0 transition this call. Detect the SRD
             # massive-damage overflow case: when the remainder of the
-            # incoming damage (after zeroing HP) meets or exceeds
-            # `max_hp`, the character dies outright rather than
-            # falling Unconscious. The "Unconscious" condition added
-            # by `_sync_dying_conditions` below will be replaced with
+            # HP damage (after zeroing HP) meets or exceeds `max_hp`,
+            # the character dies outright rather than falling
+            # Unconscious. The "Unconscious" condition added by
+            # `_sync_dying_conditions` below will be replaced with
             # "dead" because `death_save_failures` is forced to 3.
-            overflow = amount - pre_hp
+            overflow = hp_damage - pre_hp
             if overflow >= self.max_hp:
                 self.death_save_failures = 3
                 if event_bus is not None:
@@ -1297,7 +1309,7 @@ class Character(Creature):
                             type=EventType.MASSIVE_DAMAGE_DEATH,
                             data={
                                 "character": self.name,
-                                "damage": amount,
+                                "damage": hp_damage,
                                 "max_hp": self.max_hp,
                                 "overflow": overflow,
                             },

@@ -225,16 +225,63 @@ class TestTempHP_ZeroHpInteraction:
     """
 
     def test_temp_hp_grant_does_not_revive_unconscious_creature(self) -> None:
-        pytest.skip(
-            "GAP: depends on Temp HP grant + Unconscious linkage. "
-            "`Character.recover_hp` "
-            "(dnd_engine/core/character.py:1162-1173) explicitly "
-            "resets death saves when leaving 0 HP — that path is "
-            "*correct* for healing, but the SRD requires a Temp HP "
-            "grant to NOT trigger the same revival. Without a grant "
-            "API the negative cannot be exercised. Tracked by "
-            "issue #482."
+        # SRD: at 0 HP, receiving Temp HP does NOT restore consciousness.
+        from dnd_engine.core.character import Character, CharacterClass
+
+        character = Character(
+            name="Downed",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=Abilities(
+                strength=14,
+                dexterity=12,
+                constitution=13,
+                intelligence=10,
+                wisdom=11,
+                charisma=8,
+            ),
+            max_hp=20,
+            ac=16,
+            current_hp=0,
         )
+        character.death_save_failures = 1
+        character.set_temporary_hit_points(8)
+        assert character.temporary_hit_points == 8
+        assert character.current_hp == 0  # still down — grant is not healing
+        assert character.is_unconscious  # not revived
+        assert character.death_save_failures == 1  # death saves untouched
+
+    def test_temp_hp_absorbs_damage_at_0_hp_without_a_death_save_failure(self) -> None:
+        # A downed creature holding Temp HP that fully absorbs a blow
+        # loses no Hit Points, so it suffers no new death-save failure.
+        # (When the buffer is empty — every existing death-save test —
+        # carryover equals the incoming amount and the failure still
+        # fires, so this path is purely additive.)
+        from dnd_engine.core.character import Character, CharacterClass
+
+        character = Character(
+            name="Downed",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=Abilities(
+                strength=14,
+                dexterity=12,
+                constitution=13,
+                intelligence=10,
+                wisdom=11,
+                charisma=8,
+            ),
+            max_hp=20,
+            ac=16,
+            current_hp=0,
+        )
+        character.death_save_failures = 0
+        character.set_temporary_hit_points(10)
+        character.take_damage(6)  # fully absorbed by the buffer
+        assert character.temporary_hit_points == 4
+        assert character.current_hp == 0
+        assert character.death_save_failures == 0  # no HP lost → no failure
+        assert character.is_unconscious
 
     def test_only_true_healing_revives_a_zero_hp_creature(self) -> None:
         """Healing (not Temp HP) is what revives a downed creature.
