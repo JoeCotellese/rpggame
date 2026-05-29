@@ -172,6 +172,14 @@ class Creature:
         # Maps condition name -> metadata dict
         self.active_conditions: dict[str, dict] = {}
 
+        # SRD § Vision and Light › Special Senses: a map of special
+        # senses to their range in feet (e.g. {Sense.BLINDSIGHT: 60}).
+        # Ordinary sight is implicit and not stored here. Consumed by
+        # `dnd_engine.systems.perception` to compute visibility; defaults
+        # to empty (sight only). Keys may be `Sense` members or their
+        # string values — `perception.observer_senses` normalizes them.
+        self.senses: dict = {}
+
         # Alternate base-AC formulas (SRD § Playing the Game › Attack Rolls
         # › Armor Class › "Only One Base AC"). A creature may register
         # multiple ways to calculate its base AC (Mage Armor, Barbarian /

@@ -156,16 +156,21 @@ class TestVisionAndLight_ObscuredAreas:
     """
 
     def test_lightly_obscured_concept_exists_in_engine(self):
-        pytest.skip(
-            "GAP: the literal 'lightly_obscured' concept is not "
-            "modeled. The string appears nowhere in `dnd-engine/"
-            "dnd_engine/`. Dim light's mechanical effect is hard-coded "
-            "for the literal 'perception' skill in `GameState."
-            "_apply_lighting_penalties` (`dnd-engine/dnd_engine/core/"
-            "game_state.py:753-754`) but is not surfaced as a reusable "
-            "obscurement state that other sight-based rules could "
-            "consult. Tracked by issue #493."
+        """The Lightly Obscured concept is a first-class engine state.
+
+        plan-05 slice A introduces `Obscurement.LIGHTLY` as a reusable
+        obscurement state, and Dim Light maps onto it via
+        `effective_obscurement` — the reusable hook other sight-based
+        rules can consult. (issue #493)
+        """
+        from dnd_engine.systems.perception import (
+            LightLevel,
+            Obscurement,
+            effective_obscurement,
         )
+
+        assert Obscurement.LIGHTLY.value == "lightly"
+        assert effective_obscurement(LightLevel.DIM) == Obscurement.LIGHTLY
 
     def test_lightly_obscured_dim_light_imposes_disadvantage_on_sight_perception(self):
         """Dim Light imposes Disadvantage on Wisdom (Perception) checks.
@@ -199,13 +204,21 @@ class TestVisionAndLight_ObscuredAreas:
         )
 
     def test_heavily_obscured_concept_exists_in_engine(self):
-        pytest.skip(
-            "GAP: the 'heavily_obscured' concept is not modeled in the "
-            "engine. The string appears only as descriptive text in "
-            "`dnd-engine/dnd_engine/data/srd/spells.json:893` "
-            "(`poison_cloud` description) — no code path reads it. "
-            "Tracked by issue #493."
+        """The Heavily Obscured concept is a first-class engine state.
+
+        `Obscurement.HEAVILY` exists and Darkness maps onto it via
+        `effective_obscurement`; a sight-based observer is Unseen across
+        a heavily obscured area (the Blinded-against-that-area rule).
+        (issue #493)
+        """
+        from dnd_engine.systems.perception import (
+            LightLevel,
+            Obscurement,
+            effective_obscurement,
         )
+
+        assert Obscurement.HEAVILY.value == "heavily"
+        assert effective_obscurement(LightLevel.DARK) == Obscurement.HEAVILY
 
     def test_heavily_obscured_darkness_auto_fails_sight_based_perception(self):
         """Darkness short-circuits sight-based Perception to auto-fail.
@@ -472,33 +485,92 @@ class TestVisionAndLight_SpecialSenses:
         assert Capability.DARKVISION in racial.get("elf", [])
 
     def test_blindsight_is_modeled(self):
-        pytest.skip(
-            "GAP: Blindsight is not modeled as an engine concept. The "
-            "string appears only as descriptive text in `dnd-engine/"
-            "dnd_engine/data/srd/monsters.json:670` (zombie senses "
-            "field: 'blindsight 60 ft. (blind beyond this radius)'). "
-            "No `Capability.BLINDSIGHT` exists, no per-creature "
-            "`blindsight_range` field exists, and no engine code "
-            "consults it. Tracked by issue #495."
+        """Blindsight is a first-class engine sense (plan-05 slice A).
+
+        `Sense.BLINDSIGHT` exists and `compute_visibility` lets an
+        observer with blindsight perceive a target in darkness within
+        range — the rule the rendering layer could only approximate.
+        Catalog import of the monster `senses` field is wired in a
+        later slice (issue #495); here the engine *concept* exists.
+        """
+        from dnd_engine.systems.perception import (
+            LightLevel,
+            Sense,
+            VisibilityRelation,
+            compute_visibility,
         )
+
+        observer = _make_human_character()
+        observer.senses = {Sense.BLINDSIGHT: 60}
+        target = _make_human_character()
+        relation = compute_visibility(
+            observer,
+            target,
+            light_level=LightLevel.DARK,
+            distance=30.0,
+        )
+        assert relation == VisibilityRelation.SEEN
 
     def test_tremorsense_is_modeled(self):
-        pytest.skip(
-            "GAP: Tremorsense is not modeled. The string 'tremorsense' "
-            "does not appear anywhere in `dnd-engine/dnd_engine/`. No "
-            "capability, no per-creature range, no consumer. Tracked "
-            "by issue #495."
+        """Tremorsense is modeled and senses only grounded targets.
+
+        `Sense.TREMORSENSE` locates a grounded target through a shared
+        surface (UnseenButSensed) within range, but a flying target —
+        out of contact with the ground — is Unseen. (issue #495)
+        """
+        from dnd_engine.systems.perception import (
+            LightLevel,
+            Sense,
+            VisibilityRelation,
+            compute_visibility,
         )
 
-    def test_truesight_is_modeled(self):
-        pytest.skip(
-            "GAP: Truesight is not modeled. The string 'truesight' "
-            "does not appear anywhere in `dnd-engine/dnd_engine/`. No "
-            "capability, no per-creature range, no consumer — which "
-            "matters because Truesight is the only sense that sees "
-            "through magical Darkness (also unmodeled — see issue "
-            "#494). Tracked by issue #495."
+        observer = _make_human_character()
+        observer.senses = {Sense.TREMORSENSE: 30}
+        target = _make_human_character()
+        grounded = compute_visibility(
+            observer,
+            target,
+            light_level=LightLevel.DARK,
+            distance=20.0,
+            target_on_ground=True,
         )
+        flying = compute_visibility(
+            observer,
+            target,
+            light_level=LightLevel.DARK,
+            distance=20.0,
+            target_on_ground=False,
+        )
+        assert grounded == VisibilityRelation.UNSEEN_BUT_SENSED
+        assert flying == VisibilityRelation.UNSEEN
+
+    def test_truesight_is_modeled(self):
+        """Truesight sees through darkness and invisibility within range.
+
+        Truesight is the only sense that pierces magical Darkness and
+        the Invisible condition; `compute_visibility` returns Seen for a
+        truesighted observer against an invisible target in the dark,
+        within range. (issue #495)
+        """
+        from dnd_engine.systems.perception import (
+            LightLevel,
+            Sense,
+            VisibilityRelation,
+            compute_visibility,
+        )
+
+        observer = _make_human_character()
+        observer.senses = {Sense.TRUESIGHT: 60}
+        target = _make_human_character()
+        target.add_condition("invisible")
+        relation = compute_visibility(
+            observer,
+            target,
+            light_level=LightLevel.DARK,
+            distance=30.0,
+        )
+        assert relation == VisibilityRelation.SEEN
 
 
 class TestVisionAndLight_CombatVisibilityNotConsulted:
