@@ -19,6 +19,7 @@ from dnd_engine.core.party import Party
 from dnd_engine.core.position import Position
 from dnd_engine.core.quest import QuestManager
 from dnd_engine.core.room_registry import RoomRegistry
+from dnd_engine.rules.damage import apply_damage_modifiers
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.systems.action_economy import ActionType, Terrain, cost_for
 from dnd_engine.systems.ai import EnemyAI
@@ -667,9 +668,7 @@ class GameState:
         # Action history for narrative context
         self.action_history: list[str] = []
 
-    def bootstrap_spatial(
-        self, map: Map, *, replace: bool = False
-    ) -> SpatialIndex:
+    def bootstrap_spatial(self, map: Map, *, replace: bool = False) -> SpatialIndex:
         """Construct and install a ``SpatialIndex`` backed by ``map``.
 
         Single entry point for wiring up the engine spatial model. Guards
@@ -981,9 +980,7 @@ class GameState:
             )
 
         turn_state = (
-            self.initiative_tracker.get_current_turn_state()
-            if self.initiative_tracker
-            else None
+            self.initiative_tracker.get_current_turn_state() if self.initiative_tracker else None
         )
         budget = turn_state.movement_remaining if turn_state is not None else 0
 
@@ -1052,9 +1049,7 @@ class GameState:
 
         # Map drives terrain by default; explicit kwarg wins when supplied.
         actual_terrain = (
-            terrain
-            if terrain is not None
-            else spatial_map.terrain_at(destination.x, destination.y)
+            terrain if terrain is not None else spatial_map.terrain_at(destination.x, destination.y)
         )
 
         # Pre-validate the actual cost against the budget before doing any
@@ -1232,7 +1227,6 @@ class GameState:
                 )
             )
 
-
     def start(self) -> None:
         """
         Begin the game.
@@ -1281,7 +1275,14 @@ class GameState:
             The room's `environment` value (e.g. `"underwater"`) or
             `None` when the current room declares no environment tag.
         """
-        room = self.get_current_room()
+        # Best-effort: unit/combat states that never bootstrapped a
+        # dungeon map have no current room, hence no environment context.
+        # Treat an unresolvable room as "no environment" rather than
+        # raising, since environment-granted carve-outs are optional.
+        try:
+            room = self.get_current_room()
+        except (KeyError, AttributeError, TypeError):
+            return None
         env = room.get("environment")
         if env is None:
             return None
@@ -2255,13 +2256,9 @@ class GameState:
             if not met:
                 # Provide a hint about what's needed
                 if requires_any:
-                    interaction_entry["reason"] = (
-                        f"Requires one of: {', '.join(requires_any)}"
-                    )
+                    interaction_entry["reason"] = f"Requires one of: {', '.join(requires_any)}"
                 else:
-                    interaction_entry["reason"] = (
-                        f"Requires: {', '.join(missing)}"
-                    )
+                    interaction_entry["reason"] = f"Requires: {', '.join(missing)}"
             else:
                 # Show what capability is being used
                 source = None
@@ -2341,8 +2338,7 @@ class GameState:
                 return {
                     "success": False,
                     "message": (
-                        f"You don't have the ability to do this. "
-                        f"Requires: {', '.join(missing)}"
+                        f"You don't have the ability to do this. Requires: {', '.join(missing)}"
                     ),
                     "rewards": [],
                 }
@@ -2370,11 +2366,13 @@ class GameState:
                     item_data = self.data_loader.get_item_by_id(item_id)
                     if item_data:
                         character.add_item(item_id, item_data.get("category", "misc"))
-                        granted_rewards.append({
-                            "type": "item",
-                            "id": item_id,
-                            "name": item_data.get("name", item_id),
-                        })
+                        granted_rewards.append(
+                            {
+                                "type": "item",
+                                "id": item_id,
+                                "name": item_data.get("name", item_id),
+                            }
+                        )
 
             elif reward.get("type") == "currency":
                 # Add currency to party
@@ -2384,11 +2382,13 @@ class GameState:
                         amount = reward.get(currency_type, 0)
                         if amount > 0:
                             character.add_currency(currency_type, amount)
-                            granted_rewards.append({
-                                "type": "currency",
-                                "currency": currency_type,
-                                "amount": amount,
-                            })
+                            granted_rewards.append(
+                                {
+                                    "type": "currency",
+                                    "currency": currency_type,
+                                    "amount": amount,
+                                }
+                            )
 
         return {
             "success": True,
@@ -2668,9 +2668,7 @@ class GameState:
 
                 handler = get_effect_handler(effect_type)
                 if handler:
-                    effect_handler_result = handler.apply(
-                        spell_data, caster, target, self
-                    )
+                    effect_handler_result = handler.apply(spell_data, caster, target, self)
 
             # Create active effect if spell has duration
             effect = self._create_spell_effect(spell_data, caster_name, target_name)
@@ -3187,6 +3185,17 @@ class GameState:
 
             # Apply damage if there's a target
             if target and hasattr(target, "take_damage"):
+                # Route through the canonical damage pipeline so the
+                # target's Immunity / Resistance / Vulnerability (and any
+                # environment-granted Resistance) apply to auto-hit spell
+                # damage such as Magic Missile's force darts. #595
+                damage = apply_damage_modifiers(
+                    target,
+                    damage,
+                    damage_data.get("damage_type"),
+                    self.creature_environment(target),
+                )
+
                 import inspect
 
                 sig = inspect.signature(target.take_damage)
@@ -3454,9 +3463,7 @@ class GameState:
         effect = event.data.get("effect")
         if effect is None:
             return
-        self._revert_base_ac_formula_from_effect_data(
-            effect.target_name, effect.effect_data or {}
-        )
+        self._revert_base_ac_formula_from_effect_data(effect.target_name, effect.effect_data or {})
 
     def _get_item_category(self, item_id: str) -> str | None:
         """
@@ -3921,6 +3928,7 @@ class GameState:
             creature = self._find_creature_by_id(entity_id)
             if creature is None:
                 continue
+
             # Bind ``entity_id`` via default arg to dodge Python's
             # late-binding closure behavior — without this, every
             # registered handler would re-query the index for the
@@ -5499,6 +5507,7 @@ class GameState:
             dice_roller=self.dice_roller,
             event_bus=self.event_bus,
             time_manager=self.time_manager,
+            environment=self.creature_environment(target),
         )
 
         # Track HP after for healing display

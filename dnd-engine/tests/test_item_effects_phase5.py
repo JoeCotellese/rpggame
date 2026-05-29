@@ -200,7 +200,7 @@ class TestDamageEffect:
         event = events_received[0]
         assert event.data["has_resistance"] is True
         assert event.data["damage_rolled"] == 4  # Original roll
-        assert event.data["damage_after_resistance"] == 2  # After halving
+        assert event.data["damage_after_modifiers"] == 2  # After the damage pipeline
         assert event.data["damage_actual"] == 2  # Final damage
 
 

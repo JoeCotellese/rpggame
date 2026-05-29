@@ -38,13 +38,7 @@ pytestmark = pytest.mark.srd(
 )
 
 
-ITEMS_JSON = (
-    Path(__file__).resolve().parents[3]
-    / "dnd_engine"
-    / "data"
-    / "srd"
-    / "items.json"
-)
+ITEMS_JSON = Path(__file__).resolve().parents[3] / "dnd_engine" / "data" / "srd" / "items.json"
 
 
 def _make_creature(name: str = "Subject", hp: int = 50) -> Creature:
@@ -122,9 +116,7 @@ class TestUnderwaterCombat_ImpededMelee:
         items = json.loads(ITEMS_JSON.read_text())
         weapons = _all_weapon_entries(items)
         piercing = [w for w in weapons if w["damage_type"] == "piercing"]
-        non_piercing = [
-            w for w in weapons if w["damage_type"] in {"slashing", "bludgeoning"}
-        ]
+        non_piercing = [w for w in weapons if w["damage_type"] in {"slashing", "bludgeoning"}]
         assert piercing, (
             "Expected at least one weapon with damage_type='piercing' "
             "in items.json so the SRD's underwater piercing carve-out "
@@ -418,19 +410,33 @@ class TestUnderwaterCombat_EngineSurface_NoEnvironmentalContext:
                 "underwater skips into real assertions."
             )
 
-    def test_apply_damage_effect_signature_takes_no_environment(self) -> None:
-        """`_apply_damage_effect` has no environment parameter either.
+    def test_apply_damage_effect_honors_underwater_fire_resistance(self) -> None:
+        """Item-driven fire damage is halved in an underwater environment (#595).
 
-        The other damage path — used by alchemist's fire and other
-        item-driven damage — likewise carries no environment hook.
-        This guards the absence so the moment underwater context is
-        threaded through, the fire-resistance skip above can become a
-        real test.
+        The item damage path (alchemist's fire and other thrown damage
+        items) now accepts an `environment` argument and routes the
+        rolled damage through the canonical pipeline. When the
+        environment is "underwater" and the damage is fire, the SRD's
+        "anything underwater has Resistance to Fire damage" carve-out
+        halves the damage — with no `has_resistance_fire` condition on
+        the target.
         """
-        sig = inspect.signature(_apply_damage_effect)
-        for forbidden in ("environment", "room", "underwater"):
-            assert forbidden not in sig.parameters, (
-                f"`_apply_damage_effect` now takes `{forbidden}` — the "
-                "environment seam appears to be opening up. Flip the "
-                "underwater-fire-resistance skip into a real assertion."
-            )
+        target = _make_creature(hp=50)
+        assert not target.has_condition("has_resistance_fire")
+
+        result = _apply_damage_effect(
+            item_info={
+                "name": "Alchemist's Fire",
+                "damage": "0d4+10",  # fixed 10 fire damage
+                "damage_type": "fire",
+            },
+            target=target,
+            dice_roller=DiceRoller(seed=1),
+            event_bus=None,
+            environment="underwater",
+        )
+        assert result.amount == 5, (
+            "SRD: Anything underwater has Resistance to Fire damage — "
+            "10 fire from a thrown item should halve to 5 from the "
+            "environment alone."
+        )

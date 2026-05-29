@@ -148,9 +148,7 @@ class TestDamageTypes_EnumerationMatchesSRDGlossary:
             raw = damage.get("damage_type")
             if not raw:
                 continue
-            components = (
-                raw.replace(" and ", ",").replace("/", ",").replace(" or ", ",").split(",")
-            )
+            components = raw.replace(" and ", ",").replace("/", ",").replace(" or ", ",").split(",")
             for piece in components:
                 token = piece.strip().lower()
                 if not token:
@@ -217,9 +215,7 @@ class TestDamageTypes_EnumerationMatchesSRDGlossary:
                         if not token:
                             continue
                         if token not in SRD_DAMAGE_TYPES:
-                            offenders.append(
-                                (mid, bucket, action.get("name", "<unnamed>"), token)
-                            )
+                            offenders.append((mid, bucket, action.get("name", "<unnamed>"), token))
         assert not offenders, (
             f"Monster action damage_type values outside the SRD glossary: "
             f"{offenders}. SRD set: {sorted(SRD_DAMAGE_TYPES)}."
@@ -295,9 +291,7 @@ class TestDamageTypes_NoIntrinsicRules:
         # equality / membership comparison against a literal type
         # name. This regex catches `damage_type == "fire"`,
         # `damage_type in ("fire",)`, etc.
-        offenders = re.findall(
-            r"damage_type\s*(?:==|in|!=)\s*[\"'(\[]", src
-        )
+        offenders = re.findall(r"damage_type\s*(?:==|in|!=)\s*[\"'(\[]", src)
         assert not offenders, (
             "CombatEngine.resolve_attack must not branch on the value "
             "of damage_type; type-specific behavior belongs in "
@@ -311,22 +305,28 @@ class TestDamageTypes_NoIntrinsicRules:
 
         Confirms the "but other rules ... rely on damage types" half
         of the SRD sentence: the resistance code path consumes the
-        type field to decide whether to halve.
-        `systems/item_effects.py:_apply_damage_effect` is the lone
-        production damage path that reads `damage_type` and consults a
-        per-type resistance condition.
+        type field to decide whether to halve. The item damage path
+        reads `damage_type` from its payload and forwards it to the
+        canonical pipeline, which is where the per-type resistance
+        condition (e.g. `has_resistance_fire`) is built.
         """
         import inspect
 
+        from dnd_engine.rules import damage as damage_rules
         from dnd_engine.systems import item_effects
 
-        src = inspect.getsource(item_effects._apply_damage_effect)
-        assert 'item_info.get("damage_type"' in src, (
+        item_src = inspect.getsource(item_effects._apply_damage_effect)
+        assert 'item_info.get("damage_type"' in item_src, (
             "_apply_damage_effect must read damage_type from the item "
             "payload so resistance can key on it."
         )
-        assert "has_resistance_" in src, (
-            "_apply_damage_effect must build a per-type resistance "
+        assert "apply_damage_modifiers" in item_src, (
+            "_apply_damage_effect must forward damage_type to the canonical "
+            "pipeline (apply_damage_modifiers) so type-keyed resistance applies."
+        )
+        pipeline_src = inspect.getsource(damage_rules.apply_damage_modifiers)
+        assert "has_resistance_" in pipeline_src, (
+            "apply_damage_modifiers must build a per-type resistance "
             "condition string (e.g. has_resistance_fire) so type-keyed "
             "resistance can apply."
         )

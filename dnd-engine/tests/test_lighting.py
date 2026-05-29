@@ -300,3 +300,19 @@ class TestCreatureEnvironment:
         room["environment"] = "Underwater"
 
         assert game_state.creature_environment(human_character) == "underwater"
+
+    def test_returns_none_when_current_room_is_unresolvable(self, human_character):
+        """An unbuilt/unknown current room yields None, not a crash (#595).
+
+        Item use and other damage paths now consult this seam while a
+        combat-only GameState may never have bootstrapped a dungeon map.
+        A missing current room means "no environment context" rather than
+        a KeyError bubbling up through the damage pipeline.
+        """
+        party = Party([human_character])
+        game_state = GameState(party, "test_dungeon")
+
+        # Point the current room id at something the dungeon does not have.
+        game_state.current_room_id = "does_not_exist"
+
+        assert game_state.creature_environment(human_character) is None

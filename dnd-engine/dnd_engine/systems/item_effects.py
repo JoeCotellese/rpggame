@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from dnd_engine.core.creature import Creature
 from dnd_engine.core.dice import DiceRoller
+from dnd_engine.rules.damage import apply_damage_modifiers, is_immune
 from dnd_engine.utils.events import Event, EventBus, EventType
 
 if TYPE_CHECKING:
@@ -35,6 +36,7 @@ def apply_item_effect(
     dice_roller: DiceRoller | None = None,
     event_bus: EventBus | None = None,
     time_manager: Optional["TimeManager"] = None,
+    environment: str | None = None,
 ) -> ItemEffectResult:
     """
     Apply an item's effect to a target creature.
@@ -71,7 +73,7 @@ def apply_item_effect(
     if effect_type == "healing":
         return _apply_healing_effect(item_info, target, dice_roller, event_bus)
     elif effect_type == "damage":
-        return _apply_damage_effect(item_info, target, dice_roller, event_bus)
+        return _apply_damage_effect(item_info, target, dice_roller, event_bus, environment)
     elif effect_type == "condition_removal":
         return _apply_condition_removal_effect(item_info, target, event_bus)
     elif effect_type == "buff":
@@ -163,7 +165,11 @@ def _apply_healing_effect(
 
 
 def _apply_damage_effect(
-    item_info: dict[str, Any], target: Creature, dice_roller: DiceRoller, event_bus: EventBus | None
+    item_info: dict[str, Any],
+    target: Creature,
+    dice_roller: DiceRoller,
+    event_bus: EventBus | None,
+    environment: str | None = None,
 ) -> ItemEffectResult:
     """
     Apply a damage effect to a target.
@@ -175,6 +181,9 @@ def _apply_damage_effect(
         target: Creature to damage
         dice_roller: DiceRoller for rolling damage dice
         event_bus: Optional event bus for emitting DAMAGE_DEALT event
+        environment: Optional environment tag for the target's room
+            (e.g. "underwater"). Forwarded to the damage pipeline so SRD
+            environment carve-outs (underwater → Fire Resistance) apply.
 
     Returns:
         ItemEffectResult with damage details
@@ -185,15 +194,19 @@ def _apply_damage_effect(
 
     # Roll damage dice
     damage_roll = dice_roller.roll(damage_dice)
-    damage_amount = damage_roll.total
+    # Route the rolled damage through the canonical pipeline so Immunity,
+    # Resistance, Vulnerability, monster catalog fields, and
+    # environment-granted Resistance all apply. The pipeline is the single
+    # source of truth for the resulting number.
+    damage_amount = apply_damage_modifiers(target, damage_roll.total, damage_type, environment)
 
-    # Check for resistance to this damage type
-    resistance_condition = f"has_resistance_{damage_type}"
-    has_resistance = target.has_condition(resistance_condition)
-
-    # Halve damage if resistant
-    if has_resistance:
-        damage_amount = damage_amount // 2  # Integer division for D&D rules
+    # Display-only: describe what the pipeline actually did by comparing the
+    # rolled total to the applied amount, so catalog Immunity / Resistance /
+    # Vulnerability are reflected just like the condition-flag forms. This
+    # does not affect the number (the pipeline already applied it).
+    target_is_immune = is_immune(target, damage_type)
+    has_resistance = not target_is_immune and damage_amount < damage_roll.total
+    is_vulnerable = damage_amount > damage_roll.total
 
     # Apply damage
     hp_before = target.current_hp
@@ -210,7 +223,7 @@ def _apply_damage_effect(
                 "damage_dice": damage_dice,
                 "damage_type": damage_type,
                 "damage_rolled": damage_roll.total,  # Original rolled damage
-                "damage_after_resistance": damage_amount,  # After resistance applied
+                "damage_after_modifiers": damage_amount,  # After the damage pipeline
                 "damage_actual": actual_damage,  # After all reductions
                 "has_resistance": has_resistance,
                 "hp_before": hp_before,
@@ -223,15 +236,20 @@ def _apply_damage_effect(
     damage_roll_str = f"rolled {damage_dice}: {damage_roll.total}"
 
     if actual_damage == 0:
-        # Show resistance if it caused the damage to be 0
-        if has_resistance and damage_roll.total > 0:
+        # Explain a zero result: Immunity zeroes outright; Resistance can
+        # also floor a low roll to zero.
+        if target_is_immune and damage_roll.total > 0:
+            message = f"{target.name} takes no damage (immune to {damage_type})"
+        elif has_resistance and damage_roll.total > 0:
             message = f"{target.name} takes no damage ({damage_roll_str}, halved by resistance)"
         else:
             message = f"{target.name} takes no damage"
     else:
-        # If resistance was applied, show the halving
+        # Annotate the modifier the pipeline applied, if any.
         if has_resistance:
             message = f"{target.name} takes {actual_damage} {damage_type} damage ({damage_roll_str}, halved by resistance)"
+        elif is_vulnerable:
+            message = f"{target.name} takes {actual_damage} {damage_type} damage ({damage_roll_str}, doubled by vulnerability)"
         else:
             message = (
                 f"{target.name} takes {actual_damage} {damage_type} damage ({damage_roll_str})"
