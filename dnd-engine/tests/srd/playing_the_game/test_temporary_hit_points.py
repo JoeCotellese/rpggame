@@ -48,6 +48,30 @@ def _make_creature(max_hp: int = 20, current_hp: int | None = None) -> Creature:
     )
 
 
+def _make_character(max_hp: int = 20, current_hp: int | None = None):
+    """Build a level-1 Fighter for Temp HP assertions that need the
+    full Character rest / death-save machinery (the bare Creature has
+    neither)."""
+    from dnd_engine.core.character import Character, CharacterClass
+
+    return Character(
+        name="Hero",
+        character_class=CharacterClass.FIGHTER,
+        level=1,
+        abilities=Abilities(
+            strength=14,
+            dexterity=12,
+            constitution=13,
+            intelligence=10,
+            wisdom=11,
+            charisma=8,
+        ),
+        max_hp=max_hp,
+        ac=16,
+        current_hp=current_hp,
+    )
+
+
 class TestTempHP_Intro:
     """SRD § Playing the Game › Temporary Hit Points › Intro.
 
@@ -117,21 +141,19 @@ class TestTempHP_Duration:
     """
 
     def test_long_rest_clears_temporary_hit_points(self) -> None:
-        pytest.skip(
-            "GAP: `Character.take_long_rest` "
-            "(dnd_engine/core/character.py:1236-1280) restores HP and "
-            "clears expired conditions but has no Temp HP pool to "
-            "zero out. Tracked by issue #482."
-        )
+        # SRD: Temp HP last until depleted or a Long Rest.
+        character = _make_character(max_hp=20, current_hp=15)
+        character.set_temporary_hit_points(8)
+        character.take_long_rest()
+        assert character.temporary_hit_points == 0
 
     def test_short_rest_does_not_clear_temporary_hit_points(self) -> None:
-        pytest.skip(
-            "GAP: depends on the Temp HP pool field. The SRD scopes "
-            "expiry to Long Rest specifically — short rest must NOT "
-            "drain Temp HP. `Character.take_short_rest` "
-            "(dnd_engine/core/character.py:1202-1234) has no Temp HP "
-            "branch to assert against. Tracked by issue #482."
-        )
+        # SRD scopes expiry to a Long Rest specifically — a Short Rest
+        # must leave the buffer intact.
+        character = _make_character(max_hp=20, current_hp=15)
+        character.set_temporary_hit_points(8)
+        character.take_short_rest()
+        assert character.temporary_hit_points == 8
 
 
 class TestTempHP_DontStack:

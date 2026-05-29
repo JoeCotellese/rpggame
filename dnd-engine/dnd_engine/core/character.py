@@ -1458,6 +1458,10 @@ class Character(Creature):
             self.process_stable_recovery(hours_elapsed=8.0)
             hp_recovered = self.recover_hp()
             resources_recovered = self.recover_resources("long_rest")
+            # SRD § Playing the Game › Temporary Hit Points › Duration:
+            # Temp HP "last until they're depleted or you finish a Long
+            # Rest." A Long Rest zeroes the buffer (a Short Rest does not).
+            self.temporary_hit_points = 0
             # Clear all non-permanent conditions (8 hours exceeds any timed condition)
             conditions_removed = self.clear_expired_conditions()
 
