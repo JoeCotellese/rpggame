@@ -83,22 +83,25 @@ class TestTempHP_Intro:
         creature = _make_creature(max_hp=10)
         assert creature.temporary_hit_points == 0
 
-    def test_item_effects_temporary_hp_buff_placeholder_is_documented(self) -> None:
-        """Source-level guard: the placeholder is still labeled TODO.
+    def test_item_effects_temporary_hp_buff_grants_real_pool(self) -> None:
+        """Source-level guard: the catalog branch grants a real pool.
 
-        Until the real Temp HP system lands (issue #482), the engine
-        carries a placeholder buff at
-        `dnd_engine/systems/item_effects.py:364-368`. This test pins
-        that placeholder so it can't silently start claiming Temp-HP
-        semantics without being rewritten.
+        The placeholder that attached a flavor `has_temporary_hp_buff`
+        condition with no amount has been replaced (issue #482). The
+        `temporary_hp` branch now grants a real Temp HP pool via
+        `set_temporary_hit_points`. This guard pins the real grant so
+        the branch can't silently regress to a flavor condition.
         """
         from dnd_engine.systems import item_effects
 
-        src = inspect.getsource(item_effects)
-        assert "TODO: Implement proper temporary HP system" in src, (
-            "Placeholder Temp-HP buff at "
-            "dnd_engine/systems/item_effects.py:364-368 must remain "
-            "labeled TODO until the real system (issue #482) lands."
+        src = inspect.getsource(item_effects._apply_buff_effect)
+        assert "set_temporary_hit_points" in src, (
+            "The `temporary_hp` catalog branch must grant a real pool "
+            "via set_temporary_hit_points (issue #482)."
+        )
+        assert "has_temporary_hp_buff" not in src, (
+            "The flavor `has_temporary_hp_buff` placeholder condition "
+            "must be gone now that the real Temp HP pool exists."
         )
 
 
