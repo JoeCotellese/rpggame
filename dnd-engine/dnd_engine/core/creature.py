@@ -27,6 +27,26 @@ class Size(str, Enum):
     HUGE = "huge"
     GARGANTUAN = "gargantuan"
 
+    @property
+    def footprint(self) -> int:
+        """
+        Width, in 5-ft tiles, of the square space this size occupies.
+
+        Per the SRD Creature Size and Space table, Tiny/Small/Medium each
+        fit within a single tile, Large fills a 2x2 block, Huge a 3x3, and
+        Gargantuan a 4x4. The returned value is the side length of that
+        square; the full set of tiles a creature claims is that length
+        squared (see `SpatialIndex.footprint_tiles`).
+        """
+        return {
+            Size.TINY: 1,
+            Size.SMALL: 1,
+            Size.MEDIUM: 1,
+            Size.LARGE: 2,
+            Size.HUGE: 3,
+            Size.GARGANTUAN: 4,
+        }[self]
+
 
 class MovementMode(str, Enum):
     """
