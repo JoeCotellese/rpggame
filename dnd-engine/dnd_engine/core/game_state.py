@@ -9,7 +9,7 @@ from typing import Any
 from dnd_engine.core.campaign_progress import CampaignProgress, CampaignProgressTracker
 from dnd_engine.core.character import Character
 from dnd_engine.core.combat import AttackResult, CombatEngine
-from dnd_engine.core.creature import Creature
+from dnd_engine.core.creature import Creature, Size
 from dnd_engine.core.dice import DiceRoller, format_dice_with_modifier
 from dnd_engine.core.entity_ids import pc_entity_id
 from dnd_engine.core.map import Map
@@ -805,9 +805,14 @@ class GameState:
                 "(built from a Map) before calling set_position"
             )
         destination = Position(x, y)
+        creature = self._find_creature_by_id(entity_id)
         existing = self.spatial.position_of(entity_id)
         if existing is None:
-            self.spatial.place(entity_id, destination)
+            # Pass the creature's size so the SpatialIndex claims the full
+            # footprint (Large 2x2, Huge 3x3, …); unknown entities default to
+            # Medium. ``move`` reuses the size recorded here.
+            size = creature.size if creature is not None else Size.MEDIUM
+            self.spatial.place(entity_id, destination, size=size)
             self.event_bus.emit(
                 Event(
                     type=EventType.CREATURE_PLACED,
@@ -828,7 +833,6 @@ class GameState:
                     },
                 )
             )
-        creature = self._find_creature_by_id(entity_id)
         if creature is not None:
             creature.position = destination
         return destination

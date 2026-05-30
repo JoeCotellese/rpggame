@@ -6,7 +6,7 @@ from __future__ import annotations
 import pytest
 
 from dnd_engine.core.character import Character, CharacterClass
-from dnd_engine.core.creature import Abilities
+from dnd_engine.core.creature import Abilities, Creature, Size
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.game_state import GameState
 from dnd_engine.core.map import Map, TileType
@@ -303,6 +303,41 @@ class TestSetPositionCreatureSync:
         game_state.remove_creature_position(entity_id)
 
         assert character.position is None
+
+    def test_set_position_threads_creature_size_into_footprint(
+        self, game_state: GameState, map_5x5: Map
+    ) -> None:
+        """A Large creature placed via set_position claims its full 2x2 block.
+
+        ``_find_creature_by_id`` resolves ``<id>_<index>`` to
+        ``active_enemies[index]``, so an enemy's size flows through to the
+        SpatialIndex footprint rather than collapsing to a single tile.
+        """
+        game_state.spatial = SpatialIndex(map_5x5)
+        ogre = Creature(
+            name="Ogre",
+            max_hp=59,
+            ac=11,
+            abilities=Abilities(
+                strength=19,
+                dexterity=8,
+                constitution=16,
+                intelligence=5,
+                wisdom=7,
+                charisma=7,
+            ),
+            size=Size.LARGE,
+        )
+        game_state.active_enemies.append(ogre)
+
+        # (0,0) anchors a 2x2 block clear of the fixture walls.
+        game_state.set_position("ogre_0", 0, 0)
+
+        assert game_state.spatial.footprint_of("ogre_0") == frozenset(
+            {Position(0, 0), Position(1, 0), Position(0, 1), Position(1, 1)}
+        )
+        # Occupancy resolves a non-anchor footprint tile to the ogre.
+        assert game_state.spatial.occupant_at(Position(1, 1)) == "ogre_0"
 
 
 class TestBootstrapSpatial:
