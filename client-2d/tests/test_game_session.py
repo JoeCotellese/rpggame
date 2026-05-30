@@ -2269,3 +2269,112 @@ class TestIssue570Reproduction:
         assert " damage" in response or "MISS" in response, (
             f"response carries neither damage nor MISS:\n{response}"
         )
+
+
+def _make_room_concealing(session) -> None:
+    """Flip the current room to Heavily Obscured so the #496 Hide gate
+    opens, mirroring the engine's hide integration fixture."""
+    room = session.engine.game_state.get_current_room()
+    room["lighting"] = "bright"
+    room["obscurement_sources"] = ["heavy_fog"]
+    room["cover"] = "none"
+
+
+def _make_room_open(session) -> None:
+    """Flip the current room to open/lit so the Hide gate refuses."""
+    room = session.engine.game_state.get_current_room()
+    room["lighting"] = "bright"
+    room["obscurement_sources"] = []
+    room["cover"] = "none"
+
+
+class TestSessionHide:
+    """Coverage for ``GameSession.hide`` — the player-facing Hide action
+    (#608) that routes the MCP/key surface into ``GameState.attempt_hide``.
+    """
+
+    def test_hide_refused_when_not_in_combat(self, session) -> None:
+        """Hiding is a combat-turn action; outside combat it refuses with
+        the same guidance the other combat verbs use."""
+        session.engine.game_state.in_combat = False
+        result = session.hide()
+        assert "Not in combat" in result
+
+    def test_hide_refused_when_not_players_turn(self, session) -> None:
+        """When an enemy holds the turn, Hide refuses rather than spending
+        someone else's slot."""
+        goblin = session.engine.game_state.active_enemies[0]
+        _force_combatant_turn(session, goblin)
+        result = session.hide()
+        assert "Not your turn" in result
+
+    def test_hide_refused_in_open_room_keeps_action(self, session) -> None:
+        """An open, lit room fails the #496 gate. The refusal is surfaced
+        and the action slot is preserved (the gate runs before any spend)."""
+        _force_player_turn(session)
+        _make_room_open(session)
+
+        result = session.hide()
+
+        from dnd_engine.systems.action_economy import ActionType
+
+        assert "no concealment or cover" in result.lower()
+        turn_state = session.engine.get_current_turn_state()
+        assert turn_state.is_action_available(ActionType.ACTION)
+
+    def test_hide_in_concealing_room_runs_stealth_check(self, session) -> None:
+        """A Heavily Obscured room opens the gate; Hide rolls Stealth vs the
+        watchers' passive Perception and reports the outcome alongside the
+        map state."""
+        _force_player_turn(session)
+        _make_room_concealing(session)
+        session.set_seed(42)
+
+        result = session.hide()
+
+        # Either outcome phrasing from HideAttemptResult, plus the state block.
+        assert "slips out of sight" in result or "stays visible" in result, (
+            f"missing hide outcome:\n{result}"
+        )
+        assert "Available Actions:" in result
+
+    def test_hide_command_dispatches_through_bridge(self, session) -> None:
+        """``CommandType.HIDE`` on the bridge routes to ``GameSession.hide``."""
+        from concurrent.futures import Future
+
+        from client_2d.mcp_bridge import CommandRequest, CommandType, MCPBridge
+
+        bridge = MCPBridge()
+        session._mcp_bridge = bridge
+        _force_player_turn(session)
+        _make_room_concealing(session)
+        session.set_seed(42)
+
+        request = CommandRequest(command_type=CommandType.HIDE)
+        request.response_future = Future()
+        bridge._command_queue.put(request)
+
+        session._process_mcp_commands()
+
+        result = request.response_future.result(timeout=1.0)
+        assert "slips out of sight" in result or "stays visible" in result, (
+            f"bridge HIDE did not reach hide():\n{result}"
+        )
+
+
+class TestSessionStateSurfacesHide:
+    """``get_state`` must advertise ``game_hide()`` exactly when the engine
+    reports Hide as available (#608 acceptance: client offers Hide when
+    ``get_available_actions()`` includes ``"hide"``)."""
+
+    def test_state_lists_hide_when_available(self, session) -> None:
+        _force_player_turn(session)
+        _make_room_concealing(session)
+        state = session.get_state()
+        assert "game_hide()" in state
+
+    def test_state_omits_hide_in_open_room(self, session) -> None:
+        _force_player_turn(session)
+        _make_room_open(session)
+        state = session.get_state()
+        assert "game_hide()" not in state

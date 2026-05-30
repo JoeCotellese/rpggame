@@ -881,6 +881,8 @@ class GameSession:
                 result = self.attack(target)
             elif request.command_type == CommandType.WAIT:
                 result = self.wait()
+            elif request.command_type == CommandType.HIDE:
+                result = self.hide()
             elif request.command_type == CommandType.SPAWN_MONSTER:
                 result = self.spawn_monster(
                     request.args.get("monster_id", ""),
@@ -1080,6 +1082,11 @@ class GameSession:
                 lines.append(f"  Movement: {turn_state.movement_remaining} ft remaining")
             lines.append("  - game_move(direction) - Move north/south/east/west")
             lines.append("  - game_attack(target) - Attack enemy in weapon range")
+            # SRD § Actions › Hide is offered only when the engine's #496
+            # gate passes for the current combatant (concealment or cover).
+            game_state = self.engine.game_state
+            if game_state is not None and "hide" in game_state.get_available_actions():
+                lines.append("  - game_hide() - Hide (Dexterity (Stealth) check)")
             lines.append("  - game_wait() - Pass turn")
         else:
             lines.append("  - game_move(direction) - Move north/south/east/west")
@@ -1537,6 +1544,63 @@ class GameSession:
         if between:
             return f"{between}\n\n{state}"
         return state
+
+    def hide(self) -> str:
+        """Take the Hide action (Dexterity (Stealth) check) for the current PC.
+
+        Routes the player-facing surface (the ``game_hide`` MCP tool and the
+        windowed ``H`` key) into ``GameState.attempt_hide``. Hide spends the
+        action slot but does NOT end the turn — the player keeps any remaining
+        movement and ends the turn explicitly with ``game_wait()``. Because the
+        turn stays with the player, no enemy turns are drained here.
+
+        Refusals (not in combat, not the player's turn, the #496 environment
+        gate, or no action slot) come back as a message-with-state rather than
+        a crash, mirroring how ``attack``/``wait`` report ineligible inputs.
+        """
+        if not self.engine.in_combat:
+            return "Not in combat! Use game_move() to explore."
+
+        if not self.engine.is_player_turn():
+            return "Not your turn! Wait for enemies to act."
+
+        current = self.engine.get_current_combatant()
+        if current is None:
+            return "Error: Could not get current combatant."
+
+        game_state = self.engine.game_state
+        if game_state is None:
+            return "Error: Game state unavailable."
+
+        result = game_state.attempt_hide(current["creature"])
+        self._add_combat_log(result.message)
+
+        report = self._format_hide_report(result)
+        state = self.get_state()
+        return f"{report}\n\n{state}" if report else state
+
+    def _format_hide_report(self, result: Any) -> str:
+        """Render the Hide outcome for the player surface.
+
+        For a refused attempt (gate or slot), the reason is surfaced as-is —
+        no roll happened. When the attempt ran, the contested check is shown
+        (Stealth roll vs the watchers' passive Perception DC) so players can
+        audit the math the same way they can for attacks (#570).
+        """
+        if not result.attempted:
+            return result.message
+
+        lines = [result.message]
+        check = result.check_result or {}
+        roll = check.get("roll")
+        total = check.get("total")
+        if roll is not None and total is not None and result.dc is not None:
+            outcome = "SUCCESS" if result.success else "FAIL"
+            lines.append(
+                f"Stealth check: roll {roll} -> {total} vs passive "
+                f"Perception {result.dc} -> {outcome}"
+            )
+        return "\n".join(lines)
 
     # ========== Public dev/MCP API (gated upstream by dev_mode) ==========
 

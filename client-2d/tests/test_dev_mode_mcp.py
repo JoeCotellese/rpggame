@@ -24,7 +24,7 @@ DEV_TOOL_NAMES = {
     "reset_game",
 }
 
-PLAY_TOOL_NAMES = {"game_state", "game_move", "game_attack", "game_wait"}
+PLAY_TOOL_NAMES = {"game_state", "game_move", "game_attack", "game_wait", "game_hide"}
 
 
 def _registered_tool_names(server: EmbeddedMCPServer) -> set[str]:

@@ -305,6 +305,17 @@ class GameWindow(arcade.Window):
     def _pass_turn(self) -> None:
         self.session.pass_turn()
 
+    def _hide(self) -> None:
+        """Take the Hide action for the current PC.
+
+        Delegates to GameSession.hide, which routes into
+        GameState.attempt_hide and logs the outcome (including the
+        environment-gate refusal when there's no concealment) to the
+        combat log. Hide spends the action but leaves the turn with the
+        player, so no enemy turns are drained here.
+        """
+        self.session.hide()
+
     def _mcp_combat_move(self, direction: str) -> str:
         return self.session.combat_move(direction)
 
@@ -896,9 +907,15 @@ class GameWindow(arcade.Window):
             anchor_x="center",
         )
 
-        # Controls hint
+        # Controls hint. Hide is offered only when the engine's #496 gate
+        # passes for the current combatant (heavy obscurement or cover),
+        # matching GameState.get_available_actions().
+        controls = "1-9: Select  |  A: Attack  |  WASD/Arrows: Move  |  Space: Wait"
+        game_state = self.engine.game_state
+        if game_state is not None and "hide" in game_state.get_available_actions():
+            controls += "  |  H: Hide"
         arcade.draw_text(
-            "1-9: Select  |  A: Attack  |  WASD/Arrows: Move  |  Space: Wait",
+            controls,
             x + w // 2,
             y + UI_PADDING,
             UIColors.TEXT_DIM,
@@ -1378,6 +1395,11 @@ class GameWindow(arcade.Window):
         # Space to wait/pass
         elif key == arcade.key.SPACE:
             self._pass_turn()
+
+        # H to take the Hide action (gated on concealment/cover; the
+        # session logs the refusal when the #496 environment gate fails)
+        elif key == arcade.key.H:
+            self._hide()
 
         # WASD/Arrow movement during combat (uses action economy)
         elif key in (arcade.key.W, arcade.key.UP):

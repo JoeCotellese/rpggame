@@ -1,0 +1,27 @@
+# Scenario: hide_action_basic
+#
+# Exercises the player-facing Hide action (#608) end-to-end. The party
+# starts in laboratory.boiler_room, which is Heavily Obscured by
+# heavy_fog, so the SRD 5.2.1 / #496 environment gate permits hiding.
+# A goblin stands a few tiles away as the watcher whose passive
+# Perception sets the Stealth DC.
+#
+# Use with `load_scenario("...hide_action_basic.yaml")`, then `game_hide()`
+# to take the Hide action and `game_attack("goblin_0")` to verify that
+# attacking from hidden reveals the attacker and grants advantage.
+
+name: hide_action_basic
+seed: 42
+map:
+  dungeon: laboratory
+  campaign: poisoned_laboratory
+  start_room: laboratory.boiler_room
+party:
+  - class: rogue
+    race: halfling
+    weapons: [shortbow]
+    position: [3, 5]
+    name: Sneak
+enemies:
+  - monster_id: goblin
+    position: [8, 5]

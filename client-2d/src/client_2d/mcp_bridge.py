@@ -29,6 +29,7 @@ class CommandType(Enum):
     MOVE = auto()
     ATTACK = auto()
     WAIT = auto()
+    HIDE = auto()
 
     # Dev-mode commands (only dispatched when EmbeddedMCPServer was started
     # with dev_mode=True, gated upstream by --dev or DND_DEBUG=1).
