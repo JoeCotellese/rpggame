@@ -10,7 +10,8 @@
     "weapon_proficiencies": ["simple", "martial"],
     "skill_proficiencies": {
       "choose": 2,
-      "from": ["acrobatics", "animal_handling", "athletics", "history", "insight", "intimidation", "perception", "survival"]
+      "from": ["acrobatics", "animal_handling", "athletics", "history", "insight", "intimidation", "perception", "survival"],
+      "default": ["athletics", "perception"]
     },
     "starting_equipment": ["longsword", "chain_mail", "potion_of_healing", "potion_of_healing", "potion_of_healing", "potion_of_healing", "potion_of_healing"],
     "starting_gold": 10,
@@ -83,7 +84,8 @@
     "tool_proficiencies": ["thieves_tools"],
     "skill_proficiencies": {
       "choose": 4,
-      "from": ["acrobatics", "athletics", "deception", "insight", "intimidation", "investigation", "perception", "performance", "persuasion", "sleight_of_hand", "stealth"]
+      "from": ["acrobatics", "athletics", "deception", "insight", "intimidation", "investigation", "perception", "performance", "persuasion", "sleight_of_hand", "stealth"],
+      "default": ["stealth", "sleight_of_hand", "perception", "acrobatics"]
     },
     "starting_equipment": ["rapier", "shortbow", "leather_armor", "thieves_tools", "potion_of_healing", "potion_of_healing"],
     "starting_gold": 15,
@@ -148,7 +150,8 @@
     "weapon_proficiencies": ["daggers", "darts", "slings", "quarterstaffs", "light_crossbows"],
     "skill_proficiencies": {
       "choose": 2,
-      "from": ["arcana", "history", "insight", "investigation", "medicine", "religion"]
+      "from": ["arcana", "history", "insight", "investigation", "medicine", "religion"],
+      "default": ["arcana", "investigation"]
     },
     "starting_equipment": ["quarterstaff", "dagger", "potion_of_healing"],
     "starting_gold": 5,
