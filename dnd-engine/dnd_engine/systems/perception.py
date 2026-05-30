@@ -23,6 +23,7 @@ SRD references:
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from enum import Enum
 from typing import TYPE_CHECKING
 
@@ -101,6 +102,21 @@ _OBSCUREMENT_SEVERITY: dict[Obscurement, int] = {
     Obscurement.HEAVILY: 2,
 }
 
+# Named environmental obscurement sources (SRD § Obscured Areas). Patchy
+# fog and moderate foliage are Lightly Obscured; heavy fog, dense
+# foliage, and the fog_cloud / poison_cloud area effects are Heavily
+# Obscured. This is the data-driven catalog rooms and area effects draw
+# from; unrecognized names contribute no obscurement.
+_SOURCE_OBSCUREMENT: dict[str, Obscurement] = {
+    "patchy_fog": Obscurement.LIGHTLY,
+    "light_foliage": Obscurement.LIGHTLY,
+    "moderate_foliage": Obscurement.LIGHTLY,
+    "heavy_fog": Obscurement.HEAVILY,
+    "dense_foliage": Obscurement.HEAVILY,
+    "fog_cloud": Obscurement.HEAVILY,
+    "poison_cloud": Obscurement.HEAVILY,
+}
+
 
 def observer_senses(creature: Creature) -> dict[Sense, int]:
     """Resolve a creature's special senses to a ``{Sense: range_ft}`` map.
@@ -173,6 +189,45 @@ def effective_obscurement(
     if _OBSCUREMENT_SEVERITY[ambient] >= _OBSCUREMENT_SEVERITY[from_light]:
         return ambient
     return from_light
+
+
+# Skills whose checks can rely on sight, and so suffer in obscured areas
+# (SRD § Obscured Areas). Perception is the canonical case; Investigation
+# (spotting clues), Insight (reading a creature), Medicine (diagnosing by
+# sight), and Survival (tracking) likewise depend on sight here. Whether a
+# check relies on sight is a rule, not content, so the set lives in the
+# engine's perception layer rather than in skill data.
+_SIGHT_BASED_SKILLS: frozenset[str] = frozenset(
+    {"perception", "investigation", "insight", "medicine", "survival"}
+)
+
+
+def relies_on_sight(skill: str) -> bool:
+    """Whether a skill check relies on sight (SRD § Obscured Areas).
+
+    Sight-reliant checks take Disadvantage in a Lightly Obscured area and
+    auto-fail (the Blinded consequence) in a Heavily Obscured area.
+    """
+    return str(skill).lower() in _SIGHT_BASED_SKILLS
+
+
+def obscurement_from_sources(sources: Iterable[str]) -> Obscurement:
+    """Resolve named environmental sources to an effective Obscurement.
+
+    Recognized sources (SRD § Obscured Areas): patchy fog and moderate
+    foliage are Lightly Obscured; heavy fog, dense foliage, and the
+    fog_cloud / poison_cloud area effects are Heavily Obscured. Multiple
+    sources stack to the more severe; unrecognized names contribute
+    nothing. An empty or all-unrecognized set is CLEAR.
+    """
+    worst = Obscurement.CLEAR
+    for source in sources:
+        level = _SOURCE_OBSCUREMENT.get(str(source).lower())
+        if level is None:
+            continue
+        if _OBSCUREMENT_SEVERITY[level] > _OBSCUREMENT_SEVERITY[worst]:
+            worst = level
+    return worst
 
 
 def compute_visibility(
