@@ -29,6 +29,7 @@ class TestCommandType:
         assert CommandType.MOVE is not None
         assert CommandType.ATTACK is not None
         assert CommandType.WAIT is not None
+        assert CommandType.HIDE is not None
 
     def test_command_types_unique(self) -> None:
         """Each command type has a unique value."""
@@ -37,6 +38,7 @@ class TestCommandType:
             CommandType.MOVE,
             CommandType.ATTACK,
             CommandType.WAIT,
+            CommandType.HIDE,
         ]
         assert len(types) == len(set(types))
 
