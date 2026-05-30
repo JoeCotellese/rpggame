@@ -34,6 +34,7 @@ from dnd_engine.scenarios.script_executor import (
     _attack_range_for,
     _attack_reach_for,
 )
+from dnd_engine.systems.actions import disengage
 from dnd_engine.systems.opportunity_attacks import (
     register_default_opportunity_attack,
 )
@@ -525,15 +526,45 @@ class TestOpportunityAttacks_Avoidance:
     """
 
     def test_disengage_action_prevents_opportunity_attack(self):
-        pytest.skip(
-            "GAP: Disengage is not a playable action. The string "
-            "'Disengage' appears only as flavor text in "
-            "dnd_engine/data/srd/classes.json (rogue cunning action) "
-            "and dnd_engine/data/srd/monsters.json (goblin Nimble "
-            "Escape, spy). No action handler, dispatcher, or "
-            "movement-flag is wired up — a player cannot choose "
-            "Disengage to avoid OAs. Tracked by issue #414 "
-            "(depends on #413 per-creature OAs)."
+        """Taking the Disengage action suppresses OAs for the rest of the turn.
+
+        Same fixture as the triggering test, but the fighter takes the
+        Disengage action (`dnd_engine.systems.actions.disengage`) before
+        stepping out of the goblin's reach. `disengage` sets
+        `TurnState.disengaged_this_turn`, which `publish_movement_provoke`
+        consults and honors — so the goblin keeps its Reaction and no OA
+        damage fires. Shipped under issue #414 (depends on #413/#412).
+        """
+        game_state, pc_id, goblin, fighter = _build_oa_fixture()
+        tracker = game_state.initiative_tracker
+        assert tracker is not None
+        assert tracker.turn_states[goblin].reaction_available is True
+
+        # Fighter takes the Disengage action this turn.
+        ok, reason = disengage(tracker.turn_states[fighter])
+        assert ok is True, f"disengage failed: {reason}"
+        assert tracker.turn_states[fighter].disengaged_this_turn is True
+
+        damage_events: list[Event] = []
+        game_state.event_bus.subscribe(
+            EventType.DAMAGE_DEALT, damage_events.append
+        )
+
+        # Step out of reach — no OA should be provoked.
+        result = game_state.attempt_combat_step(pc_id, dx=-1, dy=0)
+        assert result.ok, f"step failed unexpectedly: {result.reason}"
+        assert result.position == Position(0, 1)
+
+        # Disengage preserved the goblin's Reaction and produced no OA.
+        assert tracker.turn_states[goblin].reaction_available is True, (
+            "Disengage did not suppress the OA — the goblin's Reaction "
+            "was consumed."
+        )
+        oa_events = [
+            e for e in damage_events if e.data.get("opportunity_attack") is True
+        ]
+        assert oa_events == [], (
+            f"Disengage should produce no OA damage events; got {oa_events}"
         )
 
     def test_involuntary_movement_does_not_provoke(self):
@@ -587,15 +618,27 @@ class TestOpportunityAttacks_Mechanics:
     """
 
     def test_opportunity_attack_consumes_attackers_reaction(self):
-        pytest.skip(
-            "GAP: Reaction economy is not modeled. `flee_combat()` "
-            "fans out one attack per living enemy without checking or "
-            "consuming a Reaction (dnd_engine/core/game_state.py:4222"
-            "-4264). An enemy could in principle OA on every flee and "
-            "still react to other triggers in the same round. Tracked "
-            "by issue #412. Cross-link from "
-            "docs/srd/playing-the-game/reactions.md when that section "
-            "is audited."
+        """An OA on tactical movement consumes the reactor's single Reaction.
+
+        SRD § Reactions: a creature has one Reaction per round, consumed
+        on use. When the fighter steps out of reach, the goblin's OA
+        fires through the ReactionDispatcher, which calls
+        `consume_action(REACTION)` — flipping `reaction_available` to
+        False so no further Reaction can fire this round. Shipped under
+        issue #412 (Reaction economy).
+        """
+        game_state, pc_id, goblin, _fighter = _build_oa_fixture()
+        tracker = game_state.initiative_tracker
+        assert tracker is not None
+        assert tracker.turn_states[goblin].reaction_available is True
+
+        result = game_state.attempt_combat_step(pc_id, dx=-1, dy=0)
+        assert result.ok, f"step failed unexpectedly: {result.reason}"
+
+        # The single Reaction slot is now spent — the economy is enforced.
+        assert tracker.turn_states[goblin].reaction_available is False, (
+            "OA fired but did not consume the goblin's Reaction slot — the "
+            "one-Reaction-per-round economy is not enforced."
         )
 
     def test_opportunity_attack_requires_seeing_the_provoker(self):
