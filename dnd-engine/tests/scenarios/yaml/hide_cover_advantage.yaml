@@ -1,0 +1,28 @@
+# Scenario: hide_cover_advantage
+#
+# Exercises the cover-based Hide payoff (#606) end-to-end. The party starts
+# in laboratory.machine_gallery, which is brightly lit (clear sight) and
+# offers Three-Quarters Cover, so the SRD 5.2.1 / #496 environment gate
+# permits hiding *and* the hidden attacker can still see the target. Unlike
+# the heavy-fog boiler room (hide_action_basic), the unseen-attacker
+# advantage does NOT cancel here — the attacker is not blinded.
+#
+# Use with `load_scenario("...hide_cover_advantage.yaml")`, then `game_hide()`
+# to take the Hide action and `game_attack("skeleton_0")` to verify that
+# attacking from hidden reveals the attacker and lands with advantage.
+
+name: hide_cover_advantage
+seed: 42
+map:
+  dungeon: laboratory
+  campaign: poisoned_laboratory
+  start_room: laboratory.machine_gallery
+party:
+  - class: rogue
+    race: halfling
+    weapons: [shortbow]
+    position: [3, 5]
+    name: Sneak
+enemies:
+  - monster_id: skeleton
+    position: [8, 5]

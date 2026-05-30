@@ -199,7 +199,8 @@
       "description": "A massive furnace roars in the center of this sweltering room, used to heat alchemical reactions. The heat is intense. A large wolf, its fur singed and eyes glowing red, lies near the furnace beside a pile of treasure. The beast's breath carries the acrid smell of sulfur. A low archway to the north vents thick clouds of scalding steam from the boiler beyond.",
       "exits": {
         "east": "laboratory.storage",
-        "north": "laboratory.boiler_room"
+        "north": "laboratory.boiler_room",
+        "west": "laboratory.machine_gallery"
       },
       "enemies": [
         "wolf"
@@ -236,6 +237,33 @@
         "note": "Potion of Fire Resistance prevents this damage"
       },
       "id": "laboratory.furnace_room"
+    },
+    "laboratory.machine_gallery": {
+      "name": "Collapsed Machine Gallery",
+      "description": "A workroom of toppled brass apparatus and overturned shipping crates, lit clearly by a sputtering work-lamp that still clings to one wall. The wreckage is chest-high in places — more than enough to crouch behind and break an onlooker's line of sight while leaving your own view of the room unobstructed. A skeletal sentry, reassembled from mismatched bones, scrapes back and forth across the open floor, oblivious to anyone tucked among the machinery.",
+      "lighting": "bright",
+      "cover": "three_quarters",
+      "exits": {
+        "east": "laboratory.furnace_room"
+      },
+      "enemies": [
+        "skeleton"
+      ],
+      "items": [
+        {
+          "type": "currency",
+          "gold": 18,
+          "visible": false
+        },
+        {
+          "type": "item",
+          "id": "potion_of_healing",
+          "visible": false
+        }
+      ],
+      "searched": false,
+      "searchable": true,
+      "id": "laboratory.machine_gallery"
     },
     "laboratory.sanctum": {
       "name": "The Mad Alchemist's Sanctum",

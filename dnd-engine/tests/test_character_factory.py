@@ -446,3 +446,64 @@ class TestApplyStartingEquipment:
         CharacterFactory.apply_starting_equipment(character, classes_data["fighter"], items_data)
 
         assert character.inventory.gold == 10
+
+
+class TestDefaultSkillSelection:
+    """Auto-selected skill proficiencies should be thematically aware (issue #607).
+
+    The class-list-order slice (`available_skills[:n]`) never reached Stealth for
+    rogues because Stealth is last in the rogue `from` list. Default selection must
+    guarantee a class's signature skills.
+    """
+
+    def _make_factory(self):
+        return CharacterFactory(dice_roller=DiceRoller(seed=1)), DataLoader(
+            dice_roller=DiceRoller(seed=1)
+        )
+
+    def test_default_rogue_gets_stealth_proficiency(self):
+        """A factory-built rogue with no explicit skills must be proficient in Stealth."""
+        factory, loader = self._make_factory()
+        rogue = factory.create_character(
+            class_name="rogue", race_name="human", data_loader=loader
+        )
+        assert "stealth" in rogue.skill_proficiencies
+
+    def test_default_rogue_skill_count_matches_class_choose(self):
+        """Rogue chooses 4 skills; auto-selection must yield exactly that many."""
+        factory, loader = self._make_factory()
+        rogue = factory.create_character(
+            class_name="rogue", race_name="human", data_loader=loader
+        )
+        assert len(rogue.skill_proficiencies) == 4
+
+    def test_default_rogue_skills_are_unique_and_in_class_list(self):
+        """Auto-selected skills must be distinct and drawn from the class `from` list."""
+        factory, loader = self._make_factory()
+        rogue = factory.create_character(
+            class_name="rogue", race_name="human", data_loader=loader
+        )
+        assert len(set(rogue.skill_proficiencies)) == len(rogue.skill_proficiencies)
+        class_data = loader.load_classes()["rogue"]
+        allowed = set(class_data["skill_proficiencies"]["from"])
+        assert set(rogue.skill_proficiencies) <= allowed
+
+    def test_default_rogue_expertise_includes_stealth(self):
+        """Rogue expertise auto-pick should favor signature skills (Stealth among them)."""
+        factory, loader = self._make_factory()
+        rogue = factory.create_character(
+            class_name="rogue", race_name="human", data_loader=loader
+        )
+        assert "stealth" in rogue.expertise_skills
+        assert all(s in rogue.skill_proficiencies for s in rogue.expertise_skills)
+
+    def test_explicit_skills_override_defaults(self):
+        """Explicitly provided skills are respected verbatim (no auto-selection)."""
+        factory, loader = self._make_factory()
+        rogue = factory.create_character(
+            class_name="rogue",
+            race_name="human",
+            data_loader=loader,
+            skill_proficiencies=["acrobatics", "insight"],
+        )
+        assert rogue.skill_proficiencies == ["acrobatics", "insight"]

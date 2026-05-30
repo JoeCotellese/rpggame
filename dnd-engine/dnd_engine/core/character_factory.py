@@ -635,12 +635,18 @@ class CharacterFactory:
         # Get speed from race data (default 30 ft if not specified)
         speed = race_data.get("speed", 30)
 
-        # Auto-select skill proficiencies if not provided
+        # Auto-select skill proficiencies if not provided.
+        # Prefer the class's thematic `default` list (signature skills first, e.g.
+        # Stealth for a rogue) so the auto-pick is not biased by the order of `from`.
+        # Any remaining slots are filled from `from` in order, skipping duplicates.
         if skill_proficiencies is None:
             skill_profs = class_data.get("skill_proficiencies", {})
             num_skills = skill_profs.get("choose", 0)
             available_skills = skill_profs.get("from", [])
-            skill_proficiencies = available_skills[:num_skills]
+            available_set = set(available_skills)
+            ordered = [s for s in skill_profs.get("default", []) if s in available_set]
+            ordered += [s for s in available_skills if s not in ordered]
+            skill_proficiencies = ordered[:num_skills]
 
         # Auto-select expertise for rogues if not provided
         if expertise_skills is None and class_name == "rogue":
