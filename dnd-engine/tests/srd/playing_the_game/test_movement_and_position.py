@@ -18,8 +18,9 @@ from pathlib import Path
 
 import pytest
 
-from dnd_engine.core.creature import Abilities, Creature, MovementMode
+from dnd_engine.core.creature import Abilities, Creature, MovementMode, Size
 from dnd_engine.core.dice import DiceRoller
+from dnd_engine.core.map import Map, TileType
 from dnd_engine.core.position import Position
 from dnd_engine.systems.action_economy import ActionType, Terrain, TurnState, cost_for
 from dnd_engine.systems.actions import disengage
@@ -29,6 +30,7 @@ from dnd_engine.systems.opportunity_attacks import (
     register_default_opportunity_attack,
 )
 from dnd_engine.systems.reactions import ReactionDispatcher
+from dnd_engine.systems.spatial_index import SpatialIndex
 
 pytestmark = pytest.mark.srd(
     "playing-the-game/movement-and-position.md",
@@ -489,17 +491,55 @@ class TestCreatureSize_SpaceFromSizeCategory:
                 f"monster '{mid}' has unrecognized size '{mdata['size']}'"
             )
 
+    def _clear_index(self, n: int = 6) -> SpatialIndex:
+        """A wall-free n x n SpatialIndex for unobstructed footprint geometry."""
+        tiles = {(x, y): TileType.FLOOR for x in range(n) for y in range(n)}
+        return SpatialIndex(Map(width=n, height=n, tiles=tiles))
+
     def test_engine_computes_occupied_tiles_from_size_category(self) -> None:
-        pytest.skip(
-            "GAP: creature size does not drive map footprint. The SRD "
-            "Size table maps Large -> 2x2 tiles, Huge -> 3x3, "
-            "Gargantuan -> 4x4. The `Size` enum and `Creature.size` field "
-            "DID ship (dnd_engine/core/creature.py:13, :155) but are a "
-            "data-model foundation only — nothing consumes them "
-            "geometrically. `SpatialIndex` maps each entity to a single "
-            "`Position` (dnd_engine/systems/spatial_index.py) with no "
-            "multi-tile footprint, and no SRD size->tile table exists in "
-            "dnd_engine/data/srd/. Tracked by issue #442."
+        """Creature size drives the set of tiles a creature occupies.
+
+        The SRD Creature Size and Space table maps Medium -> 1 tile,
+        Large -> 2x2, Huge -> 3x3, Gargantuan -> 4x4. The engine reads
+        `Creature.size` and the `SpatialIndex` claims the full footprint,
+        so occupancy queries resolve every covered tile — not just the
+        anchor.
+        """
+        abilities = Abilities(
+            strength=19,
+            dexterity=10,
+            constitution=16,
+            intelligence=6,
+            wisdom=10,
+            charisma=7,
+        )
+
+        # Side length of the square space matches the SRD table.
+        assert Size.MEDIUM.footprint == 1
+        assert Size.LARGE.footprint == 2
+        assert Size.HUGE.footprint == 3
+        assert Size.GARGANTUAN.footprint == 4
+
+        # A Large creature anchored at (1,1) claims the 2x2 block, and
+        # occupancy is footprint-aware across every covered tile.
+        ogre = Creature(
+            name="Ogre", max_hp=59, ac=11, abilities=abilities, size=Size.LARGE
+        )
+        index = self._clear_index()
+        index.place("ogre", Position(1, 1), size=ogre.size)
+        assert index.footprint_of("ogre") == frozenset(
+            {Position(1, 1), Position(2, 1), Position(1, 2), Position(2, 2)}
+        )
+        assert index.occupant_at(Position(2, 2)) == "ogre"  # not just the anchor
+        assert index.occupant_at(Position(3, 3)) is None  # outside the block
+
+        # A Huge creature claims the full 3x3 block.
+        giant = Creature(
+            name="Hill Giant", max_hp=105, ac=13, abilities=abilities, size=Size.HUGE
+        )
+        index.place("giant", Position(3, 3), size=giant.size)
+        assert index.footprint_of("giant") == frozenset(
+            Position(3 + dx, 3 + dy) for dx in range(3) for dy in range(3)
         )
 
 
