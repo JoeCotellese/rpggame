@@ -1484,12 +1484,17 @@ class GameState:
         The engine's core combat is non-positional, so distance defaults
         to melee (0 ft) — every ranged special sense comfortably reaches,
         which is the relation that matters for adjacent attacks. Lighting
-        is room-wide at this layer, matching the rest of the engine's
-        Vision and Light model.
+        and ambient obscurement (fog, foliage) are room-wide at this
+        layer, matching the rest of the engine's Vision and Light model.
         """
         light_level = self._ambient_light_level()
-        attacker_sees_defender = compute_visibility(attacker, defender, light_level=light_level)
-        defender_sees_attacker = compute_visibility(defender, attacker, light_level=light_level)
+        obscurement = self.ambient_obscurement()
+        attacker_sees_defender = compute_visibility(
+            attacker, defender, light_level=light_level, obscurement=obscurement
+        )
+        defender_sees_attacker = compute_visibility(
+            defender, attacker, light_level=light_level, obscurement=obscurement
+        )
         return attacker_sees_defender, defender_sees_attacker
 
     def get_available_actions(self) -> list[str]:
