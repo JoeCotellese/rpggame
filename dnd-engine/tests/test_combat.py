@@ -331,6 +331,28 @@ class TestResolveAttackVisibility:
         assert result.advantage is False
         assert result.disadvantage is False
 
+    def test_hidden_attacker_reveals_itself_after_attacking(self):
+        """SRD § Hide: a hidden creature reveals its location when it
+        makes an attack roll. The Hidden condition is cleared by
+        ``resolve_attack`` once the attack resolves."""
+        self.attacker.add_condition("hidden")
+        self._attack(defender_sees_attacker=VisibilityRelation.UNSEEN)
+        assert self.attacker.has_condition("hidden") is False
+
+    def test_hidden_attacker_keeps_advantage_on_the_revealing_attack(self):
+        """The reveal does not rob the hider of its one advantaged shot:
+        the unseen-attacker Advantage (derived by the caller before the
+        attack) still applies to the attack that reveals it."""
+        self.attacker.add_condition("hidden")
+        result = self._attack(defender_sees_attacker=VisibilityRelation.UNSEEN)
+        assert result.advantage is True
+        assert self.attacker.has_condition("hidden") is False
+
+    def test_non_hidden_attacker_is_unaffected_by_the_reveal_hook(self):
+        """A visible attacker has no Hidden condition to clear."""
+        self._attack()
+        assert self.attacker.has_condition("hidden") is False
+
 
 class TestAttackResult:
     """Test the AttackResult class"""
