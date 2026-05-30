@@ -119,6 +119,50 @@ def dodge(creature: Creature, turn_state: TurnState) -> ActionResult:
     return True, None
 
 
+def hide(
+    creature: Creature,
+    turn_state: TurnState,
+    *,
+    succeeded: bool,
+    action_type: ActionType = ActionType.ACTION,
+) -> ActionResult:
+    """Take the Hide action.
+
+    SRD § Actions › Hide: "Make a Dexterity (Stealth) check." The check
+    itself is rolled by the caller — it needs the skills data and a DC
+    drawn from observers' passive Perception, neither of which belongs
+    in this pure handler. This handler consumes the turn's slot and, on
+    a successful check (``succeeded``), gives the hider the Hidden
+    (unseen) condition consumed by the unseen-attacker/target rules.
+
+    The action is spent whether or not the check succeeds — taking the
+    Hide action costs the slot; the roll only decides whether the
+    creature ends up hidden. Cunning Action / Nimble Escape let some
+    creatures Hide as a Bonus Action, so ``action_type`` is configurable
+    (defaulting to the SRD's Action cost).
+
+    Args:
+        creature: The actor taking Hide. Becomes Hidden on success.
+        turn_state: The actor's TurnState; the chosen slot is consumed.
+        succeeded: Whether the caller's Dexterity (Stealth) check beat
+            the observers' passive Perception.
+        action_type: The slot the Hide costs. Defaults to
+            ``ActionType.ACTION``; pass ``BONUS_ACTION`` for Cunning
+            Action / Nimble Escape.
+
+    Returns:
+        ``(True, None)`` when the action was taken (regardless of the
+        check outcome). ``(False, "no action available")`` when the
+        required slot is already consumed; in that case no condition is
+        applied.
+    """
+    if not turn_state.consume_action(action_type):
+        return False, "no action available"
+    if succeeded:
+        creature.add_condition("hidden")
+    return True, None
+
+
 def help_action(helper: Creature, ally: Creature, turn_state: TurnState) -> ActionResult:
     """Take the Help action.
 
