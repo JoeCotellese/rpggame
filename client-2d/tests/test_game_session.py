@@ -2316,11 +2316,11 @@ class TestSessionHide:
 
         result = session.hide()
 
+        from dnd_engine.systems.action_economy import ActionType
+
         assert "no concealment or cover" in result.lower()
         turn_state = session.engine.get_current_turn_state()
-        assert turn_state.is_action_available(
-            __import__("dnd_engine.systems.action_economy", fromlist=["ActionType"]).ActionType.ACTION
-        )
+        assert turn_state.is_action_available(ActionType.ACTION)
 
     def test_hide_in_concealing_room_runs_stealth_check(self, session) -> None:
         """A Heavily Obscured room opens the gate; Hide rolls Stealth vs the
@@ -2333,9 +2333,9 @@ class TestSessionHide:
         result = session.hide()
 
         # Either outcome phrasing from HideAttemptResult, plus the state block.
-        assert (
-            "slips out of sight" in result or "stays visible" in result
-        ), f"missing hide outcome:\n{result}"
+        assert "slips out of sight" in result or "stays visible" in result, (
+            f"missing hide outcome:\n{result}"
+        )
         assert "Available Actions:" in result
 
     def test_hide_command_dispatches_through_bridge(self, session) -> None:
@@ -2357,9 +2357,9 @@ class TestSessionHide:
         session._process_mcp_commands()
 
         result = request.response_future.result(timeout=1.0)
-        assert (
-            "slips out of sight" in result or "stays visible" in result
-        ), f"bridge HIDE did not reach hide():\n{result}"
+        assert "slips out of sight" in result or "stays visible" in result, (
+            f"bridge HIDE did not reach hide():\n{result}"
+        )
 
 
 class TestSessionStateSurfacesHide:
