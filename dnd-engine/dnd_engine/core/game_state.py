@@ -1694,7 +1694,17 @@ class GameState:
             List of action names (e.g., ["move", "attack", "search"])
         """
         if self.in_combat:
-            return ["attack", "use_item"]
+            actions = ["attack", "use_item"]
+            # SRD § Actions › Hide is offered only when the current
+            # combatant's surroundings permit it (the #496 gate).
+            current = (
+                self.initiative_tracker.get_current_combatant()
+                if self.initiative_tracker
+                else None
+            )
+            if current is not None and self.can_attempt_hide(current.creature):
+                actions.append("hide")
+            return actions
         else:
             actions = ["move"]
             room = self.get_current_room()

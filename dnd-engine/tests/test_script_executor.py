@@ -72,6 +72,27 @@ enemies:
     position: [8, 5]
 """
 
+# Hide body: a rogue and a goblin in the steam-choked boiler room
+# (obscurement_sources: ["heavy_fog"] → Heavily Obscured), so the SRD
+# 5.2.1 hide gate is satisfied and a Hide action can be dispatched.
+HIDE_YAML = """
+name: exec_hide
+seed: 42
+map:
+  dungeon: laboratory
+  campaign: poisoned_laboratory
+  start_room: laboratory.boiler_room
+party:
+  - class: rogue
+    race: halfling
+    weapons: [dagger]
+    position: [3, 5]
+    name: Sneaky
+enemies:
+  - monster_id: goblin
+    position: [10, 5]
+"""
+
 # Out-of-range body: dagger past long range. Distance 17 tiles
 # = 85 ft, beyond dagger long range of 60 ft. Attack must be
 # rejected without invoking the engine.
@@ -630,3 +651,55 @@ def test_monster_attack_missing_required_field_raises(tmp_path: Path) -> None:
         ])
     msg = str(exc.value).lower()
     assert "monster_attack" in msg or "target" in msg or "monster_action" in msg
+
+
+def _cycle_to_party_member(loaded) -> None:
+    """Advance initiative until the current combatant is a party member.
+
+    Hide acts on the current combatant; the boiler-room scenario's
+    initiative order isn't fixed, so spin the tracker until the rogue
+    holds the turn before dispatching the Hide action.
+    """
+    tracker = loaded.game_state.initiative_tracker
+    party = set(loaded.game_state.party.characters)
+    for _ in range(len(tracker.combatants)):
+        if tracker.get_current_combatant().creature in party:
+            return
+        tracker.next_turn()
+    raise AssertionError("no party member ever held the turn")
+
+
+def test_hide_action_is_dispatchable(tmp_path: Path) -> None:
+    """`{"action": "hide"}` is a recognized script action and records a result."""
+    path = _write(tmp_path, HIDE_YAML)
+    loaded = ScenarioLoader().load(path)
+    _cycle_to_party_member(loaded)
+
+    ctx = ScriptExecutor(loaded).run([{"action": "hide"}])
+
+    # The boiler room is Heavily Obscured, so the attempt happens.
+    assert ctx.last_hide is not None
+    assert ctx.last_hide.attempted is True
+    assert ctx.turn_count == 1
+
+
+def test_hide_sets_hidden_state_matching_the_check_outcome(tmp_path: Path) -> None:
+    """After a Hide, the hider's Hidden condition tracks the check result."""
+    path = _write(tmp_path, HIDE_YAML)
+    loaded = ScenarioLoader().load(path)
+    _cycle_to_party_member(loaded)
+    rogue = loaded.game_state.party.characters[0]
+
+    ctx = ScriptExecutor(loaded).run([{"action": "hide"}])
+
+    assert rogue.has_condition("hidden") == ctx.last_hide.success
+
+
+def test_unknown_action_still_rejected(tmp_path: Path) -> None:
+    """Adding `hide` to the dispatcher doesn't loosen unknown-action rejection."""
+    path = _write(tmp_path, HIDE_YAML)
+    loaded = ScenarioLoader().load(path)
+
+    with pytest.raises(ScriptExecutionError) as exc:
+        ScriptExecutor(loaded).run([{"action": "sneak"}])
+    assert "unknown script action" in str(exc.value).lower()
