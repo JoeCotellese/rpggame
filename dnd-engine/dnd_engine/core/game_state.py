@@ -22,6 +22,7 @@ from dnd_engine.core.room_registry import RoomRegistry
 from dnd_engine.rules.damage import apply_damage_modifiers
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.systems.action_economy import ActionType, Terrain, cost_for
+from dnd_engine.systems.actions import hide
 from dnd_engine.systems.ai import EnemyAI
 from dnd_engine.systems.condition_manager import ConditionManager
 from dnd_engine.systems.initiative import InitiativeTracker
@@ -257,6 +258,27 @@ class StabilizeResult:
     modifier: int
     total: int
     dc: int
+
+
+@dataclass
+class HideAttemptResult:
+    """Result of a creature attempting the Hide action (SRD § Actions › Hide).
+
+    Carries everything the UI needs to narrate the attempt without
+    re-running engine logic. ``attempted`` is False when the Hide never
+    happened — the environment didn't permit it (the #496 gate) or the
+    required action slot was unavailable — in which case no roll was
+    made. When ``attempted`` is True the Dexterity (Stealth) check ran:
+    ``success`` says whether the creature is now Hidden, and the slot was
+    spent regardless of the outcome.
+    """
+
+    attempted: bool
+    success: bool
+    message: str
+    check_result: dict[str, Any] | None = None
+    dc: int | None = None
+    action_consumed: ActionType | None = None
 
 
 class EnemyTurnAction(Enum):
@@ -1547,6 +1569,122 @@ class GameState:
             cover = Cover.NONE
 
         return can_attempt_hide(obscurement, cover)
+
+    def _highest_enemy_passive_perception(self) -> int:
+        """Highest passive Perception among the active enemies (min 10).
+
+        Both the Hide action and the pre-combat surprise check contest a
+        Stealth roll against the most perceptive watching enemy. An
+        enemy's passive Perception comes from its own
+        ``passive_perception`` attribute when present, otherwise from the
+        monster catalog matched by name; enemies that resolve to neither
+        are skipped. Returns 10 (the SRD baseline passive Perception,
+        10 + a +0 Wisdom) when no enemy yields a value.
+        """
+        monsters_data = self.data_loader.load_monsters()
+        highest = 0
+        for enemy in self.active_enemies:
+            pp = getattr(enemy, "passive_perception", None)
+            if pp is None:
+                for _monster_id, monster_data in monsters_data.items():
+                    if monster_data["name"] == enemy.name:
+                        pp = monster_data.get("passive_perception", 10)
+                        break
+            if pp is not None:
+                highest = max(highest, int(pp))
+        return highest if highest > 0 else 10
+
+    def attempt_hide(
+        self, creature: "Character", *, as_bonus_action: bool = False
+    ) -> HideAttemptResult:
+        """Take the Hide action: contest Stealth vs the watchers' Perception.
+
+        Orchestrates the SRD Hide action on the actor's combat turn:
+
+        1. The environment must permit hiding (``can_attempt_hide`` — the
+           SRD 5.2.1 gate from issue #496); otherwise the attempt is
+           refused before any slot is spent.
+        2. The Hide costs an action slot — ``ActionType.ACTION`` by
+           default, or ``BONUS_ACTION`` when ``as_bonus_action`` is set
+           (Cunning Action / Nimble Escape).
+        3. A Dexterity (Stealth) check is rolled against the highest
+           passive Perception among the active enemies.
+        4. On success the actor gains the Hidden (unseen) condition that
+           the unseen-attacker/target rules consume; on failure it stays
+           visible. Either way the slot is spent.
+
+        Args:
+            creature: The acting character (must be the current
+                combatant — Hide reads the current turn's slot).
+            as_bonus_action: Spend a Bonus Action instead of the Action.
+
+        Returns:
+            A :class:`HideAttemptResult` describing the outcome.
+        """
+        if not self.can_attempt_hide(creature):
+            return HideAttemptResult(
+                attempted=False,
+                success=False,
+                message="There's no concealment or cover here to hide behind.",
+            )
+
+        turn_state = (
+            self.initiative_tracker.get_current_turn_state() if self.initiative_tracker else None
+        )
+        if turn_state is None:
+            return HideAttemptResult(
+                attempted=False,
+                success=False,
+                message="Hiding requires an active combat turn.",
+            )
+
+        action_type = ActionType.BONUS_ACTION if as_bonus_action else ActionType.ACTION
+        if not turn_state.is_action_available(action_type):
+            slot = "bonus action" if as_bonus_action else "action"
+            return HideAttemptResult(
+                attempted=False,
+                success=False,
+                message=f"No {slot} available this turn.",
+            )
+
+        dc = self._highest_enemy_passive_perception()
+        skills_data = self.data_loader.load_skills()
+        check = creature.make_skill_check("stealth", dc, skills_data)
+
+        ok, reason = hide(
+            creature, turn_state, succeeded=check["success"], action_type=action_type
+        )
+        if not ok:
+            return HideAttemptResult(
+                attempted=False,
+                success=False,
+                message=reason or "Could not take the Hide action.",
+            )
+
+        self.event_bus.emit(
+            Event(
+                type=EventType.SKILL_CHECK,
+                data={
+                    "character": creature.name,
+                    **check,
+                    "action": f"Hide (Stealth vs passive Perception {dc})",
+                },
+            )
+        )
+
+        message = (
+            f"{creature.name} slips out of sight."
+            if check["success"]
+            else f"{creature.name} fails to find concealment and stays visible."
+        )
+        return HideAttemptResult(
+            attempted=True,
+            success=check["success"],
+            message=message,
+            check_result=check,
+            dc=dc,
+            action_consumed=action_type,
+        )
 
     def get_available_actions(self) -> list[str]:
         """
@@ -3932,20 +4070,7 @@ class GameState:
         skills_data = self.data_loader.load_skills()
 
         # Get highest enemy passive Perception
-        monsters_data = self.data_loader.load_monsters()
-        max_enemy_perception = 0  # Start at 0, will take highest from actual enemies
-
-        for enemy in self.active_enemies:
-            # Find enemy's passive_perception from monster data
-            for _monster_id, monster_data in monsters_data.items():
-                if monster_data["name"] == enemy.name:
-                    enemy_pp = monster_data.get("passive_perception", 10)
-                    max_enemy_perception = max(max_enemy_perception, enemy_pp)
-                    break
-
-        # Fallback if no passive_perception found
-        if max_enemy_perception == 0:
-            max_enemy_perception = 10
+        max_enemy_perception = self._highest_enemy_passive_perception()
 
         # Group stealth check - ALL party members must beat enemy passive Perception
         party_hidden = True
