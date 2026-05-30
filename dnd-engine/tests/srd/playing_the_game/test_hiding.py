@@ -23,9 +23,12 @@ import inspect
 import pytest
 
 from dnd_engine.core.character import Character, CharacterClass
-from dnd_engine.core.creature import Abilities
+from dnd_engine.core.creature import Abilities, Creature
 from dnd_engine.core.game_state import GameState
 from dnd_engine.core.party import Party
+from dnd_engine.systems.action_economy import ActionType
+from dnd_engine.systems.initiative import InitiativeTracker
+from dnd_engine.systems.perception import VisibilityRelation
 
 pytestmark = pytest.mark.srd(
     "playing-the-game/hiding.md",
@@ -54,6 +57,49 @@ def _make_stealthy_character() -> Character:
         skill_proficiencies=["stealth"],
     )
     return char
+
+
+def _unmissable_hider() -> Character:
+    """A hider whose Stealth check clears the DC-10 baseline on any roll.
+
+    DEX 20 (+5) plus Stealth expertise (proficiency 2 doubled = +4) gives
+    a +9 modifier, so even a natural 1 totals 10 — guaranteeing success
+    against the no-enemies baseline DC of 10. Used to exercise the
+    success branch deterministically.
+    """
+    char = _make_stealthy_character()
+    char.abilities = Abilities(
+        strength=10, dexterity=20, constitution=10, intelligence=10, wisdom=10, charisma=10
+    )
+    char.expertise_skills = ["stealth"]
+    return char
+
+
+def _dummy_enemy(name: str = "Zombie") -> Creature:
+    return Creature(
+        name=name, max_hp=22, ac=8, abilities=Abilities(13, 6, 16, 3, 6, 5)
+    )
+
+
+def _combat_state(char: Character, *, concealing: bool = True) -> GameState:
+    """A crypt-room GameState in combat with ``char`` as the current turn.
+
+    When ``concealing`` the room is made Heavily Obscured (heavy fog) so
+    the SRD 5.2.1 hide gate is satisfied; otherwise it's an open, brightly
+    lit room where hiding isn't permitted (used by tests that set the
+    Hidden condition directly to probe the unseen-attacker rules).
+    """
+    party = Party([char])
+    gs = GameState(party, "crypt", campaign_id="the_unquiet_dead")
+    gs.current_room_id = "crypt.hall_of_the_dead"
+    room = gs.get_current_room()
+    room["lighting"] = "bright"
+    room["obscurement_sources"] = ["heavy_fog"] if concealing else []
+    room["cover"] = "none"
+    gs.in_combat = True
+    gs.initiative_tracker = InitiativeTracker(gs.dice_roller, gs.time_manager)
+    gs.initiative_tracker.add_combatant(char)
+    return gs
 
 
 class TestHiding_Intro:
@@ -246,72 +292,135 @@ class TestHiding_HideAction:
     """
 
     def test_hide_action_is_dispatchable_as_a_playable_action(self):
-        pytest.skip(
-            "GAP: there is no playable Hide action. The script "
-            "executor's action dispatcher "
-            "(`dnd-engine/dnd_engine/scenarios/script_executor.py:200-"
-            "224`) only accepts 'wait', 'attack', and 'monster_attack' "
-            "— `hide` is not a recognized action. The combat-mode "
-            "available-actions list (`dnd-engine/dnd_engine/core/"
-            "game_state.py:766`) is `['attack', 'use_item']` — no "
-            "'hide'. The string 'Hide' appears only as flavor text in "
-            "the rogue Cunning Action description "
-            "(`dnd-engine/dnd_engine/data/srd/classes.json`) and in "
-            "the spy monster's Nimble Escape "
-            "(`dnd-engine/dnd_engine/data/srd/monsters.json`). "
-            "Tracked by issue #443."
-        )
+        """Hide is surfaced as a combat action when the room permits it.
+
+        `GameState.get_available_actions` lists "hide" during combat
+        only when the current combatant's surroundings satisfy the SRD
+        5.2.1 gate, making it a real, player-selectable action (issue
+        #443). In an open, brightly lit room it is not offered.
+        """
+        char = _make_stealthy_character()
+        gs = _combat_state(char)
+        assert "hide" in gs.get_available_actions()
+
+        # Remove the concealment: the action is no longer offered.
+        gs.get_current_room()["obscurement_sources"] = []
+        assert "hide" not in gs.get_available_actions()
 
     def test_hide_action_makes_a_dexterity_stealth_check(self):
-        pytest.skip(
-            "GAP: same as above — there is no Hide action handler, so "
-            "no dispatcher invokes `make_skill_check('stealth', ...)` "
-            "on demand. The check primitive exists "
-            "(`dnd-engine/dnd_engine/core/character.py:697-738`) but "
-            "is currently only fired by the surprise-round path, not "
-            "by a player-initiated Hide. Tracked by issue #443."
-        )
+        """`GameState.attempt_hide` rolls a Dexterity (Stealth) check.
+
+        SRD § Actions › Hide: "Make a Dexterity (Stealth) check." The
+        attempt surfaces the rolled check (skill ``stealth``, ability
+        ``dex``) contested against a DC drawn from enemy passive
+        Perception.
+        """
+        char = _make_stealthy_character()
+        gs = _combat_state(char)
+
+        result = gs.attempt_hide(char)
+
+        assert result.attempted is True
+        assert result.check_result is not None
+        assert result.check_result["skill"] == "stealth"
+        assert result.check_result["ability"] == "dex"
+        assert result.dc is not None
 
     def test_hide_action_consumes_the_turn_action_slot(self):
-        pytest.skip(
-            "GAP: the Hide action should consume `ActionType.ACTION` "
-            "(or `BONUS_ACTION` via rogue Cunning Action / monster "
-            "Nimble Escape). Action economy is modeled — `TurnState` "
-            "in `dnd-engine/dnd_engine/systems/action_economy.py:26-"
-            "40` carries the slot — but no Hide handler consumes it. "
-            "Tracked by issue #443."
-        )
+        """Taking the Hide action spends the turn's Action slot."""
+        char = _make_stealthy_character()
+        gs = _combat_state(char)
+        turn_state = gs.initiative_tracker.get_current_turn_state()
+        assert turn_state.action_available is True
+
+        result = gs.attempt_hide(char)
+
+        assert result.action_consumed == ActionType.ACTION
+        assert turn_state.action_available is False
 
     def test_successful_hide_sets_unseen_state_on_the_hider(self):
-        pytest.skip(
-            "GAP: the SRD's Hide action produces an *unseen* state "
-            "(consumed by attack-roll rules — issue #475). No `hidden` "
-            "/ `unseen` / `is_hidden` flag exists on Creature or "
-            "Character in `dnd-engine/dnd_engine/core/creature.py` or "
-            "`character.py`. The `active_conditions` dict on Creature "
-            "could carry it, but no code writes 'hidden' there. "
-            "Tracked by issue #443."
-        )
+        """A successful Hide gives the hider the Hidden (unseen) condition.
+
+        The Hidden condition is what the unseen-attacker/target rules
+        consume (issue #475); ``compute_visibility`` already treats a
+        Hidden target as ``UNSEEN``.
+        """
+        char = _unmissable_hider()
+        gs = _combat_state(char)
+
+        result = gs.attempt_hide(char)
+
+        assert result.success is True
+        assert char.has_condition("hidden") is True
 
     def test_attacks_against_unseen_attacker_or_target_apply_visibility_advantage(self):
-        pytest.skip(
-            "GAP: even if the Hide action set an unseen flag, the "
-            "attack pipeline would not consume it. `CombatEngine."
-            "resolve_attack` (`dnd-engine/dnd_engine/core/combat.py:"
-            "91`) accepts `advantage` / `disadvantage` flags but no "
-            "caller derives them from attacker/target visibility "
-            "state. The Blinded condition is similarly unconsumed by "
-            "attack rolls (only the close-combat ranged helper "
-            "`dnd_engine/systems/ranged_attacks.py:71` reads it). "
-            "Tracked by issue #475 (which is the *consumer* of the "
-            "hidden state from #443)."
+        """A Hidden creature is unseen for the attack-roll rules.
+
+        SRD § Combat › Unseen Attackers and Targets: an attacker the
+        target can't see has Advantage; a target the attacker can't see
+        is attacked with Disadvantage. With the hider in a clear, lit
+        room (so only the Hidden condition — not ambient fog — drives
+        visibility), the relations resolve exactly that way.
+        """
+        char = _make_stealthy_character()
+        gs = _combat_state(char, concealing=False)
+        enemy = _dummy_enemy()
+        gs.active_enemies = [enemy]
+        char.add_condition("hidden")
+
+        # Enemy attacks the hidden hider → target unseen → Disadvantage.
+        attacker_sees, defender_sees = gs.attack_visibility(enemy, char)
+        assert attacker_sees == VisibilityRelation.UNSEEN
+        incoming = gs.combat_engine.resolve_attack(
+            attacker=enemy,
+            defender=char,
+            attack_bonus=3,
+            damage_dice="1d6",
+            attacker_sees_defender=attacker_sees,
+            defender_sees_attacker=defender_sees,
+            game_state=gs,
         )
+        assert incoming.disadvantage is True
+        assert incoming.advantage is False
+
+        # Hidden hider attacks the enemy → attacker unseen → Advantage.
+        char.add_condition("hidden")  # re-hide (the prior attack didn't reveal char)
+        saw_defender, saw_attacker = gs.attack_visibility(char, enemy)
+        assert saw_attacker == VisibilityRelation.UNSEEN
+        outgoing = gs.combat_engine.resolve_attack(
+            attacker=char,
+            defender=enemy,
+            attack_bonus=4,
+            damage_dice="1d6",
+            attacker_sees_defender=saw_defender,
+            defender_sees_attacker=saw_attacker,
+            game_state=gs,
+        )
+        assert outgoing.advantage is True
 
     def test_hidden_attacker_reveals_location_on_attack(self):
-        pytest.skip(
-            "GAP: the SRD says a hidden creature reveals its location "
-            "when it makes an attack roll. Today there is no hidden "
-            "state to reveal (issue #443) and no post-attack reveal "
-            "hook in `resolve_attack` (`dnd-engine/dnd_engine/core/"
-            "combat.py:91`). Tracked by issue #475."
+        """A Hidden creature reveals itself the moment it attacks.
+
+        SRD § Hide: making an attack roll ends the hidden state. The
+        hider keeps its one advantaged shot (the relation was captured
+        before the roll), then is no longer Hidden.
+        """
+        char = _make_stealthy_character()
+        gs = _combat_state(char, concealing=False)
+        enemy = _dummy_enemy()
+        gs.active_enemies = [enemy]
+        char.add_condition("hidden")
+        assert char.has_condition("hidden") is True
+
+        saw_defender, saw_attacker = gs.attack_visibility(char, enemy)
+        gs.combat_engine.resolve_attack(
+            attacker=char,
+            defender=enemy,
+            attack_bonus=4,
+            damage_dice="1d6",
+            attacker_sees_defender=saw_defender,
+            defender_sees_attacker=saw_attacker,
+            game_state=gs,
         )
+
+        assert char.has_condition("hidden") is False
