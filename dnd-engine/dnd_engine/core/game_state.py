@@ -30,6 +30,11 @@ from dnd_engine.systems.opportunity_attacks import (
     publish_movement_provoke,
     register_default_opportunity_attack,
 )
+from dnd_engine.systems.perception import (
+    LightLevel,
+    VisibilityRelation,
+    compute_visibility,
+)
 from dnd_engine.systems.reactions import ReactionDispatcher
 from dnd_engine.systems.spatial_index import SpatialIndex
 from dnd_engine.systems.time_manager import ActiveEffect, EffectType, TimeManager
@@ -1205,6 +1210,7 @@ class GameState:
         if action is None:
             return
 
+        attacker_sees_defender, defender_sees_attacker = self.attack_visibility(attacker, target)
         result = self.combat_engine.resolve_attack(
             attacker=attacker,
             defender=target,
@@ -1212,6 +1218,8 @@ class GameState:
             damage_dice=action["damage"],
             apply_damage=True,
             game_state=self,
+            attacker_sees_defender=attacker_sees_defender,
+            defender_sees_attacker=defender_sees_attacker,
         )
 
         if result.hit:
@@ -1394,6 +1402,55 @@ class GameState:
             return True, True, None
 
         return True, False, None
+
+    def _ambient_light_level(self) -> "LightLevel":
+        """Resolve the room's ambient light, before any observer's darkvision.
+
+        Mirrors `get_effective_lighting`'s room + temporary-effect
+        resolution but omits the per-observer darkvision downgrade: the
+        perception model (`compute_visibility`) applies darkvision itself
+        from each observer's senses, so feeding it the raw ambient level
+        avoids double-counting darkvision.
+        """
+        from dnd_engine.systems.time_manager import EffectType
+
+        room = self.get_current_room()
+        level = room.get("lighting", "bright")
+
+        for effect in self.time_manager.active_effects:
+            if effect.effect_type == EffectType.SPELL and effect.source.lower() == "light":
+                level = "bright"
+                break
+            if effect.effect_data.get("light_level"):
+                level = effect.effect_data["light_level"]
+                break
+
+        try:
+            return LightLevel(level)
+        except ValueError:
+            return LightLevel.BRIGHT
+
+    def attack_visibility(
+        self, attacker: "Creature", defender: "Creature"
+    ) -> tuple["VisibilityRelation", "VisibilityRelation"]:
+        """Compute the bidirectional visibility for an attack.
+
+        Returns ``(attacker_sees_defender, defender_sees_attacker)`` from
+        the engine perception model, using the room's ambient lighting
+        and each combatant's senses. `CombatEngine.resolve_attack`
+        consumes these to apply the SRD Unseen Attackers and Targets rule
+        (unseen attacker → Advantage; unseen target → Disadvantage).
+
+        The engine's core combat is non-positional, so distance defaults
+        to melee (0 ft) — every ranged special sense comfortably reaches,
+        which is the relation that matters for adjacent attacks. Lighting
+        is room-wide at this layer, matching the rest of the engine's
+        Vision and Light model.
+        """
+        light_level = self._ambient_light_level()
+        attacker_sees_defender = compute_visibility(attacker, defender, light_level=light_level)
+        defender_sees_attacker = compute_visibility(defender, attacker, light_level=light_level)
+        return attacker_sees_defender, defender_sees_attacker
 
     def get_available_actions(self) -> list[str]:
         """
@@ -2891,6 +2948,7 @@ class GameState:
             weapon_name = "unarmed strike"
 
         # Resolve attack via combat engine
+        attacker_sees_defender, defender_sees_attacker = self.attack_visibility(attacker, target)
         attack_result = self.combat_engine.resolve_attack(
             attacker=attacker,
             defender=target,
@@ -2899,6 +2957,8 @@ class GameState:
             disadvantage=disadvantage,
             apply_damage=True,
             game_state=self,
+            attacker_sees_defender=attacker_sees_defender,
+            defender_sees_attacker=defender_sees_attacker,
         )
 
         # Consume ammunition after the attack (hit or miss, the ammo is still used)
@@ -4841,6 +4901,7 @@ class GameState:
             conditions_before = set(target.active_conditions.keys())
 
         # Resolve attack
+        attacker_sees_defender, defender_sees_attacker = self.attack_visibility(enemy, target)
         attack_result = self.combat_engine.resolve_attack(
             attacker=enemy,
             defender=target,
@@ -4850,6 +4911,8 @@ class GameState:
             event_bus=self.event_bus,
             action=action,
             game_state=self,
+            attacker_sees_defender=attacker_sees_defender,
+            defender_sees_attacker=defender_sees_attacker,
         )
 
         # Check concentration if target was hit and took damage
@@ -5075,6 +5138,7 @@ class GameState:
                             break
 
                     if action:
+                        saw_defender, saw_attacker = self.attack_visibility(enemy, target)
                         result = self.combat_engine.resolve_attack(
                             attacker=enemy,
                             defender=target,
@@ -5082,6 +5146,8 @@ class GameState:
                             damage_dice=action["damage"],
                             apply_damage=True,
                             game_state=self,
+                            attacker_sees_defender=saw_defender,
+                            defender_sees_attacker=saw_attacker,
                         )
                         opportunity_attacks.append(result)
 
@@ -5350,6 +5416,7 @@ class GameState:
         damage_dice = used_item_data.get("damage", "1d4")
 
         # Resolve the attack
+        attacker_sees_defender, defender_sees_attacker = self.attack_visibility(user, target)
         attack_result = self.combat_engine.resolve_attack(
             attacker=user,
             defender=target,
@@ -5358,6 +5425,8 @@ class GameState:
             apply_damage=True,
             event_bus=self.event_bus,
             game_state=self,
+            attacker_sees_defender=attacker_sees_defender,
+            defender_sees_attacker=defender_sees_attacker,
         )
 
         # Apply special effects on hit

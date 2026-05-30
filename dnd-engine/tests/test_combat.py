@@ -5,6 +5,7 @@ from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.combat import AttackResult, CombatEngine
 from dnd_engine.core.creature import Abilities, Creature
 from dnd_engine.core.dice import DiceRoller
+from dnd_engine.systems.perception import VisibilityRelation
 
 
 class TestCombatEngine:
@@ -245,6 +246,90 @@ class TestCombatEngine:
                 if result.hit and not result.critical_hit:
                     assert min_dmg <= result.damage <= max_dmg
                     break
+
+
+class TestResolveAttackVisibility:
+    """SRD § Combat › Unseen Attackers and Targets (#475).
+
+    `resolve_attack` consults the `VisibilityRelation` in each direction:
+    an attacker the defender can't see has Advantage; a target the
+    attacker can't see is attacked with Disadvantage; when both apply
+    they cancel. Both `UNSEEN` and `UNSEEN_BUT_SENSED` count as "can't
+    see" — tremorsense locates a target but does not let you see it.
+    """
+
+    def setup_method(self):
+        self.roller = DiceRoller(seed=42)
+        self.engine = CombatEngine(self.roller)
+        abilities = Abilities(
+            strength=16, dexterity=14, constitution=15, intelligence=10, wisdom=12, charisma=8
+        )
+        self.attacker = Creature(name="Attacker", max_hp=20, ac=16, abilities=abilities)
+        self.defender = Creature(name="Defender", max_hp=20, ac=16, abilities=abilities)
+
+    def _attack(self, **kwargs):
+        return self.engine.resolve_attack(
+            attacker=self.attacker,
+            defender=self.defender,
+            attack_bonus=5,
+            damage_dice="1d8+3",
+            **kwargs,
+        )
+
+    def test_unseen_attacker_gains_advantage(self):
+        """Defender can't see the attacker → attacker has Advantage."""
+        result = self._attack(defender_sees_attacker=VisibilityRelation.UNSEEN)
+        assert result.advantage is True
+        assert result.disadvantage is False
+
+    def test_unseen_target_imposes_disadvantage(self):
+        """Attacker can't see the target → attack has Disadvantage."""
+        result = self._attack(attacker_sees_defender=VisibilityRelation.UNSEEN)
+        assert result.disadvantage is True
+        assert result.advantage is False
+
+    def test_both_unseen_cancel(self):
+        """Unseen attacker + unseen target cancel to a straight roll."""
+        result = self._attack(
+            attacker_sees_defender=VisibilityRelation.UNSEEN,
+            defender_sees_attacker=VisibilityRelation.UNSEEN,
+        )
+        assert result.advantage is False
+        assert result.disadvantage is False
+
+    def test_unseen_but_sensed_attacker_still_grants_advantage(self):
+        """Tremorsense locates but doesn't see — attacker still unseen."""
+        result = self._attack(defender_sees_attacker=VisibilityRelation.UNSEEN_BUT_SENSED)
+        assert result.advantage is True
+
+    def test_unseen_but_sensed_target_still_imposes_disadvantage(self):
+        """A target only sensed (not seen) is still attacked at Disadvantage."""
+        result = self._attack(attacker_sees_defender=VisibilityRelation.UNSEEN_BUT_SENSED)
+        assert result.disadvantage is True
+
+    def test_seen_relations_change_nothing(self):
+        """Mutual SEEN → no visibility-driven advantage or disadvantage."""
+        result = self._attack(
+            attacker_sees_defender=VisibilityRelation.SEEN,
+            defender_sees_attacker=VisibilityRelation.SEEN,
+        )
+        assert result.advantage is False
+        assert result.disadvantage is False
+
+    def test_visibility_defaults_preserve_legacy_behavior(self):
+        """Omitting the relations leaves the attack unmodified (backward compat)."""
+        result = self._attack()
+        assert result.advantage is False
+        assert result.disadvantage is False
+
+    def test_explicit_advantage_and_unseen_target_cancel(self):
+        """A pre-existing Advantage cancels against an unseen-target Disadvantage."""
+        result = self._attack(
+            advantage=True,
+            attacker_sees_defender=VisibilityRelation.UNSEEN,
+        )
+        assert result.advantage is False
+        assert result.disadvantage is False
 
 
 class TestAttackResult:

@@ -316,3 +316,125 @@ class TestCreatureEnvironment:
         game_state.current_room_id = "does_not_exist"
 
         assert game_state.creature_environment(human_character) is None
+
+
+class TestAttackVisibility:
+    """`GameState.attack_visibility` feeds the Unseen Attackers rule (#475).
+
+    The engine derives the per-direction `VisibilityRelation` from the
+    room's ambient lighting and each combatant's senses, and
+    `resolve_attack` turns those into the SRD Advantage/Disadvantage for
+    an unseen attacker / unseen target.
+    """
+
+    def _dark_room_state(self, party):
+        game_state = GameState(party, "crypt", campaign_id="the_unquiet_dead")
+        game_state.current_room_id = "crypt.hall_of_the_dead"
+        assert game_state.get_current_room().get("lighting") == "dark"
+        return game_state
+
+    def test_bright_room_sees_both_ways(self, human_character, dwarf_character):
+        """In bright light each combatant sees the other (no adv/disadv)."""
+        from dnd_engine.systems.perception import VisibilityRelation
+
+        party = Party([human_character, dwarf_character])
+        game_state = GameState(party, "test_dungeon")
+
+        saw_def, saw_atk = game_state.attack_visibility(human_character, dwarf_character)
+        assert saw_def == VisibilityRelation.SEEN
+        assert saw_atk == VisibilityRelation.SEEN
+
+    def test_darkvision_attacker_unseen_by_sighted_defender_in_dark(
+        self, human_character, dwarf_character
+    ):
+        """Dwarf (darkvision) sees the human; the human can't see the dwarf."""
+        from dnd_engine.systems.perception import VisibilityRelation
+
+        party = Party([human_character, dwarf_character])
+        game_state = self._dark_room_state(party)
+
+        saw_def, saw_atk = game_state.attack_visibility(dwarf_character, human_character)
+        # Dwarf sees the human (darkvision); human can't see the dwarf.
+        assert saw_def == VisibilityRelation.SEEN
+        assert saw_atk == VisibilityRelation.UNSEEN
+
+    def test_darkvision_attacker_gains_advantage_in_dark(self, human_character, dwarf_character):
+        """The dwarf, unseen by the human, attacks with Advantage."""
+        party = Party([human_character, dwarf_character])
+        game_state = self._dark_room_state(party)
+
+        saw_def, saw_atk = game_state.attack_visibility(dwarf_character, human_character)
+        result = game_state.combat_engine.resolve_attack(
+            attacker=dwarf_character,
+            defender=human_character,
+            attack_bonus=4,
+            damage_dice="1d8",
+            game_state=game_state,
+            attacker_sees_defender=saw_def,
+            defender_sees_attacker=saw_atk,
+        )
+        assert result.advantage is True
+        assert result.disadvantage is False
+
+    def test_sighted_attacker_has_disadvantage_against_darkvision_foe_in_dark(
+        self, human_character, dwarf_character
+    ):
+        """The human, blind in the dark, attacks the dwarf with Disadvantage."""
+        party = Party([human_character, dwarf_character])
+        game_state = self._dark_room_state(party)
+
+        saw_def, saw_atk = game_state.attack_visibility(human_character, dwarf_character)
+        result = game_state.combat_engine.resolve_attack(
+            attacker=human_character,
+            defender=dwarf_character,
+            attack_bonus=4,
+            damage_dice="1d8",
+            game_state=game_state,
+            attacker_sees_defender=saw_def,
+            defender_sees_attacker=saw_atk,
+        )
+        assert result.disadvantage is True
+        assert result.advantage is False
+
+    def test_two_blind_combatants_in_dark_cancel_to_straight_roll(self, basic_abilities):
+        """Two sightless-in-the-dark combatants each grant the other adv/disadv → cancel."""
+        from dnd_engine.systems.perception import VisibilityRelation
+
+        a = Character(
+            name="Human A",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=basic_abilities,
+            max_hp=12,
+            ac=16,
+            race="human",
+        )
+        b = Character(
+            name="Human B",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=basic_abilities,
+            max_hp=12,
+            ac=16,
+            race="human",
+        )
+        a.darkvision_range = 0
+        b.darkvision_range = 0
+        party = Party([a, b])
+        game_state = self._dark_room_state(party)
+
+        saw_def, saw_atk = game_state.attack_visibility(a, b)
+        assert saw_def == VisibilityRelation.UNSEEN
+        assert saw_atk == VisibilityRelation.UNSEEN
+
+        result = game_state.combat_engine.resolve_attack(
+            attacker=a,
+            defender=b,
+            attack_bonus=4,
+            damage_dice="1d8",
+            game_state=game_state,
+            attacker_sees_defender=saw_def,
+            defender_sees_attacker=saw_atk,
+        )
+        assert result.advantage is False
+        assert result.disadvantage is False

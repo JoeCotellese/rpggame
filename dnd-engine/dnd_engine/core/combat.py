@@ -7,6 +7,7 @@ from typing import Any
 from dnd_engine.core.creature import Creature
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.rules.damage import apply_damage_adjustments, apply_damage_modifiers
+from dnd_engine.systems.perception import VisibilityRelation
 from dnd_engine.utils.events import Event, EventType
 
 
@@ -132,6 +133,8 @@ class CombatEngine:
         action: dict | None = None,
         game_state=None,
         damage_type: str | None = None,
+        attacker_sees_defender: VisibilityRelation | None = None,
+        defender_sees_attacker: VisibilityRelation | None = None,
     ) -> AttackResult:
         """
         Resolve a complete attack.
@@ -169,6 +172,18 @@ class CombatEngine:
                 this method (SRD: "Damage types ... have no rules of
                 their own"); it is purely a key for the modifier
                 chokepoint.
+            attacker_sees_defender: How the attacker perceives the
+                defender (a `VisibilityRelation`). When the attacker
+                can't see the target — `UNSEEN` or `UNSEEN_BUT_SENSED`
+                (tremorsense locates but does not see) — the attack is
+                made with Disadvantage (SRD § Unseen Attackers and
+                Targets). `None` (default) leaves the roll unmodified.
+            defender_sees_attacker: How the defender perceives the
+                attacker. When the defender can't see the attacker, the
+                attacker has Advantage. `None` leaves the roll
+                unmodified. When both an unseen attacker and an unseen
+                target apply, they cancel via the advantage/disadvantage
+                rule below.
 
         Returns:
             AttackResult containing full attack details including sneak attack if applicable
@@ -190,6 +205,19 @@ class CombatEngine:
         if getattr(attacker, "pending_help_from", None) is not None:
             advantage = True
             attacker.pending_help_from = None
+
+        # SRD § Combat › Unseen Attackers and Targets: an attacker the
+        # target can't see has Advantage; a target the attacker can't
+        # see is attacked with Disadvantage. Both UNSEEN and
+        # UNSEEN_BUT_SENSED count as "can't see" — tremorsense locates a
+        # creature but does not let you see it. When both apply they
+        # cancel via the advantage/disadvantage rule below. A `None`
+        # relation means the caller did not supply visibility state, so
+        # the roll is left unmodified (backward compatibility).
+        if defender_sees_attacker is not None and defender_sees_attacker != VisibilityRelation.SEEN:
+            advantage = True
+        if attacker_sees_defender is not None and attacker_sees_defender != VisibilityRelation.SEEN:
+            disadvantage = True
 
         # SRD: "If circumstances cause a roll to have both advantage
         # and disadvantage, you're considered to have neither of them"

@@ -118,19 +118,69 @@ class TestVisionAndLight_Intro:
         )
 
     def test_hitting_an_enemy_is_affected_by_sight(self):
-        pytest.skip(
-            "GAP: the SRD intro names 'hitting an enemy' as one of the "
-            "sight-affected adventuring tasks, but `CombatEngine."
-            "resolve_attack` (`dnd-engine/dnd_engine/core/combat.py:91`) "
-            "does not take any lighting / obscurement / visibility "
-            "parameter. Attacks resolve identically in bright light, "
-            "dim light, and darkness. The per-tile visibility model "
-            "lives in `client-2d/src/client_2d/systems/lighting.py:111` "
-            "and `client-2d/src/client_2d/systems/fog_of_war.py:14` but "
-            "the engine never reads it back. Tracked by issue #494 "
-            "(vision rules in client-2d) and issue #475 (visibility "
-            "advantage/disadvantage)."
+        """'Hitting an enemy' reads visibility: darkness flips adv/disadv.
+
+        In darkness, ordinary sight fails in both directions (each
+        creature is `UNSEEN` to the other), so `compute_visibility`
+        reports the relations that `resolve_attack` turns into the
+        unseen-attacker Advantage and unseen-target Disadvantage — the
+        engine-level enforcement of the SRD intro's 'hitting an enemy is
+        affected by sight'. Issue #475."""
+        from dnd_engine.core.combat import CombatEngine
+        from dnd_engine.core.creature import Creature
+        from dnd_engine.core.dice import DiceRoller
+        from dnd_engine.systems.perception import (
+            LightLevel,
+            VisibilityRelation,
+            compute_visibility,
         )
+
+        abilities = Abilities(
+            strength=10,
+            dexterity=10,
+            constitution=10,
+            intelligence=10,
+            wisdom=10,
+            charisma=10,
+        )
+        attacker = Creature(name="Attacker", max_hp=10, ac=12, abilities=abilities)
+        defender = Creature(name="Defender", max_hp=10, ac=12, abilities=abilities)
+
+        # No darkvision on either side: in darkness each is Unseen to the other.
+        attacker_view = compute_visibility(
+            attacker, defender, light_level=LightLevel.DARK, distance=10.0
+        )
+        defender_view = compute_visibility(
+            defender, attacker, light_level=LightLevel.DARK, distance=10.0
+        )
+        assert attacker_view == VisibilityRelation.UNSEEN
+        assert defender_view == VisibilityRelation.UNSEEN
+
+        engine = CombatEngine(DiceRoller(seed=1))
+
+        # Attacker unseen by defender → Advantage; bright/seen target.
+        unseen_attacker = engine.resolve_attack(
+            attacker=attacker,
+            defender=defender,
+            attack_bonus=4,
+            damage_dice="1d6",
+            attacker_sees_defender=VisibilityRelation.SEEN,
+            defender_sees_attacker=VisibilityRelation.UNSEEN,
+        )
+        assert unseen_attacker.advantage is True
+        assert unseen_attacker.disadvantage is False
+
+        # Target unseen by attacker → Disadvantage.
+        unseen_target = engine.resolve_attack(
+            attacker=attacker,
+            defender=defender,
+            attack_bonus=4,
+            damage_dice="1d6",
+            attacker_sees_defender=VisibilityRelation.UNSEEN,
+            defender_sees_attacker=VisibilityRelation.SEEN,
+        )
+        assert unseen_target.disadvantage is True
+        assert unseen_target.advantage is False
 
     def test_targeting_certain_spells_is_affected_by_sight(self):
         pytest.skip(
@@ -308,11 +358,7 @@ class TestVisionAndLight_Light:
         from pathlib import Path
 
         items_path = (
-            Path(__file__).resolve().parents[3]
-            / "dnd_engine"
-            / "data"
-            / "srd"
-            / "items.json"
+            Path(__file__).resolve().parents[3] / "dnd_engine" / "data" / "srd" / "items.json"
         )
         items = json.loads(items_path.read_text())
         # items.json is keyed by category (weapons, armor, consumables, …);
@@ -414,9 +460,7 @@ class TestVisionAndLight_Light:
         """
         char = _make_human_character()
         party = Party([char])
-        game_state = GameState(
-            party, "crypt", campaign_id="the_unquiet_dead"
-        )
+        game_state = GameState(party, "crypt", campaign_id="the_unquiet_dead")
         game_state.current_room_id = "crypt.hall_of_the_dead"
         room = game_state.get_current_room()
         assert room.get("lighting") == "dark", (
@@ -457,9 +501,7 @@ class TestVisionAndLight_SpecialSenses:
         """
         dwarf = _make_dwarf_character()
         party = Party([dwarf])
-        game_state = GameState(
-            party, "crypt", campaign_id="the_unquiet_dead"
-        )
+        game_state = GameState(party, "crypt", campaign_id="the_unquiet_dead")
         game_state.current_room_id = "crypt.hall_of_the_dead"
         assert game_state.get_current_room().get("lighting") == "dark"
         assert game_state.get_effective_lighting(dwarf) == "dim"
@@ -573,28 +615,25 @@ class TestVisionAndLight_SpecialSenses:
         assert relation == VisibilityRelation.SEEN
 
 
-class TestVisionAndLight_CombatVisibilityNotConsulted:
-    """Cross-cut: combat does not consult Vision and Light state.
+class TestVisionAndLight_CombatConsultsVisibility:
+    """Cross-cut: combat consults Vision and Light state (#475).
 
     The SRD intro ("hitting an enemy ... affected by sight") and the
     Obscured Areas rules ("Heavily Obscured ... Blinded condition")
-    together imply that the attack pipeline must read visibility. The
-    engine's attack pipeline does not, so a single source-level guard
-    captures that absence here.
+    together require the attack pipeline to read visibility.
+    `CombatEngine.resolve_attack` now accepts the per-direction
+    `VisibilityRelation` and derives the unseen-attacker Advantage /
+    unseen-target Disadvantage from it.
     """
 
-    def test_resolve_attack_does_not_take_lighting_or_visibility_parameters(self):
-        pytest.skip(
-            "GAP: confirmed absence. `CombatEngine.resolve_attack` "
-            "(`dnd-engine/dnd_engine/core/combat.py:91`) signature is "
-            "`(attacker, defender, attack_bonus, damage_dice, "
-            "advantage=False, disadvantage=False, apply_damage=False, "
-            "event_bus=None, action=None, game_state=None)`. There is "
-            "no `lighting`, `obscurement`, `visibility`, or `can_see` "
-            "parameter, and no caller derives `advantage`/`disadvantage` "
-            "from visibility state today. The closest helper — "
-            "`dnd_engine/systems/ranged_attacks.is_close_combat_ranged_"
-            "disadvantage` — accepts a `attacker_visible_to` callable "
-            "but it defaults to always-True. Tracked by issues #475 "
-            "and #494."
-        )
+    def test_resolve_attack_takes_visibility_parameters(self):
+        """`resolve_attack` exposes the per-direction visibility relations."""
+        from dnd_engine.core.combat import CombatEngine
+
+        params = inspect.signature(CombatEngine.resolve_attack).parameters
+        assert "attacker_sees_defender" in params
+        assert "defender_sees_attacker" in params
+        # Defaulting to None keeps callers that don't pass visibility on
+        # the legacy unmodified-roll path.
+        assert params["attacker_sees_defender"].default is None
+        assert params["defender_sees_attacker"].default is None
