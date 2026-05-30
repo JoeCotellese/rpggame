@@ -507,3 +507,37 @@ class TestDefaultSkillSelection:
             skill_proficiencies=["acrobatics", "insight"],
         )
         assert rogue.skill_proficiencies == ["acrobatics", "insight"]
+
+
+class TestCharacterRaceSize:
+    """A factory-built character's size category comes from its race.
+
+    SRD § Creature Statistics › Size: most player races are Medium, but a
+    few (Halfling, Gnome) are Small. The factory must surface that so the
+    spatial layer can size the character's footprint correctly.
+    """
+
+    def _make_factory(self) -> tuple[CharacterFactory, DataLoader]:
+        return CharacterFactory(dice_roller=DiceRoller(seed=1)), DataLoader(
+            dice_roller=DiceRoller(seed=1)
+        )
+
+    def test_human_is_medium(self):
+        """The Human race is Medium per races.json."""
+        from dnd_engine.core.creature import Size
+
+        factory, loader = self._make_factory()
+        human = factory.create_character(
+            class_name="fighter", race_name="human", data_loader=loader
+        )
+        assert human.size is Size.MEDIUM
+
+    def test_halfling_is_small(self):
+        """The Halfling race is Small per races.json."""
+        from dnd_engine.core.creature import Size
+
+        factory, loader = self._make_factory()
+        halfling = factory.create_character(
+            class_name="rogue", race_name="halfling", data_loader=loader
+        )
+        assert halfling.size is Size.SMALL

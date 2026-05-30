@@ -37,6 +37,28 @@ class TestSizeEnum:
         assert Size("gargantuan") is Size.GARGANTUAN
 
 
+class TestSizeFootprint:
+    """Test the SRD Creature Size and Space table → square footprint.
+
+    SRD § Playing the Game › Movement and Position › Creature Size:
+    a creature's size determines the width of the square space it
+    occupies on a map — Tiny/Small/Medium share one tile, Large is
+    2×2, Huge is 3×3, Gargantuan is 4×4.
+    """
+
+    def test_small_sizes_occupy_a_single_tile(self):
+        """Tiny, Small, and Medium all occupy a 1-tile-wide square."""
+        assert Size.TINY.footprint == 1
+        assert Size.SMALL.footprint == 1
+        assert Size.MEDIUM.footprint == 1
+
+    def test_large_sizes_scale_with_category(self):
+        """Large/Huge/Gargantuan widen to 2/3/4 tiles per the SRD table."""
+        assert Size.LARGE.footprint == 2
+        assert Size.HUGE.footprint == 3
+        assert Size.GARGANTUAN.footprint == 4
+
+
 class TestCreatureSizeField:
     """Test that the Creature class carries a size field defaulting to Medium."""
 

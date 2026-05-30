@@ -6,6 +6,7 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping
 from types import MappingProxyType
 
+from dnd_engine.core.creature import Size
 from dnd_engine.core.distance import chebyshev_distance, is_adjacent
 from dnd_engine.core.map import Map
 from dnd_engine.core.position import Position
@@ -15,10 +16,15 @@ class SpatialIndex:
     """
     Engine-side registry mapping entity ids to grid Positions, plus spatial queries.
 
-    Maintains two synchronized dicts as its core invariant:
-        _by_entity[entity_id] == position  iff  _by_position[position] == entity_id
+    Maintains synchronized dicts as its core invariant:
+        _by_entity[entity_id] == anchor, and _by_position[tile] == entity_id
+        for every tile in the entity's footprint (a creature's size, per the
+        SRD Creature Size and Space table, determines whether that footprint
+        is a single tile or an N x N block).
     Every mutation updates both sides atomically; readers may rely on the
-    invariant in any externally observable state.
+    invariant in any externally observable state. Medium (and smaller)
+    occupants claim exactly one tile, so the model degrades to the original
+    one-tile-per-entity mapping.
 
     Mutations (`place`, `move`, `remove`) reject blocking tiles via
     ``Map.is_blocking`` and reject double-occupancy. Queries (`distance`,
@@ -49,75 +55,127 @@ class SpatialIndex:
         # ``list(map(...))`` inside the class would otherwise hit
         # ``TypeError: 'Map' object is not callable``.
         self._map = grid_map
+        # ``_by_entity`` stores each entity's *anchor* (minimum-x / minimum-y
+        # corner of its footprint); ``_by_position`` maps *every* tile a
+        # footprint covers back to its entity. For Medium (1x1) occupants the
+        # two are one-to-one, matching the original single-tile model.
         self._by_entity: dict[str, Position] = {}
         self._by_position: dict[Position, str] = {}
+        self._size_by_entity: dict[str, Size] = {}
         self._occupants_view: MappingProxyType[str, Position] = MappingProxyType(
             self._by_entity
+        )
+
+    @staticmethod
+    def footprint_tiles(
+        anchor: Position, size: Size = Size.MEDIUM
+    ) -> frozenset[Position]:
+        """Tiles a creature of ``size`` occupies when anchored at ``anchor``.
+
+        The anchor is the minimum-x / minimum-y corner; the square block
+        extends toward +x and +y. Medium (and smaller) sizes return just
+        ``{anchor}``; Large/Huge/Gargantuan return the 2x2 / 3x3 / 4x4 block
+        per the SRD Creature Size and Space table. Pure geometry — it does
+        not consult map bounds or occupancy.
+        """
+        side = size.footprint
+        return frozenset(
+            Position(anchor.x + dx, anchor.y + dy)
+            for dx in range(side)
+            for dy in range(side)
         )
 
     # ------------------------------------------------------------------ #
     # Mutations
     # ------------------------------------------------------------------ #
 
-    def place(self, entity_id: str, position: Position) -> None:
-        """Place a new occupant at ``position``.
+    def place(
+        self, entity_id: str, position: Position, size: Size = Size.MEDIUM
+    ) -> None:
+        """Place a new occupant anchored at ``position``.
+
+        ``size`` drives the footprint: Medium (the default) claims the single
+        anchor tile, preserving the original single-tile behavior; Large+
+        creatures claim their full N x N block (see ``footprint_tiles``). The
+        anchor and the creature's size are retained so ``move`` and ``remove``
+        can relocate or clear the whole footprint.
 
         Raises:
-            ValueError: If ``entity_id`` is already placed, ``position`` is
-                blocking per ``map.is_blocking``, or another entity already
-                occupies ``position``.
+            ValueError: If ``entity_id`` is already placed, or if *any* tile
+                of the footprint is blocking per ``map.is_blocking`` (this
+                also rejects footprints that spill off the map) or is already
+                occupied by another entity.
         """
         if entity_id in self._by_entity:
             raise ValueError(f"entity {entity_id!r} is already placed")
-        if self._map.is_blocking(position.x, position.y):
-            raise ValueError(f"position {position!r} is blocking")
-        if position in self._by_position:
-            raise ValueError(
-                f"position {position!r} is occupied by "
-                f"{self._by_position[position]!r}"
-            )
+        tiles = self.footprint_tiles(position, size)
+        for tile in tiles:
+            if self._map.is_blocking(tile.x, tile.y):
+                raise ValueError(f"footprint tile {tile!r} is blocking")
+            occupant = self._by_position.get(tile)
+            if occupant is not None:
+                raise ValueError(
+                    f"footprint tile {tile!r} is occupied by {occupant!r}"
+                )
         self._by_entity[entity_id] = position
-        self._by_position[position] = entity_id
+        self._size_by_entity[entity_id] = size
+        for tile in tiles:
+            self._by_position[tile] = entity_id
 
     def move(self, entity_id: str, position: Position) -> None:
-        """Move an existing occupant to ``position``.
+        """Move an existing occupant so its footprint is anchored at ``position``.
 
-        Moving to the entity's current position is a no-op.
+        The creature's size is preserved from ``place``; the whole footprint
+        relocates. Moving to the entity's current anchor is a no-op. Tiles the
+        creature already occupies do not count as obstructions to itself, so a
+        Large creature may slide into a position whose new block overlaps its
+        old one.
 
         Raises:
             KeyError: If ``entity_id`` is not currently placed.
-            ValueError: If ``position`` is blocking or occupied by another
-                entity.
+            ValueError: If any tile of the destination footprint is blocking
+                or occupied by another entity.
         """
         if entity_id not in self._by_entity:
             raise KeyError(entity_id)
         current = self._by_entity[entity_id]
         if position == current:
             return
-        if self._map.is_blocking(position.x, position.y):
-            raise ValueError(f"position {position!r} is blocking")
-        occupant = self._by_position.get(position)
-        if occupant is not None and occupant != entity_id:
-            raise ValueError(
-                f"position {position!r} is occupied by {occupant!r}"
-            )
-        del self._by_position[current]
+        size = self._size_by_entity[entity_id]
+        old_tiles = self.footprint_tiles(current, size)
+        new_tiles = self.footprint_tiles(position, size)
+        for tile in new_tiles:
+            if self._map.is_blocking(tile.x, tile.y):
+                raise ValueError(f"footprint tile {tile!r} is blocking")
+            occupant = self._by_position.get(tile)
+            if occupant is not None and occupant != entity_id:
+                raise ValueError(
+                    f"footprint tile {tile!r} is occupied by {occupant!r}"
+                )
+        # Vacate the old footprint first so an overlapping new block does not
+        # collide with the creature's own former tiles, then claim the new one.
+        for tile in old_tiles:
+            if self._by_position.get(tile) == entity_id:
+                del self._by_position[tile]
         self._by_entity[entity_id] = position
-        self._by_position[position] = entity_id
+        for tile in new_tiles:
+            self._by_position[tile] = entity_id
 
     def remove(self, entity_id: str) -> None:
-        """Remove a placed occupant.
+        """Remove a placed occupant, clearing every tile of its footprint.
 
         No-op if ``entity_id`` is not placed; cleanup paths can call this
         unconditionally without guarding.
         """
         position = self._by_entity.pop(entity_id, None)
-        if position is not None:
-            # Defensive: only drop the reverse entry if it still points at us
-            # (the invariant guarantees it does, but guarding keeps stray
+        size = self._size_by_entity.pop(entity_id, None)
+        if position is not None and size is not None:
+            # Defensive: only drop reverse entries that still point at us
+            # (the invariant guarantees they do, but guarding keeps stray
             # external corruption from cascading).
-            if self._by_position.get(position) == entity_id:
-                del self._by_position[position]
+            for tile in self.footprint_tiles(position, size):
+                if self._by_position.get(tile) == entity_id:
+                    del self._by_position[tile]
 
     # ------------------------------------------------------------------ #
     # Queries
@@ -135,8 +193,23 @@ class SpatialIndex:
         return self._map
 
     def position_of(self, entity_id: str) -> Position | None:
-        """Return the placed position of ``entity_id``, or ``None``."""
+        """Return the anchor position of ``entity_id``, or ``None``.
+
+        The anchor is the minimum-x / minimum-y corner of the footprint; for
+        Large+ creatures the full set of occupied tiles is ``footprint_of``.
+        """
         return self._by_entity.get(entity_id)
+
+    def footprint_of(self, entity_id: str) -> frozenset[Position]:
+        """Return every tile ``entity_id`` occupies, or an empty set if unplaced.
+
+        A Medium occupant returns its single anchor tile; Large/Huge/
+        Gargantuan creatures return their full N x N block.
+        """
+        anchor = self._by_entity.get(entity_id)
+        if anchor is None:
+            return frozenset()
+        return self.footprint_tiles(anchor, self._size_by_entity[entity_id])
 
     def occupant_at(self, position: Position) -> str | None:
         """Return the entity id occupying ``position``, or ``None``."""

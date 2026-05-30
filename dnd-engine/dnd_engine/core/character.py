@@ -4,7 +4,7 @@
 from enum import Enum
 from typing import Any
 
-from dnd_engine.core.creature import Abilities, Creature
+from dnd_engine.core.creature import Abilities, Creature, Size
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.spell import Spell
 from dnd_engine.systems.inventory import Inventory
@@ -98,6 +98,7 @@ class Character(Creature):
         prepared_spells: list[str] | None = None,
         vault_id: str | None = None,
         speed: int = 30,
+        size: Size = Size.MEDIUM,
     ):
         """
         Initialize a player character.
@@ -125,6 +126,8 @@ class Character(Creature):
             prepared_spells: List of spell IDs the character has prepared
             vault_id: UUID linking this character to their vault entry (for syncing progression)
             speed: Movement speed in feet per round (default 30, varies by race)
+            size: SRD size category (default Medium, varies by race — e.g.
+                Halflings and Gnomes are Small)
         """
         super().__init__(
             name=name,
@@ -133,6 +136,7 @@ class Character(Creature):
             abilities=abilities,
             current_hp=current_hp,
             speed=speed,
+            size=size,
         )
 
         self.character_class = character_class

@@ -4,7 +4,7 @@
 from typing import Any
 
 from dnd_engine.core.character import Character, CharacterClass
-from dnd_engine.core.creature import Abilities
+from dnd_engine.core.creature import Abilities, Size
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.systems.inventory import EquipmentSlot
@@ -635,6 +635,11 @@ class CharacterFactory:
         # Get speed from race data (default 30 ft if not specified)
         speed = race_data.get("speed", 30)
 
+        # Get size category from race data (default Medium). The canonical
+        # lowercase string matches Size.value, so a case-insensitive lookup
+        # round-trips "Small"/"Medium" cleanly from races.json.
+        size = Size(race_data.get("size", "medium").lower())
+
         # Auto-select skill proficiencies if not provided.
         # Prefer the class's thematic `default` list (signature skills first, e.g.
         # Stealth for a rogue) so the auto-pick is not biased by the order of `from`.
@@ -679,6 +684,7 @@ class CharacterFactory:
             tool_proficiencies=tool_proficiencies,
             saving_throw_proficiencies=saving_throw_proficiencies,
             speed=speed,
+            size=size,
         )
 
         # Store race and darkvision
