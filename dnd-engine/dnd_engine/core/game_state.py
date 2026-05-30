@@ -31,10 +31,13 @@ from dnd_engine.systems.opportunity_attacks import (
     register_default_opportunity_attack,
 )
 from dnd_engine.systems.perception import (
+    Cover,
     LightLevel,
     Obscurement,
     VisibilityRelation,
+    can_attempt_hide,
     compute_visibility,
+    effective_obscurement,
     obscurement_from_sources,
     relies_on_sight,
 )
@@ -1496,6 +1499,54 @@ class GameState:
             defender, attacker, light_level=light_level, obscurement=obscurement
         )
         return attacker_sees_defender, defender_sees_attacker
+
+    def can_attempt_hide(self, creature: "Creature") -> bool:
+        """Whether the current room permits a Hide attempt (SRD 5.2.1).
+
+        The SRD grants the GM discretion over when hiding is allowed;
+        SRD 5.2.1 makes that concrete — a creature can try to hide only
+        when its area is Heavily Obscured or it has at least
+        Three-Quarters Cover. This resolves the room's effective
+        obscurement (the worse of ambient light and fog/foliage sources)
+        and its `cover` signal, then applies the rule in
+        `perception.can_attempt_hide`. This is the precondition gate
+        (issue #496); the Hide action mechanics and the resulting unseen
+        state are separate (issues #443 / #475).
+
+        Obscurement here is the area-level value (room lighting + ambient
+        sources), not a per-observer one: a darkvision creature still
+        treats a dark room as concealing for the purpose of *whether*
+        hiding is available. Per-observer visibility lives in
+        `attack_visibility` / `compute_visibility`.
+
+        Args:
+            creature: The creature attempting to hide. Currently unused —
+                the gate is environmental — but kept in the signature for
+                forward compatibility with per-creature room tracking
+                (#514), mirroring `creature_environment`.
+
+        Returns:
+            True when the environment offers concealment sufficient to
+            attempt the Hide action; False otherwise (e.g. an open,
+            brightly lit, featureless room). Returns False when no room
+            is resolvable.
+        """
+        try:
+            room = self.get_current_room()
+        except (KeyError, AttributeError, TypeError):
+            return False
+
+        obscurement = effective_obscurement(
+            self._ambient_light_level(), self.ambient_obscurement()
+        )
+
+        cover_value = str(room.get("cover", "none")).lower()
+        try:
+            cover = Cover(cover_value)
+        except ValueError:
+            cover = Cover.NONE
+
+        return can_attempt_hide(obscurement, cover)
 
     def get_available_actions(self) -> list[str]:
         """

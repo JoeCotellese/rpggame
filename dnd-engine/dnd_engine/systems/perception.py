@@ -54,6 +54,22 @@ class Obscurement(str, Enum):
     HEAVILY = "heavily"
 
 
+class Cover(str, Enum):
+    """Degree of cover a position offers against being seen / hit.
+
+    SRD § Cover: an obstacle between a creature and a hazard grants
+    Half Cover (+2 AC / Dexterity saves), Three-Quarters Cover (+5),
+    or Total Cover (can't be targeted directly). For the Hide action
+    (SRD 5.2.1) a creature needs at least Three-Quarters Cover to use
+    cover alone as a hiding circumstance.
+    """
+
+    NONE = "none"
+    HALF = "half"
+    THREE_QUARTERS = "three_quarters"
+    TOTAL = "total"
+
+
 class Sense(str, Enum):
     """Perception channels a creature can possess.
 
@@ -228,6 +244,22 @@ def obscurement_from_sources(sources: Iterable[str]) -> Obscurement:
         if _OBSCUREMENT_SEVERITY[level] > _OBSCUREMENT_SEVERITY[worst]:
             worst = level
     return worst
+
+
+def can_attempt_hide(obscurement: Obscurement, cover: Cover) -> bool:
+    """Whether the surroundings permit a Hide attempt (SRD 5.2.1).
+
+    The Game Master decides when circumstances are appropriate for
+    hiding; SRD 5.2.1 makes that concrete: a creature can try to hide
+    only when its area is **Heavily Obscured** or it has at least
+    **Three-Quarters Cover**. Lighter conditions — a Lightly Obscured
+    area, Half Cover, or open clear ground — do not qualify. This is
+    the precondition gate (issue #496); the Hide action mechanics and
+    the resulting unseen state are separate (issues #443 / #475).
+    """
+    if obscurement == Obscurement.HEAVILY:
+        return True
+    return cover in (Cover.THREE_QUARTERS, Cover.TOTAL)
 
 
 def compute_visibility(

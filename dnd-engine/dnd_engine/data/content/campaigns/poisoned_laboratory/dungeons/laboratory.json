@@ -196,9 +196,10 @@
     },
     "laboratory.furnace_room": {
       "name": "Furnace Chamber",
-      "description": "A massive furnace roars in the center of this sweltering room, used to heat alchemical reactions. The heat is intense. A large wolf, its fur singed and eyes glowing red, lies near the furnace beside a pile of treasure. The beast's breath carries the acrid smell of sulfur.",
+      "description": "A massive furnace roars in the center of this sweltering room, used to heat alchemical reactions. The heat is intense. A large wolf, its fur singed and eyes glowing red, lies near the furnace beside a pile of treasure. The beast's breath carries the acrid smell of sulfur. A low archway to the north vents thick clouds of scalding steam from the boiler beyond.",
       "exits": {
-        "east": "laboratory.storage"
+        "east": "laboratory.storage",
+        "north": "laboratory.boiler_room"
       },
       "enemies": [
         "wolf"
@@ -354,6 +355,27 @@
         }
       ],
       "id": "laboratory.specimen_chamber"
+    },
+    "laboratory.boiler_room": {
+      "name": "Steam-Choked Boiler Room",
+      "description": "A ruptured boiler floods this cramped chamber with roiling clouds of scalding steam. Visibility drops to nothing more than an arm's length ahead, and shapes dissolve into the white haze. The dense vapor would hide a creature completely from anyone more than a few feet away.",
+      "lighting": "bright",
+      "obscurement_sources": ["heavy_fog"],
+      "cover": "none",
+      "exits": {
+        "south": "laboratory.furnace_room"
+      },
+      "enemies": [],
+      "items": [
+        {
+          "type": "item",
+          "id": "potion_of_healing",
+          "visible": false
+        }
+      ],
+      "searched": false,
+      "searchable": true,
+      "id": "laboratory.boiler_room"
     }
   }
 }
