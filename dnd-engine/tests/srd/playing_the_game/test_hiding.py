@@ -25,6 +25,7 @@ import pytest
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities
 from dnd_engine.core.game_state import GameState
+from dnd_engine.core.party import Party
 
 pytestmark = pytest.mark.srd(
     "playing-the-game/hiding.md",
@@ -135,32 +136,107 @@ class TestHiding_GMDiscretion:
     """
 
     def test_engine_gates_hide_attempts_on_appropriate_circumstances(self):
-        pytest.skip(
-            "GAP: there is no engine-side gate that consults the "
-            "environment before allowing a hide attempt. The only "
-            "extant Stealth call — `GameState._check_for_surprise` "
-            "(`dnd-engine/dnd_engine/core/game_state.py:3014`) — fires "
-            "unconditionally before combat, regardless of whether the "
-            "current room offers cover, obscurement, or distraction. "
-            "There is no `can_attempt_hide(creature, context)` helper, "
-            "no per-room or per-tile `cover` / `concealment` data "
-            "field, and no per-tile obscurement model in the engine "
-            "(the bright/dim/dark per-tile model lives only in "
-            "`client-2d/src/client_2d/systems/lighting.py:111` and "
-            "`client-2d/src/client_2d/systems/fog_of_war.py:14`). "
-            "Tracked by issue #496."
+        """The engine consults the environment before allowing a hide.
+
+        SRD 5.2.1 makes hiding available only when the surroundings
+        offer concealment: a creature can attempt to hide when its area
+        is **Heavily Obscured** OR it has at least **three-quarters
+        cover**. Lighter conditions (Lightly Obscured, half cover, or a
+        clear open space) do not qualify — this is stricter than
+        plan-05's looser "Lightly Obscured" draft, and the SRD threshold
+        is canonical (issue #496).
+
+        Two layers are gated:
+
+        - The pure rule `perception.can_attempt_hide(obscurement, cover)`
+          decides eligibility from an area's obscurement and cover.
+        - `GameState.can_attempt_hide(creature)` resolves the current
+          room's effective obscurement (lighting + ambient sources) and
+          its cover signal, then delegates to the rule.
+        """
+        from dnd_engine.systems.perception import (
+            Cover,
+            Obscurement,
+            can_attempt_hide,
         )
 
+        # --- Pure rule: obscurement gate at the SRD threshold ---
+        # Heavily Obscured qualifies; nothing lighter does.
+        assert can_attempt_hide(Obscurement.HEAVILY, Cover.NONE) is True
+        assert can_attempt_hide(Obscurement.LIGHTLY, Cover.NONE) is False
+        assert can_attempt_hide(Obscurement.CLEAR, Cover.NONE) is False
+
+        # --- Pure rule: cover gate at the SRD threshold ---
+        # Three-quarters and total cover qualify; half cover does not.
+        assert can_attempt_hide(Obscurement.CLEAR, Cover.THREE_QUARTERS) is True
+        assert can_attempt_hide(Obscurement.CLEAR, Cover.TOTAL) is True
+        assert can_attempt_hide(Obscurement.CLEAR, Cover.HALF) is False
+
+        # --- GameState integration: room data drives the gate ---
+        char = _make_stealthy_character()
+        party = Party([char])
+        game_state = GameState(party, "crypt", campaign_id="the_unquiet_dead")
+        game_state.current_room_id = "crypt.hall_of_the_dead"
+        room = game_state.get_current_room()
+
+        # A heavily fogged room qualifies even in Bright Light: the area
+        # is Heavily Obscured regardless of illumination.
+        room["lighting"] = "bright"
+        room["obscurement_sources"] = ["heavy_fog"]
+        room["cover"] = "none"
+        assert game_state.can_attempt_hide(char) is True
+
+        # A clear, brightly lit room with no cover does not qualify.
+        room["obscurement_sources"] = []
+        room["cover"] = "none"
+        assert game_state.can_attempt_hide(char) is False
+
+        # Three-quarters cover qualifies even in a clear, bright room.
+        room["cover"] = "three_quarters"
+        assert game_state.can_attempt_hide(char) is True
+
     def test_party_cannot_hide_in_an_open_brightly_lit_empty_room(self):
-        pytest.skip(
-            "GAP: the SRD's GM-discretion clause should make hiding "
-            "*unavailable* in an open, brightly lit, featureless room. "
-            "Today, `GameState._check_for_surprise` would still run a "
-            "Stealth check there because it does not consult lighting "
-            "or cover. With the cover-gate from issue #496 implemented, "
-            "this test would assert the Hide action / surprise check "
-            "is refused in such an environment. Tracked by issue #496."
+        """Hiding is unavailable in an open, brightly lit, featureless room.
+
+        The SRD's GM-discretion clause means a creature standing in the
+        open with full illumination and nothing to hide behind cannot
+        attempt the Hide action: the area is not obscured and offers no
+        cover. `GameState.can_attempt_hide` must refuse here (issue
+        #496).
+        """
+        char = _make_stealthy_character()
+        party = Party([char])
+        game_state = GameState(party, "crypt", campaign_id="the_unquiet_dead")
+        game_state.current_room_id = "crypt.hall_of_the_dead"
+        room = game_state.get_current_room()
+        room["lighting"] = "bright"
+        room["obscurement_sources"] = []
+        room["cover"] = "none"
+
+        assert game_state.can_attempt_hide(char) is False
+
+    def test_shipped_dungeon_room_carries_the_obscurement_hide_signal(self):
+        """Shipped content exercises the hide gate from room data.
+
+        The acceptance criterion for issue #496 requires room data to
+        carry the obscurement / cover signal that drives the gate. The
+        Poisoned Laboratory's steam-choked boiler room declares
+        `obscurement_sources: ["heavy_fog"]`, making it Heavily Obscured,
+        so a creature there can attempt to hide — while the adjacent
+        open furnace room cannot. This guards the data wiring so the
+        signal can't silently disappear from the dungeon.
+        """
+        char = _make_stealthy_character()
+        party = Party([char])
+        game_state = GameState(
+            party, "laboratory", campaign_id="poisoned_laboratory"
         )
+
+        game_state.current_room_id = "laboratory.boiler_room"
+        assert game_state.can_attempt_hide(char) is True
+
+        game_state.current_room_id = "laboratory.furnace_room"
+        assert game_state.can_attempt_hide(char) is False
 
 
 class TestHiding_HideAction:
