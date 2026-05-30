@@ -3,7 +3,7 @@
 
 from dnd_engine.core.creature import Abilities, Creature
 from dnd_engine.systems.action_economy import ActionType, TurnState
-from dnd_engine.systems.actions import dash, disengage, drop_prone, stand_up
+from dnd_engine.systems.actions import dash, disengage, drop_prone, hide, stand_up
 
 
 def _make_creature(name: str = "Hero", speed: int = 30) -> Creature:
@@ -169,3 +169,55 @@ class TestStandUp:
         assert ok is True
         # 25 // 2 = 12, leaving 13
         assert turn.movement_remaining == 13
+
+
+class TestHide:
+    """SRD § Actions › Hide: 'Make a Dexterity (Stealth) check.'
+
+    The caller rolls the Stealth check (it needs skills data and the DC
+    from observers' passive Perception); the handler consumes the turn's
+    slot and, on a successful check, gives the hider the Hidden (unseen)
+    condition.
+    """
+
+    def test_hide_consumes_action_and_sets_hidden_on_success(self):
+        actor = _make_creature()
+        turn = TurnState()
+        turn.reset(speed=30)
+        ok, reason = hide(actor, turn, succeeded=True)
+        assert ok is True
+        assert reason is None
+        assert turn.action_available is False
+        assert actor.has_condition("hidden") is True
+
+    def test_hide_consumes_action_but_stays_visible_on_failure(self):
+        actor = _make_creature()
+        turn = TurnState()
+        turn.reset(speed=30)
+        ok, reason = hide(actor, turn, succeeded=False)
+        assert ok is True
+        assert reason is None
+        assert turn.action_available is False  # the action is still spent
+        assert actor.has_condition("hidden") is False
+
+    def test_hide_fails_when_no_action_available(self):
+        actor = _make_creature()
+        turn = TurnState()
+        turn.reset(speed=30)
+        turn.consume_action(ActionType.ACTION)
+        ok, reason = hide(actor, turn, succeeded=True)
+        assert ok is False
+        assert reason == "no action available"
+        assert actor.has_condition("hidden") is False
+
+    def test_hide_can_use_a_bonus_action(self):
+        """Cunning Action / Nimble Escape let some creatures Hide as a
+        Bonus Action; the handler honors an explicit BONUS_ACTION cost."""
+        actor = _make_creature()
+        turn = TurnState()
+        turn.reset(speed=30)
+        ok, _ = hide(actor, turn, succeeded=True, action_type=ActionType.BONUS_ACTION)
+        assert ok is True
+        assert turn.bonus_action_available is False
+        assert turn.action_available is True  # Action slot untouched
+        assert actor.has_condition("hidden") is True

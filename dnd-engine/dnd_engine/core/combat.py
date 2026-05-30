@@ -206,6 +206,15 @@ class CombatEngine:
             advantage = True
             attacker.pending_help_from = None
 
+        # SRD § Hide: a hidden creature reveals its location when it
+        # makes an attack roll. The unseen-attacker Advantage below is
+        # derived from `defender_sees_attacker`, which the caller
+        # captured *before* this attack, so clearing the Hidden
+        # condition here preserves that one advantaged shot while
+        # revealing the attacker for everything that follows.
+        if hasattr(attacker, "has_condition") and attacker.has_condition("hidden"):
+            attacker.remove_condition("hidden")
+
         # SRD § Combat › Unseen Attackers and Targets: an attacker the
         # target can't see has Advantage; a target the attacker can't
         # see is attacked with Disadvantage. Both UNSEEN and

@@ -59,6 +59,7 @@ class ScriptContext:
     last_attack: Any | None = None
     last_attack_error: str | None = None
     last_attack_disadvantage: bool = False
+    last_hide: Any | None = None
     turn_count: int = 0
 
     def resolve_entity(self, entity_id: str) -> Any | None:
@@ -201,6 +202,8 @@ class ScriptExecutor:
         a_type = action.get("action")
         if a_type == "wait":
             self._action_wait()
+        elif a_type == "hide":
+            self._action_hide()
         elif a_type == "attack":
             target = action.get("target")
             if target is None:
@@ -232,6 +235,23 @@ class ScriptExecutor:
                 "wait: combat is not active (no initiative tracker)"
             )
         tracker.next_turn()
+        self.ctx.turn_count += 1
+
+    def _action_hide(self) -> None:
+        """Dispatch the Hide action for the current party member.
+
+        Delegates to ``GameState.attempt_hide`` (the SRD § Actions ›
+        Hide surface — env gate, Stealth check, action-slot use) and
+        records the :class:`HideAttemptResult` on the context for
+        assertion runners, then advances the turn like the other
+        turn-consuming actions.
+        """
+        hider, _hider_id = self._current_player_attacker()
+        self.ctx.last_hide = self.ctx.game_state.attempt_hide(hider)
+
+        tracker = self.ctx.game_state.initiative_tracker
+        if tracker is not None:
+            tracker.next_turn()
         self.ctx.turn_count += 1
 
     def _action_attack(self, target_id: str) -> None:

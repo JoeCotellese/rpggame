@@ -25,6 +25,7 @@ from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.game_state import GameState
 from dnd_engine.scenarios import script_executor as script_executor_mod
 from dnd_engine.systems.action_economy import ActionType, TurnState
+from dnd_engine.systems.actions import hide
 
 pytestmark = pytest.mark.srd(
     "playing-the-game/actions.md",
@@ -532,16 +533,25 @@ class TestAction_Hide:
     """
 
     def test_hide_makes_a_dexterity_stealth_check(self) -> None:
-        pytest.skip(
-            "GAP: There is no `Hide` action handler. A Stealth check "
-            "primitive exists "
-            "(`Character.make_skill_check('stealth', ...)` "
-            "in dnd_engine/core/character.py:726) and is used for "
-            "surprise rounds (game_state.py:3050), but no action "
-            "dispatches it on demand, no hidden/unseen flag is set on "
-            "the hider, and visibility is not consulted by attack "
-            "resolution. Tracked by issue #443."
+        """`GameState.attempt_hide` is the Hide-action surface.
+
+        SRD § Actions › Hide: "Make a Dexterity (Stealth) check." The
+        engine body lives at `GameState.attempt_hide`, which rolls
+        `make_skill_check("stealth", ...)` against the watching enemies'
+        passive Perception and consumes the turn's action slot via the
+        pure `actions.hide` handler. Source-level guard so this link
+        from the SRD Hide row to the engine can't silently regress.
+        """
+        assert callable(getattr(GameState, "attempt_hide", None))
+        src = inspect.getsource(GameState.attempt_hide)
+        assert '"stealth"' in src or "'stealth'" in src, (
+            "The Hide action must roll a Stealth check."
         )
+        assert "make_skill_check" in src, (
+            "The Hide action must consume the Stealth check primitive."
+        )
+        # The handler it delegates to spends an action slot.
+        assert "consume_action" in inspect.getsource(hide)
 
 
 class TestAction_Influence:
