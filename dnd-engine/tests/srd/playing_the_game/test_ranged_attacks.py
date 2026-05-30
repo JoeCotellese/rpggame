@@ -90,7 +90,11 @@ class TestRange_TwoRangeWeapons:
             "dnd_engine/scenarios/script_executor.py:214 "
             "(`last_attack_disadvantage = distance > normal_range`). "
             "A new third-party client would silently miss the rule. "
-            "Open question: should the engine own positional checks?"
+            "NOTE: the engine now owns positions (`SpatialIndex` / "
+            "`attempt_combat_step`) and computes Chebyshev distance for "
+            "OAs and difficult terrain, so this is now an ownership "
+            "decision, not an impossibility — open question: should "
+            "`execute_player_attack` own positional range checks?"
         )
 
     def test_attack_beyond_long_range_is_rejected_by_engine(self):
@@ -101,7 +105,10 @@ class TestRange_TwoRangeWeapons:
             "dnd_engine/scenarios/script_executor.py:207 "
             "(`if distance > max_range: ... last_attack_error = ...`). "
             "Engine performs no check, so a buggy or new client could "
-            "execute attacks from arbitrary distances."
+            "execute attacks from arbitrary distances. NOTE: the engine "
+            "now tracks positions (`SpatialIndex`) so it could own this; "
+            "the unused weapon `range` data in items.json (e.g. '80/320') "
+            "is the natural input. Open ownership decision."
         )
 
 

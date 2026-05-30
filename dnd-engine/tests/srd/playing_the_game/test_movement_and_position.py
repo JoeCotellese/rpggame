@@ -18,8 +18,17 @@ from pathlib import Path
 
 import pytest
 
-from dnd_engine.core.creature import Abilities, Creature
-from dnd_engine.systems.action_economy import ActionType, TurnState
+from dnd_engine.core.creature import Abilities, Creature, MovementMode
+from dnd_engine.core.dice import DiceRoller
+from dnd_engine.core.position import Position
+from dnd_engine.systems.action_economy import ActionType, Terrain, TurnState, cost_for
+from dnd_engine.systems.actions import disengage
+from dnd_engine.systems.initiative import InitiativeTracker
+from dnd_engine.systems.opportunity_attacks import (
+    publish_movement_provoke,
+    register_default_opportunity_attack,
+)
+from dnd_engine.systems.reactions import ReactionDispatcher
 
 pytestmark = pytest.mark.srd(
     "playing-the-game/movement-and-position.md",
@@ -206,16 +215,27 @@ class TestSpeed_SpecialSpeeds:
     """
 
     def test_creature_exposes_climb_fly_swim_speeds(self) -> None:
-        pytest.skip(
-            "GAP: special speeds (Climb / Fly / Swim / Burrow) are not "
-            "modeled. `Creature` exposes a single scalar `speed` "
-            "(dnd_engine/core/creature.py:89) and `monsters.json` only "
-            "declares a single integer `speed` per stat block. The "
-            "client-2d combat-move path treats one tile as 5 ft of the "
-            "creature's only speed (client-2d/src/client_2d/session.py:912), "
-            "so a flying or aquatic creature has no engine-tracked way to "
-            "spend a Fly Speed or Swim Speed. Tracked by issue #432."
+        """The engine models per-mode Speed via `Creature.speeds` keyed by
+        `MovementMode` (Climb / Fly / Swim / Burrow), shipped under issue
+        #432. Per-mode movement *cost* is a separate concern tracked by
+        #433 (see `TestMovement_Modes`); this asserts only the data model.
+        """
+        # A flying creature can carry distinct per-mode speeds.
+        flyer = Creature(
+            name="Wyvern",
+            max_hp=30,
+            ac=13,
+            abilities=Abilities(19, 10, 16, 5, 12, 6),
+            speeds={MovementMode.WALK: 20, MovementMode.FLY: 80},
         )
+        assert flyer.speeds[MovementMode.WALK] == 20
+        assert flyer.speeds[MovementMode.FLY] == 80
+        # The legacy scalar `speed` mirrors the WALK entry for back-compat.
+        assert flyer.speed == 20
+
+        # A plain creature defaults to a single WALK entry derived from `speed`.
+        walker = _make_creature(speed=30)
+        assert walker.speeds == {MovementMode.WALK: 30}
 
 
 class TestMovement_Modes:
@@ -229,39 +249,49 @@ class TestMovement_Modes:
 
     def test_climbing_costs_extra_movement(self) -> None:
         pytest.skip(
-            "GAP: climbing is not a tracked movement mode. The Rules "
-            "Glossary entry for Climbing imposes a 1-ft extra cost per "
-            "foot climbed without a Climb Speed. The engine has no "
-            "concept of climbable terrain or per-mode cost; "
-            "`TurnState.consume_movement` (dnd_engine/systems/action_economy.py:83) "
-            "takes a flat feet argument and the client-2d combat-move "
-            "always charges 5 ft per tile. Tracked by issue #433."
+            "GAP: climbing has no per-mode movement cost. The Rules "
+            "Glossary imposes a 1-ft extra cost per foot climbed without "
+            "a Climb Speed. The `MovementMode`/`Creature.speeds` data "
+            "model shipped under #432 (dnd_engine/core/creature.py:31), "
+            "but no system reads `.speeds` to compute cost: `cost_for` "
+            "(dnd_engine/systems/action_economy.py:41) and "
+            "`TurnState.consume_movement` "
+            "(dnd_engine/systems/action_economy.py:140) key cost only on "
+            "`Terrain` (NORMAL/DIFFICULT), with no per-mode multiplier. "
+            "Tracked by issue #433."
         )
 
     def test_swimming_costs_extra_movement(self) -> None:
         pytest.skip(
-            "GAP: swimming is not a tracked movement mode. Per Rules "
+            "GAP: swimming has no per-mode movement cost. Per Rules "
             "Glossary, swimming without a Swim Speed costs 1 extra foot "
-            "per foot. The engine has no aquatic terrain model and no "
-            "per-mode cost in `TurnState.consume_movement`. Tracked by "
+            "per foot. The `MovementMode`/`Creature.speeds` data model "
+            "shipped under #432, but `cost_for` "
+            "(dnd_engine/systems/action_economy.py:41) and "
+            "`TurnState.consume_movement` "
+            "(dnd_engine/systems/action_economy.py:140) key cost only on "
+            "`Terrain`, with no swim-mode multiplier. Tracked by "
             "issue #433."
         )
 
     def test_crawling_costs_extra_movement(self) -> None:
         pytest.skip(
-            "GAP: crawling is not a tracked movement mode. Per Rules "
-            "Glossary, every foot of crawling costs 1 extra foot. The "
-            "engine has no Prone-aware movement cost; `consume_movement` "
-            "takes a flat feet argument. Tracked by issue #433."
+            "GAP: crawling has no per-mode movement cost. Per Rules "
+            "Glossary, every foot of crawling costs 1 extra foot. "
+            "`MovementMode.CRAWL` exists (dnd_engine/core/creature.py:31) "
+            "but there is no Prone-aware cost path: `consume_movement` "
+            "(dnd_engine/systems/action_economy.py:140) keys cost only on "
+            "`Terrain`. Tracked by issue #433."
         )
 
     def test_jumping_consumes_movement(self) -> None:
         pytest.skip(
-            "GAP: jumping is not a tracked movement mode. Per Rules "
+            "GAP: jumping has no per-mode movement cost. Per Rules "
             "Glossary, a long jump and a high jump each consume movement "
             "equal to the distance covered (with STR- and DEX-derived "
-            "maxima). No jump action, helper, or movement-cost model "
-            "exists in the engine. Tracked by issue #433."
+            "maxima). `MovementMode.JUMP` exists "
+            "(dnd_engine/core/creature.py:31) but no jump-distance helper "
+            "or movement-cost model reads it. Tracked by issue #433."
         )
 
 
@@ -273,25 +303,38 @@ class TestDifficultTerrain_CostsExtra:
     """
 
     def test_difficult_terrain_doubles_movement_cost(self) -> None:
-        pytest.skip(
-            "GAP: Difficult Terrain is not modeled. `TurnState."
-            "consume_movement` (dnd_engine/systems/action_economy.py:83) "
-            "accepts a flat feet argument; the 2D client charges a fixed "
-            "5 ft per tile in combat-move "
-            "(client-2d/src/client_2d/session.py:912) with no terrain "
-            "query. `RoomLayout` (client-2d/src/client_2d/integration/"
-            "layout_schema.py) declares WALL and PIT tile types but has "
-            "no Difficult Terrain tile type or `is_difficult_terrain` "
-            "predicate. Tracked by issue #436."
-        )
+        """Every foot of movement in Difficult Terrain costs 1 extra foot.
+
+        Shipped under issue #436 (PR #558): `cost_for` doubles the
+        per-foot cost and `TurnState.consume_movement` accepts a
+        `terrain` kwarg that applies it.
+        """
+        # A 5-ft step through Difficult Terrain costs 10 ft (1 extra foot/foot).
+        assert cost_for(5, Terrain.NORMAL) == 5
+        assert cost_for(5, Terrain.DIFFICULT) == 10
+
+        # consume_movement deducts the doubled cost from the pool.
+        state = TurnState(movement_remaining=30)
+        assert state.consume_movement(5, terrain=Terrain.DIFFICULT) is True
+        assert state.movement_remaining == 20  # 30 - (5 * 2)
 
     def test_overlapping_difficult_terrain_does_not_stack(self) -> None:
-        pytest.skip(
-            "GAP: dependent on Difficult Terrain existing first. The "
-            "SRD caps the cost at +1 ft per foot regardless of how many "
-            "Difficult-Terrain causes overlap in a space. Until the "
-            "base mechanic ships (#436), this cap has nothing to guard."
-        )
+        """Cost is +1 ft per foot "even if multiple things in a space
+        count as Difficult Terrain". The engine models a single binary
+        `Terrain.DIFFICULT` category (issue #436 / PR #558); `cost_for`
+        returns a flat `feet * 2`, so no number of overlapping difficult
+        causes can raise the cost beyond the single +1-ft/ft cap.
+        """
+        # Difficult is a single category; the doubled cost is the cap,
+        # never 3x+, regardless of how many causes overlap a space.
+        assert cost_for(5, Terrain.DIFFICULT) == 10
+
+        # Re-applying difficult terrain does not compound: two 5-ft steps
+        # through difficult terrain cost 10 each, with no escalating surcharge.
+        state = TurnState(movement_remaining=30)
+        assert state.consume_movement(5, terrain=Terrain.DIFFICULT) is True
+        assert state.consume_movement(5, terrain=Terrain.DIFFICULT) is True
+        assert state.movement_remaining == 10  # 30 - 10 - 10, no stacking
 
 
 class TestBreakingUpMove_BeforeAndAfterAction:
@@ -450,13 +493,13 @@ class TestCreatureSize_SpaceFromSizeCategory:
         pytest.skip(
             "GAP: creature size does not drive map footprint. The SRD "
             "Size table maps Large -> 2x2 tiles, Huge -> 3x3, "
-            "Gargantuan -> 4x4. The `Creature` class does not store a "
-            "size category; `monsters.json` records `size` as a string "
-            "but no code (engine or client-2d) reads it to size the "
-            "creature's footprint. `EntityManager.get_at_position` "
-            "(client-2d/src/client_2d/entities/entity_manager.py) "
-            "treats every entity as a single-tile occupant. Tracked by "
-            "issue #442."
+            "Gargantuan -> 4x4. The `Size` enum and `Creature.size` field "
+            "DID ship (dnd_engine/core/creature.py:13, :155) but are a "
+            "data-model foundation only — nothing consumes them "
+            "geometrically. `SpatialIndex` maps each entity to a single "
+            "`Position` (dnd_engine/systems/spatial_index.py) with no "
+            "multi-tile footprint, and no SRD size->tile table exists in "
+            "dnd_engine/data/srd/. Tracked by issue #442."
         )
 
 
@@ -471,22 +514,26 @@ class TestMovingAroundOtherCreatures_PassThroughAllowed:
 
     def test_move_can_pass_through_an_allys_space(self) -> None:
         pytest.skip(
-            "GAP: the combat-move path treats any occupied destination "
-            "tile as blocked. `Session.combat_move` "
-            "(client-2d/src/client_2d/session.py:902-908) rejects any "
-            "monster at the destination with 'Path blocked!'; no "
-            "ally / incapacitated / size-relative carve-out is wired "
-            "up. Engine-side movement has no per-creature OAs or "
-            "pass-through query either. Tracked by issue #445."
+            "GAP: engine `attempt_combat_step` blanket-rejects any "
+            "occupied destination tile. The engine now owns tactical "
+            "movement (the rule no longer lives in the client): "
+            "`GameState.attempt_combat_step` "
+            "(dnd_engine/core/game_state.py) returns not-ok for any "
+            "occupant other than the mover, with no ally / Incapacitated "
+            "/ Tiny / two-sizes-apart carve-out, and `SpatialIndex` "
+            "(dnd_engine/systems/spatial_index.py) rejects all "
+            "double-occupancy. The pass-through query does not exist "
+            "engine-side. Tracked by issue #445."
         )
 
     def test_move_can_pass_through_incapacitated_creature(self) -> None:
         pytest.skip(
             "GAP: dependent on pass-through carve-outs existing (#445). "
-            "Per SRD, an Incapacitated creature does not block "
-            "movement. The combat-move path consults neither "
-            "`Creature.has_condition('incapacitated')` nor any size "
-            "comparison when rejecting a destination tile."
+            "Per SRD, an Incapacitated creature does not block movement. "
+            "`attempt_combat_step` (dnd_engine/core/game_state.py) "
+            "rejects on bare occupancy and never consults "
+            "`Creature.is_incapacitated()` (dnd_engine/core/creature.py) "
+            "or any size comparison. Tracked by issue #445."
         )
 
     def test_move_can_pass_through_tiny_creature(self) -> None:
@@ -516,12 +563,15 @@ class TestMovingAroundOtherCreatures_DifficultTerrain:
 
     def test_passing_through_creature_costs_double_movement(self) -> None:
         pytest.skip(
-            "GAP: depends on Difficult Terrain (#436) and the pass-"
-            "through carve-outs (#445). Even when pass-through is "
-            "allowed, the SRD imposes Difficult Terrain cost on the "
-            "space of a non-Tiny non-ally creature. Neither the cost "
-            "rule nor the carve-out exists today, so the combined "
-            "behavior has no enforcement path."
+            "GAP: depends on pass-through carve-outs (#445). NOTE: base "
+            "Difficult Terrain now ships — `cost_for` "
+            "(dnd_engine/systems/action_economy.py) and `Map.terrain_at` "
+            "(dnd_engine/core/map.py) drive a doubled per-foot cost inside "
+            "`attempt_combat_step`, so #436 is satisfied. What's missing "
+            "is treating an occupied non-ally non-Tiny space as Difficult "
+            "Terrain: `attempt_combat_step` rejects the occupied tile "
+            "outright before any creature-as-terrain cost can apply. "
+            "Blocked on #445."
         )
 
 
@@ -577,12 +627,16 @@ class TestMovingAroundOtherCreatures_CannotEndInOccupiedSpace:
 
     def test_involuntarily_ending_in_occupied_space_applies_prone(self) -> None:
         pytest.skip(
-            "GAP: the carve-out for involuntary co-occupancy is not "
-            "modeled. Per SRD, if a creature 'somehow' ends a turn in "
-            "a space with another (e.g., shoved, pulled by an effect), "
-            "it gains the Prone condition unless it is Tiny or larger "
-            "than the other creature. No engine path applies Prone on "
-            "involuntary co-occupancy. Tracked by issue #445."
+            "GAP: involuntary co-occupancy -> Prone is not modeled. "
+            "`attempt_combat_step` has an `involuntary` flag "
+            "(dnd_engine/core/game_state.py) but it only suppresses the "
+            "opportunity-attack publish; it does not permit co-occupancy "
+            "or apply Prone. `SpatialIndex` "
+            "(dnd_engine/systems/spatial_index.py) rejects any occupied "
+            "tile, so two creatures can never share a space, and no path "
+            "calls `add_condition('prone')` on forced co-occupancy "
+            "(size exception: Tiny or larger than the other). Tracked by "
+            "issue #445."
         )
 
 
@@ -595,26 +649,66 @@ class TestLeavingReach_ProvokesOpportunityAttack:
     movement side keeps the cross-reference live.
     """
 
+    @staticmethod
+    def _oa_setup() -> tuple[ReactionDispatcher, InitiativeTracker, Creature, Creature]:
+        """A reactor threatening a mover, wired through the OA dispatcher.
+
+        Reactor sits at (5, 5) with the default 5-ft reach; the mover is
+        a combatant so `publish_movement_provoke` can read its TurnState
+        (and honor a Disengage). Returns the dispatcher, tracker, reactor
+        and mover.
+        """
+        reactor = Creature(
+            name="Sentinel", max_hp=20, ac=15, abilities=Abilities(10, 10, 10, 10, 10, 10)
+        )
+        mover = Creature(
+            name="Runner", max_hp=20, ac=15, abilities=Abilities(10, 10, 10, 10, 10, 10)
+        )
+        tracker = InitiativeTracker(DiceRoller(seed=1))
+        tracker.add_combatant(reactor)
+        tracker.add_combatant(mover)
+        dispatcher = ReactionDispatcher(tracker)
+        register_default_opportunity_attack(
+            dispatcher, reactor, get_position=lambda: Position(5, 5)
+        )
+        return dispatcher, tracker, reactor, mover
+
     def test_moving_out_of_reach_during_own_turn_provokes(self) -> None:
-        pytest.skip(
-            "GAP: OAs do not fire on tactical movement out of reach. "
-            "The engine's only OA path is `flee_combat()` "
-            "(dnd_engine/core/game_state.py:4194), which is a "
-            "party-wide retreat trigger and does not introspect "
-            "per-creature reach against a moving creature's path. "
-            "`Session.combat_move` (client-2d/src/client_2d/session.py:871) "
-            "applies no OA hook when a creature steps off a tile "
-            "adjacent to an enemy. Tracked by issue #413 (depends on "
-            "#412 Reaction economy)."
+        """Stepping out of an adjacent enemy's reach provokes an OA that
+        consumes the reactor's Reaction. This is the movement-side audit
+        of the rule wired into `GameState.attempt_combat_step` ->
+        `publish_movement_provoke` (issue #413, depends on #412).
+        """
+        dispatcher, tracker, reactor, mover = self._oa_setup()
+        assert tracker.turn_states[reactor].reaction_available is True
+
+        # Mover steps from 5 ft (in reach) to 15 ft (out of reach).
+        outcomes = publish_movement_provoke(
+            dispatcher, mover=mover,
+            from_position=Position(6, 5), to_position=Position(8, 5),
         )
 
+        assert any(o.reacted for o in outcomes), "leaving reach did not provoke an OA"
+        assert tracker.turn_states[reactor].reaction_available is False
+
     def test_disengage_action_suppresses_movement_oa_provocation(self) -> None:
-        pytest.skip(
-            "GAP: Disengage is not a playable action. The string "
-            "'Disengage' appears only as flavor text in "
-            "dnd_engine/data/srd/classes.json (rogue cunning action) "
-            "and dnd_engine/data/srd/monsters.json (goblin Nimble "
-            "Escape, spy). No action handler, dispatcher, or "
-            "movement-flag is wired up. Tracked by issue #414 "
-            "(depends on #413 per-creature OAs)."
+        """Taking the Disengage action suppresses OA provocation for the
+        rest of the turn, preserving the reactor's Reaction. `disengage`
+        sets `TurnState.disengaged_this_turn`, which
+        `publish_movement_provoke` honors (issue #414, depends on #413).
+        """
+        dispatcher, tracker, reactor, mover = self._oa_setup()
+
+        # Mover takes the Disengage action this turn.
+        ok, reason = disengage(tracker.turn_states[mover])
+        assert ok is True, f"disengage failed: {reason}"
+        assert tracker.turn_states[mover].disengaged_this_turn is True
+
+        # The same out-of-reach step now provokes nothing.
+        outcomes = publish_movement_provoke(
+            dispatcher, mover=mover,
+            from_position=Position(6, 5), to_position=Position(8, 5),
         )
+
+        assert outcomes == [], "Disengage did not suppress OA provocation"
+        assert tracker.turn_states[reactor].reaction_available is True
