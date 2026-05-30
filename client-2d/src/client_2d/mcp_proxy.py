@@ -306,6 +306,23 @@ def create_proxy_server() -> FastMCP:
             return "Game not running. Use game_start() first."
         return await proxy.call_tool_async("game_wait")
 
+    @mcp.tool()
+    async def game_hide() -> str:
+        """Take the Hide action: a Dexterity (Stealth) check to become unseen.
+
+        Combat-turn action, available only when the surroundings allow it
+        (heavy obscurement or three-quarters cover — see Available Actions in
+        game_state). Hide spends your action but not your turn; attacking from
+        hidden grants advantage and reveals you.
+
+        Returns:
+            The Hide outcome (roll vs DC) and updated state, or a no-op
+            message when Hide isn't available.
+        """
+        if not game_manager.is_running:
+            return "Game not running. Use game_start() first."
+        return await proxy.call_tool_async("game_hide")
+
     # === Dev-Mode Tools (only registered when DND_DEBUG=1) ===
     # Forward to the matching tools on the game's embedded MCP server, which
     # itself only registers them when launched with --dev / DND_DEBUG=1.

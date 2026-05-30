@@ -50,6 +50,7 @@ class EmbeddedMCPServer:
         - game_move: Move party north/south/east/west
         - game_attack: Attack enemy by index in combat
         - game_wait: Pass turn in combat
+        - game_hide: Take the Hide action (Dexterity (Stealth) check)
 
     Note: Unlike the standalone mcp_server.py, this server does NOT
     have a game_new tool since the game is already running.
@@ -171,6 +172,29 @@ class EmbeddedMCPServer:
                 Updated game state after all enemy turns complete.
             """
             request = CommandRequest(command_type=CommandType.WAIT)
+            return bridge.submit_command(request, timeout=10.0)
+
+        @mcp.tool()
+        def game_hide() -> str:
+            """Take the Hide action: a Dexterity (Stealth) check to become unseen.
+
+            Only works during combat on a player's turn, and only when the
+            surroundings allow it (heavy obscurement or three-quarters cover —
+            check the Available Actions in game_state). The check is contested
+            against the most perceptive enemy's passive Perception.
+
+            Hide spends your action but NOT your turn — you keep any remaining
+            movement and can reposition, then game_wait() to end the turn.
+            Attacking from hidden grants advantage and reveals you.
+
+            Example:
+                game_hide()  # Roll Stealth; on success you become unseen
+
+            Returns:
+                The Hide outcome (roll vs DC, success/fail) and updated state.
+                A no-op message (not a crash) when Hide isn't available.
+            """
+            request = CommandRequest(command_type=CommandType.HIDE)
             return bridge.submit_command(request, timeout=10.0)
 
         if self._dev_mode:
