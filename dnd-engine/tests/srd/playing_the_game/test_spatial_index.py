@@ -361,3 +361,154 @@ class TestOccupantsView:
         assert isinstance(view, MappingProxyType)
         with pytest.raises(TypeError):
             view["intruder"] = Position(1, 1)  # type: ignore[index]
+
+
+class TestFootprint:
+    """SpatialIndex honors multi-tile creature footprints (#442).
+
+    SRD § Playing the Game › Movement and Position › Creature Size:
+    Large creatures fill a 2x2 block, Huge 3x3, Gargantuan 4x4. The
+    anchor Position is the minimum-x / minimum-y corner; the block
+    extends toward +x and +y.
+    """
+
+    def _clear_index(self, n: int = 6) -> SpatialIndex:
+        """A wall-free n x n index, for unobstructed footprint geometry."""
+        tiles = {(x, y): TileType.FLOOR for x in range(n) for y in range(n)}
+        return SpatialIndex(Map(width=n, height=n, tiles=tiles))
+
+    # -- pure geometry ---------------------------------------------------- #
+
+    def test_footprint_tiles_medium_is_single_anchor(self) -> None:
+        from dnd_engine.core.creature import Size
+
+        assert SpatialIndex.footprint_tiles(
+            Position(2, 2), Size.MEDIUM
+        ) == frozenset({Position(2, 2)})
+
+    def test_footprint_tiles_large_is_2x2_extending_positive(self) -> None:
+        from dnd_engine.core.creature import Size
+
+        assert SpatialIndex.footprint_tiles(Position(1, 1), Size.LARGE) == frozenset(
+            {Position(1, 1), Position(2, 1), Position(1, 2), Position(2, 2)}
+        )
+
+    def test_footprint_tiles_huge_is_3x3(self) -> None:
+        from dnd_engine.core.creature import Size
+
+        tiles = SpatialIndex.footprint_tiles(Position(0, 0), Size.HUGE)
+        assert tiles == frozenset(
+            Position(x, y) for x in range(3) for y in range(3)
+        )
+
+    # -- placement -------------------------------------------------------- #
+
+    def test_place_large_registers_full_2x2_footprint(self) -> None:
+        from dnd_engine.core.creature import Size
+
+        idx = self._clear_index()
+        idx.place("ogre", Position(1, 1), size=Size.LARGE)
+        assert idx.footprint_of("ogre") == frozenset(
+            {Position(1, 1), Position(2, 1), Position(1, 2), Position(2, 2)}
+        )
+
+    def test_occupant_at_is_footprint_aware(self) -> None:
+        from dnd_engine.core.creature import Size
+
+        idx = self._clear_index()
+        idx.place("ogre", Position(1, 1), size=Size.LARGE)
+        # The anchor and every covered tile resolve to the ogre.
+        assert idx.occupant_at(Position(1, 1)) == "ogre"
+        assert idx.occupant_at(Position(2, 1)) == "ogre"
+        assert idx.occupant_at(Position(2, 2)) == "ogre"
+        # A tile outside the footprint is clear; the anchor is the
+        # reported position.
+        assert idx.occupant_at(Position(3, 3)) is None
+        assert idx.position_of("ogre") == Position(1, 1)
+
+    def test_place_onto_existing_footprint_tile_raises(self) -> None:
+        from dnd_engine.core.creature import Size
+
+        idx = self._clear_index()
+        idx.place("ogre", Position(1, 1), size=Size.LARGE)
+        with pytest.raises(ValueError, match="occupied"):
+            idx.place("goblin", Position(2, 2))  # inside the ogre's 2x2 block
+
+    def test_place_footprint_off_map_raises(self) -> None:
+        from dnd_engine.core.creature import Size
+
+        idx = self._clear_index()  # 6x6, valid indices 0..5
+        with pytest.raises(ValueError, match="blocking"):
+            # A 2x2 anchored at (5,5) would spill onto x=6 / y=6.
+            idx.place("ogre", Position(5, 5), size=Size.LARGE)
+
+    def test_place_footprint_onto_wall_raises(self) -> None:
+        from dnd_engine.core.creature import Size
+
+        tiles = {(x, y): TileType.FLOOR for x in range(6) for y in range(6)}
+        tiles[(2, 1)] = TileType.WALL
+        idx = SpatialIndex(Map(width=6, height=6, tiles=tiles))
+        with pytest.raises(ValueError, match="blocking"):
+            # The 2x2 block from (1,1) covers the wall at (2,1).
+            idx.place("ogre", Position(1, 1), size=Size.LARGE)
+
+    def test_place_without_size_keeps_single_tile_behavior(self) -> None:
+        idx = self._clear_index()
+        idx.place("goblin", Position(2, 2))
+        assert idx.footprint_of("goblin") == frozenset({Position(2, 2)})
+        # Default size is Medium → one tile, leaving neighbors clear.
+        assert idx.occupant_at(Position(3, 2)) is None
+
+    # -- movement --------------------------------------------------------- #
+
+    def test_move_relocates_whole_block_and_clears_old_tiles(self) -> None:
+        from dnd_engine.core.creature import Size
+
+        idx = self._clear_index()
+        idx.place("ogre", Position(0, 0), size=Size.LARGE)
+        idx.move("ogre", Position(3, 3))
+        # Old tiles are vacated.
+        assert idx.occupant_at(Position(0, 0)) is None
+        assert idx.occupant_at(Position(1, 1)) is None
+        # The full new footprint is registered.
+        assert idx.footprint_of("ogre") == frozenset(
+            {Position(3, 3), Position(4, 3), Position(3, 4), Position(4, 4)}
+        )
+        assert idx.occupant_at(Position(4, 4)) == "ogre"
+
+    def test_move_into_own_overlapping_footprint_succeeds(self) -> None:
+        from dnd_engine.core.creature import Size
+
+        # Sliding a Large creature so the new block overlaps the old must
+        # not trip the occupied-tile guard against the creature itself.
+        idx = self._clear_index()
+        idx.place("ogre", Position(1, 1), size=Size.LARGE)
+        idx.move("ogre", Position(2, 2))  # new block overlaps old (2,2)
+        assert idx.position_of("ogre") == Position(2, 2)
+        assert idx.occupant_at(Position(1, 1)) is None
+        assert idx.occupant_at(Position(3, 3)) == "ogre"
+
+    def test_move_blocked_by_other_entity_in_target_footprint(self) -> None:
+        from dnd_engine.core.creature import Size
+
+        idx = self._clear_index()
+        idx.place("ogre", Position(0, 0), size=Size.LARGE)
+        idx.place("goblin", Position(3, 3))
+        with pytest.raises(ValueError, match="occupied"):
+            # The 2x2 block anchored at (2,2) would cover the goblin (3,3).
+            idx.move("ogre", Position(2, 2))
+
+    def test_remove_clears_entire_footprint(self) -> None:
+        from dnd_engine.core.creature import Size
+
+        idx = self._clear_index()
+        idx.place("ogre", Position(1, 1), size=Size.LARGE)
+        idx.remove("ogre")
+        for tile in (
+            Position(1, 1),
+            Position(2, 1),
+            Position(1, 2),
+            Position(2, 2),
+        ):
+            assert idx.occupant_at(tile) is None
+        assert idx.position_of("ogre") is None
