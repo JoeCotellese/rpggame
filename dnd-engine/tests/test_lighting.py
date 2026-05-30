@@ -438,3 +438,21 @@ class TestAttackVisibility:
         )
         assert result.advantage is False
         assert result.disadvantage is False
+
+    def test_heavy_fog_blinds_both_combatants_in_bright_light(
+        self, human_character, dwarf_character
+    ):
+        """Heavy fog Heavily Obscures the room, so attack_visibility reports
+        each combatant Unseen to the other — even in Bright Light and even
+        with darkvision, since fog is opaque to sight (issue #493)."""
+        from dnd_engine.systems.perception import VisibilityRelation
+
+        party = Party([human_character, dwarf_character])
+        game_state = GameState(party, "test_dungeon")
+        room = game_state.get_current_room()
+        room["lighting"] = "bright"
+        room["obscurement_sources"] = ["heavy_fog"]
+
+        saw_def, saw_atk = game_state.attack_visibility(human_character, dwarf_character)
+        assert saw_def == VisibilityRelation.UNSEEN
+        assert saw_atk == VisibilityRelation.UNSEEN

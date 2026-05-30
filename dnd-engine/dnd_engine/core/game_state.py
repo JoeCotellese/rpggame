@@ -32,8 +32,11 @@ from dnd_engine.systems.opportunity_attacks import (
 )
 from dnd_engine.systems.perception import (
     LightLevel,
+    Obscurement,
     VisibilityRelation,
     compute_visibility,
+    obscurement_from_sources,
+    relies_on_sight,
 )
 from dnd_engine.systems.reactions import ReactionDispatcher
 from dnd_engine.systems.spatial_index import SpatialIndex
@@ -1343,15 +1346,49 @@ class GameState:
         # Otherwise, return base room lighting
         return base_lighting
 
+    def ambient_obscurement(self) -> "Obscurement":
+        """Resolve the current room's ambient obscurement from environmental sources.
+
+        Reads the room's data-driven ``obscurement_sources`` (fog,
+        foliage) plus any active area effects that declare an
+        ``obscurement_source`` (e.g. the fog_cloud / poison_cloud
+        spells), and combines them into the worst applicable
+        ``Obscurement``. This is *additional* to lighting:
+        ``_apply_lighting_penalties`` and the perception model take the
+        worse of this and the lighting-derived obscurement.
+
+        Returns ``Obscurement.CLEAR`` when no room is resolvable (e.g.
+        combat-only states that never bootstrapped a dungeon).
+        """
+        try:
+            room = self.get_current_room()
+        except (KeyError, AttributeError, TypeError):
+            return Obscurement.CLEAR
+
+        sources: list[str] = list(room.get("obscurement_sources", []))
+        for effect in self.time_manager.active_effects:
+            source = effect.effect_data.get("obscurement_source")
+            if source:
+                sources.append(str(source))
+
+        return obscurement_from_sources(sources)
+
     def _apply_lighting_penalties(
         self, character: "Character", skill: str, dc: int, action: str
     ) -> tuple[bool, bool, dict[str, Any] | None]:
         """
-        Apply lighting penalties to a skill check.
+        Apply obscurement penalties to a sight-based skill check.
 
-        For sight-based checks (Perception) in poor lighting:
-        - Dim light: Apply disadvantage
-        - Darkness: Auto-fail
+        For checks that rely on sight, in a Lightly or Heavily Obscured
+        area (SRD § Obscured Areas):
+        - Lightly Obscured (Dim Light, patchy fog, moderate foliage):
+          Apply disadvantage.
+        - Heavily Obscured (Darkness, heavy fog, dense foliage): Auto-fail
+          (the Blinded-against-that-area consequence).
+
+        Obscurement is the worse of the lighting-derived level and the
+        room's ambient sources (``ambient_obscurement``), so a heavily
+        fogged room auto-fails sight-based checks even in Bright Light.
 
         Args:
             character: Character making the check
@@ -1361,16 +1398,18 @@ class GameState:
 
         Returns:
             Tuple of (should_continue, has_disadvantage, check_result_if_autofail)
-            - should_continue: False if check auto-failed in darkness
+            - should_continue: False if check auto-failed (heavily obscured)
             - has_disadvantage: True if check should be made with disadvantage
             - check_result_if_autofail: The failed check result dict if auto-failed, None otherwise
         """
-        if skill != "perception":
+        if not relies_on_sight(skill):
             return True, False, None
 
         lighting = self.get_effective_lighting(character)
-        if lighting == "dark":
-            # In complete darkness, sight-based Perception checks auto-fail
+        obscurement = self.ambient_obscurement()
+        if lighting == "dark" or obscurement == Obscurement.HEAVILY:
+            # Heavily Obscured: a creature trying to see is effectively
+            # Blinded, so sight-based checks auto-fail.
             check_result = {
                 "skill": skill,
                 "dc": dc,
@@ -1393,12 +1432,13 @@ class GameState:
                         "success": False,
                         "action": action,
                         "success_text": None,
-                        "failure_text": "You can't see anything in the complete darkness",
+                        "failure_text": "You can't see well enough to make anything out",
                     },
                 )
             )
             return False, False, check_result
-        elif lighting == "dim":
+        elif lighting == "dim" or obscurement == Obscurement.LIGHTLY:
+            # Lightly Obscured: disadvantage on the sight-based check.
             return True, True, None
 
         return True, False, None
@@ -1444,12 +1484,17 @@ class GameState:
         The engine's core combat is non-positional, so distance defaults
         to melee (0 ft) — every ranged special sense comfortably reaches,
         which is the relation that matters for adjacent attacks. Lighting
-        is room-wide at this layer, matching the rest of the engine's
-        Vision and Light model.
+        and ambient obscurement (fog, foliage) are room-wide at this
+        layer, matching the rest of the engine's Vision and Light model.
         """
         light_level = self._ambient_light_level()
-        attacker_sees_defender = compute_visibility(attacker, defender, light_level=light_level)
-        defender_sees_attacker = compute_visibility(defender, attacker, light_level=light_level)
+        obscurement = self.ambient_obscurement()
+        attacker_sees_defender = compute_visibility(
+            attacker, defender, light_level=light_level, obscurement=obscurement
+        )
+        defender_sees_attacker = compute_visibility(
+            defender, attacker, light_level=light_level, obscurement=obscurement
+        )
         return attacker_sees_defender, defender_sees_attacker
 
     def get_available_actions(self) -> list[str]:

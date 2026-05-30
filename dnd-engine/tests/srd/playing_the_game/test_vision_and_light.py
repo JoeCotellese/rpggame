@@ -94,20 +94,20 @@ class TestVisionAndLight_Intro:
     """
 
     def test_perception_in_darkness_is_affected_by_sight(self):
-        """Sight-based Perception auto-fails in darkness (the "noticing danger" branch).
+        """Sight-based checks auto-fail in darkness (the "noticing danger" branch).
 
         The SRD's first promise — that "noticing danger" is sight-
         affected — has a real engine implementation in
         `GameState._apply_lighting_penalties`
         (`dnd-engine/dnd_engine/core/game_state.py:698-756`): in dark
-        rooms, sight-based Perception is short-circuited with an
-        auto-fail result. The path is gated to the literal "perception"
-        skill only, but the intro promise that *some* sight check
-        respects darkness is honored.
+        rooms, sight-based checks are short-circuited with an auto-fail
+        result. The path gates on sight-reliance via `relies_on_sight`
+        (Perception, Investigation, Insight, Medicine, Survival), so the
+        intro promise that sight checks respect darkness is honored.
         """
         src = inspect.getsource(GameState._apply_lighting_penalties)
-        assert "perception" in src.lower(), (
-            "Sight-based Perception must be a recognized branch of the "
+        assert "relies_on_sight" in src or "sight" in src.lower(), (
+            "Sight-based checks must be a recognized branch of the "
             "lighting-penalty logic so 'effects that obscure vision can "
             "hinder you' has at least one enforcement site."
         )
@@ -243,15 +243,43 @@ class TestVisionAndLight_ObscuredAreas:
         )
 
     def test_lightly_obscured_disadvantage_extends_to_all_sight_based_wis_checks(self):
-        pytest.skip(
-            "GAP: the dim-light disadvantage in `GameState."
-            "_apply_lighting_penalties` (`dnd-engine/dnd_engine/core/"
-            "game_state.py:720-721`) is gated to the literal "
-            "'perception' skill. Other sight-based WIS checks (Insight, "
-            "Medicine, Survival) and non-WIS sight-based checks "
-            "(Investigation — INT, Sleight of Hand observation — DEX) "
-            "get no penalty. Tracked by issue #493."
+        """Disadvantage in a Lightly Obscured area is not gated to literal "perception".
+
+        The SRD imposes Disadvantage on sight-based checks in a Lightly
+        Obscured area. The engine classifies sight-reliance via
+        `relies_on_sight`, so Investigation, Insight, Medicine, and
+        Survival — not just the literal "perception" skill — take
+        Disadvantage in Dim Light, and a non-sight skill is unaffected.
+        (issue #493)
+        """
+        from dnd_engine.systems.perception import relies_on_sight
+
+        assert relies_on_sight("perception") is True
+        assert relies_on_sight("investigation") is True
+        assert relies_on_sight("insight") is True
+        assert relies_on_sight("athletics") is False
+
+        char = _make_human_character()
+        party = Party([char])
+        game_state = GameState(party, "crypt", campaign_id="the_unquiet_dead")
+        game_state.current_room_id = "crypt.hall_of_the_dead"
+        room = game_state.get_current_room()
+        room["lighting"] = "dim"
+        room["obscurement_sources"] = []
+
+        # A sight-based check other than the literal "perception" skill
+        # still takes Disadvantage in Dim Light.
+        should_continue, disadvantage, _auto_fail = game_state._apply_lighting_penalties(
+            char, "investigation", dc=10, action="search for tracks"
         )
+        assert should_continue is True
+        assert disadvantage is True
+
+        # A non-sight skill is unaffected by the obscured area.
+        should_continue, disadvantage, _auto_fail = game_state._apply_lighting_penalties(
+            char, "athletics", dc=10, action="climb the wall"
+        )
+        assert disadvantage is False
 
     def test_heavily_obscured_concept_exists_in_engine(self):
         """The Heavily Obscured concept is a first-class engine state.
@@ -293,31 +321,85 @@ class TestVisionAndLight_ObscuredAreas:
         )
 
     def test_heavily_obscured_applies_blinded_condition_when_trying_to_see(self):
-        pytest.skip(
-            "GAP: the SRD specifies the Blinded *condition* applies "
-            "while trying to see into a heavily obscured area. The "
-            "`blinded` condition exists as a string only — referenced "
-            "by `dnd-engine/dnd_engine/systems/ranged_attacks.py:71` "
-            "(close-combat ranged disadvantage) and as a monster "
-            "`condition_immunity` in `monsters.json:661`. No code "
-            "applies the condition to a creature looking into a "
-            "heavily obscured area. The Blinded condition is not even "
-            "in `dnd-engine/dnd_engine/data/srd/conditions.json` (only "
-            "`on_fire` and `surprised` are catalogued there). Tracked "
-            "by issue #493."
+        """The Blinded condition is catalogued and has teeth in the perception model.
+
+        The SRD: a creature trying to see into a Heavily Obscured area
+        has the Blinded condition with respect to that area. Blinded is a
+        first-class catalogued condition, and the perception model honors
+        it — a Blinded observer cannot see its target even in Bright,
+        clear conditions. (issue #493)
+        """
+        import json
+        from pathlib import Path
+
+        from dnd_engine.systems.perception import (
+            LightLevel,
+            VisibilityRelation,
+            compute_visibility,
         )
 
-    def test_obscurement_sources_are_data_driven(self):
-        pytest.skip(
-            "GAP: the SRD lists six environmental triggers for "
-            "obscurement — Dim Light, patchy fog, moderate foliage "
-            "(lightly); Darkness, heavy fog, dense foliage (heavily). "
-            "Only `room.lighting` (`dnd-engine/dnd_engine/core/"
-            "game_state.py:677`) is consulted by `get_effective_"
-            "lighting`. Fog, foliage, and other obscurement sources "
-            "have no data model on rooms or per-tile in client-2d. "
-            "Tracked by issue #493."
+        conditions_path = (
+            Path(__file__).resolve().parents[3] / "dnd_engine" / "data" / "srd" / "conditions.json"
         )
+        conditions = json.loads(conditions_path.read_text())["conditions"]
+        assert "blinded" in conditions, (
+            "The Blinded condition must be catalogued in conditions.json "
+            "so the Heavily-Obscured 'Blinded against that area' rule has "
+            "a first-class data presence."
+        )
+        assert "sight" in json.dumps(conditions["blinded"]).lower(), (
+            "The catalogued Blinded condition must describe its sight "
+            "consequence (can't see / auto-fails checks that require sight)."
+        )
+
+        # The condition has teeth: a Blinded observer cannot see its
+        # target, even in Bright Light with no obscurement.
+        observer = _make_human_character()
+        target = _make_human_character()
+        observer.add_condition("blinded")
+        relation = compute_visibility(observer, target, light_level=LightLevel.BRIGHT)
+        assert relation == VisibilityRelation.UNSEEN
+
+    def test_obscurement_sources_are_data_driven(self):
+        """Obscurement is derivable from data-driven environmental sources.
+
+        The SRD lists six environmental triggers for obscurement — Dim
+        Light, patchy fog, moderate foliage (Lightly); Darkness, heavy
+        fog, dense foliage (Heavily). Beyond room lighting, fog and
+        foliage are sourced from room data (`obscurement_sources`) and
+        combined into the effective `Obscurement` that sight-based rules
+        consult. (issue #493)
+        """
+        from dnd_engine.systems.perception import (
+            Obscurement,
+            obscurement_from_sources,
+        )
+
+        # Named environmental sources map onto obscurement severity.
+        assert obscurement_from_sources([]) == Obscurement.CLEAR
+        assert obscurement_from_sources(["patchy_fog"]) == Obscurement.LIGHTLY
+        assert obscurement_from_sources(["moderate_foliage"]) == Obscurement.LIGHTLY
+        assert obscurement_from_sources(["heavy_fog"]) == Obscurement.HEAVILY
+        assert obscurement_from_sources(["dense_foliage"]) == Obscurement.HEAVILY
+        # Stacked sources take the worse of the two.
+        assert obscurement_from_sources(["patchy_fog", "dense_foliage"]) == Obscurement.HEAVILY
+
+        # Room data carries the sources, and GameState resolves them into
+        # the ambient obscurement the sight-based rules consult.
+        char = _make_human_character()
+        party = Party([char])
+        game_state = GameState(party, "crypt", campaign_id="the_unquiet_dead")
+        game_state.current_room_id = "crypt.hall_of_the_dead"
+        room = game_state.get_current_room()
+        room["lighting"] = "bright"
+        room["obscurement_sources"] = ["heavy_fog"]
+        assert game_state.ambient_obscurement() == Obscurement.HEAVILY
+        # A heavily obscured area auto-fails a sight-based check even in
+        # Bright Light — the Blinded-against-that-area consequence.
+        should_continue, _disadvantage, _auto_fail = game_state._apply_lighting_penalties(
+            char, "perception", dc=10, action="spot the ambush"
+        )
+        assert should_continue is False
 
 
 class TestVisionAndLight_Light:

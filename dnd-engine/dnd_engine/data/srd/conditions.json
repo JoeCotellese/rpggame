@@ -35,6 +35,16 @@
       "duration_type": "end_of_first_turn",
       "turn_start_message": "⚠️  {creature_name} is SURPRISED and cannot act this turn!",
       "turn_end_removal": true
+    },
+    "blinded": {
+      "name": "Blinded",
+      "description": "A Blinded creature can't see and automatically fails any ability check that requires sight. Attack rolls against the creature have Advantage, and the creature's attack rolls have Disadvantage. A creature trying to see into a Heavily Obscured area is Blinded with respect to that area.",
+      "effects": {
+        "cannot_see": true,
+        "auto_fail_sight_checks": true,
+        "attacks_against_have_advantage": true,
+        "attacks_have_disadvantage": true
+      }
     }
   }
 }
