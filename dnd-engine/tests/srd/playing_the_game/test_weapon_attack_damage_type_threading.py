@@ -207,3 +207,54 @@ class TestEnemyTurnDamageType:
         assert normal.hit and resisted.hit
         assert normal.damage > 1
         assert resisted.damage == normal.damage // 2
+
+
+def _run_combat_attack_item(data_loader, item_id, *, seed, resistances=None):
+    """Throw a combat attack item (acid_vial → acid) at an always-hit dummy.
+    Returns the AttackResult. Same seed -> identical attack and damage rolls.
+    """
+    dice_roller = DiceRoller(seed=seed)
+    fighter = Character(
+        name="Conan",
+        character_class=CharacterClass.FIGHTER,
+        level=3,
+        abilities=Abilities(16, 14, 14, 10, 10, 10),
+        max_hp=28,
+        ac=16,
+    )
+    fighter.inventory.add_item(item_id, "consumables", 1)
+    target = Creature(name="Dummy", max_hp=999, ac=1, abilities=Abilities(8, 14, 10, 10, 8, 8))
+    if resistances:
+        target.damage_resistances = resistances
+    gs = GameState(
+        party=Party([fighter]),
+        dungeon_name="test_dungeon",
+        event_bus=EventBus(),
+        data_loader=data_loader,
+        dice_roller=dice_roller,
+    )
+    gs.active_enemies = [target]
+    gs.in_combat = True
+    gs.initiative_tracker = InitiativeTracker(dice_roller=dice_roller)
+    gs.initiative_tracker.combatants = [
+        InitiativeEntry(creature=fighter, initiative_roll=20),
+        InitiativeEntry(creature=target, initiative_roll=10),
+    ]
+    gs.initiative_tracker.turn_states[fighter] = TurnState()
+    gs.initiative_tracker.turn_states[target] = TurnState()
+    gs.initiative_tracker.round_number = 1
+    gs.initiative_tracker.current_turn_index = 0  # fighter's turn
+    return gs.use_combat_attack_item(fighter, item_id, target).attack_result
+
+
+class TestCombatAttackItemDamageType:
+    def test_thrown_item_respects_target_resistance(self, data_loader):
+        """An acid vial (acid) is halved against an acid-resistant target."""
+        normal = _run_combat_attack_item(data_loader, "acid_vial", seed=3)
+        resisted = _run_combat_attack_item(
+            data_loader, "acid_vial", seed=3, resistances=["acid"]
+        )
+
+        assert normal.hit and resisted.hit
+        assert normal.damage > 1
+        assert resisted.damage == normal.damage // 2

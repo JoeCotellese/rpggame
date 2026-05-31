@@ -5669,6 +5669,7 @@ class GameState:
 
         # Get damage from item
         damage_dice = used_item_data.get("damage", "1d4")
+        damage_type = used_item_data.get("damage_type")
 
         # Resolve the attack
         attacker_sees_defender, defender_sees_attacker = self.attack_visibility(user, target)
@@ -5680,6 +5681,7 @@ class GameState:
             apply_damage=True,
             event_bus=self.event_bus,
             game_state=self,
+            damage_type=damage_type,
             attacker_sees_defender=attacker_sees_defender,
             defender_sees_attacker=defender_sees_attacker,
         )
