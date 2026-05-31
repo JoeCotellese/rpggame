@@ -1250,6 +1250,7 @@ class GameState:
             damage_dice=action["damage"],
             apply_damage=True,
             game_state=self,
+            damage_type=action.get("damage_type"),
             attacker_sees_defender=attacker_sees_defender,
             defender_sees_attacker=defender_sees_attacker,
         )
@@ -3163,6 +3164,7 @@ class GameState:
             damage_dice = weapon_data.get("damage", "1d8")
             damage_dice = format_dice_with_modifier(damage_dice, damage_bonus)
             weapon_name = weapon_data.get("name", equipped_weapon)
+            damage_type = weapon_data.get("damage_type")
 
             # Check if weapon requires ammunition
             weapon_properties = weapon_data.get("properties", [])
@@ -3194,6 +3196,8 @@ class GameState:
             damage_bonus = attacker.melee_damage_bonus
             damage_dice = format_dice_with_modifier("1d8", damage_bonus)
             weapon_name = "unarmed strike"
+            # SRD § Unarmed Strike: deals bludgeoning damage.
+            damage_type = "bludgeoning"
 
         # Resolve attack via combat engine
         attacker_sees_defender, defender_sees_attacker = self.attack_visibility(attacker, target)
@@ -3205,6 +3209,7 @@ class GameState:
             disadvantage=disadvantage,
             apply_damage=True,
             game_state=self,
+            damage_type=damage_type,
             attacker_sees_defender=attacker_sees_defender,
             defender_sees_attacker=defender_sees_attacker,
         )
@@ -5160,6 +5165,7 @@ class GameState:
             event_bus=self.event_bus,
             action=action,
             game_state=self,
+            damage_type=action.get("damage_type"),
             attacker_sees_defender=attacker_sees_defender,
             defender_sees_attacker=defender_sees_attacker,
         )
@@ -5663,6 +5669,7 @@ class GameState:
 
         # Get damage from item
         damage_dice = used_item_data.get("damage", "1d4")
+        damage_type = used_item_data.get("damage_type")
 
         # Resolve the attack
         attacker_sees_defender, defender_sees_attacker = self.attack_visibility(user, target)
@@ -5674,6 +5681,7 @@ class GameState:
             apply_damage=True,
             event_bus=self.event_bus,
             game_state=self,
+            damage_type=damage_type,
             attacker_sees_defender=attacker_sees_defender,
             defender_sees_attacker=defender_sees_attacker,
         )
