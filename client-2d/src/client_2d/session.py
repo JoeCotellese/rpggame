@@ -398,6 +398,14 @@ class GameSession:
         self.party_spread = True
         self._update_lighting()
 
+        # Activate the engine spatial/movement stack now that every combatant
+        # is placed: bootstrap the SpatialIndex from the room layout and wire
+        # Opportunity Attack handlers so combat movement provokes. This is the
+        # single combat-start seam for the normal flow — initialize(),
+        # _transition_room(), and the spawn_monster room-entry path all funnel
+        # through here. The scenario path bootstraps separately (#613).
+        self._bootstrap_spatial()
+
     def _bootstrap_spatial(self) -> None:
         """Install the engine ``SpatialIndex`` and place every combatant.
 
