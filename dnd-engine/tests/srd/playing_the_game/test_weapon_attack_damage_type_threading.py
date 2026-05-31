@@ -24,7 +24,9 @@ def data_loader():
 @pytest.fixture
 def fighter_abilities():
     # STR 16 (+3): longsword (slashing) and unarmed strike both swing off STR.
-    return Abilities(strength=16, dexterity=14, constitution=14, intelligence=10, wisdom=12, charisma=8)
+    return Abilities(
+        strength=16, dexterity=14, constitution=14, intelligence=10, wisdom=12, charisma=8
+    )
 
 
 def _make_fighter(abilities, *, with_weapon=True):
@@ -87,9 +89,7 @@ class TestPlayerWeaponDamageType:
         """A target vulnerable to slashing takes double from a longsword."""
         fighter = _make_fighter(fighter_abilities)
         normal = _run_player_attack(data_loader, fighter, seed=7)
-        vulnerable = _run_player_attack(
-            data_loader, fighter, seed=7, vulnerabilities=["slashing"]
-        )
+        vulnerable = _run_player_attack(data_loader, fighter, seed=7, vulnerabilities=["slashing"])
 
         assert normal.hit and vulnerable.hit
         assert vulnerable.damage == normal.damage * 2
@@ -98,9 +98,7 @@ class TestPlayerWeaponDamageType:
         """An unarmed strike is bludgeoning, so bludgeoning resistance halves it."""
         fighter = _make_fighter(fighter_abilities, with_weapon=False)
         normal = _run_player_attack(data_loader, fighter, seed=7)
-        resisted = _run_player_attack(
-            data_loader, fighter, seed=7, resistances=["bludgeoning"]
-        )
+        resisted = _run_player_attack(data_loader, fighter, seed=7, resistances=["bludgeoning"])
 
         assert normal.hit and resisted.hit
         assert normal.damage > 1
@@ -114,7 +112,9 @@ class TestUntypedItemDamage:
         """A fire-immune creature takes FULL damage from an untyped item."""
         from dnd_engine.systems.item_effects import _apply_damage_effect
 
-        target = Creature(name="Fire Elemental", max_hp=50, ac=10, abilities=Abilities(10, 10, 10, 10, 10, 10))
+        target = Creature(
+            name="Fire Elemental", max_hp=50, ac=10, abilities=Abilities(10, 10, 10, 10, 10, 10)
+        )
         target.damage_immunities = ["fire"]
         item_info = {"name": "Mystery Vial", "damage": "2d6"}  # no damage_type
 
@@ -127,7 +127,9 @@ class TestUntypedItemDamage:
         """The result message for untyped damage omits a damage-type word."""
         from dnd_engine.systems.item_effects import _apply_damage_effect
 
-        target = Creature(name="Dummy", max_hp=50, ac=10, abilities=Abilities(10, 10, 10, 10, 10, 10))
+        target = Creature(
+            name="Dummy", max_hp=50, ac=10, abilities=Abilities(10, 10, 10, 10, 10, 10)
+        )
         item_info = {"name": "Mystery Vial", "damage": "2d6"}  # no damage_type
 
         result = _apply_damage_effect(item_info, target, DiceRoller(seed=1), event_bus=None)
@@ -280,9 +282,7 @@ class TestCombatAttackItemDamageType:
     def test_thrown_item_respects_target_resistance(self, data_loader):
         """An acid vial (acid) is halved against an acid-resistant target."""
         normal = _run_combat_attack_item(data_loader, "acid_vial", seed=3)
-        resisted = _run_combat_attack_item(
-            data_loader, "acid_vial", seed=3, resistances=["acid"]
-        )
+        resisted = _run_combat_attack_item(data_loader, "acid_vial", seed=3, resistances=["acid"])
 
         assert normal.hit and resisted.hit
         assert normal.damage > 1

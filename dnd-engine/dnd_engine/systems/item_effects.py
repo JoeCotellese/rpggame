@@ -258,9 +258,7 @@ def _apply_damage_effect(
         elif is_vulnerable:
             message = f"{target.name} takes {actual_damage} {type_word}damage ({damage_roll_str}, doubled by vulnerability)"
         else:
-            message = (
-                f"{target.name} takes {actual_damage} {type_word}damage ({damage_roll_str})"
-            )
+            message = f"{target.name} takes {actual_damage} {type_word}damage ({damage_roll_str})"
 
         if not target.is_alive:
             message += " - KILLED!"
