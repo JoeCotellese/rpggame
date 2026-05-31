@@ -107,6 +107,35 @@ class TestPlayerWeaponDamageType:
         assert resisted.damage == normal.damage // 2
 
 
+class TestUntypedItemDamage:
+    """#598: a damage item with no declared damage_type is untyped, not fire."""
+
+    def test_untyped_item_is_not_treated_as_fire(self):
+        """A fire-immune creature takes FULL damage from an untyped item."""
+        from dnd_engine.systems.item_effects import _apply_damage_effect
+
+        target = Creature(name="Fire Elemental", max_hp=50, ac=10, abilities=Abilities(10, 10, 10, 10, 10, 10))
+        target.damage_immunities = ["fire"]
+        item_info = {"name": "Mystery Vial", "damage": "2d6"}  # no damage_type
+
+        result = _apply_damage_effect(item_info, target, DiceRoller(seed=1), event_bus=None)
+
+        assert result.amount > 0, "untyped damage must not be zeroed by fire immunity"
+        assert target.current_hp < 50
+
+    def test_untyped_item_message_has_no_type_word(self):
+        """The result message for untyped damage omits a damage-type word."""
+        from dnd_engine.systems.item_effects import _apply_damage_effect
+
+        target = Creature(name="Dummy", max_hp=50, ac=10, abilities=Abilities(10, 10, 10, 10, 10, 10))
+        item_info = {"name": "Mystery Vial", "damage": "2d6"}  # no damage_type
+
+        result = _apply_damage_effect(item_info, target, DiceRoller(seed=1), event_bus=None)
+
+        assert "None" not in result.message
+        assert "fire" not in result.message.lower()
+
+
 def _floor_map(size: int = 7) -> Map:
     tiles = {(x, y): TileType.FLOOR for x in range(size) for y in range(size)}
     return Map(width=size, height=size, tiles=tiles)

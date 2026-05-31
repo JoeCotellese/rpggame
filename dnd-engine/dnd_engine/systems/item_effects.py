@@ -189,7 +189,11 @@ def _apply_damage_effect(
         ItemEffectResult with damage details
     """
     damage_dice = item_info.get("damage", "1d4")
-    damage_type = item_info.get("damage_type", "fire")
+    # A missing damage_type means conceptually untyped damage. The pipeline
+    # treats None as "no per-type scaling" (no Immunity/Resistance can apply),
+    # so do not fabricate a type — defaulting to a real type (e.g. "fire")
+    # would wrongly let fire Immunity/Resistance/Vulnerability touch it.
+    damage_type = item_info.get("damage_type")
     item_name = item_info.get("name", "Unknown Damage Item")
 
     # Roll damage dice
@@ -245,14 +249,17 @@ def _apply_damage_effect(
         else:
             message = f"{target.name} takes no damage"
     else:
+        # Untyped damage (damage_type is None) names no type; typed damage
+        # includes the type word ("7 fire damage" vs "7 damage").
+        type_word = f"{damage_type} " if damage_type else ""
         # Annotate the modifier the pipeline applied, if any.
         if has_resistance:
-            message = f"{target.name} takes {actual_damage} {damage_type} damage ({damage_roll_str}, halved by resistance)"
+            message = f"{target.name} takes {actual_damage} {type_word}damage ({damage_roll_str}, halved by resistance)"
         elif is_vulnerable:
-            message = f"{target.name} takes {actual_damage} {damage_type} damage ({damage_roll_str}, doubled by vulnerability)"
+            message = f"{target.name} takes {actual_damage} {type_word}damage ({damage_roll_str}, doubled by vulnerability)"
         else:
             message = (
-                f"{target.name} takes {actual_damage} {damage_type} damage ({damage_roll_str})"
+                f"{target.name} takes {actual_damage} {type_word}damage ({damage_roll_str})"
             )
 
         if not target.is_alive:
