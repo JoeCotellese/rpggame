@@ -7,6 +7,7 @@ from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities, Creature
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.game_state import GameState
+from dnd_engine.core.map import Map, TileType
 from dnd_engine.core.party import Party
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.systems.action_economy import TurnState
@@ -104,6 +105,61 @@ class TestPlayerWeaponDamageType:
         assert normal.hit and resisted.hit
         assert normal.damage > 1
         assert resisted.damage == normal.damage // 2
+
+
+def _floor_map(size: int = 7) -> Map:
+    tiles = {(x, y): TileType.FLOOR for x in range(size) for y in range(size)}
+    return Map(width=size, height=size, tiles=tiles)
+
+
+def _run_opportunity_attack(data_loader, *, resistances=None):
+    """Provoke a goblin Opportunity Attack (Scimitar → slashing) against an
+    AC-1 fighter and return the HP the fighter lost. Fixed seed -> identical
+    OA roll, so resistance is the only variable.
+    """
+    fighter = Character(
+        name="Fighter 1",
+        character_class=CharacterClass.FIGHTER,
+        level=1,
+        abilities=Abilities(15, 14, 13, 10, 12, 8),
+        max_hp=30,
+        ac=1,  # the OA reliably connects
+    )
+    if resistances:
+        fighter.damage_resistances = resistances
+    gs = GameState(
+        party=Party(characters=[fighter]),
+        dungeon_name="test_dungeon",
+        event_bus=EventBus(),
+        data_loader=data_loader,
+        dice_roller=DiceRoller(seed=1),
+    )
+    gs.bootstrap_spatial(_floor_map())
+    goblin = gs.data_loader.create_monster("goblin")
+    gs.active_enemies.append(goblin)
+    pc_id = f"pc_{fighter.name.lower().replace(' ', '_')}"
+    gs.set_position("goblin_0", 3, 3)
+    gs.set_position(pc_id, 3, 4)  # 5 ft south — within the goblin's reach
+    gs._start_combat()
+    fighter_idx = next(
+        i for i, e in enumerate(gs.initiative_tracker.combatants) if e.creature is fighter
+    )
+    gs.initiative_tracker.current_turn_index = fighter_idx
+    gs.initiative_tracker.turn_states[fighter].reset(speed=fighter.speed)
+
+    hp_before = fighter.current_hp
+    gs.attempt_combat_step(pc_id, 0, 1)  # step out of reach -> provokes the OA
+    return hp_before - fighter.current_hp
+
+
+class TestOpportunityAttackDamageType:
+    def test_opportunity_attack_respects_target_resistance(self, data_loader):
+        """A connecting goblin OA (slashing) is halved against a slashing-resistant PC."""
+        normal_loss = _run_opportunity_attack(data_loader)
+        resisted_loss = _run_opportunity_attack(data_loader, resistances=["slashing"])
+
+        assert normal_loss > 1, "OA must connect for a non-trivial amount"
+        assert resisted_loss == normal_loss // 2
 
 
 def _run_enemy_turn(data_loader, *, seed, resistances=None):
