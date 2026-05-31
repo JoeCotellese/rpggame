@@ -9,6 +9,8 @@ from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.game_state import GameState
 from dnd_engine.core.party import Party
 from dnd_engine.rules.loader import DataLoader
+from dnd_engine.systems.action_economy import TurnState
+from dnd_engine.systems.initiative import InitiativeEntry, InitiativeTracker
 from dnd_engine.systems.inventory import EquipmentSlot
 from dnd_engine.utils.events import EventBus
 
@@ -98,6 +100,53 @@ class TestPlayerWeaponDamageType:
         resisted = _run_player_attack(
             data_loader, fighter, seed=7, resistances=["bludgeoning"]
         )
+
+        assert normal.hit and resisted.hit
+        assert normal.damage > 1
+        assert resisted.damage == normal.damage // 2
+
+
+def _run_enemy_turn(data_loader, *, seed, resistances=None):
+    """Run one goblin enemy turn (Scimitar → slashing) against a PC that always
+    gets hit. Returns the AttackResult. Same seed -> identical rolls.
+    """
+    dice_roller = DiceRoller(seed=seed)
+    fighter = Character(
+        name="Conan",
+        character_class=CharacterClass.FIGHTER,
+        level=3,
+        abilities=Abilities(16, 12, 14, 10, 10, 10),
+        max_hp=999,  # survives, so damage is never HP-capped
+        ac=1,  # guarantees the goblin lands its attack
+    )
+    if resistances:
+        fighter.damage_resistances = resistances
+    goblin = Creature(name="Goblin", max_hp=7, ac=13, abilities=Abilities(8, 14, 10, 10, 8, 8))
+    gs = GameState(
+        party=Party([fighter]),
+        dungeon_name="test_dungeon",
+        event_bus=EventBus(),
+        data_loader=data_loader,
+        dice_roller=dice_roller,
+    )
+    gs.active_enemies = [goblin]
+    gs.in_combat = True
+    gs.initiative_tracker = InitiativeTracker(dice_roller=dice_roller)
+    gs.initiative_tracker.combatants = [
+        InitiativeEntry(creature=goblin, initiative_roll=20),
+        InitiativeEntry(creature=fighter, initiative_roll=10),
+    ]
+    gs.initiative_tracker.turn_states[goblin] = TurnState()
+    gs.initiative_tracker.turn_states[fighter] = TurnState()
+    gs.initiative_tracker.round_number = 1
+    return gs.process_enemy_turn().attack_result
+
+
+class TestEnemyTurnDamageType:
+    def test_enemy_attack_respects_target_resistance(self, data_loader):
+        """A PC resistant to slashing takes half from the goblin's Scimitar."""
+        normal = _run_enemy_turn(data_loader, seed=7)
+        resisted = _run_enemy_turn(data_loader, seed=7, resistances=["slashing"])
 
         assert normal.hit and resisted.hit
         assert normal.damage > 1

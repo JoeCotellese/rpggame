@@ -5164,6 +5164,7 @@ class GameState:
             event_bus=self.event_bus,
             action=action,
             game_state=self,
+            damage_type=action.get("damage_type"),
             attacker_sees_defender=attacker_sees_defender,
             defender_sees_attacker=defender_sees_attacker,
         )
