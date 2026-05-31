@@ -560,8 +560,10 @@ class TestSessionCombatMoveAnchorsToActiveCombatant:
         party = session.entity_manager.get_party_members()
         assert len(party) == 1
         pc_entity = party[0]
-        pc_entity.grid_x = 3
-        pc_entity.grid_y = 4
+        # Establish the PC's TRUE tile in BOTH the spatial index and the
+        # entity layer (set_position syncs both); the `@` cursor stays at
+        # the scenario-seeded (3, 5), one tile south — the #578 desync.
+        session.set_position(pc_entity.entity_id, 3, 4)
         assert (session.player_x, session.player_y) == (3, 5)
 
         starting_movement = session.engine.get_current_turn_state().movement_remaining
@@ -593,9 +595,9 @@ class TestSessionCombatMoveAnchorsToActiveCombatant:
         party = session.entity_manager.get_party_members()
         assert len(party) == 1
         pc_entity = party[0]
-        # PC at (3, 4); `@` lags at (3, 5).
-        pc_entity.grid_x = 3
-        pc_entity.grid_y = 4
+        # PC truly at (3, 4) in both spatial + entity layers; `@` lags at
+        # (3, 5). set_position syncs both layers the way production does.
+        session.set_position(pc_entity.entity_id, 3, 4)
         assert (session.player_x, session.player_y) == (3, 5)
 
         starting_movement = session.engine.get_current_turn_state().movement_remaining
@@ -662,7 +664,7 @@ class TestSessionCombatMoveSpatialDelegation:
         # Use the session's existing RoomLayout to seed the engine Map.
         game_state = session.engine.game_state
         engine_map = Map.from_room_layout(session.room_layout)
-        game_state.bootstrap_spatial(engine_map)
+        game_state.bootstrap_spatial(engine_map, replace=True)
 
         # Place the current PC at the session's player tile.
         current = session.engine.get_current_combatant()
@@ -736,7 +738,7 @@ class TestSessionCombatMoveSpatialDelegation:
         }
         engine_map = Map(width=3, height=3, tiles=tiles)
         game_state = session.engine.game_state
-        game_state.bootstrap_spatial(engine_map)
+        game_state.bootstrap_spatial(engine_map, replace=True)
         pc = session.engine.party.characters[0]
         entity_id = f"pc_{pc.name.lower().replace(' ', '_')}"
         game_state.set_position(entity_id, target_x, target_y)
@@ -769,7 +771,7 @@ class TestSessionCombatMoveSpatialDelegation:
         # Bootstrap spatial but DO NOT call set_position for the PC.
         game_state = session.engine.game_state
         engine_map = Map.from_room_layout(session.room_layout)
-        game_state.bootstrap_spatial(engine_map)
+        game_state.bootstrap_spatial(engine_map, replace=True)
         current = session.engine.get_current_combatant()
         entity_id = f"pc_{current['creature'].name.lower().replace(' ', '_')}"
         assert game_state.spatial.position_of(entity_id) is None
@@ -824,7 +826,7 @@ class TestSessionCombatMoveSpatialDelegation:
         # the new goblin).
         game_state = session.engine.game_state
         engine_map = Map.from_room_layout(session.room_layout)
-        game_state.bootstrap_spatial(engine_map)
+        game_state.bootstrap_spatial(engine_map, replace=True)
         pc = session.engine.party.characters[0]
         entity_id = f"pc_{pc.name.lower().replace(' ', '_')}"
         game_state.set_position(entity_id, target_x, target_y)
@@ -861,7 +863,7 @@ class TestSessionCombatMoveSpatialDelegation:
 
         game_state = session.engine.game_state
         engine_map = Map.from_room_layout(session.room_layout)
-        game_state.bootstrap_spatial(engine_map)
+        game_state.bootstrap_spatial(engine_map, replace=True)
         current = session.engine.get_current_combatant()
         entity_id = f"pc_{current['creature'].name.lower().replace(' ', '_')}"
         game_state.set_position(entity_id, target_x, target_y)
