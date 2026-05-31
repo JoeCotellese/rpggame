@@ -23,6 +23,7 @@ from client_2d.entities.entity import (
     MonsterEntity,
     PartyMemberEntity,
 )
+from dnd_engine.core.entity_ids import pc_entity_id
 
 if TYPE_CHECKING:
 
@@ -106,7 +107,11 @@ class EntityManager:
             # Strip trailing numbers for texture lookup
             base_type = monster_type.rstrip("0123456789").rstrip("_")
 
-            entity_id = f"monster_{i}"
+            # Engine spatial convention is ``<monster_id>_<index>`` (e.g.
+            # "giant_rat_0"), matching GameState._find_creature_by_id and the
+            # scenario loader so the bootstrapped SpatialIndex can place and
+            # address this monster.
+            entity_id = f"{base_type}_{i}"
             monster = MonsterEntity(
                 entity_id=entity_id,
                 grid_x=ex,
@@ -315,9 +320,23 @@ class EntityManager:
             if party and i < len(party.characters):
                 creature_ref = party.characters[i]
 
+            # Engine spatial convention addresses PCs as
+            # ``pc_<name_lower_underscored>`` (see
+            # GameState._find_creature_by_id). Deriving the id from the
+            # creature name keeps the visual layer in lockstep with the
+            # bootstrapped SpatialIndex so placement and OA registration
+            # resolve to a live Character. Fall back to the index-keyed id
+            # only when no creature is available (defensive; real play always
+            # has one).
+            entity_id = (
+                pc_entity_id(creature_ref.name)
+                if creature_ref is not None
+                else f"party_{i}"
+            )
+
             char_class = char_data["class"].lower()
             entity = PartyMemberEntity(
-                entity_id=f"party_{i}",
+                entity_id=entity_id,
                 grid_x=px,
                 grid_y=py,
                 entity_type=EntityType.PARTY_MEMBER,
