@@ -4195,6 +4195,20 @@ class GameState:
         # stays empty and harmless.
         self._register_default_opportunity_attacks()
 
+    def register_opportunity_attacks(self) -> None:
+        """Public entry to (re)register default Opportunity Attack handlers.
+
+        Combat can begin (``_start_combat``) before the SpatialIndex is
+        bootstrapped: the scenario loader starts combat, then the
+        client-side session installs ``spatial`` from its room layout and
+        places entities. In that ordering the registration walk inside
+        ``_start_combat`` runs against an absent index and subscribes
+        nobody. A caller that bootstraps ``spatial`` *after* combat has
+        started invokes this once placements exist so every combatant
+        gets its 5-ft handler.
+        """
+        self._register_default_opportunity_attacks()
+
     def _register_default_opportunity_attacks(self) -> None:
         """Subscribe every placed combatant to ``OPPORTUNITY_PROVOKED``.
 

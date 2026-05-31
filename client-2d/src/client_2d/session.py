@@ -398,6 +398,56 @@ class GameSession:
         self.party_spread = True
         self._update_lighting()
 
+    def _bootstrap_spatial(self) -> None:
+        """Install the engine ``SpatialIndex`` and place every combatant.
+
+        This is the production wiring the plan-03 spatial/movement stack
+        depends on: without a bootstrapped ``GameState.spatial`` the
+        engine movement path (``attempt_combat_step``) stays dormant and
+        monster Opportunity Attacks never fire (plan-10 W1). Builds an
+        engine ``Map`` from the loaded ``RoomLayout``, installs it with
+        ``replace=True`` so a scenario reload or room transition rebuilds
+        cleanly, then mirrors each party / monster placement into the
+        index using the engine entity-id convention.
+
+        When combat is already active — the scenario loader starts combat
+        before the session gets control — re-registers default
+        Opportunity Attack handlers now that the index is populated; the
+        registration walk inside ``_start_combat`` is a no-op while
+        ``spatial`` is still None.
+        """
+        from dnd_engine.core.map import Map
+
+        game_state = self.engine.game_state
+        if game_state is None or self.room_layout is None:
+            return
+
+        engine_map = Map.from_room_layout(self.room_layout)
+        game_state.bootstrap_spatial(engine_map, replace=True)
+
+        # Only creatures belong in the combat spatial index. Items would
+        # occupy (and thus block) their tile; the visual layer renders
+        # them separately.
+        combatants = (
+            self.entity_manager.get_party_members()
+            + self.entity_manager.get_monsters()
+        )
+        for entity in combatants:
+            entity_id = getattr(entity, "entity_id", None)
+            if not entity_id:
+                continue
+            try:
+                game_state.set_position(entity_id, entity.grid_x, entity.grid_y)
+            except ValueError:
+                # Blocking / occupied tile per the freshly built index, or
+                # an entity_id outside the engine spawn convention. The
+                # visual layer still renders the entity; it just carries no
+                # spatial coordinate (matching EngineAdapter.spawn_*).
+                continue
+
+        if game_state.in_combat and game_state.reaction_dispatcher is not None:
+            game_state.register_opportunity_attacks()
+
     def _collapse_party_after_combat(self) -> None:
         """Collapse party back to single unit after combat ends."""
         if self.party_positions:
@@ -1241,7 +1291,25 @@ class GameSession:
             name = self._resolve_blocker_name(blocker_id)
             return f"Path blocked! {name} is in the way."
 
-        result = game_state.attempt_combat_step(entity_id, dx, dy)
+        # The step may provoke an Opportunity Attack, which the engine
+        # resolves synchronously and surfaces as a DAMAGE_DEALT event
+        # tagged ``opportunity_attack``. Capture those around the call so
+        # the hit lands in the wire response instead of only showing up
+        # as a silent HP delta in the next state dump (#W1).
+        from dnd_engine.utils.events import Event, EventType
+
+        oa_hits: list[dict[str, object]] = []
+
+        def _capture_oa(event: Event) -> None:
+            if event.data.get("opportunity_attack"):
+                oa_hits.append(event.data)
+
+        event_bus = game_state.event_bus
+        event_bus.subscribe(EventType.DAMAGE_DEALT, _capture_oa)
+        try:
+            result = game_state.attempt_combat_step(entity_id, dx, dy)
+        finally:
+            event_bus.unsubscribe(EventType.DAMAGE_DEALT, _capture_oa)
         if not result.ok:
             if result.reason == "out of bounds":
                 # Distinct legacy wire string for OOB vs in-bounds walls.
@@ -1283,9 +1351,24 @@ class GameSession:
             self.engine, self.player_x, self.player_y
         )
 
+        # Surface any provoked Opportunity Attack(s) above the state dump
+        # and mirror them into the combat log so the windowed HUD and the
+        # MCP between-turns buffer both see the hit.
+        oa_block = ""
+        if oa_hits:
+            lines = [
+                f"Opportunity attack! {hit.get('attacker', 'Something')} hits "
+                f"{hit.get('defender', 'the target')} for {hit.get('damage', 0)} damage."
+                for hit in oa_hits
+            ]
+            for line in lines:
+                self._add_combat_log(line)
+            oa_block = "\n".join(lines) + "\n"
+
         return (
             f"Moved {direction}. Movement remaining: "
             f"{result.movement_remaining} ft.\n"
+            + oa_block
             + self.get_state()
         )
 
@@ -1865,5 +1948,10 @@ class GameSession:
             self.current_mode = GameMode.COMBAT
         else:
             self.current_mode = GameMode.EXPLORATION
+
+        # Activate the engine spatial/movement stack now that entities are
+        # placed: bootstrap the SpatialIndex from the room layout and wire
+        # Opportunity Attack handlers so combat movement provokes (#W1).
+        self._bootstrap_spatial()
 
         return f"Loaded scenario '{result['name']}' (seed={result['seed']}). " + self.get_state()
