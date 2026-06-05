@@ -199,3 +199,46 @@ class TestDoorPassability:
 
         assert fake.current_room_id == "entry"
         assert (session.player_x, session.player_y) == (door_x, door_y)
+
+
+class TestEntrySpawn:
+    """After a transition the player appears just inside the entry door."""
+
+    def _walk_through_north_door(self, session) -> None:
+        door_x, door_y = session.room_layout.spawn_points.exits["north"]
+        session.player_x, session.player_y = door_x, door_y + 1
+        session._move_player("north")
+
+    def test_player_spawns_inside_matching_entry_door(self, session_and_state) -> None:
+        """Going north places the player one tile in from the south door."""
+        session, fake = session_and_state
+        self._walk_through_north_door(session)
+
+        assert fake.current_room_id == "north_room"
+        south_x, south_y = session.room_layout.spawn_points.exits["south"]
+        assert (session.player_x, session.player_y) == (south_x, south_y - 1)
+
+    def test_cross_room_backtracking(self, session_and_state) -> None:
+        """Stepping back through the entry door returns to the prior room."""
+        session, fake = session_and_state
+        self._walk_through_north_door(session)
+
+        session._move_player("south")
+
+        assert fake.current_room_id == "entry"
+
+    def test_falls_back_to_default_spawn_without_matching_door(self) -> None:
+        """A destination with no door on the entry side uses its spawn point."""
+        session, fake = make_session(
+            rooms={
+                "entry": {"name": "Entry Hall", "exits": {"north": "dead_end"}},
+                "dead_end": {"name": "Dead End", "exits": {}},
+            }
+        )
+        self._walk_through_north_door(session)
+
+        assert fake.current_room_id == "dead_end"
+        assert (
+            session.player_x,
+            session.player_y,
+        ) == session.room_layout.spawn_points.player

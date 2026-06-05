@@ -616,6 +616,7 @@ class GameSession:
 
         if result:
             self._load_room_layout()
+            self._place_player_at_entry(direction)
 
             room = game_state.get_current_room()
             room_name = room.get("name", "Unknown")
@@ -637,6 +638,47 @@ class GameSession:
                 if not self.engine.is_player_turn():
                     self.processing_enemy_turn = True
                     self.enemy_turn_timer = ENEMY_TURN_DELAY
+
+    def _place_player_at_entry(self, travel_direction: str) -> None:
+        """Position the player just inside the door they entered through.
+
+        Traveling north means entering through the destination room's
+        south door, so the player lands one tile inward from it. Rooms
+        without a matching door keep the layout's default spawn point
+        (already set by ``_load_room_layout``).
+        """
+        if not self.room_layout:
+            return
+
+        opposite = {
+            "north": "south",
+            "south": "north",
+            "east": "west",
+            "west": "east",
+        }.get(travel_direction)
+        if opposite is None:
+            return
+
+        door = self.room_layout.spawn_points.exits.get(opposite)
+        if door is None:
+            return
+
+        # Inward = away from the entry door, i.e. the travel direction.
+        dx, dy = {
+            "north": (0, -1),
+            "south": (0, 1),
+            "east": (1, 0),
+            "west": (-1, 0),
+        }[travel_direction]
+        inward_x, inward_y = door[0] + dx, door[1] + dy
+
+        if (
+            0 <= inward_x < self.room_layout.width
+            and 0 <= inward_y < self.room_layout.height
+            and not self.room_layout.is_blocking(inward_x, inward_y)
+        ):
+            self.player_x, self.player_y = inward_x, inward_y
+            self._update_lighting()
 
     # ========== Combat state machine ==========
 
