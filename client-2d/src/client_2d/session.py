@@ -545,18 +545,26 @@ class GameSession:
                 exits[direction] = dest
         return exits
 
+    def _can_pass_exit(self, direction: str) -> bool:
+        """Check whether the exit in ``direction`` can be passed through.
+
+        This is the seam for SRD door mechanics: stuck/locked/barred
+        doors (Strength checks, thieves' tools, the Knock spell) and
+        similar door states gate passage here rather than in movement.
+        """
+        return True
+
     # ========== Exploration movement ==========
 
     def _move_player(self, direction: str) -> None:
-        """Attempt to move the player in a direction during exploration."""
+        """Attempt to move the player in a direction during exploration.
+
+        Direction keys always perform a one-tile grid move; a room
+        transition only fires when the step lands on an exit/door tile
+        (and the door is passable — see ``_can_pass_exit``).
+        """
         if self.engine.in_combat:
             self._add_combat_log("Can't move during combat!")
-            return
-
-        exits = self._get_available_exits()
-        if direction in exits:
-            self._add_combat_log(f"Moving {direction}...")
-            self._transition_room(direction)
             return
 
         dx, dy = {
@@ -568,9 +576,22 @@ class GameSession:
         new_x = self.player_x + dx
         new_y = self.player_y + dy
 
-        if self.room_layout and (
-            0 <= new_x < self.room_layout.width and 0 <= new_y < self.room_layout.height
-        ):
+        if not self.room_layout:
+            return
+
+        # Stepping onto an exit/door tile uses that door, regardless of
+        # approach direction. Hidden exits never appear in the available
+        # set, so their door tiles behave as plain walkable floor.
+        exits = self._get_available_exits()
+        exit_tiles = self.room_layout.spawn_points.exits
+        for exit_dir in exits:
+            if exit_tiles.get(exit_dir) == (new_x, new_y):
+                if self._can_pass_exit(exit_dir):
+                    self._add_combat_log(f"Moving {exit_dir}...")
+                    self._transition_room(exit_dir)
+                return
+
+        if 0 <= new_x < self.room_layout.width and 0 <= new_y < self.room_layout.height:
             if not self.room_layout.is_blocking(new_x, new_y):
                 self.player_x = new_x
                 self.player_y = new_y
