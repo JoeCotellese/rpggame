@@ -114,34 +114,33 @@ def get_attack_range(weapon_data: dict | None) -> tuple[int, int]:
     return (5, 5)
 
 
-class GameWindow(arcade.Window):
-    """Main game window with real engine integration."""
+class GameView(arcade.View):
+    """Gameplay view: renders the dungeon and routes player input.
+
+    Hosted by :class:`GameWindow` via ``window.show_view``. Owns the
+    rendering + input surface and a :class:`GameSession` (the non-graphical
+    authority). Keeping gameplay in a View lets the host window swap between
+    this view and the launch-screen menu views (#626-#630).
+    """
 
     def __init__(
         self,
-        width: int = 1280,
-        height: int = 900,
-        fullscreen: bool = False,
         enable_mcp: bool = False,
         mcp_port: int = 8765,
         dev_mode: bool = False,
     ):
-        """Initialize the game window.
+        """Initialize the gameplay view.
 
         Args:
-            width: Window width in pixels.
-            height: Window height in pixels.
-            fullscreen: Whether to run in fullscreen mode.
             enable_mcp: Whether to start embedded MCP server.
             mcp_port: Port for MCP HTTP server.
             dev_mode: Whether to register --dev spawn/setup MCP tools.
         """
-        super().__init__(width, height, WINDOW_TITLE, fullscreen=fullscreen)
-        arcade.set_background_color(UIColors.PANEL_BG_DARK)
+        super().__init__()
 
         # Session owns the non-graphical state: engine adapter, entity
         # manager, MCP plumbing, room layout, combat state machine.
-        # GameWindow accesses these via property delegators below.
+        # GameView accesses these via property delegators below.
         self.session = GameSession(
             enable_mcp=enable_mcp,
             mcp_port=mcp_port,
@@ -172,12 +171,25 @@ class GameWindow(arcade.Window):
         # Boot the session: load party, room, optionally start MCP server.
         self.session.initialize()
         if enable_mcp:
-            # Pass self so the bridge can resolve back to this window for
+            # Pass the host window so the bridge can resolve back to it for
             # code paths that still consult its window reference.
-            self.session.initialize_mcp_server(window=self)
+            self.session.initialize_mcp_server(window=self.window)
+
+    # ========== Window geometry ==========
+    # A View has no surface of its own; the host Window owns width/height.
+    # Expose them so the rendering / input code keeps using self.width and
+    # self.height unchanged.
+
+    @property
+    def width(self) -> int:
+        return self.window.width
+
+    @property
+    def height(self) -> int:
+        return self.window.height
 
     # ========== Property delegators to GameSession ==========
-    # GameWindow holds a GameSession; these proxies let the existing
+    # GameView holds a GameSession; these proxies let the existing
     # drawing / input code read session-owned state through the
     # familiar self.X names without per-call updates.
 
@@ -262,7 +274,7 @@ class GameWindow(arcade.Window):
         return self.session.enemy_turn_timer
 
     # ========== Method delegators to GameSession ==========
-    # Thin wrappers for the methods that GameWindow's input handlers,
+    # Thin wrappers for the methods that GameView's input handlers,
     # drawing code, and mouse handlers still call directly. The real
     # logic lives in GameSession; these keep the call sites unchanged.
 
@@ -337,7 +349,7 @@ class GameWindow(arcade.Window):
 
         try:
             # Capture the framebuffer
-            image = arcade.get_image(0, 0, *self.get_size())
+            image = arcade.get_image(0, 0, *self.window.get_size())
             image.save(str(filepath))
 
             # Show feedback
@@ -415,9 +427,7 @@ class GameWindow(arcade.Window):
             if texture:
                 self.decoration_textures[deco_id] = texture
 
-    def _try_load_texture(
-        self, path: Path | None, name: str
-    ) -> arcade.Texture | None:
+    def _try_load_texture(self, path: Path | None, name: str) -> arcade.Texture | None:
         """Try to load a texture, logging success or fallback."""
         if path and path.exists():
             print(f"Loaded {name}: {path.name}")
@@ -494,9 +504,7 @@ class GameWindow(arcade.Window):
         else:
             combatant_x, combatant_y = combatant_pos
 
-        distance_ft = distance_in_feet(
-            combatant_x, combatant_y, entity.grid_x, entity.grid_y
-        )
+        distance_ft = distance_in_feet(combatant_x, combatant_y, entity.grid_x, entity.grid_y)
 
         # Get attacker's equipped weapon range
         current = self.engine.get_current_combatant()
@@ -738,9 +746,7 @@ class GameWindow(arcade.Window):
                     fallback_color = (50, 180, 50)  # Green for items
                 else:
                     fallback_color = (180, 140, 50)  # Gold for decorations
-                tile_rect = arcade.LBWH(
-                    screen_x + 4, screen_y + 4, tile_size - 8, tile_size - 8
-                )
+                tile_rect = arcade.LBWH(screen_x + 4, screen_y + 4, tile_size - 8, tile_size - 8)
                 arcade.draw_rect_filled(tile_rect, fallback_color)
 
             # Draw targeting overlays for monsters during combat
@@ -756,8 +762,7 @@ class GameWindow(arcade.Window):
                 if entity == self.selected_target:
                     # Calculate pulse value (0.0 to 1.0)
                     pulse = (
-                        math.sin(self.pulse_timer * 2 * math.pi / PULSE_CYCLE_DURATION)
-                        + 1
+                        math.sin(self.pulse_timer * 2 * math.pi / PULSE_CYCLE_DURATION) + 1
                     ) / 2
 
                     # Pulsing glow
@@ -783,8 +788,7 @@ class GameWindow(arcade.Window):
                 # Draw hover highlight
                 elif entity == self.hovered_entity:
                     arcade.draw_circle_outline(
-                        center_x, center_y, tile_size // 2 + 2,
-                        arcade.color.WHITE, 2
+                        center_x, center_y, tile_size // 2 + 2, arcade.color.WHITE, 2
                     )
 
         # Draw party/player
@@ -792,7 +796,9 @@ class GameWindow(arcade.Window):
             # Combat formation - draw each party member from EntityManager
             for party_entity in self.entity_manager.get_party_members():
                 char_screen_x = offset_x + party_entity.grid_x * tile_size
-                char_screen_y = offset_y + (self.room_layout.height - 1 - party_entity.grid_y) * tile_size
+                char_screen_y = (
+                    offset_y + (self.room_layout.height - 1 - party_entity.grid_y) * tile_size
+                )
 
                 char_class = party_entity.character_class
                 is_current_turn = party_entity.is_current_turn
@@ -803,8 +809,7 @@ class GameWindow(arcade.Window):
                     center_x = char_screen_x + tile_size // 2
                     center_y = char_screen_y + tile_size // 2
                     arcade.draw_circle_outline(
-                        center_x, center_y, tile_size // 2 + 2,
-                        UIColors.TEXT_HIGHLIGHT, 3
+                        center_x, center_y, tile_size // 2 + 2, UIColors.TEXT_HIGHLIGHT, 3
                     )
 
                 # Draw character texture or fallback
@@ -817,8 +822,12 @@ class GameWindow(arcade.Window):
                     arcade.draw_circle_filled(center_x, center_y, tile_size // 3, color)
                     # Show first letter of class
                     arcade.draw_text(
-                        char_class[0].upper(), center_x, center_y - 5,
-                        (255, 255, 255), 14, anchor_x="center"
+                        char_class[0].upper(),
+                        center_x,
+                        center_y - 5,
+                        (255, 255, 255),
+                        14,
+                        anchor_x="center",
                     )
 
                 # Draw torch glow on current turn character
@@ -838,7 +847,9 @@ class GameWindow(arcade.Window):
                 center_x = player_screen_x + tile_size // 2
                 center_y = player_screen_y + tile_size // 2
                 arcade.draw_circle_filled(center_x, center_y, tile_size // 3, UIColors.HP_FULL)
-                arcade.draw_text("@", center_x, center_y - 5, (255, 255, 255), 14, anchor_x="center")
+                arcade.draw_text(
+                    "@", center_x, center_y - 5, (255, 255, 255), 14, anchor_x="center"
+                )
 
             # Draw light indicator on player (torch glow)
             center_x = player_screen_x + tile_size // 2
@@ -853,7 +864,11 @@ class GameWindow(arcade.Window):
                 if exit_pos:
                     exit_x, exit_y = exit_pos
                     exit_screen_x = offset_x + exit_x * tile_size + tile_size // 2
-                    exit_screen_y = offset_y + (self.room_layout.height - 1 - exit_y) * tile_size + tile_size // 2
+                    exit_screen_y = (
+                        offset_y
+                        + (self.room_layout.height - 1 - exit_y) * tile_size
+                        + tile_size // 2
+                    )
                     arcade.draw_text(
                         direction[0].upper(),  # N, S, E, W
                         exit_screen_x,
@@ -1194,7 +1209,7 @@ class GameWindow(arcade.Window):
                 self._add_combat_log("Target deselected")
                 return
             # Otherwise: close window
-            self.close()
+            self.window.close()
             return
 
         # Ctrl-P to take screenshot
@@ -1271,9 +1286,7 @@ class GameWindow(arcade.Window):
             combatant_x, combatant_y = combatant_pos
 
         # Calculate distance in feet (each square = 5 ft)
-        distance_ft = distance_in_feet(
-            combatant_x, combatant_y, target.grid_x, target.grid_y
-        )
+        distance_ft = distance_in_feet(combatant_x, combatant_y, target.grid_x, target.grid_y)
 
         # Get attacker's equipped weapon and its range
         current = self.engine.get_current_combatant()
@@ -1302,9 +1315,7 @@ class GameWindow(arcade.Window):
         # Long-range attacks roll with disadvantage per D&D 5E.
         in_long_range = distance_ft > normal_range
         if in_long_range:
-            self._add_combat_log(
-                f"{weapon_name} at {distance_ft} ft (long range - disadvantage)"
-            )
+            self._add_combat_log(f"{weapon_name} at {distance_ft} ft (long range - disadvantage)")
 
         # Set selected enemy and execute attack
         self.selected_enemy = target.enemy_index
@@ -1330,9 +1341,7 @@ class GameWindow(arcade.Window):
         # Sort by distance (nearest first)
         sorted_monsters = sorted(
             monsters,
-            key=lambda m: chebyshev_distance(
-                combatant_x, combatant_y, m.grid_x, m.grid_y
-            ),
+            key=lambda m: chebyshev_distance(combatant_x, combatant_y, m.grid_x, m.grid_y),
         )
 
         # Find current index in sorted list
@@ -1432,6 +1441,46 @@ class GameWindow(arcade.Window):
 
         # Always show feedback in combat log
         self._add_combat_log(feedback)
+
+
+class GameWindow(arcade.Window):
+    """Thin host window that shows gameplay / menu views.
+
+    Owns the OS window + GL context only; gameplay lives in
+    :class:`GameView`. Constructing the window immediately shows a GameView
+    so the windowed entry point behaves exactly as before, while leaving
+    room to swap in the launch-screen views (#626-#630) via show_view.
+    """
+
+    def __init__(
+        self,
+        width: int = 1280,
+        height: int = 900,
+        fullscreen: bool = False,
+        enable_mcp: bool = False,
+        mcp_port: int = 8765,
+        dev_mode: bool = False,
+    ):
+        """Create the host window and show the gameplay view.
+
+        Args:
+            width: Window width in pixels.
+            height: Window height in pixels.
+            fullscreen: Whether to run in fullscreen mode.
+            enable_mcp: Whether to start embedded MCP server.
+            mcp_port: Port for MCP HTTP server.
+            dev_mode: Whether to register --dev spawn/setup MCP tools.
+        """
+        super().__init__(width, height, WINDOW_TITLE, fullscreen=fullscreen)
+        arcade.set_background_color(UIColors.PANEL_BG_DARK)
+
+        self.show_view(
+            GameView(
+                enable_mcp=enable_mcp,
+                mcp_port=mcp_port,
+                dev_mode=dev_mode,
+            )
+        )
 
 
 def run_2d_client(

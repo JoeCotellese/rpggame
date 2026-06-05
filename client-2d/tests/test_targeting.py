@@ -15,7 +15,7 @@ class MockRoomLayout:
 
 
 def create_mock_game_window():
-    """Create a properly mocked GameWindow instance for testing."""
+    """Create a properly mocked GameView instance for testing."""
     # Mock arcade.Window to avoid GUI initialization
     mock_window = MagicMock()
     mock_window.room_layout = None
@@ -35,23 +35,23 @@ class TestScreenToGridConversion:
 
     def test_get_map_render_params_returns_none_without_layout(self):
         """Should return None when room_layout is not set."""
-        from client_2d.game import GameWindow
+        from client_2d.game import GameView
 
         mock_window = create_mock_game_window()
         mock_window.room_layout = None
 
         # Bind the method to our mock
-        result = GameWindow._get_map_render_params(mock_window)
+        result = GameView._get_map_render_params(mock_window)
         assert result is None
 
     def test_get_map_render_params_calculates_offsets(self):
         """Should calculate proper offsets for centering map."""
-        from client_2d.game import GameWindow
+        from client_2d.game import GameView
 
         mock_window = create_mock_game_window()
         mock_window.room_layout = MockRoomLayout(width=20, height=15)
 
-        result = GameWindow._get_map_render_params(mock_window)
+        result = GameView._get_map_render_params(mock_window)
         assert result is not None
         offset_x, offset_y, tile_size = result
 
@@ -63,41 +63,41 @@ class TestScreenToGridConversion:
 
     def test_screen_to_grid_returns_none_outside_bounds(self):
         """Should return None for coordinates outside the map."""
-        from client_2d.game import GameWindow
+        from client_2d.game import GameView
 
         mock_window = create_mock_game_window()
         mock_window.room_layout = MockRoomLayout(width=20, height=15)
 
         # Bind real method to mock for _get_map_render_params
-        mock_window._get_map_render_params = lambda: GameWindow._get_map_render_params(mock_window)
+        mock_window._get_map_render_params = lambda: GameView._get_map_render_params(mock_window)
 
         # Test far outside bounds
-        result = GameWindow._screen_to_grid(mock_window, -100, -100)
+        result = GameView._screen_to_grid(mock_window, -100, -100)
         assert result is None
 
-        result = GameWindow._screen_to_grid(mock_window, 2000, 2000)
+        result = GameView._screen_to_grid(mock_window, 2000, 2000)
         assert result is None
 
     def test_screen_to_grid_returns_valid_coords(self):
         """Should return valid grid coordinates for points on the map."""
-        from client_2d.game import GameWindow
+        from client_2d.game import GameView
 
         mock_window = create_mock_game_window()
         mock_window.room_layout = MockRoomLayout(width=20, height=15)
 
         # Get render params to understand the coordinate space
-        params = GameWindow._get_map_render_params(mock_window)
+        params = GameView._get_map_render_params(mock_window)
         assert params is not None
         offset_x, offset_y, tile_size = params
 
         # Bind real method to mock
-        mock_window._get_map_render_params = lambda: GameWindow._get_map_render_params(mock_window)
+        mock_window._get_map_render_params = lambda: GameView._get_map_render_params(mock_window)
 
         # Test center of map
         center_screen_x = int(offset_x + 10 * tile_size + tile_size // 2)
         center_screen_y = int(offset_y + (15 - 1 - 7) * tile_size + tile_size // 2)
 
-        result = GameWindow._screen_to_grid(mock_window, center_screen_x, center_screen_y)
+        result = GameView._screen_to_grid(mock_window, center_screen_x, center_screen_y)
         assert result is not None
         grid_x, grid_y = result
 
@@ -111,7 +111,7 @@ class TestTargetCycling:
 
     def test_cycle_target_sorts_by_distance(self):
         """Should cycle through targets nearest first."""
-        from client_2d.game import GameWindow
+        from client_2d.game import GameView
 
         mock_window = create_mock_game_window()
         mock_window.player_x = 5
@@ -153,27 +153,27 @@ class TestTargetCycling:
         mock_window.entity_manager.get_current_turn_position.return_value = (5, 5)
 
         # First cycle should select closest
-        GameWindow._cycle_target(mock_window)
+        GameView._cycle_target(mock_window)
         assert mock_window.selected_target == monster_close
         assert mock_window.selected_enemy == 0
 
         # Second cycle should select next closest (mid)
-        GameWindow._cycle_target(mock_window)
+        GameView._cycle_target(mock_window)
         assert mock_window.selected_target == monster_mid
         assert mock_window.selected_enemy == 2
 
         # Third cycle should select farthest
-        GameWindow._cycle_target(mock_window)
+        GameView._cycle_target(mock_window)
         assert mock_window.selected_target == monster_far
         assert mock_window.selected_enemy == 1
 
         # Fourth cycle should wrap back to closest
-        GameWindow._cycle_target(mock_window)
+        GameView._cycle_target(mock_window)
         assert mock_window.selected_target == monster_close
 
     def test_cycle_target_reverse(self):
         """Should cycle in reverse order with reverse=True."""
-        from client_2d.game import GameWindow
+        from client_2d.game import GameView
 
         mock_window = create_mock_game_window()
         mock_window.player_x = 5
@@ -199,16 +199,16 @@ class TestTargetCycling:
         mock_window.entity_manager.get_current_turn_position.return_value = (5, 5)
 
         # Forward: should select monster1 (closest)
-        GameWindow._cycle_target(mock_window, reverse=False)
+        GameView._cycle_target(mock_window, reverse=False)
         assert mock_window.selected_target == monster1
 
         # Reverse: should go to last (monster2)
-        GameWindow._cycle_target(mock_window, reverse=True)
+        GameView._cycle_target(mock_window, reverse=True)
         assert mock_window.selected_target == monster2
 
     def test_cycle_target_no_monsters(self):
         """Should log message when no targets available."""
-        from client_2d.game import GameWindow
+        from client_2d.game import GameView
 
         mock_window = create_mock_game_window()
         mock_window.combat_log = []
@@ -219,7 +219,7 @@ class TestTargetCycling:
         # Bind _add_combat_log to actually append
         mock_window._add_combat_log = lambda msg: mock_window.combat_log.append(msg)
 
-        GameWindow._cycle_target(mock_window)
+        GameView._cycle_target(mock_window)
 
         assert "No targets available" in mock_window.combat_log
 
@@ -344,9 +344,7 @@ class TestMCPAttackEntityID:
         mock_window.engine = MagicMock()
         mock_window.engine.in_combat = True
         mock_window.engine.is_player_turn.return_value = True
-        mock_window.engine.get_current_turn_state.return_value = MagicMock(
-            movement_remaining=30
-        )
+        mock_window.engine.get_current_turn_state.return_value = MagicMock(movement_remaining=30)
 
         # Mock current combatant as a player with a melee weapon
         mock_creature = MagicMock()
@@ -422,34 +420,32 @@ class TestMultiplyTints:
 
     def test_white_preserves_color(self):
         """Multiplying by white (255,255,255) should preserve the original color."""
-        from client_2d.game import GameWindow
+        from client_2d.game import GameView
 
         mock_window = create_mock_game_window()
 
-        result = GameWindow._multiply_tints(mock_window, (255, 255, 255), (128, 64, 32))
+        result = GameView._multiply_tints(mock_window, (255, 255, 255), (128, 64, 32))
         assert result == (128, 64, 32)
 
     def test_black_produces_black(self):
         """Multiplying by black (0,0,0) should produce black."""
-        from client_2d.game import GameWindow
+        from client_2d.game import GameView
 
         mock_window = create_mock_game_window()
 
-        result = GameWindow._multiply_tints(mock_window, (128, 128, 128), (0, 0, 0))
+        result = GameView._multiply_tints(mock_window, (128, 128, 128), (0, 0, 0))
         assert result == (0, 0, 0)
 
     def test_fog_plus_green_tint(self):
         """Fog tint combined with green targeting should produce muted green."""
         from client_2d.core.constants import TargetingColors
-        from client_2d.game import GameWindow
+        from client_2d.game import GameView
 
         mock_window = create_mock_game_window()
 
         # Dim fog (160, 160, 180) + green targeting (128, 255, 128)
         fog_tint = (160, 160, 180)
-        result = GameWindow._multiply_tints(
-            mock_window, fog_tint, TargetingColors.IN_RANGE_TINT
-        )
+        result = GameView._multiply_tints(mock_window, fog_tint, TargetingColors.IN_RANGE_TINT)
 
         # Verify green channel is boosted relative to red
         assert result[1] > result[0], "Green should be brighter than red"
@@ -457,27 +453,25 @@ class TestMultiplyTints:
     def test_fog_plus_red_tint(self):
         """Fog tint combined with red targeting should produce muted red."""
         from client_2d.core.constants import TargetingColors
-        from client_2d.game import GameWindow
+        from client_2d.game import GameView
 
         mock_window = create_mock_game_window()
 
         # Dim fog (160, 160, 180) + red targeting (255, 128, 128)
         fog_tint = (160, 160, 180)
-        result = GameWindow._multiply_tints(
-            mock_window, fog_tint, TargetingColors.OUT_OF_RANGE_TINT
-        )
+        result = GameView._multiply_tints(mock_window, fog_tint, TargetingColors.OUT_OF_RANGE_TINT)
 
         # Verify red channel is boosted relative to green
         assert result[0] > result[1], "Red should be brighter than green"
 
     def test_multiplication_math(self):
         """Verify the multiplication formula: (a * b) // 255."""
-        from client_2d.game import GameWindow
+        from client_2d.game import GameView
 
         mock_window = create_mock_game_window()
 
         # 128 * 128 / 255 = 64.25 -> 64
-        result = GameWindow._multiply_tints(mock_window, (128, 128, 128), (128, 128, 128))
+        result = GameView._multiply_tints(mock_window, (128, 128, 128), (128, 128, 128))
         assert result == (64, 64, 64)
 
 
@@ -530,8 +524,6 @@ class TestPulseAnimation:
 
         # At t=PULSE_CYCLE_DURATION, we should be back to the starting value
         pulse_start = (math.sin(0 * 2 * math.pi / PULSE_CYCLE_DURATION) + 1) / 2
-        pulse_end = (
-            math.sin(PULSE_CYCLE_DURATION * 2 * math.pi / PULSE_CYCLE_DURATION) + 1
-        ) / 2
+        pulse_end = (math.sin(PULSE_CYCLE_DURATION * 2 * math.pi / PULSE_CYCLE_DURATION) + 1) / 2
 
         assert abs(pulse_start - pulse_end) < 0.001, "Pulse should complete cycle"
