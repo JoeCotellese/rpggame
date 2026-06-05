@@ -132,3 +132,70 @@ class TestGridMovement:
         session._move_player("east")
 
         assert fake.current_room_id == "north_room"
+
+
+class TestDoorPassability:
+    """SRD door-state seam (#637): locked doors block, hidden exits inert."""
+
+    def test_locked_exit_blocks_transition_and_step(self) -> None:
+        """A locked door refuses passage; the player stays put."""
+        session, fake = make_session(
+            rooms={
+                "entry": {
+                    "name": "Entry Hall",
+                    "exits": {"north": {"destination": "north_room", "locked": True}},
+                },
+                "north_room": {"name": "North Room", "exits": {"south": "entry"}},
+            }
+        )
+        door_x, door_y = session.room_layout.spawn_points.exits["north"]
+        session.player_x, session.player_y = door_x, door_y + 1
+
+        session._move_player("north")
+
+        assert fake.current_room_id == "entry"
+        assert (session.player_x, session.player_y) == (door_x, door_y + 1)
+        assert any("locked" in msg.lower() for msg in session.combat_log)
+
+    def test_dict_exit_without_locked_flag_passes(self) -> None:
+        """Dict-form exits without door-state flags behave as open doors."""
+        session, fake = make_session(
+            rooms={
+                "entry": {
+                    "name": "Entry Hall",
+                    "exits": {"north": {"destination": "north_room"}},
+                },
+                "north_room": {"name": "North Room", "exits": {"south": "entry"}},
+            }
+        )
+        door_x, door_y = session.room_layout.spawn_points.exits["north"]
+        session.player_x, session.player_y = door_x, door_y + 1
+
+        session._move_player("north")
+
+        assert fake.current_room_id == "north_room"
+
+    def test_hidden_exit_door_tile_is_inert(self) -> None:
+        """An undiscovered secret door never fires a transition; its
+        tile behaves as plain walkable floor."""
+        session, fake = make_session(
+            rooms={
+                "entry": {
+                    "name": "Entry Hall",
+                    "exits": {
+                        "north": "north_room",
+                        "east": {"destination": "secret_room", "hidden": True},
+                    },
+                },
+                "north_room": {"name": "North Room", "exits": {"south": "entry"}},
+                "secret_room": {"name": "Secret Room", "exits": {}},
+            }
+        )
+        # The layout still places a door tile for the hidden exit.
+        door_x, door_y = session.room_layout.spawn_points.exits["east"]
+        session.player_x, session.player_y = door_x - 1, door_y
+
+        session._move_player("east")
+
+        assert fake.current_room_id == "entry"
+        assert (session.player_x, session.player_y) == (door_x, door_y)

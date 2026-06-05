@@ -551,7 +551,16 @@ class GameSession:
         This is the seam for SRD door mechanics: stuck/locked/barred
         doors (Strength checks, thieves' tools, the Knock spell) and
         similar door states gate passage here rather than in movement.
+        Blocked attempts log the reason to the combat log.
         """
+        game_state = self.engine.game_state
+        if game_state is None:
+            return False
+
+        exit_data = game_state.get_current_room().get("exits", {}).get(direction)
+        if isinstance(exit_data, dict) and exit_data.get("locked", False):
+            self._add_combat_log("The door is locked.")
+            return False
         return True
 
     # ========== Exploration movement ==========
