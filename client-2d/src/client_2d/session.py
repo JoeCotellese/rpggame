@@ -605,6 +605,15 @@ class GameSession:
                 self.player_x = new_x
                 self.player_y = new_y
                 self._update_lighting()
+                return
+
+        # Fallback for layouts that define an exit but no door tile for
+        # it: a failed step (wall or room edge) in the exit's direction
+        # still uses the exit, keeping such rooms traversable.
+        if direction in exits and exit_tiles.get(direction) is None:
+            if self._can_pass_exit(direction):
+                self._add_combat_log(f"Moving {direction}...")
+                self._transition_room(direction)
 
     def _transition_room(self, direction: str) -> None:
         """Transition to a new room via an exit."""

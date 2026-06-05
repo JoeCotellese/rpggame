@@ -242,3 +242,69 @@ class TestEntrySpawn:
             session.player_x,
             session.player_y,
         ) == session.room_layout.spawn_points.player
+
+
+class TestExitWithoutDoorTile:
+    """Layouts missing a door tile for a defined exit stay traversable:
+    a failed step (wall/edge) in the exit's direction uses the exit."""
+
+    def _custom_layout(self, session, tiles) -> None:
+        from client_2d.integration.layout_schema import RoomLayout
+
+        session.room_layout = RoomLayout(
+            width=len(tiles[0]),
+            height=len(tiles),
+            tiles=tiles,
+            spawn_points={"player": (1, 1), "exits": {}},
+        )
+
+    def test_wall_bump_in_exit_direction_transitions(self) -> None:
+        session, fake = make_session()
+        from client_2d.integration.layout_schema import TileType
+
+        f, w = TileType.FLOOR.value, TileType.WALL.value
+        self._custom_layout(
+            session,
+            [
+                [w, w, w],
+                [w, f, w],
+                [w, w, w],
+            ],
+        )
+        session.player_x, session.player_y = 1, 1
+
+        session._move_player("north")
+
+        assert fake.current_room_id == "north_room"
+
+    def test_edge_step_in_exit_direction_transitions(self) -> None:
+        session, fake = make_session()
+        from client_2d.integration.layout_schema import TileType
+
+        f = TileType.FLOOR.value
+        self._custom_layout(session, [[f, f], [f, f]])
+        session.player_x, session.player_y = 1, 0
+
+        session._move_player("north")
+
+        assert fake.current_room_id == "north_room"
+
+    def test_wall_bump_in_non_exit_direction_does_not_transition(self) -> None:
+        session, fake = make_session()
+        from client_2d.integration.layout_schema import TileType
+
+        f, w = TileType.FLOOR.value, TileType.WALL.value
+        self._custom_layout(
+            session,
+            [
+                [w, w, w],
+                [w, f, w],
+                [w, w, w],
+            ],
+        )
+        session.player_x, session.player_y = 1, 1
+
+        session._move_player("east")  # no east exit in room data
+
+        assert fake.current_room_id == "entry"
+        assert (session.player_x, session.player_y) == (1, 1)
