@@ -26,6 +26,8 @@ from dnd_engine.rules.loader import DataLoader
 from dnd_engine.systems.action_economy import ActionType, Terrain, cost_for
 from dnd_engine.systems.actions import hide
 from dnd_engine.systems.ai import EnemyAI
+from dnd_engine.systems.ai import pipeline as ai_pipeline
+from dnd_engine.systems.ai.context import TurnContext
 from dnd_engine.systems.condition_manager import ConditionManager
 from dnd_engine.systems.initiative import InitiativeTracker
 from dnd_engine.systems.inventory import EquipmentSlot
@@ -5193,83 +5195,39 @@ class GameState:
                 ) <= reach_ft
             ]
             if not in_reach:
-                # Layer 3 (#641): close distance toward the nearest PC.
-                # Loop attempt_combat_step (single 5-ft tile per call);
-                # OAs publish automatically via that primitive. Break
-                # on: (a) a PC entering reach -> fall through to attack,
-                # (b) speed budget exhausted (no movement remaining),
-                # (c) two consecutive step failures (anti-loop guard
-                # for monster-vs-monster collisions and walls), or
-                # (d) the hard step ceiling as a paranoia backstop.
+                # Layer 3 (#641): close distance toward the nearest PC,
+                # now driven by the AI pipeline (#647). The greedy
+                # close-distance loop is the `AggressiveAdvance`
+                # MovementStrategy; per-monster strategies (skirmisher,
+                # etc.) plug in via the registry. `pipeline.decide`
+                # picks the strategy from `monsters.json` and asks it
+                # to plan a path; `pipeline.execute` walks it tile-by-
+                # tile through `attempt_combat_step`, so per-step
+                # CREATURE_MOVED publication, opportunity-attack
+                # provocation, and Difficult Terrain cost continue to
+                # flow through the existing primitive.
                 #
                 # MVP limits intentionally not addressed:
-                # - Greedy sign(dx, dy) pathing; will clump in doorways
-                #   and may provoke avoidable OAs.
+                # - Greedy sign(dx, dy) pathing in AggressiveAdvance.
                 # - No Dash. Targets beyond `speed` feet trigger MOVED.
-                # - No split movement around the attack.
-                # A* / flowfield deferred until friction shows up.
-                enemy_eid = self.spatial.occupant_at(enemy.position)
-                if enemy_eid is not None:
-                    consecutive_failures = 0
-                    max_steps = 12  # speed=30 only needs 6; hard ceiling
-                    while moved_squares < max_steps:
-                        candidates = [
-                            pc for pc in living_party
-                            if pc.position is not None
-                        ]
-                        if not candidates:
-                            break
-                        # Re-pick the nearest PC every iteration so a
-                        # mid-loop change (an OA killing a target,
-                        # plan-04 instant kill, etc.) is handled. The
-                        # ``pc.name`` tiebreaker is load-bearing: it
-                        # makes the pick stable when two PCs are
-                        # equidistant, so the enemy doesn't oscillate
-                        # between them step-to-step.
-                        target_pc = min(
-                            candidates,
-                            key=lambda pc: (
-                                distance_in_feet(
-                                    enemy.position.x, enemy.position.y,
-                                    pc.position.x, pc.position.y,
-                                ),
-                                pc.name,
-                            ),
-                        )
-                        dx = (
-                            1 if target_pc.position.x > enemy.position.x
-                            else -1 if target_pc.position.x < enemy.position.x
-                            else 0
-                        )
-                        dy = (
-                            1 if target_pc.position.y > enemy.position.y
-                            else -1 if target_pc.position.y < enemy.position.y
-                            else 0
-                        )
-                        if dx == 0 and dy == 0:
-                            break  # standing on the target tile (shouldn't happen)
-                        move_result = self.attempt_combat_step(
-                            enemy_eid, dx, dy,
-                        )
-                        if move_result.ok:
-                            moved_squares += 1
-                            consecutive_failures = 0
-                            in_reach = [
-                                pc for pc in living_party
-                                if pc.position is not None
-                                and distance_in_feet(
-                                    enemy.position.x, enemy.position.y,
-                                    pc.position.x, pc.position.y,
-                                ) <= reach_ft
-                            ]
-                            if in_reach:
-                                break  # fall through to attack
-                        else:
-                            consecutive_failures += 1
-                            if move_result.reason == "no movement remaining":
-                                break
-                            if consecutive_failures >= 2:
-                                break  # stuck (e.g., walls, other monster)
+                # - No split movement around the attack (skirmisher
+                #   strategy lands separately).
+                ctx = TurnContext.build(
+                    self, enemy,
+                    target_pool=living_party,
+                    monster_data=monster_data,
+                    action_data=action,
+                    reach_ft=reach_ft,
+                    is_ranged=False,
+                )
+                intent = ai_pipeline.decide(ctx)
+                exec_result = ai_pipeline.execute(
+                    intent, self, enemy,
+                    reach_ft=reach_ft,
+                    target_pool=living_party,
+                )
+                moved_squares = exec_result.moved_squares
+                in_reach = exec_result.in_reach_targets
 
                 if not in_reach:
                     # Either moved without reaching (MOVED) or couldn't

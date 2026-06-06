@@ -112,6 +112,12 @@ class GameSession:
         self.engine = EngineAdapter()
         self.layout_loader = LayoutLoader()
         self.entity_manager = EntityManager()
+        # Per-step monster sprite tween queue (#647). Wired to the
+        # engine event bus by _subscribe_entity_manager_to_engine
+        # after each engine-state setup (initialize / load_scenario /
+        # reset_game).
+        from client_2d.animation import MovementTweenQueue
+        self.movement_tween_queue = MovementTweenQueue()
 
         # Texture dicts - GameWindow populates these before initialize().
         # Empty dicts work fine for headless mode (entity_manager handles
@@ -198,6 +204,7 @@ class GameSession:
         )
         print(f"  Starting room: {game_info['room_name']}")
 
+        self._wire_entity_manager_to_engine_events()
         self._load_room_layout()
 
         print("\nStarting game...")
@@ -1982,9 +1989,30 @@ class GameSession:
         result = self.engine.set_seed(seed)
         return f"Dice roller reseeded with {result['seed']}."
 
+    def _wire_entity_manager_to_engine_events(self) -> None:
+        """Hook the EntityManager into the engine's event bus (#647).
+
+        Idempotent — calling it again after an engine state swap
+        (load_scenario, reset_game, initialize) cleanly transitions
+        the subscription to the fresh event bus. Headless mode passes
+        the same MovementTweenQueue; the queue's enqueue is a no-op
+        unless the renderer ticks and reads visual_offset, so headless
+        callers pay only the dict-update cost.
+        """
+        event_bus = getattr(self.engine, "event_bus", None)
+        if event_bus is None:
+            return
+        self.entity_manager.subscribe_to_engine_events(
+            event_bus, tween_queue=self.movement_tween_queue,
+        )
+
     def load_scenario(self, path: str) -> str:
         """Load a YAML scenario: swap engine state and rebuild visuals."""
         result = self.engine.load_scenario(path)
+        # The scenario load replaces game_state and event_bus, so re-
+        # attach the entity-manager subscription to the new bus before
+        # any entity-construction event handlers fire downstream.
+        self._wire_entity_manager_to_engine_events()
 
         # The new engine state has a new dungeon / room; reload the
         # layout (also resets fog + lighting).

@@ -15,6 +15,14 @@ from client_2d.entities import (
 )
 
 
+class _MockPosition:
+    """Minimal stand-in for dnd_engine.core.position.Position."""
+
+    def __init__(self, x: int, y: int):
+        self.x = x
+        self.y = y
+
+
 class MockCreature:
     """Mock creature for testing entity sync without engine dependency."""
 
@@ -25,12 +33,14 @@ class MockCreature:
         max_hp: int = 10,
         is_alive: bool = True,
         active_conditions: dict | None = None,
+        position: _MockPosition | None = None,
     ):
         self.name = name
         self.current_hp = current_hp
         self.max_hp = max_hp
         self._is_alive = is_alive
         self.active_conditions = active_conditions or {}
+        self.position = position
 
     @property
     def is_alive(self) -> bool:
@@ -219,6 +229,34 @@ class TestEntity:
 
         assert changed is True
         assert "stunned" not in entity.conditions
+
+    def test_entity_sync_does_not_mirror_position(self):
+        """#647: sync_from_creature deliberately skips position.
+
+        The engine drives position via CREATURE_MOVED / CREATURE_PLACED
+        events; the EngineBridge subscription updates grid_x / grid_y
+        directly. Mirroring position from sync_from_creature would
+        clobber legacy client-owned writes (update_current_turn_position)
+        and the MCP test fixtures that assign grid coordinates by hand
+        before the engine knows about them.
+        """
+        creature = MockCreature(
+            current_hp=10, max_hp=10,
+            position=_MockPosition(7, 3),
+        )
+        entity = Entity(
+            entity_id="goblin_1",
+            grid_x=42,
+            grid_y=42,
+            entity_type=EntityType.MONSTER,
+        )
+        entity.creature = creature
+
+        # The visual grid_x/y stays at whatever the entity was
+        # constructed with — sync_from_creature only touches HP /
+        # alive / conditions.
+        assert entity.grid_x == 42
+        assert entity.grid_y == 42
 
 
 class TestMonsterEntity:

@@ -59,6 +59,11 @@ class EntityManager:
         self._monsters: dict[str, MonsterEntity] = {}
         self._party_members: dict[str, PartyMemberEntity] = {}
         self._items: dict[str, ItemEntity] = {}
+        # Engine event subscriptions (#647). Populated by
+        # subscribe_to_engine_events so we can unsubscribe and re-
+        # subscribe cleanly across load_scenario / reset_game cycles.
+        self._subscribed_event_bus = None
+        self._tween_queue = None
 
     def clear(self) -> None:
         """Remove all entities. Call on room transitions."""
@@ -175,6 +180,90 @@ class EntityManager:
                 changed.append(party_member)
 
         return changed
+
+
+    def subscribe_to_engine_events(
+        self,
+        event_bus,
+        *,
+        tween_queue=None,
+    ) -> None:
+        """Subscribe to engine position events so the visual layer stays current.
+
+        Issue #647: the engine publishes CREATURE_MOVED on every
+        successful 5-ft step (via attempt_combat_step) and
+        CREATURE_PLACED on every spatial placement (via set_position).
+        Subscribing here lets the EntityManager update grid_x / grid_y
+        on each entity in lockstep with the engine, so MCP ASCII output
+        and the 2D renderer both reflect intermediate tiles instead of
+        snapping to the final position only.
+
+        When ``tween_queue`` is provided, each step also enqueues a
+        sprite tween so windowed-mode rendering animates the move
+        smoothly. Headless mode passes ``None``.
+
+        The method is idempotent — calling it a second time first
+        unsubscribes from the previous bus. That matters because the
+        session re-creates the engine event bus on every
+        load_scenario / reset_game.
+        """
+        from dnd_engine.utils.events import EventType
+
+        if self._subscribed_event_bus is not None:
+            self._unsubscribe_from_engine_events()
+
+        self._subscribed_event_bus = event_bus
+        self._tween_queue = tween_queue
+        event_bus.subscribe(EventType.CREATURE_MOVED, self._on_creature_moved)
+        event_bus.subscribe(EventType.CREATURE_PLACED, self._on_creature_placed)
+
+    def _unsubscribe_from_engine_events(self) -> None:
+        """Detach from the currently-subscribed event bus."""
+        from dnd_engine.utils.events import EventType
+
+        if self._subscribed_event_bus is None:
+            return
+        try:
+            self._subscribed_event_bus.unsubscribe(
+                EventType.CREATURE_MOVED, self._on_creature_moved,
+            )
+            self._subscribed_event_bus.unsubscribe(
+                EventType.CREATURE_PLACED, self._on_creature_placed,
+            )
+        except (KeyError, ValueError):
+            # Old bus may have been torn down; tolerate.
+            pass
+        self._subscribed_event_bus = None
+        self._tween_queue = None
+
+    def _on_creature_moved(self, event) -> None:
+        """CREATURE_MOVED handler — update grid position + enqueue tween."""
+        data = event.data
+        entity_id = data.get("entity_id")
+        to = data.get("to")
+        if entity_id is None or to is None:
+            return
+        entity = self._entities.get(entity_id)
+        if entity is None:
+            return
+        from_tile = (entity.grid_x, entity.grid_y)
+        entity.grid_x = to.x
+        entity.grid_y = to.y
+        if self._tween_queue is not None:
+            self._tween_queue.enqueue(entity_id, from_tile, (to.x, to.y))
+
+    def _on_creature_placed(self, event) -> None:
+        """CREATURE_PLACED handler — snap grid position (no tween)."""
+        data = event.data
+        entity_id = data.get("entity_id")
+        position = data.get("position")
+        if entity_id is None or position is None:
+            return
+        entity = self._entities.get(entity_id)
+        if entity is None:
+            return
+        entity.grid_x = position.x
+        entity.grid_y = position.y
 
     def remove_dead_entities(self) -> list[Entity]:
         """Remove dead entities from the manager.
