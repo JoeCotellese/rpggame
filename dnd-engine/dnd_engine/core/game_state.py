@@ -290,6 +290,12 @@ class EnemyTurnAction(Enum):
     DIED_START_OF_TURN = "died_start_of_turn"
     NO_TARGETS = "no_targets"
     NO_VALID_ATTACK = "no_valid_attack"
+    # Issue #634: the enemy has a valid attack and living party members
+    # to target, but every PC sits beyond the action's reach. Until the
+    # monster-movement layer ships (Layer 3 follow-up), the enemy stays
+    # put and the turn advances cleanly so the headless tick loop never
+    # hangs.
+    NO_REACHABLE_TARGET = "no_reachable_target"
 
 
 @dataclass
@@ -5102,15 +5108,8 @@ class GameState:
                 turn_advanced=True,
             )
 
-        # Use smart targeting based on enemy intelligence and combat history
-        target = self.enemy_ai.select_target_smart(
-            available_targets=living_party,
-            enemy_intelligence=enemy.abilities.intelligence,
-            combat_history=self.combat_history,
-            enemy_name=enemy.name,
-        )
-
-        # Get monster data for attack
+        # Get monster data for attack — load BEFORE target selection so
+        # the action's `reach` can range-filter the candidate list (#634).
         monsters = self.data_loader.load_monsters()
         monster_data = None
         for _mid, mdata in monsters.items():
@@ -5124,7 +5123,6 @@ class GameState:
                 enemy_name=enemy.name,
                 enemy_display_name=enemy_display_name,
                 action_taken=EnemyTurnAction.NO_VALID_ATTACK,
-                target_name=target.name,
                 turn_start_effects=turn_start_effects,
                 error="No monster data or actions found",
                 turn_advanced=True,
@@ -5143,11 +5141,63 @@ class GameState:
                 enemy_name=enemy.name,
                 enemy_display_name=enemy_display_name,
                 action_taken=EnemyTurnAction.NO_VALID_ATTACK,
-                target_name=target.name,
                 turn_start_effects=turn_start_effects,
                 error="No valid attack actions",
                 turn_advanced=True,
             )
+
+        # Range-aware target filtering (#634, Layer 2). When the enemy
+        # has spatial context (a position) and the action carries a
+        # reach value, restrict the candidate list to PCs the enemy can
+        # actually hit this turn. The smart targeting strategy then
+        # runs over the filtered subset so retaliation / lowest-HP /
+        # intelligence-based picks still apply — they just can't pick
+        # an out-of-reach PC. When no PC is in reach the enemy stays
+        # put and emits NO_REACHABLE_TARGET; Layer 3 will add movement
+        # to close the gap.
+        #
+        # Skip the filter when no spatial context exists (legacy
+        # integration tests that don't bootstrap_spatial), so this
+        # change is regression-free for the unit suite.
+        from dnd_engine.core.combat_geometry import attack_reach_for, is_ranged_action
+        from dnd_engine.core.distance import distance_in_feet
+        targeting_pool = living_party
+        if (
+            enemy.position is not None
+            and not is_ranged_action(action)
+        ):
+            reach_ft = attack_reach_for(action)
+            in_reach = [
+                pc for pc in living_party
+                if pc.position is not None
+                and distance_in_feet(
+                    enemy.position.x, enemy.position.y,
+                    pc.position.x, pc.position.y,
+                ) <= reach_ft
+            ]
+            if not in_reach:
+                # Architect blocker resolved: advance the turn so the
+                # headless tick loop never hangs on a stranded enemy.
+                self.initiative_tracker.next_turn()
+                return EnemyTurnResult(
+                    enemy_name=enemy.name,
+                    enemy_display_name=enemy_display_name,
+                    action_taken=EnemyTurnAction.NO_REACHABLE_TARGET,
+                    action_data=action,
+                    turn_start_effects=turn_start_effects,
+                    turn_end_effects=turn_end_effects,
+                    turn_advanced=True,
+                )
+            targeting_pool = in_reach
+
+        # Use smart targeting based on enemy intelligence and combat
+        # history, scoped to the range-filtered candidate pool.
+        target = self.enemy_ai.select_target_smart(
+            available_targets=targeting_pool,
+            enemy_intelligence=enemy.abilities.intelligence,
+            combat_history=self.combat_history,
+            enemy_name=enemy.name,
+        )
 
         # Track conditions before attack (for saving throw detection)
         conditions_before = set()
