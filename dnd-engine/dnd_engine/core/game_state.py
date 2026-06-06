@@ -293,11 +293,16 @@ class EnemyTurnAction(Enum):
     NO_TARGETS = "no_targets"
     NO_VALID_ATTACK = "no_valid_attack"
     # Issue #634: the enemy has a valid attack and living party members
-    # to target, but every PC sits beyond the action's reach. Until the
-    # monster-movement layer ships (Layer 3 follow-up), the enemy stays
-    # put and the turn advances cleanly so the headless tick loop never
+    # to target, but every PC sits beyond the action's reach AND the
+    # enemy cannot close the gap this turn (speed 0 / blocked twice in
+    # a row). Turn advances cleanly so the headless tick loop never
     # hangs.
     NO_REACHABLE_TARGET = "no_reachable_target"
+    # Issue #641: the enemy moved toward the nearest PC but its speed
+    # budget ran out before reaching attack range. Movement-only turn;
+    # no attack was attempted. ``moved_squares`` and
+    # ``movement_end_position`` on EnemyTurnResult carry the detail.
+    MOVED = "moved"
 
 
 @dataclass
@@ -384,6 +389,14 @@ class EnemyTurnResult:
     # Turn management
     turn_advanced: bool = True  # Whether initiative moved to next turn
     combat_ended: bool = False  # Whether combat ended this turn
+
+    # Movement (Issue #641, Layer 3): set when the enemy stepped during
+    # its turn. ``moved_squares`` counts successful 5-ft steps; non-zero
+    # on an ATTACK result means the monster closed distance before
+    # attacking. ``movement_end_position`` records the final tile so
+    # the UI can describe the path without snapshotting spatial state.
+    moved_squares: int = 0
+    movement_end_position: tuple[int, int] | None = None
 
     # Error handling
     error: str | None = None
@@ -5175,19 +5188,101 @@ class GameState:
                     pc.position.x, pc.position.y,
                 ) <= reach_ft
             ]
+            moved_squares = 0
             if not in_reach:
-                # Architect blocker resolved: advance the turn so the
-                # headless tick loop never hangs on a stranded enemy.
-                self.initiative_tracker.next_turn()
-                return EnemyTurnResult(
-                    enemy_name=enemy.name,
-                    enemy_display_name=enemy_display_name,
-                    action_taken=EnemyTurnAction.NO_REACHABLE_TARGET,
-                    action_data=action,
-                    turn_start_effects=turn_start_effects,
-                    turn_end_effects=turn_end_effects,
-                    turn_advanced=True,
-                )
+                # Layer 3 (#641): close distance toward the nearest PC.
+                # Loop attempt_combat_step (single 5-ft tile per call);
+                # OAs publish automatically via that primitive. Break
+                # on: (a) a PC entering reach -> fall through to attack,
+                # (b) speed budget exhausted (no movement remaining),
+                # (c) two consecutive step failures (anti-loop guard
+                # for monster-vs-monster collisions and walls), or
+                # (d) the hard step ceiling as a paranoia backstop.
+                #
+                # MVP limits intentionally not addressed:
+                # - Greedy sign(dx, dy) pathing; will clump in doorways
+                #   and may provoke avoidable OAs.
+                # - No Dash. Targets beyond `speed` feet trigger MOVED.
+                # - No split movement around the attack.
+                # A* / flowfield deferred until friction shows up.
+                enemy_eid = self.spatial.occupant_at(enemy.position)
+                if enemy_eid is not None:
+                    consecutive_failures = 0
+                    max_steps = 12  # speed=30 only needs 6; hard ceiling
+                    while moved_squares < max_steps:
+                        candidates = [
+                            pc for pc in living_party
+                            if pc.position is not None
+                        ]
+                        if not candidates:
+                            break
+                        target_pc = min(
+                            candidates,
+                            key=lambda pc: (
+                                distance_in_feet(
+                                    enemy.position.x, enemy.position.y,
+                                    pc.position.x, pc.position.y,
+                                ),
+                                pc.name,
+                            ),
+                        )
+                        dx = (
+                            1 if target_pc.position.x > enemy.position.x
+                            else -1 if target_pc.position.x < enemy.position.x
+                            else 0
+                        )
+                        dy = (
+                            1 if target_pc.position.y > enemy.position.y
+                            else -1 if target_pc.position.y < enemy.position.y
+                            else 0
+                        )
+                        if dx == 0 and dy == 0:
+                            break  # standing on the target tile (shouldn't happen)
+                        move_result = self.attempt_combat_step(
+                            enemy_eid, dx, dy,
+                        )
+                        if move_result.ok:
+                            moved_squares += 1
+                            consecutive_failures = 0
+                            in_reach = [
+                                pc for pc in living_party
+                                if pc.position is not None
+                                and distance_in_feet(
+                                    enemy.position.x, enemy.position.y,
+                                    pc.position.x, pc.position.y,
+                                ) <= reach_ft
+                            ]
+                            if in_reach:
+                                break  # fall through to attack
+                        else:
+                            consecutive_failures += 1
+                            if move_result.reason == "no movement remaining":
+                                break
+                            if consecutive_failures >= 2:
+                                break  # stuck (e.g., walls, other monster)
+
+                if not in_reach:
+                    # Either moved without reaching (MOVED) or couldn't
+                    # move at all (NO_REACHABLE_TARGET — speed 0 or
+                    # blocked from the start).
+                    self.initiative_tracker.next_turn()
+                    action_taken = (
+                        EnemyTurnAction.MOVED if moved_squares > 0
+                        else EnemyTurnAction.NO_REACHABLE_TARGET
+                    )
+                    return EnemyTurnResult(
+                        enemy_name=enemy.name,
+                        enemy_display_name=enemy_display_name,
+                        action_taken=action_taken,
+                        action_data=action,
+                        moved_squares=moved_squares,
+                        movement_end_position=(
+                            enemy.position.x, enemy.position.y,
+                        ),
+                        turn_start_effects=turn_start_effects,
+                        turn_end_effects=turn_end_effects,
+                        turn_advanced=True,
+                    )
             targeting_pool = in_reach
 
         # Use smart targeting based on enemy intelligence and combat
@@ -5304,6 +5399,17 @@ class GameState:
             narrative_context=narrative_context,
             turn_advanced=True,
             combat_ended=combat_ended,
+            # Layer 3 (#641): if the enemy closed distance before
+            # attacking, surface the step count on the result. Defaults
+            # to 0 / None when the enemy was already in reach.
+            moved_squares=(
+                moved_squares if "moved_squares" in locals() else 0
+            ),
+            movement_end_position=(
+                (enemy.position.x, enemy.position.y)
+                if "moved_squares" in locals() and moved_squares > 0
+                else None
+            ),
         )
 
     def process_unconscious_turn(self) -> DeathSaveTurnResult | None:
