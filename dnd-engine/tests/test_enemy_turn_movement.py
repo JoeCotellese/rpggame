@@ -241,3 +241,43 @@ class TestMonsterMovementProvokesOpportunityAttacks:
         # which is correct: the OA system makes no friend/foe check
         # (a known limitation, not introduced by this change).
         assert oa_events[0].data["defender"] == mover.name
+
+
+class TestMonsterCannotMove:
+    """SRD: a creature with speed 0 (Grappled, Restrained, etc.) can't
+    move. Layer 3 must surface this cleanly as NO_REACHABLE_TARGET so
+    the headless tick loop doesn't hang, and must not infinite-loop on
+    a step that always fails.
+    """
+
+    def test_speed_0_enemy_stays_put_and_advances_turn(self):
+        """Issue #641 acceptance criterion 4: a speed=0 enemy (e.g.,
+        grappled) returns NO_REACHABLE_TARGET with moved_squares=0.
+
+        ``attempt_combat_step`` fails the first step with
+        ``"no movement remaining"`` because TurnState was initialized
+        from ``enemy.speed = 0``. The movement loop's exhausted-budget
+        branch breaks out without spinning, the turn advances, and no
+        attack happens.
+        """
+        gs, _eids = _build_movement_fixture(
+            party_positions={"Alice": (5, 11)},  # 30 ft away
+            enemy_positions=(5, 5),
+            enemy_speed_override=0,
+        )
+        tracker = gs.initiative_tracker
+        assert tracker is not None
+        turn_index_before = tracker.current_turn_index
+
+        result = gs.process_enemy_turn()
+
+        assert result is not None
+        assert result.action_taken == EnemyTurnAction.NO_REACHABLE_TARGET
+        assert result.moved_squares == 0
+        assert result.turn_advanced is True
+        assert tracker.current_turn_index != turn_index_before, (
+            "initiative did not advance — combat would hang"
+        )
+        # Enemy position unchanged.
+        assert gs.active_enemies[0].position.x == 5
+        assert gs.active_enemies[0].position.y == 5
