@@ -5309,13 +5309,17 @@ class GameState:
                     )
             targeting_pool = in_reach
 
+        pipeline_target: Creature | None = None
         if pipeline_attack_outcome is not None and pipeline_attack_step is not None:
-            # Skirmisher path: pipeline already attacked. Reconstruct
-            # the post-attack state machinery from the pipeline outcome.
-            target = next(
+            pipeline_target = next(
                 (c for c in living_party if c.name == pipeline_attack_step.target_id),
                 None,
-            ) or living_party[0]
+            )
+
+        if pipeline_attack_outcome is not None and pipeline_target is not None:
+            # Skirmisher path: pipeline already attacked. Reconstruct
+            # the post-attack state machinery from the pipeline outcome.
+            target = pipeline_target
             attack_result = pipeline_attack_outcome
             # Conditions-before tracking is bypassed on the skirmisher
             # path; skirmisher attacks (goblin scimitar, kobold dagger)
