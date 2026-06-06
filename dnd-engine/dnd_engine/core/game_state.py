@@ -26,6 +26,8 @@ from dnd_engine.rules.loader import DataLoader
 from dnd_engine.systems.action_economy import ActionType, Terrain, cost_for
 from dnd_engine.systems.actions import hide
 from dnd_engine.systems.ai import EnemyAI
+from dnd_engine.systems.ai import pipeline as ai_pipeline
+from dnd_engine.systems.ai.context import TurnContext
 from dnd_engine.systems.condition_manager import ConditionManager
 from dnd_engine.systems.initiative import InitiativeTracker
 from dnd_engine.systems.inventory import EquipmentSlot
@@ -5210,26 +5212,16 @@ class GameState:
                 # - No Dash. Targets beyond `speed` feet trigger MOVED.
                 # - No split movement around the attack (skirmisher
                 #   strategy lands separately).
-                from dataclasses import replace
-
-                from dnd_engine.systems.ai import pipeline
-                from dnd_engine.systems.ai.context import TurnContext
-
                 ctx = TurnContext.build(
                     self, enemy,
                     target_pool=living_party,
                     monster_data=monster_data,
-                )
-                # The local `action` is the resolved attack action for
-                # this turn; build ctx so decide() planning aligns.
-                ctx = replace(
-                    ctx,
                     action_data=action,
                     reach_ft=reach_ft,
                     is_ranged=False,
                 )
-                intent = pipeline.decide(ctx)
-                exec_result = pipeline.execute(
+                intent = ai_pipeline.decide(ctx)
+                exec_result = ai_pipeline.execute(
                     intent, self, enemy,
                     reach_ft=reach_ft,
                     target_pool=living_party,

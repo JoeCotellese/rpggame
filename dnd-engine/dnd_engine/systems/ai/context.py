@@ -63,6 +63,9 @@ class TurnContext:
         *,
         target_pool: list[Creature] | None = None,
         monster_data: dict[str, Any] | None = None,
+        action_data: dict[str, Any] | None = None,
+        reach_ft: int | None = None,
+        is_ranged: bool | None = None,
     ) -> TurnContext:
         """Construct a TurnContext from a game state + enemy.
 
@@ -71,6 +74,12 @@ class TurnContext:
         action-selection contract). Falls back to None when the
         catalog or the action list is missing — callers handle that
         as "no valid attack".
+
+        Callers that already resolved the chosen attack action (e.g.
+        `process_enemy_turn`, which picks the first action carrying
+        both `attack_bonus` and `damage`) can pass `action_data` /
+        `reach_ft` / `is_ranged` explicitly so the context aligns
+        with the call site's action-selection rules.
 
         Args:
             state: The active game state.
@@ -81,6 +90,10 @@ class TurnContext:
             monster_data: Optional pre-resolved monster data dict.
                 When None, looks up `enemy.name.lower()` in the
                 catalog and returns an empty dict on miss.
+            action_data: Optional explicit override for the chosen
+                attack action. Skips the local lookup when provided.
+            reach_ft: Optional explicit override for reach.
+            is_ranged: Optional explicit override for ranged-ness.
 
         Returns:
             A frozen `TurnContext` ready to thread through `decide`.
@@ -88,21 +101,27 @@ class TurnContext:
         pool = target_pool if target_pool is not None else []
         m_data = monster_data if monster_data is not None else _lookup_monster_data(state, enemy)
 
-        action_data = _first_weapon_action(m_data)
-        reach_ft: int | None = None
-        is_ranged = False
         if action_data is not None:
-            reach_ft = attack_reach_for(action_data)
-            is_ranged = is_ranged_action(action_data)
+            resolved_action = action_data
+            resolved_reach = reach_ft if reach_ft is not None else attack_reach_for(action_data)
+            resolved_is_ranged = is_ranged if is_ranged is not None else is_ranged_action(action_data)
+        else:
+            resolved_action = _first_weapon_action(m_data)
+            if resolved_action is None:
+                resolved_reach = None
+                resolved_is_ranged = False
+            else:
+                resolved_reach = attack_reach_for(resolved_action)
+                resolved_is_ranged = is_ranged_action(resolved_action)
 
         return cls(
             state=state,
             actor=enemy,
             target_pool=pool,
             monster_data=m_data,
-            action_data=action_data,
-            reach_ft=reach_ft,
-            is_ranged=is_ranged,
+            action_data=resolved_action,
+            reach_ft=resolved_reach,
+            is_ranged=resolved_is_ranged,
         )
 
 
