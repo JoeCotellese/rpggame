@@ -39,6 +39,7 @@ def _build_movement_fixture(
     party_positions: dict[str, tuple[int, int]],
     enemy_positions: list[tuple[int, int]] | tuple[int, int],
     enemy_id: str = "giant_rat",
+    enemy_speed_override: int | None = None,
     map_size: int = 20,
 ) -> tuple[GameState, list[str]]:
     """Build a flat-floor combat with PCs and one or more enemies.
@@ -77,6 +78,11 @@ def _build_movement_fixture(
     enemy_eids: list[str] = []
     for idx, pos in enumerate(enemy_positions):
         enemy = game_state.data_loader.create_monster(enemy_id)
+        if enemy_speed_override is not None:
+            # Set speed BEFORE _start_combat() so TurnState init at
+            # initiative.py:102 picks up the override
+            # (TurnState(movement_remaining=creature.speed)).
+            enemy.speed = enemy_speed_override
         game_state.active_enemies.append(enemy)
         eid = f"{enemy_id}_{idx}"
         game_state.set_position(eid, pos[0], pos[1])
@@ -137,3 +143,41 @@ class TestMonsterClosesAndAttacks:
         # Attack happened (hit or miss — seeded roll, but the contract
         # is that the attack code ran, not that it landed).
         assert result.attack_result is not None
+
+    def test_speed_20_enemy_stops_10_ft_short_and_emits_moved(self):
+        """Speed=20 enemy 30 ft from a PC moves 4 squares and stops.
+
+        Issue #641 acceptance criterion 2: a monster whose speed
+        budget doesn't reach the nearest PC takes what movement it
+        has, ends the turn with a MOVED action, and does NOT attempt
+        an attack (the engine reach gate would reject it anyway).
+
+        Geometry: enemy at (5, 5), PC at (5, 11) → 30 ft. With
+        speed=20, the enemy takes 4 steps (4 × 5 ft = 20 ft) and
+        lands at (5, 9), still 10 ft from the PC.
+        """
+        gs, _eids = _build_movement_fixture(
+            party_positions={"Bob": (5, 11)},
+            enemy_positions=(5, 5),
+            enemy_speed_override=20,
+        )
+
+        result = gs.process_enemy_turn()
+
+        assert result is not None
+        assert result.action_taken == EnemyTurnAction.MOVED, (
+            f"speed=20 enemy should have emitted MOVED; got {result.action_taken}"
+        )
+        assert result.moved_squares == 4, (
+            f"speed=20 = 4 steps of 5 ft; got {result.moved_squares}"
+        )
+        assert result.movement_end_position == (5, 9), (
+            "enemy should have stopped at (5, 9), 10 ft from PC; "
+            f"ended at {result.movement_end_position}"
+        )
+        assert result.attack_result is None
+        assert result.target_killed is False
+        assert result.turn_advanced is True
+        # PC took no damage — confirming attack truly didn't run.
+        for character in gs.party.characters:
+            assert character.current_hp == character.max_hp
