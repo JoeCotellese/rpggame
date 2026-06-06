@@ -344,3 +344,59 @@ class TestMonsterMovementDoesNotDeadlock:
             "enemy 2 never got a turn within 10 initiative steps — "
             "something is hanging combat"
         )
+
+
+class TestTickLoopClosesAndAttacks:
+    """Integration: drive the headless tick loop forward; the only path
+    to victory is monsters closing distance. Mirrors the hang-detector
+    pattern from
+    tests/test_enemy_turn_reach_targeting.py::TestRangeAwareTargeting
+    ::test_combat_does_not_hang_when_all_enemies_stranded.
+    """
+
+    def test_monster_closes_distance_and_lands_an_attack_within_one_round(self):
+        """Issue #641 acceptance criterion 6: when the enemy is 30 ft
+        from the PC, ``process_enemy_turn`` should — within a single
+        call — move into reach and attack.
+
+        Speed=30 = 6 squares of movement; the gap closes in 5 steps
+        (the 6th step is unnecessary, the loop must recognize the
+        in-reach pool became non-empty and break to attack). We loop
+        ``process_enemy_turn`` to be resilient to initiative ordering
+        (the enemy may or may not be the first combatant), with a
+        belt-and-braces step ceiling.
+        """
+        gs, _eids = _build_movement_fixture(
+            party_positions={"Alice": (5, 11)},  # 30 ft south
+            enemy_positions=(5, 5),
+        )
+        tracker = gs.initiative_tracker
+        assert tracker is not None
+        enemy = gs.active_enemies[0]
+
+        attack_seen = False
+        moved_before_attacking = 0
+        # Hard cap on initiative iterations: enough for a few rounds
+        # in a 2-combatant fight, well short of an infinite loop.
+        for _ in range(20):
+            current = tracker.get_current_combatant()
+            if current is not None and current.creature is enemy:
+                result = gs.process_enemy_turn()
+                assert result is not None
+                if result.action_taken == EnemyTurnAction.ATTACK:
+                    attack_seen = True
+                    moved_before_attacking = result.moved_squares
+                    break
+                # MOVED or NO_REACHABLE_TARGET: keep cycling
+                continue
+            # PC turn — skip past it.
+            tracker.next_turn()
+
+        assert attack_seen, (
+            "enemy never reached attack range — closing-distance "
+            "combat would never complete"
+        )
+        assert moved_before_attacking >= 5, (
+            f"enemy needed at least 5 steps to close 30 ft; "
+            f"got {moved_before_attacking}"
+        )
