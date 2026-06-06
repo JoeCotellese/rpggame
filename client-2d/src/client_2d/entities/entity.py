@@ -102,6 +102,14 @@ class Entity:
         engine Creature. This allows efficient rendering without
         constantly querying the engine.
 
+        Position is **not** synced here. The engine drives position via
+        explicit CREATURE_MOVED / CREATURE_PLACED events; the
+        EngineBridge subscribes to those events (#647) and writes
+        grid_x / grid_y directly so the visual layer sees per-step
+        movement without overwriting client-owned writes from legacy
+        combat (update_current_turn_position) or MCP tests that set
+        grid coordinates by hand.
+
         Returns:
             True if any state changed, False if unchanged.
             Use this to trigger animations on state changes.
