@@ -3,14 +3,18 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import logging
+from dataclasses import dataclass, field
 from typing import Any
+from unittest.mock import MagicMock
 
+from dnd_engine.core.combat import AttackResult
 from dnd_engine.core.creature import Abilities, Creature
+from dnd_engine.core.move_result import MoveResult
 from dnd_engine.core.position import Position
 from dnd_engine.systems.ai import pipeline
 from dnd_engine.systems.ai.context import TurnContext
-from dnd_engine.systems.ai.intent import AttackStep, MoveStep
+from dnd_engine.systems.ai.intent import AttackStep, Intent, MoveStep
 from dnd_engine.systems.ai.strategies.skirmisher import Skirmisher
 
 
@@ -132,3 +136,225 @@ class TestDecideAggressiveStillWorks:
         )
         intent = pipeline.decide(ctx)
         assert intent.steps == []
+
+
+# ---------- execute() tests ----------
+
+
+@dataclass
+class _StubSpatial:
+    occupants: dict[Position, str] = field(default_factory=dict)
+
+    def occupant_at(self, pos: Position) -> str | None:
+        return self.occupants.get(pos)
+
+
+@dataclass
+class _StubGameState:
+    """Stub state that scripts attempt_combat_step results in order."""
+
+    spatial: _StubSpatial = field(default_factory=_StubSpatial)
+    step_results: list[MoveResult] = field(default_factory=list)
+    enemy: Creature | None = None
+    on_each_step: Any = None  # callable hook, e.g., flip enemy.is_alive
+
+    def attempt_combat_step(self, entity_id: str, dx: int, dy: int) -> MoveResult:
+        result = self.step_results.pop(0)
+        if result.ok and result.position is not None and self.enemy is not None:
+            self.enemy.position = result.position
+        if self.on_each_step is not None:
+            self.on_each_step(entity_id, dx, dy)
+        return result
+
+
+def _ok_step(pos: Position) -> MoveResult:
+    return MoveResult(ok=True, reason=None, position=pos, movement_remaining=25)
+
+
+def _attack_outcome(hit: bool = True, damage: int = 5) -> AttackResult:
+    return AttackResult(
+        attacker_name="Goblin",
+        defender_name="Brick",
+        attack_roll=15,
+        attack_bonus=4,
+        target_ac=15,
+        hit=hit,
+        damage=damage,
+        critical_hit=False,
+        advantage=False,
+        disadvantage=False,
+    )
+
+
+class TestExecuteAttackStep:
+    """execute() routes AttackStep through the supplied attack_resolver."""
+
+    def test_resolver_called_with_actor_target_id_and_action(self):
+        actor = _make_creature("Goblin", 5, 9)
+        target = _make_creature("Brick", 5, 10)
+        spatial = _StubSpatial(occupants={Position(5, 9): "goblin_0"})
+        state = _StubGameState(spatial=spatial, enemy=actor)
+        resolver = MagicMock(return_value=_attack_outcome())
+
+        intent = Intent(steps=[AttackStep(target_id="Brick", action=SCIMITAR)])
+        result = pipeline.execute(
+            intent, state, actor,
+            reach_ft=5,
+            target_pool=[target],
+            attack_resolver=resolver,
+        )
+
+        resolver.assert_called_once_with(actor, "Brick", SCIMITAR)
+        assert result.attack_outcome is not None
+        assert result.attack_outcome.hit is True
+
+    def test_skips_retreat_when_attack_kills_target(self):
+        actor = _make_creature("Goblin", 5, 9)
+        target = _make_creature("Brick", 5, 10)
+        spatial = _StubSpatial(occupants={Position(5, 9): "goblin_0"})
+        state = _StubGameState(spatial=spatial, enemy=actor)
+
+        def killer(_actor: Creature, _tid: str, _action: dict) -> AttackResult:
+            target.current_hp = 0  # kill the target
+            return _attack_outcome(damage=20)
+
+        intent = Intent(steps=[
+            AttackStep(target_id="Brick", action=SCIMITAR),
+            MoveStep(path=[Position(5, 8)]),
+        ])
+        result = pipeline.execute(
+            intent, state, actor,
+            reach_ft=5,
+            target_pool=[target],
+            attack_resolver=killer,
+        )
+
+        assert result.stopped_reason == "target_killed_no_retreat"
+        assert result.moved_squares == 0
+        assert result.attack_outcome is not None
+
+    def test_attackstep_without_resolver_logs_warning_and_continues(self, caplog):
+        actor = _make_creature("Goblin", 5, 9)
+        target = _make_creature("Brick", 5, 10)
+        spatial = _StubSpatial(occupants={Position(5, 9): "goblin_0"})
+        state = _StubGameState(
+            spatial=spatial,
+            enemy=actor,
+            step_results=[_ok_step(Position(5, 8))],
+        )
+
+        intent = Intent(steps=[
+            AttackStep(target_id="Brick", action=SCIMITAR),
+            MoveStep(path=[Position(5, 8)]),
+        ])
+        with caplog.at_level(logging.WARNING, logger="dnd_engine.systems.ai.pipeline"):
+            result = pipeline.execute(
+                intent, state, actor,
+                reach_ft=5,
+                target_pool=[target],
+                attack_resolver=None,
+            )
+
+        assert result.attack_outcome is None
+        # Retreat still walked despite missing resolver.
+        assert result.moved_squares == 1
+        assert any("attack_resolver" in rec.message for rec in caplog.records)
+
+
+class TestExecuteFullSkirmish:
+    """A complete close → attack → retreat sequence."""
+
+    def test_completes_all_phases(self):
+        actor = _make_creature("Goblin", 5, 5)
+        target = _make_creature("Brick", 5, 10)
+        spatial = _StubSpatial(occupants={Position(5, 5): "goblin_0"})
+        state = _StubGameState(
+            spatial=spatial,
+            enemy=actor,
+            step_results=[
+                # Close phase: 4 tiles to (5, 9).
+                _ok_step(Position(5, 6)),
+                _ok_step(Position(5, 7)),
+                _ok_step(Position(5, 8)),
+                _ok_step(Position(5, 9)),
+                # Retreat phase: 1 tile back to (5, 8).
+                _ok_step(Position(5, 8)),
+            ],
+        )
+        resolver = MagicMock(return_value=_attack_outcome())
+
+        intent = Intent(steps=[
+            MoveStep(path=[
+                Position(5, 6), Position(5, 7), Position(5, 8), Position(5, 9),
+            ]),
+            AttackStep(target_id="Brick", action=SCIMITAR),
+            MoveStep(path=[Position(5, 8)]),
+        ])
+        result = pipeline.execute(
+            intent, state, actor,
+            reach_ft=5,
+            target_pool=[target],
+            attack_resolver=resolver,
+        )
+
+        assert result.moved_squares == 5
+        assert result.attack_outcome is not None
+        assert result.stopped_reason == "retreated"
+        assert state.step_results == []  # all scripted steps consumed
+        resolver.assert_called_once()
+
+    def test_stops_when_enemy_dies_during_retreat(self):
+        actor = _make_creature("Goblin", 5, 9)
+        target = _make_creature("Brick", 5, 10)
+        spatial = _StubSpatial(occupants={Position(5, 9): "goblin_0"})
+
+        def kill_after_first_retreat(_eid: str, _dx: int, _dy: int) -> None:
+            actor.current_hp = 0
+
+        state = _StubGameState(
+            spatial=spatial,
+            enemy=actor,
+            step_results=[
+                _ok_step(Position(5, 8)),  # first retreat step (OA kills)
+                _ok_step(Position(5, 7)),  # would be 2nd step (should not run)
+            ],
+            on_each_step=kill_after_first_retreat,
+        )
+        resolver = MagicMock(return_value=_attack_outcome())
+
+        intent = Intent(steps=[
+            AttackStep(target_id="Brick", action=SCIMITAR),
+            MoveStep(path=[Position(5, 8), Position(5, 7)]),
+        ])
+        result = pipeline.execute(
+            intent, state, actor,
+            reach_ft=5,
+            target_pool=[target],
+            attack_resolver=resolver,
+        )
+
+        assert result.stopped_reason == "enemy_died_mid_retreat"
+        assert result.moved_squares == 1
+        # Second tile MUST NOT be walked.
+        assert len(state.step_results) == 1
+
+
+class TestExecuteAggressivePathUnchanged:
+    """Sanity: existing single-MoveStep contract is byte-identical."""
+
+    def test_aggressive_in_reach_short_circuits_as_before(self):
+        actor = _make_creature("Bandit", 5, 5)
+        target = _make_creature("Brick", 5, 6)
+        spatial = _StubSpatial(occupants={Position(5, 5): "bandit_0"})
+        state = _StubGameState(spatial=spatial, enemy=actor)
+
+        intent = Intent(steps=[MoveStep(path=[Position(5, 6)])])
+        result = pipeline.execute(
+            intent, state, actor,
+            reach_ft=5,
+            target_pool=[target],
+        )
+        # Already in reach before stepping → in_reach short-circuit.
+        assert result.stopped_reason == "in_reach"
+        assert result.moved_squares == 0
+        assert result.attack_outcome is None

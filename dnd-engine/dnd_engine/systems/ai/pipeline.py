@@ -29,6 +29,7 @@ Attack resolution remains in `process_enemy_turn` for now —
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -39,10 +40,13 @@ from dnd_engine.systems.ai.strategies.aggressive import AggressiveAdvance
 from dnd_engine.systems.ai.strategies.skirmisher import Skirmisher
 
 if TYPE_CHECKING:
+    from dnd_engine.core.combat import AttackResult
     from dnd_engine.core.creature import Creature
     from dnd_engine.core.game_state import GameState
     from dnd_engine.systems.ai.context import TurnContext
     from dnd_engine.systems.ai.movement_strategy import MovementStrategy
+
+AttackResolver = Callable[["Creature", str, dict], "AttackResult | None"]
 
 logger = logging.getLogger(__name__)
 
@@ -181,17 +185,21 @@ def decide(ctx: TurnContext) -> Intent:
 
 @dataclass
 class MovementExecution:
-    """Outcome of walking the MoveSteps in an Intent.
+    """Outcome of executing an Intent.
 
     Surfaces enough state for `process_enemy_turn` to decide between
     EnemyTurnAction.MOVED, NO_REACHABLE_TARGET, and falling through
-    to attack resolution.
+    to attack resolution. When the Intent included an AttackStep, the
+    resolver's `AttackResult` is captured on `attack_outcome` so the
+    caller can package the EnemyTurnResult directly without rerunning
+    `combat_engine.resolve_attack`.
     """
 
     moved_squares: int = 0
     final_position: Position | None = None
     in_reach_targets: list[Creature] = field(default_factory=list)
     stopped_reason: str = ""
+    attack_outcome: AttackResult | None = None
 
 
 def execute(
@@ -201,22 +209,38 @@ def execute(
     *,
     reach_ft: int | None = None,
     target_pool: list[Creature] | None = None,
+    attack_resolver: AttackResolver | None = None,
 ) -> MovementExecution:
-    """Walk the MoveSteps in `intent` via `GameState.attempt_combat_step`.
+    """Walk the Intent's steps against `state`.
+
+    MoveStep paths walk one tile at a time via
+    `GameState.attempt_combat_step` (preserving CREATURE_MOVED events,
+    opportunity-attack triggers, and Difficult Terrain costs). The
+    close phase short-circuits the per-tile loop as soon as a target
+    enters reach so the actor can attack this turn.
+
+    AttackStep is routed through `attack_resolver` when provided.
+    Skirmisher-style retreat is short-circuited if the attack killed
+    the target. Mid-retreat enemy death (e.g., via opportunity attack)
+    halts cleanly with `stopped_reason="enemy_died_mid_retreat"`.
 
     Args:
         intent: The plan produced by `decide`.
         state: The active game state.
         enemy: The acting enemy.
         reach_ft: Effective reach for the chosen action. When set
-            with `target_pool`, execution stops as soon as any
+            with `target_pool`, the close phase stops as soon as any
             target enters reach.
-        target_pool: Living-target pool for the in-reach check.
+        target_pool: Living-target pool for the in-reach check and
+            for resolving `AttackStep.target_id` to a `Creature`.
+        attack_resolver: Optional callback that resolves an
+            `AttackStep` against `state`. Signature:
+            `(actor, target_id, action) -> AttackResult | None`.
 
     Returns:
         A `MovementExecution` capturing moved squares, final
-        position, in-reach targets at end of execution, and a
-        stop-reason string.
+        position, in-reach targets, the attack outcome (if any), and
+        a stop-reason string.
     """
     result = MovementExecution(final_position=enemy.position)
     if enemy.position is None or not intent.steps:
@@ -226,21 +250,40 @@ def execute(
         result.stopped_reason = "no_entity_id"
         return result
 
-    consecutive_failures = 0
     pool = target_pool or []
+    consecutive_failures = 0
+    is_close_phase = True
+    retreat_walked = False
+
     for step in intent.steps:
+        if isinstance(step, AttackStep):
+            is_close_phase = False
+            if attack_resolver is None:
+                logger.warning(
+                    "Pipeline encountered AttackStep but no "
+                    "attack_resolver was provided; skipping.",
+                )
+                continue
+            result.attack_outcome = attack_resolver(enemy, step.target_id, step.action)
+            target = next(
+                (c for c in pool if c.name == step.target_id),
+                None,
+            )
+            if target is not None and not target.is_alive:
+                result.stopped_reason = "target_killed_no_retreat"
+                return _finalize(result, enemy)
+            if not enemy.is_alive:
+                result.stopped_reason = "enemy_died_mid_attack"
+                return _finalize(result, enemy)
+            continue
+
         if not isinstance(step, MoveStep):
             continue
+
         for target_tile in step.path:
-            # Check reach BEFORE moving — if a target is already in
-            # reach (e.g. a PC moved closer between turns), short-
-            # circuit so the actor can attack this turn.
-            if reach_ft is not None and pool:
-                in_reach_now = _filter_in_reach(enemy.position, pool, reach_ft)
-                if in_reach_now:
-                    result.in_reach_targets = in_reach_now
-                    result.stopped_reason = "in_reach"
-                    return _finalize(result, enemy)
+            if is_close_phase and reach_ft is not None and pool:
+                if _filter_in_reach(enemy.position, pool, reach_ft):
+                    break
 
             dx = _sign(target_tile.x - enemy.position.x)
             dy = _sign(target_tile.y - enemy.position.y)
@@ -251,6 +294,12 @@ def execute(
             if move_result.ok:
                 result.moved_squares += 1
                 consecutive_failures = 0
+                if not enemy.is_alive:
+                    result.stopped_reason = (
+                        "enemy_died_mid_retreat" if not is_close_phase
+                        else "enemy_died_mid_close"
+                    )
+                    return _finalize(result, enemy)
             else:
                 consecutive_failures += 1
                 if move_result.reason == "no movement remaining":
@@ -260,13 +309,18 @@ def execute(
                     result.stopped_reason = "blocked"
                     return _finalize(result, enemy)
 
-    # Final reach check after walking the full intent.
+        if not is_close_phase:
+            retreat_walked = True
+
     if reach_ft is not None and pool and enemy.position is not None:
         result.in_reach_targets = _filter_in_reach(enemy.position, pool, reach_ft)
-    if result.in_reach_targets:
-        result.stopped_reason = "in_reach"
-    elif not result.stopped_reason:
-        result.stopped_reason = "exhausted"
+    if not result.stopped_reason:
+        if retreat_walked:
+            result.stopped_reason = "retreated"
+        elif result.in_reach_targets:
+            result.stopped_reason = "in_reach"
+        else:
+            result.stopped_reason = "exhausted"
     return _finalize(result, enemy)
 
 
