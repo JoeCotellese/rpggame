@@ -10,7 +10,7 @@ from dnd_engine.core.game_state import EnemyTurnAction, GameState
 from dnd_engine.core.map import Map, TileType
 from dnd_engine.core.party import Party
 from dnd_engine.rules.loader import DataLoader
-from dnd_engine.utils.events import EventBus
+from dnd_engine.utils.events import Event, EventBus, EventType
 
 
 def _floor_map(size: int = 12) -> Map:
@@ -93,4 +93,37 @@ class TestGoblinSkirmishesEndToEnd:
         assert result.movement_end_position == (3, 7)
         # The actual goblin object's position mirrors the spatial index.
         assert goblin.position == end_position
+
+    def test_creature_moved_events_fire_in_close_then_retreat_order(self):
+        """The engine's contract for UI consumers: CREATURE_MOVED events
+        arrive in temporal order — five close-phase moves heading toward
+        the PC followed by one retreat-phase move heading away. A
+        renderer can pair this stream with the EnemyTurnResult.attack_result
+        to emit three discrete log lines (close → attack → retreat).
+
+        Melee weapon attacks do not currently emit a discrete attack
+        event through the bus (only spells do); the attack is surfaced
+        via `EnemyTurnResult.attack_result` instead.
+        """
+        gs, _fighter, _goblin, goblin_id = _make_skirmish_state()
+        moves: list[Event] = []
+        gs.event_bus.subscribe(EventType.CREATURE_MOVED, moves.append)
+
+        gs.process_enemy_turn()
+
+        positions = [
+            e.data["to"]
+            for e in moves if e.data.get("entity_id") == goblin_id
+        ]
+        assert len(positions) == 6
+        # Close phase: 5 tiles heading south toward (3,9).
+        expected_close = [(3, 4), (3, 5), (3, 6), (3, 7), (3, 8)]
+        for i, expected in enumerate(expected_close):
+            assert (positions[i].x, positions[i].y) == expected, (
+                f"close step {i}: expected {expected}, "
+                f"got ({positions[i].x},{positions[i].y})"
+            )
+        # Retreat phase: one tile heading back north — direction reverses,
+        # which is the load-bearing assertion for "attack happened between".
+        assert (positions[5].x, positions[5].y) == (3, 7)
 
