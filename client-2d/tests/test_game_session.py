@@ -308,6 +308,62 @@ class TestSessionTick:
         )
         assert current_after.creature.name == "Goblin"
 
+    def test_tick_auto_drains_enemy_turns_in_windowed_mcp_mode(self) -> None:
+        """Regression for #639: in windowed+MCP mode, ``tick`` must
+        auto-drain enemy turns just like pure windowed mode.
+
+        The #577 early-return that hands pacing to the MCP bridge is
+        only correct for headless+MCP, where MCP is the sole driver.
+        In windowed+MCP the human + keyboard is the driver — the
+        on-screen auto-drain pacing is what shows them what enemies do
+        between their turns. Stranding the FSM there freezes the game
+        until an MCP command happens to come in. The ``_is_windowed``
+        flag, raised by ``initialize_mcp_server(window=...)``, is the
+        signal that distinguishes the two modes.
+        """
+        import random
+
+        from client_2d.mcp_bridge import MCPBridge
+        from client_2d.session import GameSession
+
+        s = GameSession(enable_mcp=False, dev_mode=True)
+        s.initialize()
+        s._mcp_bridge = MCPBridge()
+        # Simulate the windowed-mode wiring: GameView calls
+        # initialize_mcp_server(window=self.window) at game.py:176, which
+        # raises this flag. Tests skip the full mcp-server boot and set
+        # the flag directly.
+        s._is_windowed = True
+        # Deterministic seed matching the #577 repro for parity.
+        s.engine.game_state.dice_roller.random = random.Random(42)
+
+        s.spawn_monster("goblin", 9, 7)
+        tracker = s.engine.game_state.initiative_tracker
+        assert tracker is not None
+
+        # After spawn the goblin owns the turn and the drain gate is up.
+        current_before = tracker.get_current_combatant()
+        assert current_before is not None
+        assert current_before.creature.name == "Goblin"
+        assert s.processing_enemy_turn is True
+        idx_before = tracker.current_turn_index
+
+        # Tick well past ENEMY_TURN_DELAY (1.5s) — the auto-drain must
+        # advance the goblin's turn and hand control back to a PC.
+        for _ in range(120):
+            s.tick(0.05)
+
+        assert s.processing_enemy_turn is False, (
+            "tick failed to auto-drain enemy turn in windowed+MCP mode; "
+            "the keyboard would be frozen waiting for a drain that never "
+            "comes (#639)"
+        )
+        assert tracker.current_turn_index != idx_before, (
+            "tick did not advance initiative in windowed+MCP; the goblin "
+            "is still the current combatant and the screen would never "
+            "animate the enemy turn"
+        )
+
 
 class TestMCPServerWiring:
     def test_enable_mcp_creates_bridge_and_server(self) -> None:
