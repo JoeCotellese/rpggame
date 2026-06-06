@@ -87,16 +87,24 @@ class Skirmisher:
         primary_target: Creature,
         reach_ft: int,
         budget_used_ft: int,
+        *,
+        from_position: Position | None = None,
     ) -> MovePlan | None:
         """Plan an opposite-direction path that breaks the target's reach.
 
+        `from_position` is the post-close position the retreat starts
+        from. When omitted, falls back to `ctx.actor.position` — which
+        is correct only when the actor hasn't closed yet (unit tests
+        and already-in-reach skirmishers).
+
         Returns None when planning is impossible — no remaining budget,
         no spatial context. Returns a `MovePlan` with `path == []` when
-        the actor is already disengaged (no retreat needed but the
-        caller can still see the intent phase).
+        the actor is already disengaged so the caller can still see the
+        intent phase.
         """
         actor = ctx.actor
-        if actor.position is None or primary_target.position is None:
+        origin = from_position if from_position is not None else actor.position
+        if origin is None or primary_target.position is None:
             return None
 
         remaining_ft = actor.speed - budget_used_ft
@@ -107,11 +115,11 @@ class Skirmisher:
         if max_steps <= 0:
             return None
 
-        if not _in_reach(actor.position, primary_target.position, reach_ft):
+        if not _in_reach(origin, primary_target.position, reach_ft):
             return MovePlan(path=[], mode=MovementMode.WALK, intent_phase="retreat")
 
         path: list[Position] = []
-        current = actor.position
+        current = origin
         target = primary_target.position
         for _ in range(max_steps):
             dx = -_sign(target.x - current.x)

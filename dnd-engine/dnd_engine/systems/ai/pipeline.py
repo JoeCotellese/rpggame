@@ -34,8 +34,9 @@ from typing import TYPE_CHECKING
 
 from dnd_engine.core.distance import distance_in_feet
 from dnd_engine.core.position import Position
-from dnd_engine.systems.ai.intent import Intent, MoveStep, WaitStep
+from dnd_engine.systems.ai.intent import AttackStep, Intent, MoveStep, WaitStep
 from dnd_engine.systems.ai.strategies.aggressive import AggressiveAdvance
+from dnd_engine.systems.ai.strategies.skirmisher import Skirmisher
 
 if TYPE_CHECKING:
     from dnd_engine.core.creature import Creature
@@ -49,6 +50,7 @@ DEFAULT_STRATEGY = "aggressive"
 
 STRATEGY_REGISTRY: dict[str, MovementStrategy] = {
     "aggressive": AggressiveAdvance(),
+    "skirmisher": Skirmisher(),
 }
 
 
@@ -98,13 +100,19 @@ def _in_reach(a: Position, b: Position, reach_ft: int) -> bool:
 def decide(ctx: TurnContext) -> Intent:
     """Build the turn's Intent from `ctx`.
 
-    Currently produces the movement phase only — attack and
-    condition-removal steps are still handled by `process_enemy_turn`.
-    Returns:
+    Returns one of:
 
     * `Intent(steps=[WaitStep("no_targets")])` — empty target pool.
-    * `Intent(steps=[])` — no actionable attack data or already in reach.
-    * `Intent(steps=[MoveStep(path=...)])` — movement planned.
+    * `Intent(steps=[])` — no actionable attack data, or aggressive
+      monster already in reach (process_enemy_turn handles attack).
+    * `Intent(steps=[MoveStep])` — aggressive close-distance plan.
+    * `Intent(steps=[MoveStep, AttackStep, MoveStep])` — skirmisher
+      close → attack → retreat (any element may be omitted when its
+      phase is empty: e.g. already-in-reach skirmisher emits
+      `[AttackStep, MoveStep(retreat)]`).
+
+    Attack and condition-removal steps for non-skirmisher monsters
+    still resolve inside `process_enemy_turn` for now.
     """
     if not ctx.target_pool:
         return Intent(steps=[WaitStep(reason="no_targets")], rationale="no living targets")
@@ -121,19 +129,53 @@ def decide(ctx: TurnContext) -> Intent:
     if actor_pos is None or target_pos is None:
         return Intent(steps=[], rationale="no spatial context")
 
-    if _in_reach(actor_pos, target_pos, ctx.reach_ft):
-        return Intent(steps=[], rationale="already in reach")
-
     strategy_name = ctx.monster_data.get("ai", {}).get("movement_strategy", DEFAULT_STRATEGY)
     strategy = get_strategy(strategy_name)
-    plan = strategy.plan(ctx, primary_target, ctx.reach_ft)
+    retreat_fn = getattr(strategy, "plan_retreat", None)
+    already_in_reach = _in_reach(actor_pos, target_pos, ctx.reach_ft)
 
-    if not plan.path:
-        return Intent(steps=[], rationale=f"{strategy.name} returned empty path")
+    # Aggressive monsters (and anything else without plan_retreat) keep
+    # the original contract: already-in-reach falls through to
+    # process_enemy_turn's attack flow with an empty Intent.
+    if retreat_fn is None and already_in_reach:
+        return Intent(steps=[], rationale="already in reach")
+
+    if already_in_reach:
+        close_path: list[Position] = []
+    else:
+        close_plan = strategy.plan(ctx, primary_target, ctx.reach_ft)
+        close_path = list(close_plan.path)
+        if not close_path:
+            return Intent(steps=[], rationale=f"{strategy.name} returned empty path")
+
+    steps: list = []
+    rationale_phases: list[str] = []
+    if close_path:
+        steps.append(MoveStep(path=close_path))
+        rationale_phases.append(f"close to {primary_target.name}")
+
+    if retreat_fn is None:
+        return Intent(
+            steps=steps,
+            rationale=f"close to {primary_target.name} via {strategy.name}",
+        )
+
+    steps.append(AttackStep(target_id=primary_target.name, action=ctx.action_data))
+    rationale_phases.append("attack")
+
+    post_close_position = close_path[-1] if close_path else actor_pos
+    retreat_plan = retreat_fn(
+        ctx, primary_target, ctx.reach_ft,
+        budget_used_ft=len(close_path) * 5,
+        from_position=post_close_position,
+    )
+    if retreat_plan is not None and retreat_plan.path:
+        steps.append(MoveStep(path=list(retreat_plan.path)))
+        rationale_phases.append("retreat")
 
     return Intent(
-        steps=[MoveStep(path=list(plan.path), mode=plan.mode)],
-        rationale=f"close to {primary_target.name} via {strategy.name}",
+        steps=steps,
+        rationale=f"skirmish ({strategy.name}): " + " → ".join(rationale_phases),
     )
 
 
