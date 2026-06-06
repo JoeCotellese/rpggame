@@ -11,7 +11,7 @@ from dnd_engine.core.game_state import EnemyTurnAction, GameState
 from dnd_engine.core.map import Map, TileType
 from dnd_engine.core.party import Party
 from dnd_engine.rules.loader import DataLoader
-from dnd_engine.utils.events import EventBus
+from dnd_engine.utils.events import Event, EventBus, EventType
 
 
 def _make_character(
@@ -181,3 +181,63 @@ class TestMonsterClosesAndAttacks:
         # PC took no damage — confirming attack truly didn't run.
         for character in gs.party.characters:
             assert character.current_hp == character.max_hp
+
+
+class TestMonsterMovementProvokesOpportunityAttacks:
+    """The OA dispatch already publishes OPPORTUNITY_PROVOKED for any
+    mover (PC or monster) via ``attempt_combat_step``. Layer 3 just has
+    to plumb monster movement through that primitive — this test
+    verifies the integration.
+    """
+
+    def test_monster_leaving_reach_to_chase_distant_pc_provokes_oa(self):
+        """Issue #641 acceptance criterion 3: enemy 1 walks south past
+        enemy 2's 5-ft reach to reach a distant PC; enemy 2's reaction
+        slot is consumed by the OA.
+
+        Why two enemies (not two PCs)? Our greedy "nearest target"
+        strategy will always pick an adjacent PC first and attack it
+        instead of moving — there's no scenario where a monster
+        rationally walks past a PC it could bite. ``_register_default_
+        opportunity_attacks`` walks every placed combatant, though, so
+        enemy 2 IS a registered reactor and its OA handler fires on
+        any mover (including another monster) leaving its 5-ft reach.
+
+        Geometry:
+          enemy 1 (mover) at (5, 5), enemy 2 (reactor) at (4, 5).
+          PC at (5, 12) — 35 ft south.
+          Step 1: (5,5)->(5,6). Enemy 1 still 5 ft from enemy 2 → no OA.
+          Step 2: (5,6)->(5,7). Enemy 1 now 10 ft from enemy 2 — leaves
+          reach → enemy 2's reaction fires, slot consumed.
+        """
+        gs, _eids = _build_movement_fixture(
+            party_positions={"Alice": (5, 12)},
+            enemy_positions=[(5, 5), (4, 5)],
+        )
+        mover = gs.active_enemies[0]
+
+        captured: list[Event] = []
+        gs.event_bus.subscribe(EventType.DAMAGE_DEALT, captured.append)
+
+        result = gs.process_enemy_turn()
+        assert result is not None
+
+        # The OA fires when the mover leaves the reactor's reach on
+        # step 2. Reaction-slot consumption can't be asserted directly
+        # here — ``process_enemy_turn`` calls ``next_turn`` before
+        # returning, and per SRD the reactor's slot resets at the
+        # start of its own turn (initiative.py:208). The roll-
+        # independent signal we DO get is the ``DAMAGE_DEALT`` event
+        # tagged ``opportunity_attack`` emitted by
+        # ``_resolve_opportunity_attack_outcome`` when an OA connects.
+        # Matches the canonical observation in
+        # tests/test_oa_combat_step_integration.py:115-127.
+        oa_events = [e for e in captured if e.data.get("opportunity_attack")]
+        assert len(oa_events) >= 1, (
+            f"expected at least one OA DAMAGE_DEALT event; got {len(oa_events)}"
+        )
+        # The mover (enemy 1) is the defender of the OA. The reactor
+        # (enemy 2) is the attacker — both happen to be "Giant Rat",
+        # which is correct: the OA system makes no friend/foe check
+        # (a known limitation, not introduced by this change).
+        assert oa_events[0].data["defender"] == mover.name
