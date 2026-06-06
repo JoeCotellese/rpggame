@@ -281,3 +281,66 @@ class TestMonsterCannotMove:
         # Enemy position unchanged.
         assert gs.active_enemies[0].position.x == 5
         assert gs.active_enemies[0].position.y == 5
+
+
+class TestMonsterMovementDoesNotDeadlock:
+    """The anti-loop guard (two consecutive step failures) protects
+    against monster-vs-monster collisions and walls. Without it, a
+    monster blocked by another monster on every step would spin until
+    the hard step ceiling tripped.
+    """
+
+    def test_two_enemies_blocking_each_other_terminate_cleanly(self):
+        """Issue #641 acceptance criterion 5: enemy 1's path to the PC
+        is blocked by enemy 2; enemy 1's movement loop must exit
+        cleanly via the anti-loop guard rather than spin.
+
+        Layout (single shared south-bound axis):
+          enemy 1 at (5, 5), enemy 2 at (5, 6) directly blocking south.
+          PC at (5, 11) — south of both.
+
+        Enemy 1's greedy sign-step is always (0, +1). attempt_combat_step
+        rejects each step with reason ``"occupied by giant_rat_1"``.
+        After two consecutive failures the loop breaks; result is
+        NO_REACHABLE_TARGET with moved_squares=0 and the turn
+        advances.
+
+        We then call ``process_enemy_turn`` again for enemy 2's turn
+        as a smoke check: it should NOT hang and should make
+        meaningful progress (its south path is clear).
+        """
+        gs, _eids = _build_movement_fixture(
+            party_positions={"Alice": (5, 11)},
+            enemy_positions=[(5, 5), (5, 6)],
+        )
+        tracker = gs.initiative_tracker
+        assert tracker is not None
+        enemy_1 = gs.active_enemies[0]
+        enemy_2 = gs.active_enemies[1]
+
+        result_1 = gs.process_enemy_turn()
+
+        assert result_1 is not None
+        assert result_1.action_taken == EnemyTurnAction.NO_REACHABLE_TARGET
+        assert result_1.moved_squares == 0
+        assert result_1.turn_advanced is True
+        # Enemy 1 stayed at (5, 5).
+        assert (enemy_1.position.x, enemy_1.position.y) == (5, 5)
+
+        # Drive forward until enemy 2 acts (a PC may go between them
+        # depending on initiative). Cap the loop to prove no hang.
+        seen_enemy_2_turn = False
+        for _ in range(10):
+            current = tracker.get_current_combatant()
+            if current is not None and current.creature is enemy_2:
+                result_2 = gs.process_enemy_turn()
+                assert result_2 is not None
+                seen_enemy_2_turn = True
+                break
+            # Skip PC turns by advancing initiative manually.
+            tracker.next_turn()
+
+        assert seen_enemy_2_turn, (
+            "enemy 2 never got a turn within 10 initiative steps — "
+            "something is hanging combat"
+        )
