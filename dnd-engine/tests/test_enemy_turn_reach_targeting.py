@@ -130,13 +130,18 @@ class TestRangeAwareTargeting:
             f"rat should have targeted in-reach Bob, picked {result.target_name!r}"
         )
 
-    def test_no_reachable_target_returns_dedicated_action_and_advances_turn(self):
-        """All PCs out of reach -> NO_REACHABLE_TARGET, turn advances.
+    def test_out_of_reach_pcs_trigger_layer3_movement_then_attack(self):
+        """All PCs out of bite reach -> Layer 3 closes distance & attacks.
 
-        Architect-flagged blocker: if the new "no in-reach" branch
-        forgets to advance the turn, the headless tick loop spins
-        forever and combat hangs. This test pins both the action enum
-        and the turn-advance contract so the regression is loud.
+        Before #641 (Layer 3) shipped, this branch returned
+        NO_REACHABLE_TARGET with no movement and the enemy stayed put.
+        Layer 3 wires ``attempt_combat_step`` into the loop so a
+        speed=30 enemy now closes a 30-ft gap and bites in the same
+        turn. The architectural invariant the original test guarded —
+        the turn advances so the headless tick loop never hangs — is
+        preserved here on the new ATTACK return path. Coverage for
+        the residual NO_REACHABLE_TARGET case (speed=0 / Grappled)
+        lives in tests/test_enemy_turn_movement.py::TestMonsterCannotMove.
         """
         gs, _enemy_eid = _build_targeting_fixture(
             party_positions={"Bob": (5, 11), "Abe": (5, 12)},  # both 30+ ft
@@ -149,16 +154,16 @@ class TestRangeAwareTargeting:
         result = gs.process_enemy_turn()
 
         assert result is not None
-        assert result.action_taken == EnemyTurnAction.NO_REACHABLE_TARGET
+        assert result.action_taken == EnemyTurnAction.ATTACK
+        assert result.moved_squares >= 5, (
+            "speed=30 enemy needs at least 5 steps to close 30 ft to "
+            f"bite reach; got {result.moved_squares}"
+        )
         assert result.turn_advanced is True
         assert tracker.current_turn_index != turn_index_before, (
             "initiative did not advance — combat would hang in the "
             "headless tick loop"
         )
-        assert result.attack_result is None
-        # No PC took damage.
-        for character in gs.party.characters:
-            assert character.current_hp == character.max_hp
 
     def test_combat_does_not_hang_when_all_enemies_stranded(self):
         """Multiple stranded enemies across rounds — initiative keeps moving.
