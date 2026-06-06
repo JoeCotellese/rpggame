@@ -545,18 +545,35 @@ class GameSession:
                 exits[direction] = dest
         return exits
 
+    def _can_pass_exit(self, direction: str) -> bool:
+        """Check whether the exit in ``direction`` can be passed through.
+
+        This is the seam for SRD door mechanics: stuck/locked/barred
+        doors (Strength checks, thieves' tools, the Knock spell) and
+        similar door states gate passage here rather than in movement.
+        Blocked attempts log the reason to the combat log.
+        """
+        game_state = self.engine.game_state
+        if game_state is None:
+            return False
+
+        exit_data = game_state.get_current_room().get("exits", {}).get(direction)
+        if isinstance(exit_data, dict) and exit_data.get("locked", False):
+            self._add_combat_log("The door is locked.")
+            return False
+        return True
+
     # ========== Exploration movement ==========
 
     def _move_player(self, direction: str) -> None:
-        """Attempt to move the player in a direction during exploration."""
+        """Attempt to move the player in a direction during exploration.
+
+        Direction keys always perform a one-tile grid move; a room
+        transition only fires when the step lands on an exit/door tile
+        (and the door is passable — see ``_can_pass_exit``).
+        """
         if self.engine.in_combat:
             self._add_combat_log("Can't move during combat!")
-            return
-
-        exits = self._get_available_exits()
-        if direction in exits:
-            self._add_combat_log(f"Moving {direction}...")
-            self._transition_room(direction)
             return
 
         dx, dy = {
@@ -568,13 +585,35 @@ class GameSession:
         new_x = self.player_x + dx
         new_y = self.player_y + dy
 
-        if self.room_layout and (
-            0 <= new_x < self.room_layout.width and 0 <= new_y < self.room_layout.height
-        ):
+        if not self.room_layout:
+            return
+
+        # Stepping onto an exit/door tile uses that door, regardless of
+        # approach direction. Hidden exits never appear in the available
+        # set, so their door tiles behave as plain walkable floor.
+        exits = self._get_available_exits()
+        exit_tiles = self.room_layout.spawn_points.exits
+        for exit_dir in exits:
+            if exit_tiles.get(exit_dir) == (new_x, new_y):
+                if self._can_pass_exit(exit_dir):
+                    self._add_combat_log(f"Moving {exit_dir}...")
+                    self._transition_room(exit_dir)
+                return
+
+        if 0 <= new_x < self.room_layout.width and 0 <= new_y < self.room_layout.height:
             if not self.room_layout.is_blocking(new_x, new_y):
                 self.player_x = new_x
                 self.player_y = new_y
                 self._update_lighting()
+                return
+
+        # Fallback for layouts that define an exit but no door tile for
+        # it: a failed step (wall or room edge) in the exit's direction
+        # still uses the exit, keeping such rooms traversable.
+        if direction in exits and exit_tiles.get(direction) is None:
+            if self._can_pass_exit(direction):
+                self._add_combat_log(f"Moving {direction}...")
+                self._transition_room(direction)
 
     def _transition_room(self, direction: str) -> None:
         """Transition to a new room via an exit."""
@@ -586,6 +625,7 @@ class GameSession:
 
         if result:
             self._load_room_layout()
+            self._place_player_at_entry(direction)
 
             room = game_state.get_current_room()
             room_name = room.get("name", "Unknown")
@@ -607,6 +647,47 @@ class GameSession:
                 if not self.engine.is_player_turn():
                     self.processing_enemy_turn = True
                     self.enemy_turn_timer = ENEMY_TURN_DELAY
+
+    def _place_player_at_entry(self, travel_direction: str) -> None:
+        """Position the player just inside the door they entered through.
+
+        Traveling north means entering through the destination room's
+        south door, so the player lands one tile inward from it. Rooms
+        without a matching door keep the layout's default spawn point
+        (already set by ``_load_room_layout``).
+        """
+        if not self.room_layout:
+            return
+
+        opposite = {
+            "north": "south",
+            "south": "north",
+            "east": "west",
+            "west": "east",
+        }.get(travel_direction)
+        if opposite is None:
+            return
+
+        door = self.room_layout.spawn_points.exits.get(opposite)
+        if door is None:
+            return
+
+        # Inward = away from the entry door, i.e. the travel direction.
+        dx, dy = {
+            "north": (0, -1),
+            "south": (0, 1),
+            "east": (1, 0),
+            "west": (-1, 0),
+        }[travel_direction]
+        inward_x, inward_y = door[0] + dx, door[1] + dy
+
+        if (
+            0 <= inward_x < self.room_layout.width
+            and 0 <= inward_y < self.room_layout.height
+            and not self.room_layout.is_blocking(inward_x, inward_y)
+        ):
+            self.player_x, self.player_y = inward_x, inward_y
+            self._update_lighting()
 
     # ========== Combat state machine ==========
 

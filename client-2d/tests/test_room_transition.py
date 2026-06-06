@@ -1,0 +1,310 @@
+# ABOUTME: Tests for exploration movement and room transitions (#637) -
+# ABOUTME: direction keys grid-move; transitions fire only on exit/door tiles.
+
+"""Tests for room-transition behavior in GameSession.
+
+Issue #637: pressing a direction key that matched any room exit used to
+teleport the player to the destination room from anywhere. These tests
+pin the fixed behavior: direction keys always perform one-tile grid
+moves, and a room transition only fires when the player steps onto the
+exit/door tile itself (gated by the SRD door-state passability seam).
+
+The engine GameState is faked with a tiny two-room graph; room layouts
+come from the loader's procedural fallback (generate_basic_room), which
+places real DOOR tiles at the wall border for each exit.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+
+class FakeGameState:
+    """Minimal stand-in for the engine GameState room graph."""
+
+    def __init__(self, rooms: dict[str, dict] | None = None) -> None:
+        self.dungeon_name = "fake_dungeon"
+        self.campaign_id = "fake_campaign"
+        self.current_room_id = "entry"
+        self.in_combat = False
+        self.active_enemies: list = []
+        self.rooms = rooms or {
+            "entry": {"name": "Entry Hall", "exits": {"north": "north_room"}},
+            "north_room": {"name": "North Room", "exits": {"south": "entry"}},
+        }
+
+    def get_current_room(self) -> dict:
+        return self.rooms[self.current_room_id]
+
+    def move(self, direction: str) -> bool:
+        dest = self.get_current_room().get("exits", {}).get(direction)
+        if isinstance(dest, dict):
+            if dest.get("hidden", False):
+                return False
+            dest = dest.get("destination")
+        if dest:
+            self.current_room_id = dest
+            return True
+        return False
+
+
+def make_session(rooms: dict[str, dict] | None = None):
+    """GameSession wired to a FakeGameState two-room graph.
+
+    The layout loader's file lookup is redirected to the fake room
+    dicts so load_room_with_fallback generates layouts (with DOOR
+    tiles) from the fake exits instead of reading dungeon JSON.
+    """
+    from client_2d.session import GameSession
+
+    s = GameSession(enable_mcp=False, dev_mode=True)
+    fake = FakeGameState(rooms)
+    s.engine._game_state = fake
+    s.layout_loader.get_room_data = (  # type: ignore[method-assign]
+        lambda dungeon_name, room_id, campaign_id=None: fake.rooms.get(room_id)
+    )
+    s._load_room_layout()
+    return s, fake
+
+
+@pytest.fixture
+def session_and_state():
+    return make_session()
+
+
+class TestGridMovement:
+    """Direction keys always grid-move within the room (#637)."""
+
+    def test_move_toward_exit_direction_is_one_tile_step(self, session_and_state) -> None:
+        """Pressing north mid-room must NOT teleport to the north room."""
+        session, fake = session_and_state
+        start_x, start_y = session.player_x, session.player_y
+
+        session._move_player("north")
+
+        assert fake.current_room_id == "entry"
+        assert (session.player_x, session.player_y) == (start_x, start_y - 1)
+
+    def test_backtracking_returns_to_starting_tile(self, session_and_state) -> None:
+        """South then north lands back on the original tile, same room."""
+        session, fake = session_and_state
+        start = (session.player_x, session.player_y)
+
+        session._move_player("south")
+        session._move_player("north")
+
+        assert fake.current_room_id == "entry"
+        assert (session.player_x, session.player_y) == start
+
+    def test_walking_onto_exit_tile_transitions(self, session_and_state) -> None:
+        """Stepping onto the north door tile fires the room transition."""
+        session, fake = session_and_state
+        door_x, door_y = session.room_layout.spawn_points.exits["north"]
+        # Place the player one tile inside the door, then step onto it.
+        session.player_x, session.player_y = door_x, door_y + 1
+
+        session._move_player("north")
+
+        assert fake.current_room_id == "north_room"
+
+    def test_lateral_step_onto_door_tile_transitions_in_door_direction(self) -> None:
+        """Approaching a door tile sideways still uses that door's exit."""
+        from client_2d.integration.layout_schema import RoomLayout, TileType
+
+        session, fake = make_session()
+        # Hand-craft a layout where the north door tile is reachable
+        # from the side (inset one row, floor neighbors on the row).
+        f, d, w = TileType.FLOOR.value, TileType.DOOR.value, TileType.WALL.value
+        session.room_layout = RoomLayout(
+            width=5,
+            height=5,
+            tiles=[
+                [w, w, w, w, w],
+                [w, f, d, f, w],
+                [w, f, f, f, w],
+                [w, f, f, f, w],
+                [w, w, w, w, w],
+            ],
+            spawn_points={"player": (2, 2), "exits": {"north": (2, 1)}},
+        )
+        session.player_x, session.player_y = 1, 1  # beside the door
+
+        session._move_player("east")
+
+        assert fake.current_room_id == "north_room"
+
+
+class TestDoorPassability:
+    """SRD door-state seam (#637): locked doors block, hidden exits inert."""
+
+    def test_locked_exit_blocks_transition_and_step(self) -> None:
+        """A locked door refuses passage; the player stays put."""
+        session, fake = make_session(
+            rooms={
+                "entry": {
+                    "name": "Entry Hall",
+                    "exits": {"north": {"destination": "north_room", "locked": True}},
+                },
+                "north_room": {"name": "North Room", "exits": {"south": "entry"}},
+            }
+        )
+        door_x, door_y = session.room_layout.spawn_points.exits["north"]
+        session.player_x, session.player_y = door_x, door_y + 1
+
+        session._move_player("north")
+
+        assert fake.current_room_id == "entry"
+        assert (session.player_x, session.player_y) == (door_x, door_y + 1)
+        assert any("locked" in msg.lower() for msg in session.combat_log)
+
+    def test_dict_exit_without_locked_flag_passes(self) -> None:
+        """Dict-form exits without door-state flags behave as open doors."""
+        session, fake = make_session(
+            rooms={
+                "entry": {
+                    "name": "Entry Hall",
+                    "exits": {"north": {"destination": "north_room"}},
+                },
+                "north_room": {"name": "North Room", "exits": {"south": "entry"}},
+            }
+        )
+        door_x, door_y = session.room_layout.spawn_points.exits["north"]
+        session.player_x, session.player_y = door_x, door_y + 1
+
+        session._move_player("north")
+
+        assert fake.current_room_id == "north_room"
+
+    def test_hidden_exit_door_tile_is_inert(self) -> None:
+        """An undiscovered secret door never fires a transition; its
+        tile behaves as plain walkable floor."""
+        session, fake = make_session(
+            rooms={
+                "entry": {
+                    "name": "Entry Hall",
+                    "exits": {
+                        "north": "north_room",
+                        "east": {"destination": "secret_room", "hidden": True},
+                    },
+                },
+                "north_room": {"name": "North Room", "exits": {"south": "entry"}},
+                "secret_room": {"name": "Secret Room", "exits": {}},
+            }
+        )
+        # The layout still places a door tile for the hidden exit.
+        door_x, door_y = session.room_layout.spawn_points.exits["east"]
+        session.player_x, session.player_y = door_x - 1, door_y
+
+        session._move_player("east")
+
+        assert fake.current_room_id == "entry"
+        assert (session.player_x, session.player_y) == (door_x, door_y)
+
+
+class TestEntrySpawn:
+    """After a transition the player appears just inside the entry door."""
+
+    def _walk_through_north_door(self, session) -> None:
+        door_x, door_y = session.room_layout.spawn_points.exits["north"]
+        session.player_x, session.player_y = door_x, door_y + 1
+        session._move_player("north")
+
+    def test_player_spawns_inside_matching_entry_door(self, session_and_state) -> None:
+        """Going north places the player one tile in from the south door."""
+        session, fake = session_and_state
+        self._walk_through_north_door(session)
+
+        assert fake.current_room_id == "north_room"
+        south_x, south_y = session.room_layout.spawn_points.exits["south"]
+        assert (session.player_x, session.player_y) == (south_x, south_y - 1)
+
+    def test_cross_room_backtracking(self, session_and_state) -> None:
+        """Stepping back through the entry door returns to the prior room."""
+        session, fake = session_and_state
+        self._walk_through_north_door(session)
+
+        session._move_player("south")
+
+        assert fake.current_room_id == "entry"
+
+    def test_falls_back_to_default_spawn_without_matching_door(self) -> None:
+        """A destination with no door on the entry side uses its spawn point."""
+        session, fake = make_session(
+            rooms={
+                "entry": {"name": "Entry Hall", "exits": {"north": "dead_end"}},
+                "dead_end": {"name": "Dead End", "exits": {}},
+            }
+        )
+        self._walk_through_north_door(session)
+
+        assert fake.current_room_id == "dead_end"
+        assert (
+            session.player_x,
+            session.player_y,
+        ) == session.room_layout.spawn_points.player
+
+
+class TestExitWithoutDoorTile:
+    """Layouts missing a door tile for a defined exit stay traversable:
+    a failed step (wall/edge) in the exit's direction uses the exit."""
+
+    def _custom_layout(self, session, tiles) -> None:
+        from client_2d.integration.layout_schema import RoomLayout
+
+        session.room_layout = RoomLayout(
+            width=len(tiles[0]),
+            height=len(tiles),
+            tiles=tiles,
+            spawn_points={"player": (1, 1), "exits": {}},
+        )
+
+    def test_wall_bump_in_exit_direction_transitions(self) -> None:
+        session, fake = make_session()
+        from client_2d.integration.layout_schema import TileType
+
+        f, w = TileType.FLOOR.value, TileType.WALL.value
+        self._custom_layout(
+            session,
+            [
+                [w, w, w],
+                [w, f, w],
+                [w, w, w],
+            ],
+        )
+        session.player_x, session.player_y = 1, 1
+
+        session._move_player("north")
+
+        assert fake.current_room_id == "north_room"
+
+    def test_edge_step_in_exit_direction_transitions(self) -> None:
+        session, fake = make_session()
+        from client_2d.integration.layout_schema import TileType
+
+        f = TileType.FLOOR.value
+        self._custom_layout(session, [[f, f], [f, f]])
+        session.player_x, session.player_y = 1, 0
+
+        session._move_player("north")
+
+        assert fake.current_room_id == "north_room"
+
+    def test_wall_bump_in_non_exit_direction_does_not_transition(self) -> None:
+        session, fake = make_session()
+        from client_2d.integration.layout_schema import TileType
+
+        f, w = TileType.FLOOR.value, TileType.WALL.value
+        self._custom_layout(
+            session,
+            [
+                [w, w, w],
+                [w, f, w],
+                [w, w, w],
+            ],
+        )
+        session.player_x, session.player_y = 1, 1
+
+        session._move_player("east")  # no east exit in room data
+
+        assert fake.current_room_id == "entry"
+        assert (session.player_x, session.player_y) == (1, 1)
