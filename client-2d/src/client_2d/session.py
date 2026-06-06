@@ -163,6 +163,13 @@ class GameSession:
         self._enable_mcp = enable_mcp
         self._mcp_port = mcp_port
         self._dev_mode = dev_mode
+        # True when the session is hosting a windowed GameView (set by
+        # ``initialize_mcp_server`` when a window is passed in). Lets
+        # ``tick`` distinguish headless+MCP (where MCP is the sole
+        # driver and must own enemy-turn pacing per #577) from
+        # windowed+MCP (where the keyboard is the driver and tick must
+        # auto-drain so the player can see enemy turns animate, #639).
+        self._is_windowed: bool = False
 
     # ========== Initialization ==========
 
@@ -236,6 +243,12 @@ class GameSession:
         self._mcp_bridge.set_session(self)
         if window is not None:
             self._mcp_bridge.set_game_window(window)
+            # GameView is the only caller that passes a window (game.py
+            # at ``GameView.__init__``); ``run_headless`` never does.
+            # Treat the window arg as the canonical "windowed mode"
+            # signal that tick() consults to decide whether to auto-
+            # drain enemy turns (#639).
+            self._is_windowed = True
 
         width = self.room_layout.width if self.room_layout else 25
         height = self.room_layout.height if self.room_layout else 18
@@ -276,14 +289,21 @@ class GameSession:
             return
 
         if self.processing_enemy_turn:
-            # When MCP is driving, wait()/attack()/spawn_monster() drain
+            # Headless+MCP only: wait()/attack()/spawn_monster() drain
             # enemy turns synchronously via _drain_enemy_turns(). Letting
             # the tick loop also auto-drain races against user commands:
             # after ENEMY_TURN_DELAY seconds of think-time the ticker
             # silently advances one enemy turn and lands on the next PC,
             # so the user's next wait() burns that PC's turn instead of
             # resolving the enemy's (#577). Hand pacing to the bridge.
-            if self._mcp_bridge is not None:
+            #
+            # Windowed+MCP is different: the human + keyboard is the
+            # driver, and the tick auto-drain is what animates enemy
+            # turns on screen. Skipping it strands the FSM and freezes
+            # the game until an MCP command happens by (#639). The
+            # ``_is_windowed`` flag, raised when ``initialize_mcp_server``
+            # receives a window, distinguishes the two cases.
+            if self._mcp_bridge is not None and not self._is_windowed:
                 return
             self.enemy_turn_timer -= delta_time
             if self.enemy_turn_timer <= 0:
