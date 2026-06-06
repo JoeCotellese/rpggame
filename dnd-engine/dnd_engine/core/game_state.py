@@ -5175,6 +5175,10 @@ class GameState:
         # integration tests that don't bootstrap_spatial), so this
         # change is regression-free for the unit suite.
         targeting_pool = living_party
+        # Defaults for the new Layer 3 (#641) movement-result fields.
+        # Stay 0/None on the ATTACK path when the enemy was already in
+        # reach; updated by the movement loop below when it runs.
+        moved_squares = 0
         if (
             enemy.position is not None
             and not is_ranged_action(action)
@@ -5188,7 +5192,6 @@ class GameState:
                     pc.position.x, pc.position.y,
                 ) <= reach_ft
             ]
-            moved_squares = 0
             if not in_reach:
                 # Layer 3 (#641): close distance toward the nearest PC.
                 # Loop attempt_combat_step (single 5-ft tile per call);
@@ -5216,6 +5219,13 @@ class GameState:
                         ]
                         if not candidates:
                             break
+                        # Re-pick the nearest PC every iteration so a
+                        # mid-loop change (an OA killing a target,
+                        # plan-04 instant kill, etc.) is handled. The
+                        # ``pc.name`` tiebreaker is load-bearing: it
+                        # makes the pick stable when two PCs are
+                        # equidistant, so the enemy doesn't oscillate
+                        # between them step-to-step.
                         target_pc = min(
                             candidates,
                             key=lambda pc: (
@@ -5263,12 +5273,20 @@ class GameState:
 
                 if not in_reach:
                     # Either moved without reaching (MOVED) or couldn't
-                    # move at all (NO_REACHABLE_TARGET — speed 0 or
-                    # blocked from the start).
+                    # move at all (NO_REACHABLE_TARGET — speed 0,
+                    # blocked from the start, or no resolvable
+                    # enemy_eid).
                     self.initiative_tracker.next_turn()
                     action_taken = (
                         EnemyTurnAction.MOVED if moved_squares > 0
                         else EnemyTurnAction.NO_REACHABLE_TARGET
+                    )
+                    # Match the EnemyTurnResult contract (game_state.py
+                    # comment above the field): movement_end_position
+                    # is None when no movement happened.
+                    end_position = (
+                        (enemy.position.x, enemy.position.y)
+                        if moved_squares > 0 else None
                     )
                     return EnemyTurnResult(
                         enemy_name=enemy.name,
@@ -5276,9 +5294,7 @@ class GameState:
                         action_taken=action_taken,
                         action_data=action,
                         moved_squares=moved_squares,
-                        movement_end_position=(
-                            enemy.position.x, enemy.position.y,
-                        ),
+                        movement_end_position=end_position,
                         turn_start_effects=turn_start_effects,
                         turn_end_effects=turn_end_effects,
                         turn_advanced=True,
@@ -5400,15 +5416,14 @@ class GameState:
             turn_advanced=True,
             combat_ended=combat_ended,
             # Layer 3 (#641): if the enemy closed distance before
-            # attacking, surface the step count on the result. Defaults
-            # to 0 / None when the enemy was already in reach.
-            moved_squares=(
-                moved_squares if "moved_squares" in locals() else 0
-            ),
+            # attacking, surface the step count and final tile on the
+            # result. ``moved_squares`` is hoisted above the in-reach
+            # branch so it's always defined; stays 0 when the enemy
+            # was already in reach.
+            moved_squares=moved_squares,
             movement_end_position=(
                 (enemy.position.x, enemy.position.y)
-                if "moved_squares" in locals() and moved_squares > 0
-                else None
+                if moved_squares > 0 else None
             ),
         )
 
