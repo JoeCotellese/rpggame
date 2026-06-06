@@ -188,14 +188,16 @@ class TestRangeAwareTargeting:
         # the loop isn't stuck on the rat's turn.
         assert len(seen_turn_indices) >= 2
 
-    def test_smart_targeting_logic_preserved_within_in_reach_subset(self):
-        """Retaliation logic still picks the recent attacker — among in-reach PCs.
+    def test_in_reach_filter_passes_multiple_candidates_through_to_targeting(self):
+        """Three in-reach PCs all survive the filter; smart targeting then picks.
 
-        Three PCs adjacent to the rat. Without history, low-INT
-        creatures would pick by lowest HP (all equal here). We inject
-        a fake combat_history so the rat "remembers" being hit by
-        Charlie — retaliation should override into picking Charlie
-        despite the in-reach filter.
+        Pins the contract that the filter is *additive*, not *collapsing*:
+        when multiple PCs are within reach, all of them reach
+        select_target_smart so retaliation / lowest-HP / intelligence
+        strategies still see a real choice. We inject a fake
+        combat_history so the test exercises the retaliation code
+        path (without pinning a specific pick — low-INT rats use a
+        weighted retaliation, not a hard rule).
         """
         gs, _enemy_eid = _build_targeting_fixture(
             party_positions={

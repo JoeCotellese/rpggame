@@ -9,8 +9,10 @@ from typing import Any
 from dnd_engine.core.campaign_progress import CampaignProgress, CampaignProgressTracker
 from dnd_engine.core.character import Character
 from dnd_engine.core.combat import AttackResult, CombatEngine
+from dnd_engine.core.combat_geometry import attack_reach_for, is_ranged_action
 from dnd_engine.core.creature import Creature, Size
 from dnd_engine.core.dice import DiceRoller, format_dice_with_modifier
+from dnd_engine.core.distance import distance_in_feet
 from dnd_engine.core.entity_ids import pc_entity_id
 from dnd_engine.core.map import Map
 from dnd_engine.core.move_result import MoveResult
@@ -5159,8 +5161,6 @@ class GameState:
         # Skip the filter when no spatial context exists (legacy
         # integration tests that don't bootstrap_spatial), so this
         # change is regression-free for the unit suite.
-        from dnd_engine.core.combat_geometry import attack_reach_for, is_ranged_action
-        from dnd_engine.core.distance import distance_in_feet
         targeting_pool = living_party
         if (
             enemy.position is not None
