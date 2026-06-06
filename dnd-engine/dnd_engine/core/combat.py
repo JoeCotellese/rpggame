@@ -4,8 +4,10 @@
 from dataclasses import dataclass
 from typing import Any
 
+from dnd_engine.core.combat_geometry import attack_reach_for, is_ranged_action
 from dnd_engine.core.creature import Creature
 from dnd_engine.core.dice import DiceRoller
+from dnd_engine.core.distance import distance_in_feet
 from dnd_engine.rules.damage import apply_damage_adjustments, apply_damage_modifiers
 from dnd_engine.systems.perception import VisibilityRelation
 from dnd_engine.utils.events import Event, EventType
@@ -188,6 +190,58 @@ class CombatEngine:
         Returns:
             AttackResult containing full attack details including sneak attack if applicable
         """
+        # SRD § Playing the Game › Melee Attacks › Reach: a melee attack
+        # may only target a creature within the attacker's reach (5 ft
+        # by default; greater for some creatures/weapons as noted on
+        # the action). When the caller provides both spatial context
+        # (``game_state``) and an authored action with a ``reach``
+        # field, reject the attack before any side effects (dice roll,
+        # hidden-state revelation, help-flag consumption) when the
+        # defender sits beyond reach. Mirrors the seam #401 added for
+        # ranged-attack range enforcement.
+        #
+        # Skipped when:
+        #  - ``action`` is None — the caller (e.g. PC weapon attack at
+        #    ``game_state.py:3204``, OAs at ``:1246``/``:5397``, item
+        #    throws at ``:5676``) gates range upstream and intentionally
+        #    omits ``action`` here.
+        #  - ``game_state`` is None — unit tests without a spatial
+        #    index can still exercise the engine; they would otherwise
+        #    regress on a single-site change.
+        #  - The action is ranged (declares ``range`` rather than
+        #    ``reach``) — reach doesn't apply; range enforcement for
+        #    ranged monster attacks is still a separate gap.
+        #
+        # The short-circuit emits an ``AttackResult`` with
+        # ``attack_roll=0`` as a sentinel so callers / tests can
+        # distinguish a gate rejection from a missed roll.
+        if (
+            action is not None
+            and game_state is not None
+            and not is_ranged_action(action)
+        ):
+            attacker_pos = getattr(attacker, "position", None)
+            defender_pos = getattr(defender, "position", None)
+            if attacker_pos is not None and defender_pos is not None:
+                reach_ft = attack_reach_for(action)
+                distance_ft = distance_in_feet(
+                    attacker_pos.x, attacker_pos.y,
+                    defender_pos.x, defender_pos.y,
+                )
+                if distance_ft > reach_ft:
+                    return AttackResult(
+                        attacker_name=attacker.name,
+                        defender_name=defender.name,
+                        attack_roll=0,
+                        attack_bonus=attack_bonus,
+                        target_ac=defender._base_ac,
+                        hit=False,
+                        damage=0,
+                        critical_hit=False,
+                        advantage=advantage,
+                        disadvantage=disadvantage,
+                    )
+
         # SRD § Actions › Dodge: a dodging defender imposes Disadvantage
         # on incoming attacks, unless they are Incapacitated or their
         # Speed is 0. Recomputed each call so revocation conditions are

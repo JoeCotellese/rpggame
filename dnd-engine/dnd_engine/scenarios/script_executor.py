@@ -125,30 +125,13 @@ def _attack_range_for(weapon_data: dict[str, Any] | None) -> tuple[int, int]:
     return (5, 5)
 
 
-def _attack_reach_for(monster_action: dict[str, Any] | None) -> int:
-    """Parse a monster action's ``reach`` string into feet.
-
-    monsters.json encodes reach per attack action as ``"5 ft."`` or
-    ``"10 ft."``. Per SRD § Playing the Game › Melee Attacks, a creature
-    has a 5-foot reach by default; creatures with greater reach declare
-    it on the action. This helper returns the integer feet so the
-    executor can gate attack resolution on distance.
-
-    Missing or unparseable values fall back to the SRD default (5 ft) so
-    a malformed catalog row degrades to vanilla melee rather than
-    silently widening reach.
-    """
-    if not monster_action:
-        return 5
-    raw = monster_action.get("reach")
-    if not raw:
-        return 5
-    # "10 ft." → "10"; tolerate stray whitespace too.
-    head = str(raw).strip().split()[0]
-    try:
-        return int(head)
-    except ValueError:
-        return 5
+# Re-export the shared reach parser from ``dnd_engine.core.combat_geometry``
+# so callers that already import ``_attack_reach_for`` from this module
+# (notably ``tests/srd/playing_the_game/test_melee_attacks.py``) keep
+# working. The single implementation now lives in ``combat_geometry`` so
+# both the engine's ``resolve_attack`` reach gate (#634) and the scenario
+# script executor consult one parser.
+from dnd_engine.core.combat_geometry import attack_reach_for as _attack_reach_for  # noqa: E402
 
 
 def _is_ranged_attack(weapon_data: dict[str, Any] | None) -> bool:
