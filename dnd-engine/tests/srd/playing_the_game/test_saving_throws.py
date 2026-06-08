@@ -19,6 +19,7 @@ import pytest
 
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities, Creature
+from dnd_engine.systems.d20 import AdvantageState, D20Result
 
 pytestmark = pytest.mark.srd(
     "playing-the-game/saving-throws.md",
@@ -370,15 +371,28 @@ class TestDifficultyClass_SetByEffect:
         )
 
     def test_save_success_uses_total_meets_or_exceeds_dc(self):
-        """`success = total >= dc` — meeting the DC is a success.
+        """Meeting the DC is a success.
 
         SRD doesn't use "above the DC"; the standard reading and
         every official rules supplement treat ties as successes. This
         is the analogue of the `>= AC` rule on the attack side
-        (#attack-rolls.md). Source-level guard against a `>` regression.
+        (#attack-rolls.md). Plan-08 slice 1 moved the `>=` check into
+        :meth:`dnd_engine.systems.d20.D20Result.succeeds_against`, so
+        the source-level guard now lives there. Behavior is also
+        verified by a runtime check: a Character rolling exactly the
+        DC succeeds.
         """
-        src = inspect.getsource(Character.make_saving_throw)
-        assert "success = total >= dc" in src, (
-            "Save success must use `>=` so that a roll exactly equal "
-            "to the DC succeeds. Same convention as attack vs. AC."
+        src = inspect.getsource(D20Result.succeeds_against)
+        assert ">=" in src, (
+            "`D20Result.succeeds_against` must use `>=` so that a roll "
+            "exactly equal to the DC/AC succeeds."
         )
+        # Behavior: a roll exactly meeting the DC succeeds.
+        result = D20Result(
+            d20=10,
+            total=10,
+            advantage_state=AdvantageState.NORMAL,
+            components={"ability_mod": 0, "proficiency": 0, "circumstantial": 0},
+            rolls=(10,),
+        )
+        assert result.succeeds_against(10) is True

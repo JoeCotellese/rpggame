@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from dnd_engine.core.position import Position
+from dnd_engine.systems.d20 import d20_test
 
 
 class Size(str, Enum):
@@ -744,8 +745,6 @@ class Creature:
         Raises:
             ValueError: If ability name is invalid
         """
-        from dnd_engine.core.dice import DiceRoller
-
         # Normalize ability to short name
         short_to_full = {
             "str": "strength",
@@ -784,12 +783,6 @@ class Creature:
         ):
             advantage = True
 
-        # SRD: advantage and disadvantage cancel. The dice roller
-        # raises on both-set, so cancel here before delegating.
-        if advantage and disadvantage:
-            advantage = False
-            disadvantage = False
-
         # Get ability modifier
         if ability_full == "strength":
             modifier = self.abilities.str_mod
@@ -806,31 +799,24 @@ class Creature:
         else:
             raise ValueError(f"Invalid ability name: {ability}")
 
-        # Roll the saving throw
-        roller = DiceRoller()
-        roll_result = roller.roll("d20", advantage=advantage, disadvantage=disadvantage)
+        # Creatures have no proficient saves in the data model today
+        # (PB-from-CR derivation is plan-08 slice 2). The primitive's
+        # default roller (a fresh `DiceRoller`) matches the legacy
+        # behavior of this method.
+        result = d20_test(
+            ability_mod=modifier,
+            advantage=advantage,
+            disadvantage=disadvantage,
+        )
 
-        # Calculate total
-        total = roll_result.total + modifier
-
-        # Determine success
-        success = total >= dc
-
-        # Create result dict
-        result = {
-            "success": success,
-            "roll": roll_result.rolls[0]
-            if len(roll_result.rolls) == 1
-            else max(roll_result.rolls)
-            if advantage
-            else min(roll_result.rolls),
+        return {
+            "success": result.succeeds_against(dc),
+            "roll": result.d20,
             "modifier": modifier,
-            "total": total,
+            "total": result.total,
             "dc": dc,
             "ability": ability_short,
         }
-
-        return result
 
     def __str__(self) -> str:
         """String representation of the creature"""

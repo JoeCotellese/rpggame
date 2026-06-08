@@ -73,48 +73,45 @@ class TestDefinition_ThreeKinds:
     """
 
     def test_ability_check_surface_exists(self):
-        """Skill checks are the only general ability-check surface today.
+        """The skill-check surface remains the engine's ability-check entry point.
 
-        The closest implementation of an ability check primitive is
-        `Character.make_skill_check`
-        (dnd-engine/dnd_engine/core/character.py:726), which couples
-        the d20 + ability modifier + (optional) proficiency bonus into
-        one call. There is no plain `make_ability_check(ability, dc)`
-        primitive — see GAP test below.
+        `Character.make_skill_check` couples ability modifier and
+        proficiency-if-relevant with a d20 roll. Plan-08 slice 1
+        migrated the d20 portion to delegate to the unified
+        `dnd_engine.systems.d20.d20_test` primitive, so the source no
+        longer carries the `"1d20"` literal directly — it now carries
+        a `d20_test(...)` call.
         """
         assert hasattr(Character, "make_skill_check"), (
             "Character must expose make_skill_check as its ability-check surface."
         )
         src = inspect.getsource(Character.make_skill_check)
         assert "advantage" in src and "disadvantage" in src
-        assert "1d20" in src
+        assert "d20_test" in src
 
     def test_saving_throw_surface_exists(self):
         """Saving throws are exposed on both Character and Creature.
 
-        `Character.make_saving_throw`
-        (dnd-engine/dnd_engine/core/character.py:237) and
-        `Creature.make_saving_throw`
-        (dnd-engine/dnd_engine/core/creature.py:478) both roll 1d20 +
-        modifier vs DC, satisfying SRD step 4 + step 5 for the saving
-        throw kind.
+        `Character.make_saving_throw` and `Creature.make_saving_throw`
+        both delegate the d20 portion to the unified
+        `dnd_engine.systems.d20.d20_test` primitive (plan-08 slice 1).
         """
         assert hasattr(Character, "make_saving_throw")
         assert hasattr(Creature, "make_saving_throw")
         for func in (Character.make_saving_throw, Creature.make_saving_throw):
             src = inspect.getsource(func)
-            assert "d20" in src
+            assert "d20_test" in src
 
     def test_attack_roll_surface_exists(self):
         """Attack rolls are resolved by `CombatEngine.resolve_attack`.
 
-        `CombatEngine.resolve_attack`
-        (dnd-engine/dnd_engine/core/combat.py:91) rolls 1d20 + attack
-        bonus vs AC and is the third leg of the SRD's "three kinds" of
-        D20 tests.
+        Plan-08 slice 1 migrated the d20 portion to delegate to the
+        unified `dnd_engine.systems.d20.d20_test` primitive while
+        keeping the surrounding orchestration (reach, sneak attack,
+        unseen attacker/target, etc.) on the callsite.
         """
         src = inspect.getsource(CombatEngine.resolve_attack)
-        assert '"1d20"' in src or "'1d20'" in src
+        assert "d20_test" in src
 
     def test_general_ability_check_primitive_is_unified(self):
         pytest.skip(

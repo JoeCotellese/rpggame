@@ -7,6 +7,7 @@ from typing import Any
 from dnd_engine.core.creature import Abilities, Creature, Size
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.spell import Spell
+from dnd_engine.systems.d20 import d20_test
 from dnd_engine.systems.inventory import Inventory
 from dnd_engine.systems.resources import ResourcePool
 
@@ -310,7 +311,6 @@ class Character(Creature):
         Raises:
             ValueError: If ability name is invalid
         """
-        from dnd_engine.core.dice import DiceRoller
         from dnd_engine.utils.events import Event, EventType
 
         # Normalize ability to short name
@@ -349,35 +349,28 @@ class Character(Creature):
         ):
             advantage = True
 
-        # SRD: advantage and disadvantage cancel. The dice roller
-        # raises on both-set, so cancel here before delegating.
-        if advantage and disadvantage:
-            advantage = False
-            disadvantage = False
-
-        # Roll the saving throw
-        roller = DiceRoller()
-        roll_result = roller.roll("d20", advantage=advantage, disadvantage=disadvantage)
-
-        # Get the saving throw modifier
         modifier = self.get_saving_throw_modifier(ability)
 
-        # Calculate total
-        total = roll_result.total + modifier
+        # Legacy `make_saving_throw` constructed a fresh `DiceRoller`
+        # rather than reusing `self._dice_roller`; omitting `roller`
+        # preserves that — the primitive defaults to a fresh roller.
+        # `Abilities` exposes modifier attrs by short name (`str_mod`,
+        # `dex_mod`, …), so look up by `ability_short`.
+        result = d20_test(
+            ability_mod=getattr(self.abilities, f"{ability_short}_mod"),
+            proficient=ability_short in self.saving_throw_proficiencies,
+            proficiency_bonus=self.proficiency_bonus,
+            advantage=advantage,
+            disadvantage=disadvantage,
+        )
 
-        # Determine success
-        success = total >= dc
+        success = result.succeeds_against(dc)
 
-        # Create result dict
-        result = {
+        result_dict = {
             "success": success,
-            "roll": roll_result.rolls[0]
-            if len(roll_result.rolls) == 1
-            else max(roll_result.rolls)
-            if advantage
-            else min(roll_result.rolls),
+            "roll": result.d20,
             "modifier": modifier,
-            "total": total,
+            "total": result.total,
             "dc": dc,
             "ability": ability_short,
         }
@@ -390,15 +383,15 @@ class Character(Creature):
                     "character": self.name,
                     "ability": ability_short,
                     "dc": dc,
-                    "roll": result["roll"],
+                    "roll": result.d20,
                     "modifier": modifier,
-                    "total": total,
+                    "total": result.total,
                     "success": success,
                 },
             )
             event_bus.emit(event)
 
-        return result
+        return result_dict
 
     @property
     def ranged_attack_bonus(self) -> int:
@@ -857,7 +850,9 @@ class Character(Creature):
             raise KeyError(f"Unknown skill: {skill}")
 
         skill_info = skills_data[skill]
+        ability_key = skill_info["ability"]
         modifier = self.get_skill_modifier(skill, skills_data)
+        proficient = skill in self.skill_proficiencies
 
         # SRD § Actions › Help: a creature receiving Help rolls its
         # next ability check with Advantage; the one-shot grant is
@@ -866,28 +861,25 @@ class Character(Creature):
             advantage = True
             self.pending_help_from = None
 
-        # SRD: advantage and disadvantage cancel. The dice roller
-        # raises on both-set, so cancel here before delegating.
-        if advantage and disadvantage:
-            advantage = False
-            disadvantage = False
-
-        # Roll the d20
-        dice_roll = self._dice_roller.roll("1d20", advantage=advantage, disadvantage=disadvantage)
-
-        # Extract the d20 roll result (before modifier is added)
-        roll_result = dice_roll.total - dice_roll.modifier  # Get just the die result
-        total = roll_result + modifier
+        result = d20_test(
+            ability_mod=getattr(self.abilities, f"{ability_key}_mod"),
+            proficient=proficient,
+            proficiency_bonus=self.proficiency_bonus,
+            expertise=skill in self.expertise_skills,
+            advantage=advantage,
+            disadvantage=disadvantage,
+            roller=self._dice_roller,
+        )
 
         return {
             "skill": skill,
-            "ability": skill_info["ability"],
+            "ability": ability_key,
             "dc": dc,
-            "roll": roll_result,
+            "roll": result.d20,
             "modifier": modifier,
-            "total": total,
-            "success": total >= dc,
-            "proficient": skill in self.skill_proficiencies,
+            "total": result.total,
+            "success": result.succeeds_against(dc),
+            "proficient": proficient,
         }
 
     def get_sneak_attack_dice(self) -> str | None:
