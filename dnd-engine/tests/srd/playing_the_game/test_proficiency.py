@@ -362,6 +362,142 @@ class TestProficiency_BonusDoesntStack:
         )
 
 
+
+class TestProficiency_EitherOrSkillModifier:
+    """SRD § Playing the Game › Proficiency › Either-or skill checks.
+
+    > If a rule allows you to make a Charisma (Deception or Persuasion)
+    > check, you add your Proficiency Bonus if you're proficient in
+    > either skill, but you don't add it twice if you're proficient in
+    > both skills.
+
+    Locked behavior for ``Character.get_either_or_skill_modifier``.
+    """
+
+    @staticmethod
+    def _silver_tongue(
+        *,
+        skill_proficiencies: list[str] | None = None,
+        expertise_skills: list[str] | None = None,
+    ) -> Character:
+        """Charismatic rogue at level 5 (PB +3) with CHA 16 (+3 mod)."""
+        abilities = Abilities(
+            strength=10,
+            dexterity=12,
+            constitution=12,
+            intelligence=10,
+            wisdom=10,
+            charisma=16,  # +3
+        )
+        return Character(
+            name="Voice",
+            character_class=CharacterClass.ROGUE,
+            level=5,
+            abilities=abilities,
+            max_hp=30,
+            ac=13,
+            skill_proficiencies=skill_proficiencies or [],
+            expertise_skills=expertise_skills or [],
+        )
+
+    def test_proficient_in_one_of_two_skills_adds_pb_once(self) -> None:
+        """Proficient in Deception only: CHA mod (+3) + PB (+3) = +6."""
+        skills_data = json.loads(SKILLS_JSON.read_text())
+        bard = self._silver_tongue(skill_proficiencies=["deception"])
+        result = bard.get_either_or_skill_modifier(
+            ["deception", "persuasion"], skills_data
+        )
+        assert result == 6
+
+    def test_proficient_in_both_skills_adds_pb_once_not_twice(self) -> None:
+        """The locked SRD rule: proficient in both → same as one.
+
+        CHA mod (+3) + PB (+3) = +6 — NOT +9.
+        """
+        skills_data = json.loads(SKILLS_JSON.read_text())
+        bard = self._silver_tongue(skill_proficiencies=["deception", "persuasion"])
+        result = bard.get_either_or_skill_modifier(
+            ["deception", "persuasion"], skills_data
+        )
+        assert result == 6
+
+    def test_proficient_in_neither_skill_omits_pb(self) -> None:
+        """No proficiency in either → just the ability modifier."""
+        skills_data = json.loads(SKILLS_JSON.read_text())
+        bard = self._silver_tongue()
+        result = bard.get_either_or_skill_modifier(
+            ["deception", "persuasion"], skills_data
+        )
+        assert result == 3  # CHA mod, no PB
+
+    def test_expertise_in_one_skill_doubles_pb_once(self) -> None:
+        """Expertise in one of the listed skills doubles PB once.
+
+        CHA mod (+3) + PB doubled (+6) = +9.
+        """
+        skills_data = json.loads(SKILLS_JSON.read_text())
+        bard = self._silver_tongue(
+            skill_proficiencies=["deception"],
+            expertise_skills=["deception"],
+        )
+        result = bard.get_either_or_skill_modifier(
+            ["deception", "persuasion"], skills_data
+        )
+        assert result == 9
+
+    def test_proficient_in_both_expertise_in_one_doubles_pb_once(self) -> None:
+        """Proficient in both, expertise in one → PB doubled once, not
+        applied twice. CHA mod (+3) + PB doubled (+6) = +9.
+        """
+        skills_data = json.loads(SKILLS_JSON.read_text())
+        bard = self._silver_tongue(
+            skill_proficiencies=["deception", "persuasion"],
+            expertise_skills=["deception"],
+        )
+        result = bard.get_either_or_skill_modifier(
+            ["deception", "persuasion"], skills_data
+        )
+        assert result == 9
+
+    def test_mismatched_abilities_raises(self) -> None:
+        """Either-or only makes sense when the candidate skills share an
+        ability (the SRD's parenthesized "Charisma (X or Y)" pattern).
+        Mixed-ability lists are a callsite bug.
+        """
+        skills_data = json.loads(SKILLS_JSON.read_text())
+        bard = self._silver_tongue(skill_proficiencies=["deception"])
+        with pytest.raises(ValueError, match="ability"):
+            bard.get_either_or_skill_modifier(
+                ["deception", "athletics"], skills_data
+            )
+
+    def test_empty_skill_list_raises(self) -> None:
+        """An empty candidate list has no ability to use; reject."""
+        skills_data = json.loads(SKILLS_JSON.read_text())
+        bard = self._silver_tongue()
+        with pytest.raises(ValueError, match="empty"):
+            bard.get_either_or_skill_modifier([], skills_data)
+
+    def test_unknown_skill_in_list_raises(self) -> None:
+        """An unknown skill is the same callsite bug as in
+        ``get_skill_modifier``."""
+        skills_data = json.loads(SKILLS_JSON.read_text())
+        bard = self._silver_tongue()
+        with pytest.raises(KeyError, match="Unknown skill"):
+            bard.get_either_or_skill_modifier(
+                ["deception", "made_up_skill"], skills_data
+            )
+
+    def test_single_skill_list_matches_get_skill_modifier(self) -> None:
+        """Defense: a list of one skill collapses to the per-skill
+        helper. Same modifier as ``get_skill_modifier``."""
+        skills_data = json.loads(SKILLS_JSON.read_text())
+        bard = self._silver_tongue(skill_proficiencies=["deception"])
+        assert bard.get_either_or_skill_modifier(
+            ["deception"], skills_data
+        ) == bard.get_skill_modifier("deception", skills_data)
+
+
 class TestProficiency_Skills:
     """SRD § Playing the Game › Proficiency › Skill Proficiencies.
 

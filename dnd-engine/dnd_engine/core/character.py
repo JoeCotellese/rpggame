@@ -815,6 +815,67 @@ class Character(Creature):
 
         return modifier
 
+
+    def get_either_or_skill_modifier(
+        self, skills: list[str], skills_data: dict
+    ) -> int:
+        """
+        Calculate the modifier for an either-or skill check.
+
+        Implements SRD § Playing the Game › Proficiency › "The Bonus
+        Doesn't Stack": for a check that allows multiple applicable
+        skills (e.g. "Charisma (Deception or Persuasion)"), the
+        Proficiency Bonus is added once if the character is proficient
+        in *any* of the listed skills — never twice for being
+        proficient in several. Expertise in any listed skill doubles
+        PB, applied once.
+
+        All listed skills must share an ability (the SRD's
+        parenthesized "Ability (Skill or Skill)" pattern); a mixed-
+        ability list is a callsite bug.
+
+        Args:
+            skills: Candidate skill names (e.g.
+                ``["deception", "persuasion"]``). Must be non-empty
+                and share an ability.
+            skills_data: Skills data dictionary loaded from skills.json.
+
+        Returns:
+            Ability modifier + (PB once if proficient in any) +
+            (PB doubled once if expertise in any).
+
+        Raises:
+            ValueError: If ``skills`` is empty or the listed skills
+                don't share an ability.
+            KeyError: If any listed skill is not in ``skills_data``.
+        """
+        if not skills:
+            raise ValueError("skills list is empty; nothing to check")
+        for skill in skills:
+            if skill not in skills_data:
+                raise KeyError(f"Unknown skill: {skill}")
+
+        abilities = {skills_data[s]["ability"] for s in skills}
+        if len(abilities) > 1:
+            raise ValueError(
+                f"Either-or skill check requires a shared ability; "
+                f"got {sorted(abilities)} across {skills}."
+            )
+
+        ability_key = next(iter(abilities))
+        ability_mod = getattr(self.abilities, f"{ability_key}_mod")
+
+        any_proficient = any(s in self.skill_proficiencies for s in skills)
+        any_expertise = any(s in self.expertise_skills for s in skills)
+
+        modifier = ability_mod
+        if any_proficient:
+            pb = ProficiencyApplication(self.proficiency_bonus)
+            multiplier = 2 if any_expertise else 1
+            modifier += pb.add(multiplier=multiplier)
+
+        return modifier
+
     def make_skill_check(
         self,
         skill: str,
