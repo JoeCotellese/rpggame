@@ -748,6 +748,7 @@ class Creature:
         dc: int,
         advantage: bool = False,
         disadvantage: bool = False,
+        circumstantial: int = 0,
         event_bus=None,
     ) -> dict:
         """
@@ -761,6 +762,10 @@ class Creature:
             dc: Difficulty class to beat
             advantage: Roll with advantage (roll twice, take higher)
             disadvantage: Roll with disadvantage (roll twice, take lower)
+            circumstantial: Signed bonus/penalty from class features,
+                spells, or "another rule" per SRD § Playing the Game ›
+                D20 Tests › Step 5. Forwarded to the d20-test primitive
+                and surfaced on the returned dict for telemetry.
             event_bus: Optional EventBus instance to emit saving throw event
 
         Returns:
@@ -768,9 +773,10 @@ class Creature:
             - "success": bool (total >= dc)
             - "roll": int (the d20 roll before modifier)
             - "modifier": int (ability modifier)
-            - "total": int (roll + modifier)
+            - "total": int (roll + modifier + circumstantial)
             - "dc": int (the DC that was beaten)
             - "ability": str (the ability that was saved with, in short form)
+            - "circumstantial": int (the signed bonus/penalty applied)
 
         Raises:
             ValueError: If ability name is invalid
@@ -837,6 +843,7 @@ class Creature:
             ability_mod=modifier,
             advantage=advantage,
             disadvantage=disadvantage,
+            circumstantial=circumstantial,
         )
 
         return {
@@ -846,6 +853,7 @@ class Creature:
             "total": result.total,
             "dc": dc,
             "ability": ability_short,
+            "circumstantial": circumstantial,
         }
 
     def make_ability_check(

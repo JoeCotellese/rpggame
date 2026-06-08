@@ -288,6 +288,7 @@ class Character(Creature):
         dc: int,
         advantage: bool = False,
         disadvantage: bool = False,
+        circumstantial: int = 0,
         event_bus=None,
     ) -> dict[str, Any]:
         """
@@ -298,16 +299,23 @@ class Character(Creature):
             dc: Difficulty class to beat
             advantage: Roll with advantage (roll twice, take higher)
             disadvantage: Roll with disadvantage (roll twice, take lower)
+            circumstantial: Signed bonus/penalty from class features,
+                spells, or "another rule" per SRD § Playing the Game ›
+                D20 Tests › Step 5. Used by Bless / Bane / Guidance
+                once those spells are plumbed. Forwarded to the
+                d20-test primitive and surfaced on the returned dict
+                and emitted event for telemetry.
             event_bus: Optional EventBus instance to emit saving throw event
 
         Returns:
             Dictionary with:
             - "success": bool (total >= dc)
             - "roll": int (the d20 roll before modifier)
-            - "modifier": int (saving throw modifier)
-            - "total": int (roll + modifier)
+            - "modifier": int (saving throw modifier — ability + PB)
+            - "total": int (roll + modifier + circumstantial)
             - "dc": int (the DC that was beaten)
             - "ability": str (the ability that was saved with, in short form)
+            - "circumstantial": int (the signed bonus/penalty applied)
 
         Raises:
             ValueError: If ability name is invalid
@@ -363,6 +371,7 @@ class Character(Creature):
             proficiency_bonus=self.proficiency_bonus,
             advantage=advantage,
             disadvantage=disadvantage,
+            circumstantial=circumstantial,
         )
 
         success = result.succeeds_against(dc)
@@ -374,6 +383,7 @@ class Character(Creature):
             "total": result.total,
             "dc": dc,
             "ability": ability_short,
+            "circumstantial": circumstantial,
         }
 
         # Emit event if event bus is provided
@@ -388,6 +398,7 @@ class Character(Creature):
                     "modifier": modifier,
                     "total": result.total,
                     "success": success,
+                    "circumstantial": circumstantial,
                 },
             )
             event_bus.emit(event)

@@ -127,3 +127,39 @@ class TestAbilityCheck:
         # arithmetic is verified by the d20_test primitive's own tests.
         assert baseline["circumstantial"] == 0
         assert boosted["circumstantial"] == 1
+
+
+class TestSavingThrow:
+    """Saving throws expose the circumstantial channel."""
+
+    def test_character_saving_throw_accepts_circumstantial(self):
+        """A `+1` Bless-like bonus is surfaced on the result dict.
+
+        ``make_saving_throw`` constructs a fresh ``DiceRoller`` per
+        call rather than reusing ``self._dice_roller`` (see the
+        comment at character.py:354), so test the structural contract:
+        the bonus reaches the result. End-to-end arithmetic of the
+        ``circumstantial`` channel is verified by the d20-test
+        primitive's own tests in ``tests/srd/playing_the_game/
+        test_d20_unified.py``.
+        """
+        fighter = _make_fighter()
+
+        result = fighter.make_saving_throw("con", dc=10, circumstantial=1)
+
+        assert result["circumstantial"] == 1
+        # The "modifier" key carries the static save modifier
+        # (ability + PB), separate from the circumstantial channel.
+        # The total includes both: d20 + modifier + circumstantial.
+        assert result["total"] == result["roll"] + result["modifier"] + 1
+
+    def test_creature_saving_throw_accepts_circumstantial(self):
+        """A `-2` Bane-like penalty is surfaced on the Creature surface."""
+        goblin = _make_creature()
+
+        result = goblin.make_saving_throw("wis", dc=10, circumstantial=-2)
+
+        assert result["circumstantial"] == -2
+        # Creatures have no proficient saves today, so modifier ==
+        # ability mod, and total == d20 + ability_mod + circumstantial.
+        assert result["total"] == result["roll"] + result["modifier"] - 2
