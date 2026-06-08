@@ -192,16 +192,45 @@ class TestAbilityCheck_Primitive:
         assert result["ability"] == "dex"
 
     def test_ability_check_primitive_exists_for_non_skill_checks(self):
-        pytest.skip(
-            "GAP: there is no `make_ability_check(ability, dc)` "
-            "primitive. The SRD's canonical examples (Strength to "
-            "force open a door, Intelligence to recall lore) are not "
-            "skill checks. Only `make_skill_check` "
-            "(dnd-engine/dnd_engine/core/character.py:726) and "
-            "`ConditionManager.attempt_condition_removal` "
-            "(systems/condition_manager.py:220) roll an ability "
-            "check. Neither is general-purpose. Tracked by issue #484."
-        )
+        """`Character.make_ability_check(ability, dc)` rolls a raw ability check.
+
+        SRD: an ability check is `d20 + ability modifier` vs a DC. No
+        skill, no tool — just the ability. The fighter has STR 16
+        (+3); rolling against DC 10 produces ``total = roll + 3``.
+        """
+        fighter = _make_fighter()
+        fighter._dice_roller = DiceRoller(seed=1)
+        result = fighter.make_ability_check("str", dc=10)
+        # STR mod (+3), no proficiency
+        assert result["modifier"] == 3
+        assert result["total"] == result["roll"] + 3
+        assert result["ability"] == "str"
+        assert result["dc"] == 10
+        assert result["success"] == (result["total"] >= 10)
+
+    def test_ability_check_accepts_advantage_and_disadvantage(self):
+        """`make_ability_check` plumbs Advantage/Disadvantage through `d20_test`.
+
+        Advantage takes the higher of two d20s; the returned `roll`
+        field is the consumed die.
+        """
+        fighter = _make_fighter()
+        fighter._dice_roller = DiceRoller(seed=7)
+        adv = fighter.make_ability_check("str", dc=10, advantage=True)
+        fighter._dice_roller = DiceRoller(seed=7)
+        dis = fighter.make_ability_check("str", dc=10, disadvantage=True)
+        # Same seed but different selection rule — adv >= dis.
+        assert adv["roll"] >= dis["roll"]
+
+    def test_ability_check_accepts_full_and_short_ability_names(self):
+        """Both `"str"` and `"strength"` resolve to the STR modifier."""
+        fighter = _make_fighter()
+        fighter._dice_roller = DiceRoller(seed=3)
+        short = fighter.make_ability_check("str", dc=10)
+        fighter._dice_roller = DiceRoller(seed=3)
+        long = fighter.make_ability_check("strength", dc=10)
+        assert short["modifier"] == long["modifier"] == 3
+        assert short["ability"] == long["ability"] == "str"
 
 
 class TestAbilityCheck_ProficiencyBonusOptional:
@@ -283,15 +312,16 @@ class TestAbilityCheck_ProficiencyBonusOptional:
 
     def test_ability_check_with_tool_proficiency(self):
         pytest.skip(
-            "GAP: the SRD names *skill or tool* proficiency as "
-            "relevance gates. Skill proficiencies are honored "
-            "(dnd-engine/dnd_engine/core/character.py:715-722). Tool "
-            "proficiencies are stored on `Character` "
-            "(character.py:109, `tool_proficiencies`) but no ability-"
-            "check call site consults them. A 'Dexterity (thieves' "
-            "tools) check' adds proficiency only if Thieves' Tools is "
-            "in `tool_proficiencies` — that wiring doesn't exist. "
-            "Tracked by issue #484."
+            "GAP (narrowed): the raw ability-check surface now exists "
+            "(`Character.make_ability_check`, plan-08 slice 4 / "
+            "#484). What remains is the tool-proficiency wiring: a "
+            "'Dexterity (thieves' tools) check' should add the "
+            "proficiency bonus when Thieves' Tools is in "
+            "`Character.tool_proficiencies` (character.py:109), and "
+            "grant Advantage when the relevant skill is also "
+            "proficient. No `make_tool_check` / "
+            "`is_proficient_with_tool` API exists. Tracked by issue "
+            "#483."
         )
 
 
@@ -360,12 +390,31 @@ class TestAbilityCheck_CreatureParity:
         assert ">= dc" in src or "roll_total >= dc" in src
 
     def test_creature_has_general_purpose_ability_check_primitive(self):
-        pytest.skip(
-            "GAP: `Creature` exposes `make_saving_throw` "
-            "(dnd-engine/dnd_engine/core/creature.py:478) but no "
-            "`make_ability_check` — a monster cannot roll a Strength "
-            "check to escape a pit, an Intelligence check to puzzle "
-            "out a glyph, etc. The condition-removal helper "
-            "(systems/condition_manager.py:220) is dedicated. Tracked "
-            "by issue #484."
+        """`Creature.make_ability_check(ability, dc)` rolls a raw check.
+
+        A monster can roll a Strength check to escape a pit or an
+        Intelligence check to puzzle out a glyph. Creatures don't yet
+        have skill proficiencies in the data model, so the surface
+        adds only the ability modifier.
+        """
+        goblin_abilities = Abilities(
+            strength=8,
+            dexterity=14,
+            constitution=10,
+            intelligence=10,
+            wisdom=8,
+            charisma=8,
         )
+        from dnd_engine.core.creature import Creature
+
+        goblin = Creature(
+            name="Goblin", max_hp=7, ac=13, abilities=goblin_abilities
+        )
+        result = goblin.make_ability_check("str", dc=10)
+        for key in ("success", "roll", "modifier", "total", "dc", "ability"):
+            assert key in result, f"missing field {key!r}"
+        # STR 8 → mod -1
+        assert result["modifier"] == -1
+        assert result["ability"] == "str"
+        assert result["dc"] == 10
+        assert result["total"] == result["roll"] - 1

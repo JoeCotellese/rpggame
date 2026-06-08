@@ -174,24 +174,89 @@ class TestProficiency_BonusByCR:
     > A monster's Proficiency Bonus is based on its Challenge Rating.
     """
 
-    def test_creature_does_not_expose_proficiency_bonus_from_cr(self) -> None:
-        pytest.skip(
-            "GAP: `Creature` (dnd-engine/dnd_engine/core/creature.py:"
-            "57) has no `proficiency_bonus` property. Only `Character."
-            "proficiency_bonus` (character.py:130) exists, derived from "
-            "PC level. Nothing maps the `cr` field in monsters.json to "
-            "the SRD PB band. Tracked by issue #480."
+    @pytest.mark.parametrize(
+        "cr,expected_pb",
+        [
+            ("0", 2),
+            ("1/8", 2),
+            ("1/4", 2),
+            ("1/2", 2),
+            ("1", 2),
+            ("4", 2),
+            ("5", 3),
+            ("8", 3),
+            ("9", 4),
+            ("12", 4),
+            ("13", 5),
+            ("16", 5),
+            ("17", 6),
+            ("20", 6),
+        ],
+    )
+    def test_creature_proficiency_bonus_follows_cr_band(
+        self, cr: str, expected_pb: int
+    ) -> None:
+        """`Creature(cr=...).proficiency_bonus` follows the SRD CR→PB table.
+
+        SRD: CR 0-4 → +2, 5-8 → +3, 9-12 → +4, 13-16 → +5, 17-20 → +6.
+        Verified at band boundaries.
+        """
+        from dnd_engine.core.creature import Creature
+
+        creature = Creature(
+            name=f"creature_cr_{cr}",
+            max_hp=10,
+            ac=12,
+            abilities=Abilities(
+                strength=10,
+                dexterity=10,
+                constitution=10,
+                intelligence=10,
+                wisdom=10,
+                charisma=10,
+            ),
+            cr=cr,
+        )
+        assert creature.proficiency_bonus == expected_pb, (
+            f"CR {cr!r} expected PB {expected_pb}, got "
+            f"{creature.proficiency_bonus}"
         )
 
     def test_monster_save_totals_decompose_to_ability_mod_plus_pb(self) -> None:
-        pytest.skip(
-            "GAP: monsters.json stores `saving_throws` as raw final "
-            "totals (e.g., bearded_devil: str=5, con=4, wis=2 at "
-            "dnd_engine/data/srd/monsters.json:969). Without a "
-            "CR->PB mapping on `Creature`, the engine cannot validate "
-            "that those totals equal `ability_mod + PB` for the "
-            "proficient saves. Tracked by issue #480."
+        """Bearded devil's stored save totals = ability_mod + PB-from-CR.
+
+        SRD: a monster's proficient save modifier is its ability
+        modifier plus the Proficiency Bonus derived from its CR.
+        bearded_devil ships ``cr=3`` (PB +2) with abilities STR 16
+        (+3), CON 15 (+2), WIS 11 (+0). The stored ``saving_throws``
+        in monsters.json must equal ``ability_mod + PB`` for each
+        proficient save.
+        """
+        monsters_path = (
+            Path(__file__).resolve().parents[3]
+            / "dnd_engine"
+            / "data"
+            / "srd"
+            / "monsters.json"
         )
+        monsters = json.loads(monsters_path.read_text())
+        devil = monsters["bearded_devil"]
+
+        from dnd_engine.systems.proficiency import proficiency_bonus_from_cr
+
+        pb = proficiency_bonus_from_cr(devil["cr"])
+        assert pb == 2, f"CR {devil['cr']!r} should give PB +2, got {pb}"
+
+        # Compute the expected modifier for each proficient save.
+        for ability_short, stored_total in devil["saving_throws"].items():
+            ability_score = devil["abilities"][ability_short]
+            ability_mod = (ability_score - 10) // 2
+            expected = ability_mod + pb
+            assert stored_total == expected, (
+                f"bearded_devil {ability_short} save: stored "
+                f"{stored_total}, decomposes to {ability_mod} (ability) "
+                f"+ {pb} (PB) = {expected}"
+            )
 
 
 class TestProficiency_BonusApplication:

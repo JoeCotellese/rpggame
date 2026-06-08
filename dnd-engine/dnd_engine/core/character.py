@@ -873,6 +873,87 @@ class Character(Creature):
 
         return modifier
 
+    def make_ability_check(
+        self,
+        ability: str,
+        dc: int,
+        advantage: bool = False,
+        disadvantage: bool = False,
+        event_bus=None,
+    ) -> dict[str, Any]:
+        """
+        Roll a raw ability check against a DC.
+
+        Unlike :meth:`make_skill_check`, this surface does not add a
+        proficiency bonus — raw ability checks (Strength to force open
+        a stuck door, Intelligence to recall lore, Constitution to
+        hold one's breath) are not gated by skill or tool proficiency
+        per SRD § Playing the Game › Ability Checks. Use
+        :meth:`make_skill_check` when a skill is named; the future
+        ``make_tool_check`` will cover tool-mediated checks (#483).
+
+        Args:
+            ability: Ability name (e.g., "str", "strength", "INT").
+            dc: Difficulty class to beat.
+            advantage: Roll with advantage (2d20, take higher).
+            disadvantage: Roll with disadvantage (2d20, take lower).
+            event_bus: Optional EventBus to emit an ABILITY_CHECK event.
+
+        Returns:
+            Dict with success / roll / modifier / total / dc / ability.
+
+        Raises:
+            ValueError: If ability name is invalid.
+        """
+        from dnd_engine.utils.events import Event, EventType
+
+        short_to_full = {
+            "str": "strength",
+            "dex": "dexterity",
+            "con": "constitution",
+            "int": "intelligence",
+            "wis": "wisdom",
+            "cha": "charisma",
+        }
+        full_to_short = {v: k for k, v in short_to_full.items()}
+
+        ability_lower = ability.lower()
+        if ability_lower in short_to_full:
+            ability_short = ability_lower
+        elif ability_lower in full_to_short:
+            ability_short = full_to_short[ability_lower]
+        else:
+            raise ValueError(f"Invalid ability name: {ability}")
+
+        ability_mod = getattr(self.abilities, f"{ability_short}_mod")
+
+        result = d20_test(
+            ability_mod=ability_mod,
+            advantage=advantage,
+            disadvantage=disadvantage,
+            roller=self._dice_roller,
+        )
+
+        success = result.succeeds_against(dc)
+        result_dict = {
+            "success": success,
+            "roll": result.d20,
+            "modifier": ability_mod,
+            "total": result.total,
+            "dc": dc,
+            "ability": ability_short,
+        }
+
+        if event_bus is not None:
+            event_bus.emit(
+                Event(
+                    type=EventType.ABILITY_CHECK,
+                    data={"character": self.name, **result_dict},
+                )
+            )
+
+        return result_dict
+
     def make_skill_check(
         self,
         skill: str,
