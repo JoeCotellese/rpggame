@@ -848,6 +848,84 @@ class Creature:
             "ability": ability_short,
         }
 
+    def make_ability_check(
+        self,
+        ability: str,
+        dc: int,
+        advantage: bool = False,
+        disadvantage: bool = False,
+        event_bus=None,
+    ) -> dict:
+        """
+        Roll a raw ability check against a DC.
+
+        Mirrors :meth:`Character.make_ability_check`. SRD § Playing
+        the Game › Ability Checks: a monster rolls ``d20 + ability
+        modifier`` for non-skill checks (escape a pit, push a boulder,
+        puzzle out a glyph). Creatures don't yet carry skill or tool
+        proficiencies, so the modifier here is just the ability mod.
+
+        Args:
+            ability: Ability name (short or full).
+            dc: Difficulty class to beat.
+            advantage: Roll 2d20, take higher.
+            disadvantage: Roll 2d20, take lower.
+            event_bus: Optional EventBus to emit an ABILITY_CHECK event.
+
+        Returns:
+            Dict with success / roll / modifier / total / dc / ability.
+
+        Raises:
+            ValueError: If ability name is invalid.
+        """
+        from dnd_engine.utils.events import Event, EventType
+
+        short_to_full = {
+            "str": "strength",
+            "dex": "dexterity",
+            "con": "constitution",
+            "int": "intelligence",
+            "wis": "wisdom",
+            "cha": "charisma",
+        }
+        full_to_short = {v: k for k, v in short_to_full.items()}
+
+        ability_lower = ability.lower()
+        if ability_lower in short_to_full:
+            ability_short = ability_lower
+        elif ability_lower in full_to_short:
+            ability_short = full_to_short[ability_lower]
+        else:
+            raise ValueError(f"Invalid ability name: {ability}")
+
+        ability_mod = getattr(self.abilities, f"{ability_short}_mod")
+
+        result = d20_test(
+            ability_mod=ability_mod,
+            advantage=advantage,
+            disadvantage=disadvantage,
+        )
+
+        success = result.succeeds_against(dc)
+        result_dict = {
+            "success": success,
+            "roll": result.d20,
+            "modifier": ability_mod,
+            "total": result.total,
+            "dc": dc,
+            "ability": ability_short,
+        }
+
+        if event_bus is not None:
+            event_bus.emit(
+                Event(
+                    type=EventType.ABILITY_CHECK,
+                    data={"creature": self.name, **result_dict},
+                )
+            )
+
+        return result_dict
+
     def __str__(self) -> str:
         """String representation of the creature"""
         status = "alive" if self.is_alive else "dead"

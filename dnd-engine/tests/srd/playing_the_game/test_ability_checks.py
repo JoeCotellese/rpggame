@@ -389,12 +389,31 @@ class TestAbilityCheck_CreatureParity:
         assert ">= dc" in src or "roll_total >= dc" in src
 
     def test_creature_has_general_purpose_ability_check_primitive(self):
-        pytest.skip(
-            "GAP: `Creature` exposes `make_saving_throw` "
-            "(dnd-engine/dnd_engine/core/creature.py:478) but no "
-            "`make_ability_check` — a monster cannot roll a Strength "
-            "check to escape a pit, an Intelligence check to puzzle "
-            "out a glyph, etc. The condition-removal helper "
-            "(systems/condition_manager.py:220) is dedicated. Tracked "
-            "by issue #484."
+        """`Creature.make_ability_check(ability, dc)` rolls a raw check.
+
+        A monster can roll a Strength check to escape a pit or an
+        Intelligence check to puzzle out a glyph. Creatures don't yet
+        have skill proficiencies in the data model, so the surface
+        adds only the ability modifier.
+        """
+        goblin_abilities = Abilities(
+            strength=8,
+            dexterity=14,
+            constitution=10,
+            intelligence=10,
+            wisdom=8,
+            charisma=8,
         )
+        from dnd_engine.core.creature import Creature
+
+        goblin = Creature(
+            name="Goblin", max_hp=7, ac=13, abilities=goblin_abilities
+        )
+        result = goblin.make_ability_check("str", dc=10)
+        for key in ("success", "roll", "modifier", "total", "dc", "ability"):
+            assert key in result, f"missing field {key!r}"
+        # STR 8 → mod -1
+        assert result["modifier"] == -1
+        assert result["ability"] == "str"
+        assert result["dc"] == 10
+        assert result["total"] == result["roll"] - 1
