@@ -166,12 +166,9 @@ _ABILITY_KEYS = ("str", "dex", "con", "int", "wis", "cha")
 
 
 def _ability_mod(score: int) -> int:
-    # SRD: floor((score - 10) / 2). Using math floor for negatives.
-    return (score - 10) // 2 if score >= 10 else -((10 - score + 1) // 2)
-
-
-def _skill_to_ability() -> dict[str, str]:
-    return DataLoader().load_skills()
+    # SRD: floor((score - 10) / 2). Python's // is floor division and
+    # handles negative scores correctly per the SRD rule.
+    return (score - 10) // 2
 
 
 def test_monster_skill_save_totals_match_cr_derived_pb():
@@ -212,9 +209,7 @@ def test_monster_skill_save_totals_match_cr_derived_pb():
         for skill_name, total in skills.items():
             skill_meta = skills_catalog.get(skill_name)
             if skill_meta is None:
-                mismatches.append(
-                    f"{monster_id} skill {skill_name}: not found in skills catalog"
-                )
+                mismatches.append(f"{monster_id} skill {skill_name}: not found in skills catalog")
                 continue
             ability_short = skill_meta["ability"]
             mod = ability_mods[ability_short]
