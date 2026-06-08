@@ -169,7 +169,9 @@ def decide(ctx: TurnContext) -> Intent:
 
     post_close_position = close_path[-1] if close_path else actor_pos
     retreat_plan = retreat_fn(
-        ctx, primary_target, ctx.reach_ft,
+        ctx,
+        primary_target,
+        ctx.reach_ft,
         budget_used_ft=len(close_path) * 5,
         from_position=post_close_position,
     )
@@ -251,7 +253,6 @@ def execute(
         return result
 
     pool = target_pool or []
-    consecutive_failures = 0
     is_close_phase = True
     retreat_walked = False
 
@@ -280,6 +281,9 @@ def execute(
         if not isinstance(step, MoveStep):
             continue
 
+        # Anti-stuck guard is per-MoveStep — a failed step in the close
+        # phase must not poison the retreat phase's first tile.
+        consecutive_failures = 0
         for target_tile in step.path:
             if is_close_phase and reach_ft is not None and pool:
                 if _filter_in_reach(enemy.position, pool, reach_ft):
@@ -296,8 +300,7 @@ def execute(
                 consecutive_failures = 0
                 if not enemy.is_alive:
                     result.stopped_reason = (
-                        "enemy_died_mid_retreat" if not is_close_phase
-                        else "enemy_died_mid_close"
+                        "enemy_died_mid_retreat" if not is_close_phase else "enemy_died_mid_close"
                     )
                     return _finalize(result, enemy)
             else:
@@ -330,7 +333,8 @@ def _filter_in_reach(
     reach_ft: int,
 ) -> list[Creature]:
     return [
-        pc for pc in pool
+        pc
+        for pc in pool
         if pc.position is not None
         and distance_in_feet(actor_pos.x, actor_pos.y, pc.position.x, pc.position.y) <= reach_ft
     ]

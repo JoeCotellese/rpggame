@@ -24,8 +24,12 @@ def _make_creature(name: str, x: int, y: int, speed: int = 30) -> Creature:
         max_hp=20,
         ac=15,
         abilities=Abilities(
-            strength=10, dexterity=10, constitution=10,
-            intelligence=10, wisdom=10, charisma=10,
+            strength=10,
+            dexterity=10,
+            constitution=10,
+            intelligence=10,
+            wisdom=10,
+            charisma=10,
         ),
         speed=speed,
     )
@@ -61,7 +65,10 @@ class TestSkirmisherClosePhase:
         target = _make_creature("Brick", 5, 0)
         plan = Skirmisher().plan(_ctx(actor), target, reach_ft=5)
         assert plan.path == [
-            Position(1, 0), Position(2, 0), Position(3, 0), Position(4, 0),
+            Position(1, 0),
+            Position(2, 0),
+            Position(3, 0),
+            Position(4, 0),
         ]
 
     def test_zero_speed_yields_empty_path(self):
@@ -99,7 +106,10 @@ class TestSkirmisherRetreat:
         actor = _make_creature("Goblin", 5, 9)
         target = _make_creature("Brick", 5, 10)
         retreat = Skirmisher().plan_retreat(
-            _ctx(actor), target, reach_ft=5, budget_used_ft=20,
+            _ctx(actor),
+            target,
+            reach_ft=5,
+            budget_used_ft=20,
         )
         assert retreat is not None
         assert retreat.path == [Position(5, 8)]
@@ -112,7 +122,10 @@ class TestSkirmisherRetreat:
         actor = _make_creature("Goblin", 4, 4, speed=30)
         target = _make_creature("Brick", 5, 5)
         retreat = Skirmisher().plan_retreat(
-            _ctx(actor), target, reach_ft=10, budget_used_ft=5,
+            _ctx(actor),
+            target,
+            reach_ft=10,
+            budget_used_ft=5,
         )
         assert retreat is not None
         # (3,3) → distance 10 ft (still in reach). (2,2) → 15 ft (out).
@@ -124,7 +137,10 @@ class TestSkirmisherRetreat:
         actor = _make_creature("Goblin", 4, 4, speed=30)
         target = _make_creature("Brick", 5, 5)
         retreat = Skirmisher().plan_retreat(
-            _ctx(actor), target, reach_ft=10, budget_used_ft=25,
+            _ctx(actor),
+            target,
+            reach_ft=10,
+            budget_used_ft=25,
         )
         assert retreat is not None
         assert retreat.path == [Position(3, 3)]  # one tile only
@@ -133,7 +149,10 @@ class TestSkirmisherRetreat:
         actor = _make_creature("Goblin", 5, 9, speed=30)
         target = _make_creature("Brick", 5, 10)
         retreat = Skirmisher().plan_retreat(
-            _ctx(actor), target, reach_ft=5, budget_used_ft=30,
+            _ctx(actor),
+            target,
+            reach_ft=5,
+            budget_used_ft=30,
         )
         assert retreat is None
 
@@ -141,7 +160,10 @@ class TestSkirmisherRetreat:
         actor = _make_creature("Goblin", 5, 9, speed=30)
         target = _make_creature("Brick", 5, 10)
         retreat = Skirmisher().plan_retreat(
-            _ctx(actor), target, reach_ft=5, budget_used_ft=26,  # 4 ft remaining
+            _ctx(actor),
+            target,
+            reach_ft=5,
+            budget_used_ft=26,  # 4 ft remaining
         )
         assert retreat is None
 
@@ -150,7 +172,10 @@ class TestSkirmisherRetreat:
         actor.position = None
         target = _make_creature("Brick", 5, 10)
         retreat = Skirmisher().plan_retreat(
-            _ctx(actor), target, reach_ft=5, budget_used_ft=0,
+            _ctx(actor),
+            target,
+            reach_ft=5,
+            budget_used_ft=0,
         )
         assert retreat is None
 
@@ -159,7 +184,10 @@ class TestSkirmisherRetreat:
         target = _make_creature("Brick", 5, 10)
         target.position = None
         retreat = Skirmisher().plan_retreat(
-            _ctx(actor), target, reach_ft=5, budget_used_ft=0,
+            _ctx(actor),
+            target,
+            reach_ft=5,
+            budget_used_ft=0,
         )
         assert retreat is None
 
@@ -170,7 +198,10 @@ class TestSkirmisherRetreat:
         actor = _make_creature("Goblin", 0, 0)
         target = _make_creature("Brick", 10, 10)  # Chebyshev 50 ft
         retreat = Skirmisher().plan_retreat(
-            _ctx(actor), target, reach_ft=5, budget_used_ft=0,
+            _ctx(actor),
+            target,
+            reach_ft=5,
+            budget_used_ft=0,
         )
         assert retreat is not None
         assert retreat.path == []
@@ -182,7 +213,9 @@ class TestSkirmisherRetreat:
         actor = _make_creature("FastGoblin", 5, 9, speed=200)
         target = _make_creature("Brick", 5, 10)
         retreat = Skirmisher().plan_retreat(
-            _ctx(actor), target, reach_ft=100,  # never out of reach
+            _ctx(actor),
+            target,
+            reach_ft=100,  # never out of reach
             budget_used_ft=0,
         )
         assert retreat is not None
@@ -193,7 +226,10 @@ class TestSkirmisherRetreat:
         actor = _make_creature("Goblin", 5, 5)
         target = _make_creature("Brick", 6, 6)
         retreat = Skirmisher().plan_retreat(
-            _ctx(actor), target, reach_ft=5, budget_used_ft=20,
+            _ctx(actor),
+            target,
+            reach_ft=5,
+            budget_used_ft=20,
         )
         assert retreat is not None
         # (4,4) → Chebyshev 10 ft from (6,6) → out of reach.

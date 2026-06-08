@@ -29,8 +29,12 @@ def _make_creature(name: str, x: int, y: int, speed: int = 30) -> Creature:
         max_hp=20,
         ac=15,
         abilities=Abilities(
-            strength=10, dexterity=10, constitution=10,
-            intelligence=10, wisdom=10, charisma=10,
+            strength=10,
+            dexterity=10,
+            constitution=10,
+            intelligence=10,
+            wisdom=10,
+            charisma=10,
         ),
         speed=speed,
     )
@@ -55,7 +59,8 @@ class TestDecideSkirmisher:
         actor = _make_creature("Goblin", 5, 5)
         target = _make_creature("Brick", 5, 10)
         ctx = TurnContext.build(
-            _StubState(), actor,
+            _StubState(),
+            actor,
             target_pool=[target],
             monster_data=SKIRMISHER_DATA,
         )
@@ -63,7 +68,10 @@ class TestDecideSkirmisher:
         assert len(intent.steps) == 3
         assert isinstance(intent.steps[0], MoveStep)
         assert intent.steps[0].path == [
-            Position(5, 6), Position(5, 7), Position(5, 8), Position(5, 9),
+            Position(5, 6),
+            Position(5, 7),
+            Position(5, 8),
+            Position(5, 9),
         ]
         assert isinstance(intent.steps[1], AttackStep)
         assert intent.steps[1].target_id == "Brick"
@@ -80,7 +88,8 @@ class TestDecideSkirmisher:
         actor = _make_creature("Goblin", 0, 0, speed=30)
         target = _make_creature("Brick", 7, 0)
         ctx = TurnContext.build(
-            _StubState(), actor,
+            _StubState(),
+            actor,
             target_pool=[target],
             monster_data=SKIRMISHER_DATA,
         )
@@ -88,8 +97,12 @@ class TestDecideSkirmisher:
         assert len(intent.steps) == 2
         assert isinstance(intent.steps[0], MoveStep)
         assert intent.steps[0].path == [
-            Position(1, 0), Position(2, 0), Position(3, 0),
-            Position(4, 0), Position(5, 0), Position(6, 0),
+            Position(1, 0),
+            Position(2, 0),
+            Position(3, 0),
+            Position(4, 0),
+            Position(5, 0),
+            Position(6, 0),
         ]
         assert isinstance(intent.steps[1], AttackStep)
 
@@ -99,7 +112,8 @@ class TestDecideSkirmisher:
         actor = _make_creature("Goblin", 5, 9)
         target = _make_creature("Brick", 5, 10)
         ctx = TurnContext.build(
-            _StubState(), actor,
+            _StubState(),
+            actor,
             target_pool=[target],
             monster_data=SKIRMISHER_DATA,
         )
@@ -118,7 +132,8 @@ class TestDecideAggressiveStillWorks:
         actor = _make_creature("Bandit", 0, 0)
         target = _make_creature("Brick", 5, 0)
         ctx = TurnContext.build(
-            _StubState(), actor,
+            _StubState(),
+            actor,
             target_pool=[target],
             monster_data={"actions": [SCIMITAR]},
         )
@@ -130,7 +145,8 @@ class TestDecideAggressiveStillWorks:
         actor = _make_creature("Bandit", 0, 0)
         target = _make_creature("Brick", 1, 0)
         ctx = TurnContext.build(
-            _StubState(), actor,
+            _StubState(),
+            actor,
             target_pool=[target],
             monster_data={"actions": [SCIMITAR]},
         )
@@ -198,7 +214,9 @@ class TestExecuteAttackStep:
 
         intent = Intent(steps=[AttackStep(target_id="Brick", action=SCIMITAR)])
         result = pipeline.execute(
-            intent, state, actor,
+            intent,
+            state,
+            actor,
             reach_ft=5,
             target_pool=[target],
             attack_resolver=resolver,
@@ -218,12 +236,16 @@ class TestExecuteAttackStep:
             target.current_hp = 0  # kill the target
             return _attack_outcome(damage=20)
 
-        intent = Intent(steps=[
-            AttackStep(target_id="Brick", action=SCIMITAR),
-            MoveStep(path=[Position(5, 8)]),
-        ])
+        intent = Intent(
+            steps=[
+                AttackStep(target_id="Brick", action=SCIMITAR),
+                MoveStep(path=[Position(5, 8)]),
+            ]
+        )
         result = pipeline.execute(
-            intent, state, actor,
+            intent,
+            state,
+            actor,
             reach_ft=5,
             target_pool=[target],
             attack_resolver=killer,
@@ -243,13 +265,17 @@ class TestExecuteAttackStep:
             step_results=[_ok_step(Position(5, 8))],
         )
 
-        intent = Intent(steps=[
-            AttackStep(target_id="Brick", action=SCIMITAR),
-            MoveStep(path=[Position(5, 8)]),
-        ])
+        intent = Intent(
+            steps=[
+                AttackStep(target_id="Brick", action=SCIMITAR),
+                MoveStep(path=[Position(5, 8)]),
+            ]
+        )
         with caplog.at_level(logging.WARNING, logger="dnd_engine.systems.ai.pipeline"):
             result = pipeline.execute(
-                intent, state, actor,
+                intent,
+                state,
+                actor,
                 reach_ft=5,
                 target_pool=[target],
                 attack_resolver=None,
@@ -283,15 +309,24 @@ class TestExecuteFullSkirmish:
         )
         resolver = MagicMock(return_value=_attack_outcome())
 
-        intent = Intent(steps=[
-            MoveStep(path=[
-                Position(5, 6), Position(5, 7), Position(5, 8), Position(5, 9),
-            ]),
-            AttackStep(target_id="Brick", action=SCIMITAR),
-            MoveStep(path=[Position(5, 8)]),
-        ])
+        intent = Intent(
+            steps=[
+                MoveStep(
+                    path=[
+                        Position(5, 6),
+                        Position(5, 7),
+                        Position(5, 8),
+                        Position(5, 9),
+                    ]
+                ),
+                AttackStep(target_id="Brick", action=SCIMITAR),
+                MoveStep(path=[Position(5, 8)]),
+            ]
+        )
         result = pipeline.execute(
-            intent, state, actor,
+            intent,
+            state,
+            actor,
             reach_ft=5,
             target_pool=[target],
             attack_resolver=resolver,
@@ -322,12 +357,16 @@ class TestExecuteFullSkirmish:
         )
         resolver = MagicMock(return_value=_attack_outcome())
 
-        intent = Intent(steps=[
-            AttackStep(target_id="Brick", action=SCIMITAR),
-            MoveStep(path=[Position(5, 8), Position(5, 7)]),
-        ])
+        intent = Intent(
+            steps=[
+                AttackStep(target_id="Brick", action=SCIMITAR),
+                MoveStep(path=[Position(5, 8), Position(5, 7)]),
+            ]
+        )
         result = pipeline.execute(
-            intent, state, actor,
+            intent,
+            state,
+            actor,
             reach_ft=5,
             target_pool=[target],
             attack_resolver=resolver,
@@ -337,6 +376,55 @@ class TestExecuteFullSkirmish:
         assert result.moved_squares == 1
         # Second tile MUST NOT be walked.
         assert len(state.step_results) == 1
+
+
+class TestExecuteAntiStuckGuardScope:
+    """The 2-consecutive-failures guard is per-MoveStep, not lifetime.
+
+    Regression for a bug where a failed step in the close phase poisoned
+    the retreat phase: one more failed retreat step would trip the guard
+    and exit with `stopped_reason="blocked"` even though the failures
+    were in unrelated phases separated by an attack.
+    """
+
+    def test_close_phase_failure_does_not_poison_retreat(self):
+        actor = _make_creature("Goblin", 5, 8)
+        target = _make_creature("Brick", 5, 10)
+        spatial = _StubSpatial(occupants={Position(5, 8): "goblin_0"})
+
+        # Close: one failed step (e.g., transient block). Retreat: first
+        # tile succeeds. With the bug, counter carries into retreat and
+        # the next failed tile (if any) would trip "blocked" early.
+        state = _StubGameState(
+            spatial=spatial,
+            enemy=actor,
+            step_results=[
+                MoveResult(ok=False, reason="blocked", position=None, movement_remaining=25),
+                _ok_step(Position(5, 9)),  # close succeeds after retry-ish
+                _ok_step(Position(5, 8)),  # retreat first tile
+            ],
+        )
+        resolver = MagicMock(return_value=_attack_outcome())
+
+        intent = Intent(
+            steps=[
+                MoveStep(path=[Position(5, 9), Position(5, 9)]),  # one fail, one ok
+                AttackStep(target_id="Brick", action=SCIMITAR),
+                MoveStep(path=[Position(5, 8)]),
+            ]
+        )
+        result = pipeline.execute(
+            intent,
+            state,
+            actor,
+            reach_ft=5,
+            target_pool=[target],
+            attack_resolver=resolver,
+        )
+
+        # Retreat completed; guard did not fire across phases.
+        assert result.stopped_reason == "retreated"
+        assert result.moved_squares == 2
 
 
 class TestExecuteAggressivePathUnchanged:
@@ -350,7 +438,9 @@ class TestExecuteAggressivePathUnchanged:
 
         intent = Intent(steps=[MoveStep(path=[Position(5, 6)])])
         result = pipeline.execute(
-            intent, state, actor,
+            intent,
+            state,
+            actor,
             reach_ft=5,
             target_pool=[target],
         )

@@ -1587,9 +1587,7 @@ class GameState:
         except (KeyError, AttributeError, TypeError):
             return False
 
-        obscurement = effective_obscurement(
-            self._ambient_light_level(), self.ambient_obscurement()
-        )
+        obscurement = effective_obscurement(self._ambient_light_level(), self.ambient_obscurement())
 
         cover_value = str(room.get("cover", "none")).lower()
         try:
@@ -1680,9 +1678,7 @@ class GameState:
         skills_data = self.data_loader.load_skills()
         check = creature.make_skill_check("stealth", dc, skills_data)
 
-        ok, reason = hide(
-            creature, turn_state, succeeded=check["success"], action_type=action_type
-        )
+        ok, reason = hide(creature, turn_state, succeeded=check["success"], action_type=action_type)
         if not ok:
             return HideAttemptResult(
                 attempted=False,
@@ -1727,9 +1723,7 @@ class GameState:
             # SRD § Actions › Hide is offered only when the current
             # combatant's surroundings permit it (the #496 gate).
             current = (
-                self.initiative_tracker.get_current_combatant()
-                if self.initiative_tracker
-                else None
+                self.initiative_tracker.get_current_combatant() if self.initiative_tracker else None
             )
             if current is not None and self.can_attempt_hide(current.creature):
                 actions.append("hide")
@@ -5187,18 +5181,19 @@ class GameState:
         # AttackStep outcome.
         pipeline_attack_outcome: AttackResult | None = None
         pipeline_attack_step: AttackStep | None = None
-        if (
-            enemy.position is not None
-            and not is_ranged_action(action)
-        ):
+        if enemy.position is not None and not is_ranged_action(action):
             reach_ft = attack_reach_for(action)
             in_reach = [
-                pc for pc in living_party
+                pc
+                for pc in living_party
                 if pc.position is not None
                 and distance_in_feet(
-                    enemy.position.x, enemy.position.y,
-                    pc.position.x, pc.position.y,
-                ) <= reach_ft
+                    enemy.position.x,
+                    enemy.position.y,
+                    pc.position.x,
+                    pc.position.y,
+                )
+                <= reach_ft
             ]
             if not in_reach:
                 # Layer 3 (#641): close distance toward the nearest PC,
@@ -5219,7 +5214,8 @@ class GameState:
                 # - No split movement around the attack (skirmisher
                 #   strategy lands separately).
                 ctx = TurnContext.build(
-                    self, enemy,
+                    self,
+                    enemy,
                     target_pool=living_party,
                     monster_data=monster_data,
                     action_data=action,
@@ -5239,8 +5235,7 @@ class GameState:
                     action_data: dict,
                 ) -> "AttackResult | None":
                     pipeline_target = next(
-                        (c for c in living_party
-                         if c.name == target_name and c.is_alive),
+                        (c for c in living_party if c.name == target_name and c.is_alive),
                         None,
                     )
                     if pipeline_target is None:
@@ -5261,7 +5256,9 @@ class GameState:
                     )
 
                 exec_result = ai_pipeline.execute(
-                    intent, self, enemy,
+                    intent,
+                    self,
+                    enemy,
                     reach_ft=reach_ft,
                     target_pool=living_party,
                     attack_resolver=_resolve_attack_step,
@@ -5286,15 +5283,15 @@ class GameState:
                     # enemy_eid).
                     self.initiative_tracker.next_turn()
                     action_taken = (
-                        EnemyTurnAction.MOVED if moved_squares > 0
+                        EnemyTurnAction.MOVED
+                        if moved_squares > 0
                         else EnemyTurnAction.NO_REACHABLE_TARGET
                     )
                     # Match the EnemyTurnResult contract (game_state.py
                     # comment above the field): movement_end_position
                     # is None when no movement happened.
                     end_position = (
-                        (enemy.position.x, enemy.position.y)
-                        if moved_squares > 0 else None
+                        (enemy.position.x, enemy.position.y) if moved_squares > 0 else None
                     )
                     return EnemyTurnResult(
                         enemy_name=enemy.name,
@@ -5449,8 +5446,7 @@ class GameState:
             # was already in reach.
             moved_squares=moved_squares,
             movement_end_position=(
-                (enemy.position.x, enemy.position.y)
-                if moved_squares > 0 else None
+                (enemy.position.x, enemy.position.y) if moved_squares > 0 else None
             ),
         )
 

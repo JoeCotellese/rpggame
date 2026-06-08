@@ -32,8 +32,12 @@ def _make_skirmish_state() -> tuple[GameState, Character, Creature, str]:
     rather than dice rolls.
     """
     abilities = Abilities(
-        strength=15, dexterity=14, constitution=13,
-        intelligence=10, wisdom=12, charisma=8,
+        strength=15,
+        dexterity=14,
+        constitution=13,
+        intelligence=10,
+        wisdom=12,
+        charisma=8,
     )
     fighter = Character(
         name="Fighter 1",
@@ -65,8 +69,7 @@ def _make_skirmish_state() -> tuple[GameState, Character, Creature, str]:
     gs._start_combat()
 
     goblin_idx = next(
-        i for i, entry in enumerate(gs.initiative_tracker.combatants)
-        if entry.creature is goblin
+        i for i, entry in enumerate(gs.initiative_tracker.combatants) if entry.creature is goblin
     )
     gs.initiative_tracker.current_turn_index = goblin_idx
     gs.initiative_tracker.turn_states[goblin].reset(speed=goblin.speed)
@@ -111,19 +114,14 @@ class TestGoblinSkirmishesEndToEnd:
 
         gs.process_enemy_turn()
 
-        positions = [
-            e.data["to"]
-            for e in moves if e.data.get("entity_id") == goblin_id
-        ]
+        positions = [e.data["to"] for e in moves if e.data.get("entity_id") == goblin_id]
         assert len(positions) == 6
         # Close phase: 5 tiles heading south toward (3,9).
         expected_close = [(3, 4), (3, 5), (3, 6), (3, 7), (3, 8)]
         for i, expected in enumerate(expected_close):
             assert (positions[i].x, positions[i].y) == expected, (
-                f"close step {i}: expected {expected}, "
-                f"got ({positions[i].x},{positions[i].y})"
+                f"close step {i}: expected {expected}, got ({positions[i].x},{positions[i].y})"
             )
         # Retreat phase: one tile heading back north — direction reverses,
         # which is the load-bearing assertion for "attack happened between".
         assert (positions[5].x, positions[5].y) == (3, 7)
-
