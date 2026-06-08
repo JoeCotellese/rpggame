@@ -192,16 +192,45 @@ class TestAbilityCheck_Primitive:
         assert result["ability"] == "dex"
 
     def test_ability_check_primitive_exists_for_non_skill_checks(self):
-        pytest.skip(
-            "GAP: there is no `make_ability_check(ability, dc)` "
-            "primitive. The SRD's canonical examples (Strength to "
-            "force open a door, Intelligence to recall lore) are not "
-            "skill checks. Only `make_skill_check` "
-            "(dnd-engine/dnd_engine/core/character.py:726) and "
-            "`ConditionManager.attempt_condition_removal` "
-            "(systems/condition_manager.py:220) roll an ability "
-            "check. Neither is general-purpose. Tracked by issue #484."
-        )
+        """`Character.make_ability_check(ability, dc)` rolls a raw ability check.
+
+        SRD: an ability check is `d20 + ability modifier` vs a DC. No
+        skill, no tool — just the ability. The fighter has STR 16
+        (+3); rolling against DC 10 produces ``total = roll + 3``.
+        """
+        fighter = _make_fighter()
+        fighter._dice_roller = DiceRoller(seed=1)
+        result = fighter.make_ability_check("str", dc=10)
+        # STR mod (+3), no proficiency
+        assert result["modifier"] == 3
+        assert result["total"] == result["roll"] + 3
+        assert result["ability"] == "str"
+        assert result["dc"] == 10
+        assert result["success"] == (result["total"] >= 10)
+
+    def test_ability_check_accepts_advantage_and_disadvantage(self):
+        """`make_ability_check` plumbs Advantage/Disadvantage through `d20_test`.
+
+        Advantage takes the higher of two d20s; the returned `roll`
+        field is the consumed die.
+        """
+        fighter = _make_fighter()
+        fighter._dice_roller = DiceRoller(seed=7)
+        adv = fighter.make_ability_check("str", dc=10, advantage=True)
+        fighter._dice_roller = DiceRoller(seed=7)
+        dis = fighter.make_ability_check("str", dc=10, disadvantage=True)
+        # Same seed but different selection rule — adv >= dis.
+        assert adv["roll"] >= dis["roll"]
+
+    def test_ability_check_accepts_full_and_short_ability_names(self):
+        """Both `"str"` and `"strength"` resolve to the STR modifier."""
+        fighter = _make_fighter()
+        fighter._dice_roller = DiceRoller(seed=3)
+        short = fighter.make_ability_check("str", dc=10)
+        fighter._dice_roller = DiceRoller(seed=3)
+        long = fighter.make_ability_check("strength", dc=10)
+        assert short["modifier"] == long["modifier"] == 3
+        assert short["ability"] == long["ability"] == "str"
 
 
 class TestAbilityCheck_ProficiencyBonusOptional:

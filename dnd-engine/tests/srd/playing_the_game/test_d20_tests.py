@@ -114,22 +114,28 @@ class TestDefinition_ThreeKinds:
         assert "d20_test" in src
 
     def test_general_ability_check_primitive_is_unified(self):
-        pytest.skip(
-            "GAP: there is no general-purpose `make_ability_check` "
-            "primitive on Creature or Character. The d20 mechanic is "
-            "implemented three times in parallel: "
-            "`Character.make_skill_check` "
-            "(dnd-engine/dnd_engine/core/character.py:726), "
-            "`Character.make_saving_throw` (character.py:237), and "
-            "`CombatEngine.resolve_attack` "
-            "(dnd-engine/dnd_engine/core/combat.py:91). A Strength "
-            "check to force open a stuck door (the SRD's canonical "
-            "example) has no dedicated entry point — the only "
-            "ability-check-flavored helper, "
-            "`ConditionManager.attempt_condition_removal` "
-            "(systems/condition_manager.py:220), is hard-wired to "
-            "ending conditions. Tracked by issue #484."
+        """All four D20-test surfaces delegate to `d20_test`.
+
+        Source-level guard: `make_skill_check`, `make_saving_throw`,
+        `make_ability_check`, and `CombatEngine.resolve_attack` all
+        contain a `d20_test(...)` call. The unified primitive is the
+        sole d20 surface; plan-08 slice 4 closed out the raw
+        ability-check path that previously had no entry point.
+        """
+        assert hasattr(Character, "make_ability_check"), (
+            "Character must expose make_ability_check for raw "
+            "(non-skill, non-save) ability checks."
         )
+        for func in (
+            Character.make_skill_check,
+            Character.make_saving_throw,
+            Character.make_ability_check,
+            CombatEngine.resolve_attack,
+        ):
+            src = inspect.getsource(func)
+            assert "d20_test" in src, (
+                f"{func.__qualname__} does not delegate to d20_test"
+            )
 
 
 class TestStep4_RollD20:
@@ -371,22 +377,29 @@ class TestKinds_AbilityCheckExamples:
         assert result["dc"] == 10
 
     def test_strength_check_to_force_open_stuck_door(self):
-        pytest.skip(
-            "GAP: the SRD's canonical Strength check (force open a "
-            "stuck door) has no dedicated call site. The only paths "
-            "into an ability-check roll are `make_skill_check` "
-            "(athletics — narrows STR checks to climbing/jumping/"
-            "swimming/grappling) and "
-            "`ConditionManager.attempt_condition_removal` "
-            "(systems/condition_manager.py:220, condition-removal "
-            "only). A non-skill ability check requires the new "
-            "primitive. Tracked by issue #484."
-        )
+        """The SRD's canonical Strength check has a call site.
+
+        `Character.make_ability_check("str", dc)` is the dedicated
+        non-skill entry point. STR 16 (+3) vs DC 15.
+        """
+        fighter = _make_fighter()
+        fighter._dice_roller = DiceRoller(seed=1)
+        result = fighter.make_ability_check("str", dc=15)
+        for key in ("success", "roll", "modifier", "total", "dc", "ability"):
+            assert key in result, f"missing field {key!r}"
+        assert result["ability"] == "str"
+        assert result["modifier"] == 3
+        assert result["dc"] == 15
 
     def test_intelligence_check_to_remember_lore(self):
-        pytest.skip(
-            "GAP: same root cause — no primitive for a non-skill "
-            "ability check. An INT check to recall lore would need "
-            "`Creature.make_ability_check('int', dc, skill=None)`. "
-            "Tracked by issue #484."
-        )
+        """A wizard's Intelligence check to recall lore uses the same surface.
+
+        Different ability, same primitive — `make_ability_check("int", dc)`.
+        Fighter has INT 10 (+0), so the total equals the d20 roll.
+        """
+        fighter = _make_fighter()
+        fighter._dice_roller = DiceRoller(seed=2)
+        result = fighter.make_ability_check("int", dc=12)
+        assert result["ability"] == "int"
+        assert result["modifier"] == 0
+        assert result["total"] == result["roll"]
