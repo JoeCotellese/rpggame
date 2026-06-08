@@ -815,10 +815,7 @@ class Character(Creature):
 
         return modifier
 
-
-    def get_either_or_skill_modifier(
-        self, skills: list[str], skills_data: dict
-    ) -> int:
+    def get_either_or_skill_modifier(self, skills: list[str], skills_data: dict) -> int:
         """
         Calculate the modifier for an either-or skill check.
 
@@ -1774,9 +1771,7 @@ class Character(Creature):
             self.death_save_failures = 0
             self.stabilized = True
 
-    def process_stable_recovery(
-        self, hours_elapsed: float, event_bus=None
-    ) -> bool:
+    def process_stable_recovery(self, hours_elapsed: float, event_bus=None) -> bool:
         """
         Apply the SRD natural-healing rule for Stable creatures.
 

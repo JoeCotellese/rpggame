@@ -388,9 +388,7 @@ class TestProficiency_BonusDoesntStack:
         either_or = ["deception", "persuasion"]
         assert proficient_in_one.get_either_or_skill_modifier(
             either_or, skills_data
-        ) == proficient_in_both.get_either_or_skill_modifier(
-            either_or, skills_data
-        )
+        ) == proficient_in_both.get_either_or_skill_modifier(either_or, skills_data)
 
     def test_proficiency_application_blocks_second_multiplier(self) -> None:
         """SRD: 'it can be multiplied only once and divided only once.'
@@ -408,7 +406,6 @@ class TestProficiency_BonusDoesntStack:
         # Second multiplier attempt raises.
         with pytest.raises(ValueError, match="multiplied only once"):
             pb.add(multiplier=2)
-
 
 
 class TestProficiency_EitherOrSkillModifier:
@@ -452,9 +449,7 @@ class TestProficiency_EitherOrSkillModifier:
         """Proficient in Deception only: CHA mod (+3) + PB (+3) = +6."""
         skills_data = json.loads(SKILLS_JSON.read_text())
         bard = self._silver_tongue(skill_proficiencies=["deception"])
-        result = bard.get_either_or_skill_modifier(
-            ["deception", "persuasion"], skills_data
-        )
+        result = bard.get_either_or_skill_modifier(["deception", "persuasion"], skills_data)
         assert result == 6
 
     def test_proficient_in_both_skills_adds_pb_once_not_twice(self) -> None:
@@ -464,18 +459,14 @@ class TestProficiency_EitherOrSkillModifier:
         """
         skills_data = json.loads(SKILLS_JSON.read_text())
         bard = self._silver_tongue(skill_proficiencies=["deception", "persuasion"])
-        result = bard.get_either_or_skill_modifier(
-            ["deception", "persuasion"], skills_data
-        )
+        result = bard.get_either_or_skill_modifier(["deception", "persuasion"], skills_data)
         assert result == 6
 
     def test_proficient_in_neither_skill_omits_pb(self) -> None:
         """No proficiency in either → just the ability modifier."""
         skills_data = json.loads(SKILLS_JSON.read_text())
         bard = self._silver_tongue()
-        result = bard.get_either_or_skill_modifier(
-            ["deception", "persuasion"], skills_data
-        )
+        result = bard.get_either_or_skill_modifier(["deception", "persuasion"], skills_data)
         assert result == 3  # CHA mod, no PB
 
     def test_expertise_in_one_skill_doubles_pb_once(self) -> None:
@@ -488,9 +479,7 @@ class TestProficiency_EitherOrSkillModifier:
             skill_proficiencies=["deception"],
             expertise_skills=["deception"],
         )
-        result = bard.get_either_or_skill_modifier(
-            ["deception", "persuasion"], skills_data
-        )
+        result = bard.get_either_or_skill_modifier(["deception", "persuasion"], skills_data)
         assert result == 9
 
     def test_proficient_in_both_expertise_in_one_doubles_pb_once(self) -> None:
@@ -502,9 +491,7 @@ class TestProficiency_EitherOrSkillModifier:
             skill_proficiencies=["deception", "persuasion"],
             expertise_skills=["deception"],
         )
-        result = bard.get_either_or_skill_modifier(
-            ["deception", "persuasion"], skills_data
-        )
+        result = bard.get_either_or_skill_modifier(["deception", "persuasion"], skills_data)
         assert result == 9
 
     def test_mismatched_abilities_raises(self) -> None:
@@ -515,9 +502,7 @@ class TestProficiency_EitherOrSkillModifier:
         skills_data = json.loads(SKILLS_JSON.read_text())
         bard = self._silver_tongue(skill_proficiencies=["deception"])
         with pytest.raises(ValueError, match="ability"):
-            bard.get_either_or_skill_modifier(
-                ["deception", "athletics"], skills_data
-            )
+            bard.get_either_or_skill_modifier(["deception", "athletics"], skills_data)
 
     def test_empty_skill_list_raises(self) -> None:
         """An empty candidate list has no ability to use; reject."""
@@ -532,9 +517,7 @@ class TestProficiency_EitherOrSkillModifier:
         skills_data = json.loads(SKILLS_JSON.read_text())
         bard = self._silver_tongue()
         with pytest.raises(KeyError, match="Unknown skill"):
-            bard.get_either_or_skill_modifier(
-                ["deception", "made_up_skill"], skills_data
-            )
+            bard.get_either_or_skill_modifier(["deception", "made_up_skill"], skills_data)
 
     def test_single_skill_list_matches_get_skill_modifier(self) -> None:
         """Defense: a list of one skill collapses to the per-skill
@@ -649,12 +632,9 @@ class TestProficiency_DeterminingSkills:
         classes: dict = json.loads(CLASSES_JSON.read_text())
         for class_id, cdata in classes.items():
             choice = cdata.get("skill_proficiencies")
-            assert choice is not None, (
-                f"class {class_id} is missing skill_proficiencies"
-            )
+            assert choice is not None, f"class {class_id} is missing skill_proficiencies"
             assert "choose" in choice and "from" in choice, (
-                f"class {class_id}.skill_proficiencies must declare "
-                f"a {{choose, from}} block"
+                f"class {class_id}.skill_proficiencies must declare a {{choose, from}} block"
             )
 
     def test_monster_skill_proficiencies_appear_in_stat_block(self) -> None:
@@ -667,9 +647,7 @@ class TestProficiency_DeterminingSkills:
         monsters_path = DATA_DIR / "monsters.json"
         monsters: dict = json.loads(monsters_path.read_text())
         for monster_id, mdata in monsters.items():
-            assert "skills" in mdata, (
-                f"monster {monster_id} is missing a `skills` block"
-            )
+            assert "skills" in mdata, f"monster {monster_id} is missing a `skills` block"
 
 
 class TestProficiency_SavingThrows:

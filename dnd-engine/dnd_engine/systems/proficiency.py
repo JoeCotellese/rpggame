@@ -94,7 +94,6 @@ def proficiency_bonus_from_cr(cr: str | int | float) -> int:
     raise ValueError(f"CR {cr!r} is outside the SRD table (0–30)")
 
 
-
 class ProficiencyApplication:
     """One PB application per D20 Test (SRD "The Bonus Doesn't Stack").
 
@@ -148,8 +147,7 @@ class ProficiencyApplication:
         """
         if multiplier != 1 and self._multiplied:
             raise ValueError(
-                "Proficiency Bonus already multiplied this calculation "
-                "(SRD: multiplied only once)."
+                "Proficiency Bonus already multiplied this calculation (SRD: multiplied only once)."
             )
         if self._added:
             return 0
