@@ -9,6 +9,7 @@ from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.spell import Spell
 from dnd_engine.systems.d20 import d20_test
 from dnd_engine.systems.inventory import Inventory
+from dnd_engine.systems.proficiency import ProficiencyApplication
 from dnd_engine.systems.resources import ResourcePool
 
 
@@ -803,14 +804,72 @@ class Character(Creature):
         # Get the ability modifier
         ability_mod = getattr(self.abilities, f"{ability_key}_mod")
 
-        # Add proficiency bonus if proficient
+        # SRD § Proficiency › "The Bonus Doesn't Stack": route PB
+        # through ProficiencyApplication so any future multiplier
+        # layered on top trips the multiplied-only-once guard.
         modifier = ability_mod
         if skill in self.skill_proficiencies:
-            # Check expertise (double proficiency bonus)
-            if skill in self.expertise_skills:
-                modifier += self.proficiency_bonus * 2
-            else:
-                modifier += self.proficiency_bonus
+            pb = ProficiencyApplication(self.proficiency_bonus)
+            multiplier = 2 if skill in self.expertise_skills else 1
+            modifier += pb.add(multiplier=multiplier)
+
+        return modifier
+
+    def get_either_or_skill_modifier(self, skills: list[str], skills_data: dict) -> int:
+        """
+        Calculate the modifier for an either-or skill check.
+
+        Implements SRD § Playing the Game › Proficiency › "The Bonus
+        Doesn't Stack": for a check that allows multiple applicable
+        skills (e.g. "Charisma (Deception or Persuasion)"), the
+        Proficiency Bonus is added once if the character is proficient
+        in *any* of the listed skills — never twice for being
+        proficient in several. Expertise in any listed skill doubles
+        PB, applied once.
+
+        All listed skills must share an ability (the SRD's
+        parenthesized "Ability (Skill or Skill)" pattern); a mixed-
+        ability list is a callsite bug.
+
+        Args:
+            skills: Candidate skill names (e.g.
+                ``["deception", "persuasion"]``). Must be non-empty
+                and share an ability.
+            skills_data: Skills data dictionary loaded from skills.json.
+
+        Returns:
+            Ability modifier + (PB once if proficient in any) +
+            (PB doubled once if expertise in any).
+
+        Raises:
+            ValueError: If ``skills`` is empty or the listed skills
+                don't share an ability.
+            KeyError: If any listed skill is not in ``skills_data``.
+        """
+        if not skills:
+            raise ValueError("skills list is empty; nothing to check")
+        for skill in skills:
+            if skill not in skills_data:
+                raise KeyError(f"Unknown skill: {skill}")
+
+        abilities = {skills_data[s]["ability"] for s in skills}
+        if len(abilities) > 1:
+            raise ValueError(
+                f"Either-or skill check requires a shared ability; "
+                f"got {sorted(abilities)} across {skills}."
+            )
+
+        ability_key = next(iter(abilities))
+        ability_mod = getattr(self.abilities, f"{ability_key}_mod")
+
+        any_proficient = any(s in self.skill_proficiencies for s in skills)
+        any_expertise = any(s in self.expertise_skills for s in skills)
+
+        modifier = ability_mod
+        if any_proficient:
+            pb = ProficiencyApplication(self.proficiency_bonus)
+            multiplier = 2 if any_expertise else 1
+            modifier += pb.add(multiplier=multiplier)
 
         return modifier
 
@@ -1712,9 +1771,7 @@ class Character(Creature):
             self.death_save_failures = 0
             self.stabilized = True
 
-    def process_stable_recovery(
-        self, hours_elapsed: float, event_bus=None
-    ) -> bool:
+    def process_stable_recovery(self, hours_elapsed: float, event_bus=None) -> bool:
         """
         Apply the SRD natural-healing rule for Stable creatures.
 

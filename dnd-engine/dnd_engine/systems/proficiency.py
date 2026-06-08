@@ -92,3 +92,66 @@ def proficiency_bonus_from_cr(cr: str | int | float) -> int:
         if low <= cr_int <= high:
             return pb
     raise ValueError(f"CR {cr!r} is outside the SRD table (0–30)")
+
+
+class ProficiencyApplication:
+    """One PB application per D20 Test (SRD "The Bonus Doesn't Stack").
+
+    Encapsulates the per-check guard: a creature's Proficiency Bonus
+    may be added to a roll at most once, and any multiplier on it
+    (e.g., Expertise) may be applied at most once
+    (``docs/srd/playing-the-game/proficiency.md`` § "The Bonus Doesn't
+    Stack").
+
+    Construct a fresh instance for every calculation. Each ``add()``
+    after the first short-circuits to ``0`` so the additive slot is
+    consumed; a second multiplier attempt raises ``ValueError`` so the
+    invariant is loud rather than silent.
+    """
+
+    def __init__(self, proficiency_bonus: int) -> None:
+        self._pb = proficiency_bonus
+        self._added = False
+        self._multiplied = False
+
+    @property
+    def added(self) -> bool:
+        """True iff PB has been added (with any multiplier) to a roll."""
+        return self._added
+
+    @property
+    def multiplied(self) -> bool:
+        """True iff a non-identity multiplier has been applied to PB."""
+        return self._multiplied
+
+    def add(self, *, multiplier: int = 1) -> int:
+        """Return the PB to add to a roll, applying SRD stacking rules.
+
+        Args:
+            multiplier: Scalar applied to PB before returning. Pass
+                ``2`` for Expertise (and similar doubling features);
+                the default ``1`` is the plain additive case.
+
+        Returns:
+            ``proficiency_bonus * multiplier`` on the first call; ``0``
+            on any subsequent additive call (the additive slot is
+            already consumed).
+
+        Raises:
+            ValueError: If a second non-identity multiplier is applied
+                after one is already in effect. SRD: "Whenever the
+                bonus is used, it can be multiplied only once and
+                divided only once." Raising — rather than silently
+                short-circuiting — surfaces a buggy callsite during
+                development.
+        """
+        if multiplier != 1 and self._multiplied:
+            raise ValueError(
+                "Proficiency Bonus already multiplied this calculation (SRD: multiplied only once)."
+            )
+        if self._added:
+            return 0
+        if multiplier != 1:
+            self._multiplied = True
+        self._added = True
+        return self._pb * multiplier

@@ -339,27 +339,194 @@ class TestProficiency_BonusDoesntStack:
     > a Charisma (Deception or Persuasion) check, you add your
     > Proficiency Bonus if you're proficient in either skill, but you
     > don't add it twice if you're proficient in both skills.
+    >
+    > Occasionally, a Proficiency Bonus might be multiplied or divided.
+    > Whenever the bonus is used, it can be multiplied only once and
+    > divided only once.
+
+    Locked by ``Character.get_either_or_skill_modifier`` and
+    ``dnd_engine.systems.proficiency.ProficiencyApplication`` (issue
+    #481, plan-08 slice 3). The detailed behavior matrix lives in
+    ``TestProficiency_EitherOrSkillModifier`` and
+    ``tests/systems/test_proficiency_application.py``; these two cases
+    pin the SRD-quoted invariants directly.
     """
 
-    def test_either_or_skill_check_helper_is_not_implemented(self) -> None:
-        pytest.skip(
-            "GAP: no helper takes a *set* of applicable skills and "
-            "applies PB once. `Character.get_skill_modifier` (dnd-"
-            "engine/dnd_engine/core/character.py:689) is per-skill. "
-            "Callers happen to pick one skill, but there is no rule-"
-            "level guard for the SRD's 'Deception or Persuasion' "
-            "pattern. Tracked by issue #481."
+    def test_either_or_skill_check_applies_pb_once(self) -> None:
+        """SRD: 'you don't add [PB] twice if you're proficient in both.'
+
+        A character proficient in both Deception and Persuasion must
+        get the same either-or modifier as one proficient in only one.
+        """
+        skills_data = json.loads(SKILLS_JSON.read_text())
+        abilities = Abilities(
+            strength=10,
+            dexterity=12,
+            constitution=12,
+            intelligence=10,
+            wisdom=10,
+            charisma=16,  # +3
+        )
+        proficient_in_one = Character(
+            name="One",
+            character_class=CharacterClass.ROGUE,
+            level=5,  # PB +3
+            abilities=abilities,
+            max_hp=30,
+            ac=13,
+            skill_proficiencies=["deception"],
+        )
+        proficient_in_both = Character(
+            name="Both",
+            character_class=CharacterClass.ROGUE,
+            level=5,
+            abilities=abilities,
+            max_hp=30,
+            ac=13,
+            skill_proficiencies=["deception", "persuasion"],
+        )
+        either_or = ["deception", "persuasion"]
+        assert proficient_in_one.get_either_or_skill_modifier(
+            either_or, skills_data
+        ) == proficient_in_both.get_either_or_skill_modifier(either_or, skills_data)
+
+    def test_proficiency_application_blocks_second_multiplier(self) -> None:
+        """SRD: 'it can be multiplied only once and divided only once.'
+
+        Source-level binding at ``dnd_engine/systems/proficiency.py``:
+        ``ProficiencyApplication.add`` raises on a second non-identity
+        multiplier so a future feature stacking on Expertise (or a
+        bug) is loud, not silent.
+        """
+        from dnd_engine.systems.proficiency import ProficiencyApplication
+
+        pb = ProficiencyApplication(proficiency_bonus=3)
+        # First multiplier (e.g., Expertise) is allowed.
+        assert pb.add(multiplier=2) == 6
+        # Second multiplier attempt raises.
+        with pytest.raises(ValueError, match="multiplied only once"):
+            pb.add(multiplier=2)
+
+
+class TestProficiency_EitherOrSkillModifier:
+    """SRD § Playing the Game › Proficiency › Either-or skill checks.
+
+    > If a rule allows you to make a Charisma (Deception or Persuasion)
+    > check, you add your Proficiency Bonus if you're proficient in
+    > either skill, but you don't add it twice if you're proficient in
+    > both skills.
+
+    Locked behavior for ``Character.get_either_or_skill_modifier``.
+    """
+
+    @staticmethod
+    def _silver_tongue(
+        *,
+        skill_proficiencies: list[str] | None = None,
+        expertise_skills: list[str] | None = None,
+    ) -> Character:
+        """Charismatic rogue at level 5 (PB +3) with CHA 16 (+3 mod)."""
+        abilities = Abilities(
+            strength=10,
+            dexterity=12,
+            constitution=12,
+            intelligence=10,
+            wisdom=10,
+            charisma=16,  # +3
+        )
+        return Character(
+            name="Voice",
+            character_class=CharacterClass.ROGUE,
+            level=5,
+            abilities=abilities,
+            max_hp=30,
+            ac=13,
+            skill_proficiencies=skill_proficiencies or [],
+            expertise_skills=expertise_skills or [],
         )
 
-    def test_proficiency_bonus_multiplied_only_once_guard(self) -> None:
-        pytest.skip(
-            "GAP: SRD: 'Whenever the bonus is used, it can be "
-            "multiplied only once and divided only once.' Expertise "
-            "doubles PB in `Character.get_skill_modifier` (dnd-engine/"
-            "dnd_engine/core/character.py:719-722), but no engine "
-            "guard prevents a second multiplier from stacking on top. "
-            "Tracked by issue #481."
+    def test_proficient_in_one_of_two_skills_adds_pb_once(self) -> None:
+        """Proficient in Deception only: CHA mod (+3) + PB (+3) = +6."""
+        skills_data = json.loads(SKILLS_JSON.read_text())
+        bard = self._silver_tongue(skill_proficiencies=["deception"])
+        result = bard.get_either_or_skill_modifier(["deception", "persuasion"], skills_data)
+        assert result == 6
+
+    def test_proficient_in_both_skills_adds_pb_once_not_twice(self) -> None:
+        """The locked SRD rule: proficient in both → same as one.
+
+        CHA mod (+3) + PB (+3) = +6 — NOT +9.
+        """
+        skills_data = json.loads(SKILLS_JSON.read_text())
+        bard = self._silver_tongue(skill_proficiencies=["deception", "persuasion"])
+        result = bard.get_either_or_skill_modifier(["deception", "persuasion"], skills_data)
+        assert result == 6
+
+    def test_proficient_in_neither_skill_omits_pb(self) -> None:
+        """No proficiency in either → just the ability modifier."""
+        skills_data = json.loads(SKILLS_JSON.read_text())
+        bard = self._silver_tongue()
+        result = bard.get_either_or_skill_modifier(["deception", "persuasion"], skills_data)
+        assert result == 3  # CHA mod, no PB
+
+    def test_expertise_in_one_skill_doubles_pb_once(self) -> None:
+        """Expertise in one of the listed skills doubles PB once.
+
+        CHA mod (+3) + PB doubled (+6) = +9.
+        """
+        skills_data = json.loads(SKILLS_JSON.read_text())
+        bard = self._silver_tongue(
+            skill_proficiencies=["deception"],
+            expertise_skills=["deception"],
         )
+        result = bard.get_either_or_skill_modifier(["deception", "persuasion"], skills_data)
+        assert result == 9
+
+    def test_proficient_in_both_expertise_in_one_doubles_pb_once(self) -> None:
+        """Proficient in both, expertise in one → PB doubled once, not
+        applied twice. CHA mod (+3) + PB doubled (+6) = +9.
+        """
+        skills_data = json.loads(SKILLS_JSON.read_text())
+        bard = self._silver_tongue(
+            skill_proficiencies=["deception", "persuasion"],
+            expertise_skills=["deception"],
+        )
+        result = bard.get_either_or_skill_modifier(["deception", "persuasion"], skills_data)
+        assert result == 9
+
+    def test_mismatched_abilities_raises(self) -> None:
+        """Either-or only makes sense when the candidate skills share an
+        ability (the SRD's parenthesized "Charisma (X or Y)" pattern).
+        Mixed-ability lists are a callsite bug.
+        """
+        skills_data = json.loads(SKILLS_JSON.read_text())
+        bard = self._silver_tongue(skill_proficiencies=["deception"])
+        with pytest.raises(ValueError, match="ability"):
+            bard.get_either_or_skill_modifier(["deception", "athletics"], skills_data)
+
+    def test_empty_skill_list_raises(self) -> None:
+        """An empty candidate list has no ability to use; reject."""
+        skills_data = json.loads(SKILLS_JSON.read_text())
+        bard = self._silver_tongue()
+        with pytest.raises(ValueError, match="empty"):
+            bard.get_either_or_skill_modifier([], skills_data)
+
+    def test_unknown_skill_in_list_raises(self) -> None:
+        """An unknown skill is the same callsite bug as in
+        ``get_skill_modifier``."""
+        skills_data = json.loads(SKILLS_JSON.read_text())
+        bard = self._silver_tongue()
+        with pytest.raises(KeyError, match="Unknown skill"):
+            bard.get_either_or_skill_modifier(["deception", "made_up_skill"], skills_data)
+
+    def test_single_skill_list_matches_get_skill_modifier(self) -> None:
+        """Defense: a list of one skill collapses to the per-skill
+        helper. Same modifier as ``get_skill_modifier``."""
+        skills_data = json.loads(SKILLS_JSON.read_text())
+        bard = self._silver_tongue(skill_proficiencies=["deception"])
+        assert bard.get_either_or_skill_modifier(
+            ["deception"], skills_data
+        ) == bard.get_skill_modifier("deception", skills_data)
 
 
 class TestProficiency_Skills:
@@ -465,12 +632,9 @@ class TestProficiency_DeterminingSkills:
         classes: dict = json.loads(CLASSES_JSON.read_text())
         for class_id, cdata in classes.items():
             choice = cdata.get("skill_proficiencies")
-            assert choice is not None, (
-                f"class {class_id} is missing skill_proficiencies"
-            )
+            assert choice is not None, f"class {class_id} is missing skill_proficiencies"
             assert "choose" in choice and "from" in choice, (
-                f"class {class_id}.skill_proficiencies must declare "
-                f"a {{choose, from}} block"
+                f"class {class_id}.skill_proficiencies must declare a {{choose, from}} block"
             )
 
     def test_monster_skill_proficiencies_appear_in_stat_block(self) -> None:
@@ -483,9 +647,7 @@ class TestProficiency_DeterminingSkills:
         monsters_path = DATA_DIR / "monsters.json"
         monsters: dict = json.loads(monsters_path.read_text())
         for monster_id, mdata in monsters.items():
-            assert "skills" in mdata, (
-                f"monster {monster_id} is missing a `skills` block"
-            )
+            assert "skills" in mdata, f"monster {monster_id} is missing a `skills` block"
 
 
 class TestProficiency_SavingThrows:
