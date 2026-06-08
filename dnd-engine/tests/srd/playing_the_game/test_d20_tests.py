@@ -92,18 +92,15 @@ class TestDefinition_ThreeKinds:
     def test_saving_throw_surface_exists(self):
         """Saving throws are exposed on both Character and Creature.
 
-        `Character.make_saving_throw`
-        (dnd-engine/dnd_engine/core/character.py:237) and
-        `Creature.make_saving_throw`
-        (dnd-engine/dnd_engine/core/creature.py:478) both roll 1d20 +
-        modifier vs DC, satisfying SRD step 4 + step 5 for the saving
-        throw kind.
+        `Character.make_saving_throw` and `Creature.make_saving_throw`
+        both delegate the d20 portion to the unified
+        `dnd_engine.systems.d20.d20_test` primitive (plan-08 slice 1).
         """
         assert hasattr(Character, "make_saving_throw")
         assert hasattr(Creature, "make_saving_throw")
         for func in (Character.make_saving_throw, Creature.make_saving_throw):
             src = inspect.getsource(func)
-            assert "d20" in src
+            assert "d20_test" in src
 
     def test_attack_roll_surface_exists(self):
         """Attack rolls are resolved by `CombatEngine.resolve_attack`.
