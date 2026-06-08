@@ -134,6 +134,7 @@ class Creature:
         size: Size = Size.MEDIUM,
         speeds: dict[MovementMode, int] | None = None,
         position: Position | None = None,
+        cr: str | int | float | None = None,
     ):
         """
         Initialize a creature.
@@ -144,6 +145,11 @@ class Creature:
             ac: Armor class (target number for attacks)
             abilities: Ability scores (STR, DEX, CON, INT, WIS, CHA)
             current_hp: Starting HP (defaults to max_hp if not specified)
+            cr: SRD Challenge Rating (monsters only). Drives
+                :attr:`proficiency_bonus` via the SRD CR-to-PB table.
+                Defaults to ``None`` for Characters and any creature
+                constructed without a CR; ``proficiency_bonus`` then
+                returns 0 and PC-side derivations remain authoritative.
             speed: Movement speed in feet per round (default 30 ft). The
                 legacy single-int `speed` kwarg is preserved so existing
                 callers and monsters.json (which carries a plain int)
@@ -224,6 +230,30 @@ class Creature:
         # or by ``InitiativeTracker.next_turn`` at the start of the
         # helper's own next turn.
         self.pending_help_from: Creature | None = None
+
+        # SRD § Playing the Game › Proficiency Bonus: a monster's PB is
+        # derived from its Challenge Rating via the SRD table (see
+        # ``dnd_engine.systems.proficiency``). Stored verbatim from the
+        # catalog so downstream consumers (XP awards, encounter
+        # balancing) can read the published CR without round-tripping
+        # through the PB band.
+        self.cr: str | int | float | None = cr
+
+    @property
+    def proficiency_bonus(self) -> int:
+        """SRD § Proficiency Bonus — derived from Challenge Rating.
+
+        Returns the SRD-table PB for ``self.cr`` (e.g., CR 1/4 → +2,
+        CR 5 → +3, CR 17 → +6). Returns ``0`` when no CR was supplied
+        — Characters override this via their own level-based property,
+        and any creature constructed without a CR has no Proficiency
+        Bonus to apply.
+        """
+        if self.cr is None:
+            return 0
+        from dnd_engine.systems.proficiency import proficiency_bonus_from_cr
+
+        return proficiency_bonus_from_cr(self.cr)
 
     @property
     def is_alive(self) -> bool:

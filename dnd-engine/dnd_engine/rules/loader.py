@@ -107,7 +107,11 @@ class DataLoader:
         # forcing a JSON rewrite.
         size = Size(data.get("size", "medium").lower())
 
-        # Create the creature
+        # Create the creature. SRD § Proficiency Bonus: a monster's PB
+        # is derived from its Challenge Rating. The catalog ``cr`` field
+        # is passed through verbatim (e.g., ``"1/4"``) and the derived
+        # ``Creature.proficiency_bonus`` property handles the table
+        # lookup.
         creature = Creature(
             name=data["name"],
             max_hp=max_hp,
@@ -116,6 +120,7 @@ class DataLoader:
             speed=speed,
             size=size,
             speeds=speeds,
+            cr=data.get("cr"),
         )
 
         # Attach per-type damage modifier fields from the monster catalog.
