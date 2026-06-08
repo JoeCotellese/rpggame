@@ -33,6 +33,9 @@
       "copper": 15,
       "silver": 3
     },
+    "ai": {
+      "movement_strategy": "skirmisher"
+    },
     "traits": [
       {
         "name": "Nimble Escape",

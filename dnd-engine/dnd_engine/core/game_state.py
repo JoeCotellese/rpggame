@@ -28,6 +28,7 @@ from dnd_engine.systems.actions import hide
 from dnd_engine.systems.ai import EnemyAI
 from dnd_engine.systems.ai import pipeline as ai_pipeline
 from dnd_engine.systems.ai.context import TurnContext
+from dnd_engine.systems.ai.intent import AttackStep
 from dnd_engine.systems.condition_manager import ConditionManager
 from dnd_engine.systems.initiative import InitiativeTracker
 from dnd_engine.systems.inventory import EquipmentSlot
@@ -1586,9 +1587,7 @@ class GameState:
         except (KeyError, AttributeError, TypeError):
             return False
 
-        obscurement = effective_obscurement(
-            self._ambient_light_level(), self.ambient_obscurement()
-        )
+        obscurement = effective_obscurement(self._ambient_light_level(), self.ambient_obscurement())
 
         cover_value = str(room.get("cover", "none")).lower()
         try:
@@ -1679,9 +1678,7 @@ class GameState:
         skills_data = self.data_loader.load_skills()
         check = creature.make_skill_check("stealth", dc, skills_data)
 
-        ok, reason = hide(
-            creature, turn_state, succeeded=check["success"], action_type=action_type
-        )
+        ok, reason = hide(creature, turn_state, succeeded=check["success"], action_type=action_type)
         if not ok:
             return HideAttemptResult(
                 attempted=False,
@@ -1726,9 +1723,7 @@ class GameState:
             # SRD § Actions › Hide is offered only when the current
             # combatant's surroundings permit it (the #496 gate).
             current = (
-                self.initiative_tracker.get_current_combatant()
-                if self.initiative_tracker
-                else None
+                self.initiative_tracker.get_current_combatant() if self.initiative_tracker else None
             )
             if current is not None and self.can_attempt_hide(current.creature):
                 actions.append("hide")
@@ -5181,18 +5176,24 @@ class GameState:
         # Stay 0/None on the ATTACK path when the enemy was already in
         # reach; updated by the movement loop below when it runs.
         moved_squares = 0
-        if (
-            enemy.position is not None
-            and not is_ranged_action(action)
-        ):
+        # Defaults for the skirmisher path (#649). Stay None unless the
+        # spatial branch below runs the pipeline and surfaces an
+        # AttackStep outcome.
+        pipeline_attack_outcome: AttackResult | None = None
+        pipeline_attack_step: AttackStep | None = None
+        if enemy.position is not None and not is_ranged_action(action):
             reach_ft = attack_reach_for(action)
             in_reach = [
-                pc for pc in living_party
+                pc
+                for pc in living_party
                 if pc.position is not None
                 and distance_in_feet(
-                    enemy.position.x, enemy.position.y,
-                    pc.position.x, pc.position.y,
-                ) <= reach_ft
+                    enemy.position.x,
+                    enemy.position.y,
+                    pc.position.x,
+                    pc.position.y,
+                )
+                <= reach_ft
             ]
             if not in_reach:
                 # Layer 3 (#641): close distance toward the nearest PC,
@@ -5213,7 +5214,8 @@ class GameState:
                 # - No split movement around the attack (skirmisher
                 #   strategy lands separately).
                 ctx = TurnContext.build(
-                    self, enemy,
+                    self,
+                    enemy,
                     target_pool=living_party,
                     monster_data=monster_data,
                     action_data=action,
@@ -5221,30 +5223,75 @@ class GameState:
                     is_ranged=False,
                 )
                 intent = ai_pipeline.decide(ctx)
+
+                # Skirmisher-style strategies need the AttackStep
+                # resolved mid-Intent so the retreat MoveStep can walk
+                # right after. The callback wraps combat_engine.resolve_attack
+                # against the live target pool; aggressive Intents
+                # carry no AttackStep, so the callback is never invoked.
+                def _resolve_attack_step(
+                    actor: Creature,
+                    target_name: str,
+                    action_data: dict,
+                ) -> "AttackResult | None":
+                    pipeline_target = next(
+                        (c for c in living_party if c.name == target_name and c.is_alive),
+                        None,
+                    )
+                    if pipeline_target is None:
+                        return None
+                    sees_def, sees_atk = self.attack_visibility(actor, pipeline_target)
+                    return self.combat_engine.resolve_attack(
+                        attacker=actor,
+                        defender=pipeline_target,
+                        attack_bonus=action_data["attack_bonus"],
+                        damage_dice=action_data["damage"],
+                        apply_damage=True,
+                        event_bus=self.event_bus,
+                        action=action_data,
+                        game_state=self,
+                        damage_type=action_data.get("damage_type"),
+                        attacker_sees_defender=sees_def,
+                        defender_sees_attacker=sees_atk,
+                    )
+
                 exec_result = ai_pipeline.execute(
-                    intent, self, enemy,
+                    intent,
+                    self,
+                    enemy,
                     reach_ft=reach_ft,
                     target_pool=living_party,
+                    attack_resolver=_resolve_attack_step,
                 )
                 moved_squares = exec_result.moved_squares
                 in_reach = exec_result.in_reach_targets
 
-                if not in_reach:
+                # Skirmisher path: the pipeline already drove the
+                # attack. Recover the AttackStep's target by name and
+                # bypass the smart-targeting + duplicate resolve_attack
+                # block below.
+                pipeline_attack_outcome = exec_result.attack_outcome
+                pipeline_attack_step = next(
+                    (s for s in intent.steps if isinstance(s, AttackStep)),
+                    None,
+                )
+
+                if not in_reach and pipeline_attack_outcome is None:
                     # Either moved without reaching (MOVED) or couldn't
                     # move at all (NO_REACHABLE_TARGET — speed 0,
                     # blocked from the start, or no resolvable
                     # enemy_eid).
                     self.initiative_tracker.next_turn()
                     action_taken = (
-                        EnemyTurnAction.MOVED if moved_squares > 0
+                        EnemyTurnAction.MOVED
+                        if moved_squares > 0
                         else EnemyTurnAction.NO_REACHABLE_TARGET
                     )
                     # Match the EnemyTurnResult contract (game_state.py
                     # comment above the field): movement_end_position
                     # is None when no movement happened.
                     end_position = (
-                        (enemy.position.x, enemy.position.y)
-                        if moved_squares > 0 else None
+                        (enemy.position.x, enemy.position.y) if moved_squares > 0 else None
                     )
                     return EnemyTurnResult(
                         enemy_name=enemy.name,
@@ -5259,35 +5306,54 @@ class GameState:
                     )
             targeting_pool = in_reach
 
-        # Use smart targeting based on enemy intelligence and combat
-        # history, scoped to the range-filtered candidate pool.
-        target = self.enemy_ai.select_target_smart(
-            available_targets=targeting_pool,
-            enemy_intelligence=enemy.abilities.intelligence,
-            combat_history=self.combat_history,
-            enemy_name=enemy.name,
-        )
+        pipeline_target: Creature | None = None
+        if pipeline_attack_outcome is not None and pipeline_attack_step is not None:
+            pipeline_target = next(
+                (c for c in living_party if c.name == pipeline_attack_step.target_id),
+                None,
+            )
 
-        # Track conditions before attack (for saving throw detection)
-        conditions_before = set()
-        if hasattr(target, "active_conditions"):
-            conditions_before = set(target.active_conditions.keys())
+        if pipeline_attack_outcome is not None and pipeline_target is not None:
+            # Skirmisher path: pipeline already attacked. Reconstruct
+            # the post-attack state machinery from the pipeline outcome.
+            target = pipeline_target
+            attack_result = pipeline_attack_outcome
+            # Conditions-before tracking is bypassed on the skirmisher
+            # path; skirmisher attacks (goblin scimitar, kobold dagger)
+            # do not currently carry saving-throw payloads. The check
+            # below short-circuits via the `"saving_throw" in action`
+            # guard.
+            conditions_before: set[str] = set()
+        else:
+            # Use smart targeting based on enemy intelligence and combat
+            # history, scoped to the range-filtered candidate pool.
+            target = self.enemy_ai.select_target_smart(
+                available_targets=targeting_pool,
+                enemy_intelligence=enemy.abilities.intelligence,
+                combat_history=self.combat_history,
+                enemy_name=enemy.name,
+            )
 
-        # Resolve attack
-        attacker_sees_defender, defender_sees_attacker = self.attack_visibility(enemy, target)
-        attack_result = self.combat_engine.resolve_attack(
-            attacker=enemy,
-            defender=target,
-            attack_bonus=action["attack_bonus"],
-            damage_dice=action["damage"],
-            apply_damage=True,
-            event_bus=self.event_bus,
-            action=action,
-            game_state=self,
-            damage_type=action.get("damage_type"),
-            attacker_sees_defender=attacker_sees_defender,
-            defender_sees_attacker=defender_sees_attacker,
-        )
+            # Track conditions before attack (for saving throw detection)
+            conditions_before = set()
+            if hasattr(target, "active_conditions"):
+                conditions_before = set(target.active_conditions.keys())
+
+            # Resolve attack
+            attacker_sees_defender, defender_sees_attacker = self.attack_visibility(enemy, target)
+            attack_result = self.combat_engine.resolve_attack(
+                attacker=enemy,
+                defender=target,
+                attack_bonus=action["attack_bonus"],
+                damage_dice=action["damage"],
+                apply_damage=True,
+                event_bus=self.event_bus,
+                action=action,
+                game_state=self,
+                damage_type=action.get("damage_type"),
+                attacker_sees_defender=attacker_sees_defender,
+                defender_sees_attacker=defender_sees_attacker,
+            )
 
         # Check concentration if target was hit and took damage
         concentration_broken = None
@@ -5380,8 +5446,7 @@ class GameState:
             # was already in reach.
             moved_squares=moved_squares,
             movement_end_position=(
-                (enemy.position.x, enemy.position.y)
-                if moved_squares > 0 else None
+                (enemy.position.x, enemy.position.y) if moved_squares > 0 else None
             ),
         )
 
