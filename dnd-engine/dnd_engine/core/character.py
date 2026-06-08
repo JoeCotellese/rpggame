@@ -288,6 +288,7 @@ class Character(Creature):
         dc: int,
         advantage: bool = False,
         disadvantage: bool = False,
+        circumstantial: int = 0,
         event_bus=None,
     ) -> dict[str, Any]:
         """
@@ -298,16 +299,23 @@ class Character(Creature):
             dc: Difficulty class to beat
             advantage: Roll with advantage (roll twice, take higher)
             disadvantage: Roll with disadvantage (roll twice, take lower)
+            circumstantial: Signed bonus/penalty from class features,
+                spells, or "another rule" per SRD § Playing the Game ›
+                D20 Tests › Step 5. Used by Bless / Bane / Guidance
+                once those spells are plumbed. Forwarded to the
+                d20-test primitive and surfaced on the returned dict
+                and emitted event for telemetry.
             event_bus: Optional EventBus instance to emit saving throw event
 
         Returns:
             Dictionary with:
             - "success": bool (total >= dc)
             - "roll": int (the d20 roll before modifier)
-            - "modifier": int (saving throw modifier)
-            - "total": int (roll + modifier)
+            - "modifier": int (saving throw modifier — ability + PB)
+            - "total": int (roll + modifier + circumstantial)
             - "dc": int (the DC that was beaten)
             - "ability": str (the ability that was saved with, in short form)
+            - "circumstantial": int (the signed bonus/penalty applied)
 
         Raises:
             ValueError: If ability name is invalid
@@ -363,6 +371,7 @@ class Character(Creature):
             proficiency_bonus=self.proficiency_bonus,
             advantage=advantage,
             disadvantage=disadvantage,
+            circumstantial=circumstantial,
         )
 
         success = result.succeeds_against(dc)
@@ -374,6 +383,7 @@ class Character(Creature):
             "total": result.total,
             "dc": dc,
             "ability": ability_short,
+            "circumstantial": circumstantial,
         }
 
         # Emit event if event bus is provided
@@ -388,6 +398,7 @@ class Character(Creature):
                     "modifier": modifier,
                     "total": result.total,
                     "success": success,
+                    "circumstantial": circumstantial,
                 },
             )
             event_bus.emit(event)
@@ -879,6 +890,7 @@ class Character(Creature):
         dc: int,
         advantage: bool = False,
         disadvantage: bool = False,
+        circumstantial: int = 0,
         event_bus=None,
     ) -> dict[str, Any]:
         """
@@ -897,10 +909,15 @@ class Character(Creature):
             dc: Difficulty class to beat.
             advantage: Roll with advantage (2d20, take higher).
             disadvantage: Roll with disadvantage (2d20, take lower).
+            circumstantial: Signed bonus/penalty from class features,
+                spells, or "another rule" per SRD § Playing the Game ›
+                D20 Tests › Step 5. Forwarded to the d20-test primitive
+                and surfaced on the returned dict for telemetry.
             event_bus: Optional EventBus to emit an ABILITY_CHECK event.
 
         Returns:
-            Dict with success / roll / modifier / total / dc / ability.
+            Dict with success / roll / modifier / total / dc / ability /
+            circumstantial.
 
         Raises:
             ValueError: If ability name is invalid.
@@ -931,6 +948,7 @@ class Character(Creature):
             ability_mod=ability_mod,
             advantage=advantage,
             disadvantage=disadvantage,
+            circumstantial=circumstantial,
             roller=self._dice_roller,
         )
 
@@ -942,6 +960,7 @@ class Character(Creature):
             "total": result.total,
             "dc": dc,
             "ability": ability_short,
+            "circumstantial": circumstantial,
         }
 
         if event_bus is not None:
@@ -961,6 +980,7 @@ class Character(Creature):
         skills_data: dict,
         advantage: bool = False,
         disadvantage: bool = False,
+        circumstantial: int = 0,
     ) -> dict:
         """
         Roll a skill check against a difficulty class (DC).
@@ -971,6 +991,12 @@ class Character(Creature):
             skills_data: Skills data dictionary loaded from skills.json
             advantage: Whether to roll with advantage (roll twice, take higher)
             disadvantage: Whether to roll with disadvantage (roll twice, take lower)
+            circumstantial: Signed bonus/penalty from class features,
+                spells, or "another rule" per SRD § Playing the Game ›
+                D20 Tests › Step 5. Used by Bless / Bane / Guidance /
+                Bardic Inspiration once those features are plumbed.
+                Forwarded to the d20-test primitive and surfaced on
+                the returned dict for telemetry.
 
         Returns:
             Dictionary containing:
@@ -979,9 +1005,10 @@ class Character(Creature):
                 - "dc": difficulty class
                 - "roll": the d20 roll result (before modifier)
                 - "modifier": skill modifier applied
-                - "total": total result (roll + modifier)
+                - "total": total result (roll + modifier + circumstantial)
                 - "success": whether the check succeeded
                 - "proficient": whether the character is proficient in this skill
+                - "circumstantial": the signed bonus/penalty applied
 
         Raises:
             KeyError: If skill is not found in skills_data
@@ -1008,6 +1035,7 @@ class Character(Creature):
             expertise=skill in self.expertise_skills,
             advantage=advantage,
             disadvantage=disadvantage,
+            circumstantial=circumstantial,
             roller=self._dice_roller,
         )
 
@@ -1020,6 +1048,7 @@ class Character(Creature):
             "total": result.total,
             "success": result.succeeds_against(dc),
             "proficient": proficient,
+            "circumstantial": circumstantial,
         }
 
     def get_sneak_attack_dice(self) -> str | None:
