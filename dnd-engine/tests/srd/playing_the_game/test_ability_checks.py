@@ -312,15 +312,16 @@ class TestAbilityCheck_ProficiencyBonusOptional:
 
     def test_ability_check_with_tool_proficiency(self):
         pytest.skip(
-            "GAP: the SRD names *skill or tool* proficiency as "
-            "relevance gates. Skill proficiencies are honored "
-            "(dnd-engine/dnd_engine/core/character.py:715-722). Tool "
-            "proficiencies are stored on `Character` "
-            "(character.py:109, `tool_proficiencies`) but no ability-"
-            "check call site consults them. A 'Dexterity (thieves' "
-            "tools) check' adds proficiency only if Thieves' Tools is "
-            "in `tool_proficiencies` — that wiring doesn't exist. "
-            "Tracked by issue #484."
+            "GAP (narrowed): the raw ability-check surface now exists "
+            "(`Character.make_ability_check`, plan-08 slice 4 / "
+            "#484). What remains is the tool-proficiency wiring: a "
+            "'Dexterity (thieves' tools) check' should add the "
+            "proficiency bonus when Thieves' Tools is in "
+            "`Character.tool_proficiencies` (character.py:109), and "
+            "grant Advantage when the relevant skill is also "
+            "proficient. No `make_tool_check` / "
+            "`is_proficient_with_tool` API exists. Tracked by issue "
+            "#483."
         )
 
 
