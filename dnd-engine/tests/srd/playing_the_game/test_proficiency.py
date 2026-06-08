@@ -339,27 +339,75 @@ class TestProficiency_BonusDoesntStack:
     > a Charisma (Deception or Persuasion) check, you add your
     > Proficiency Bonus if you're proficient in either skill, but you
     > don't add it twice if you're proficient in both skills.
+    >
+    > Occasionally, a Proficiency Bonus might be multiplied or divided.
+    > Whenever the bonus is used, it can be multiplied only once and
+    > divided only once.
+
+    Locked by ``Character.get_either_or_skill_modifier`` and
+    ``dnd_engine.systems.proficiency.ProficiencyApplication`` (issue
+    #481, plan-08 slice 3). The detailed behavior matrix lives in
+    ``TestProficiency_EitherOrSkillModifier`` and
+    ``tests/systems/test_proficiency_application.py``; these two cases
+    pin the SRD-quoted invariants directly.
     """
 
-    def test_either_or_skill_check_helper_is_not_implemented(self) -> None:
-        pytest.skip(
-            "GAP: no helper takes a *set* of applicable skills and "
-            "applies PB once. `Character.get_skill_modifier` (dnd-"
-            "engine/dnd_engine/core/character.py:689) is per-skill. "
-            "Callers happen to pick one skill, but there is no rule-"
-            "level guard for the SRD's 'Deception or Persuasion' "
-            "pattern. Tracked by issue #481."
+    def test_either_or_skill_check_applies_pb_once(self) -> None:
+        """SRD: 'you don't add [PB] twice if you're proficient in both.'
+
+        A character proficient in both Deception and Persuasion must
+        get the same either-or modifier as one proficient in only one.
+        """
+        skills_data = json.loads(SKILLS_JSON.read_text())
+        abilities = Abilities(
+            strength=10,
+            dexterity=12,
+            constitution=12,
+            intelligence=10,
+            wisdom=10,
+            charisma=16,  # +3
+        )
+        proficient_in_one = Character(
+            name="One",
+            character_class=CharacterClass.ROGUE,
+            level=5,  # PB +3
+            abilities=abilities,
+            max_hp=30,
+            ac=13,
+            skill_proficiencies=["deception"],
+        )
+        proficient_in_both = Character(
+            name="Both",
+            character_class=CharacterClass.ROGUE,
+            level=5,
+            abilities=abilities,
+            max_hp=30,
+            ac=13,
+            skill_proficiencies=["deception", "persuasion"],
+        )
+        either_or = ["deception", "persuasion"]
+        assert proficient_in_one.get_either_or_skill_modifier(
+            either_or, skills_data
+        ) == proficient_in_both.get_either_or_skill_modifier(
+            either_or, skills_data
         )
 
-    def test_proficiency_bonus_multiplied_only_once_guard(self) -> None:
-        pytest.skip(
-            "GAP: SRD: 'Whenever the bonus is used, it can be "
-            "multiplied only once and divided only once.' Expertise "
-            "doubles PB in `Character.get_skill_modifier` (dnd-engine/"
-            "dnd_engine/core/character.py:719-722), but no engine "
-            "guard prevents a second multiplier from stacking on top. "
-            "Tracked by issue #481."
-        )
+    def test_proficiency_application_blocks_second_multiplier(self) -> None:
+        """SRD: 'it can be multiplied only once and divided only once.'
+
+        Source-level binding at ``dnd_engine/systems/proficiency.py``:
+        ``ProficiencyApplication.add`` raises on a second non-identity
+        multiplier so a future feature stacking on Expertise (or a
+        bug) is loud, not silent.
+        """
+        from dnd_engine.systems.proficiency import ProficiencyApplication
+
+        pb = ProficiencyApplication(proficiency_bonus=3)
+        # First multiplier (e.g., Expertise) is allowed.
+        assert pb.add(multiplier=2) == 6
+        # Second multiplier attempt raises.
+        with pytest.raises(ValueError, match="multiplied only once"):
+            pb.add(multiplier=2)
 
 
 
