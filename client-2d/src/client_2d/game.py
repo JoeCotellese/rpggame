@@ -1394,8 +1394,8 @@ class GameView(arcade.View):
                 name = self.selected_target.sub_type or self.selected_target.entity_id
                 self._add_combat_log(f"Selected: {name}")
 
-        # A or Enter to attack selected target
-        elif key in (arcade.key.A, arcade.key.ENTER):
+        # F (fight) or Enter to attack selected target
+        elif key in (arcade.key.F, arcade.key.ENTER):
             if self.selected_target:
                 self._attack_entity(self.selected_target)
             else:
@@ -1417,7 +1417,7 @@ class GameView(arcade.View):
             self._handle_combat_movement("south")
         elif key in (arcade.key.D, arcade.key.RIGHT):
             self._handle_combat_movement("east")
-        elif key == arcade.key.LEFT:  # A is attack, so only LEFT arrow for west
+        elif key in (arcade.key.A, arcade.key.LEFT):
             self._handle_combat_movement("west")
 
     def _handle_exploration_input(self, key: int) -> None:
