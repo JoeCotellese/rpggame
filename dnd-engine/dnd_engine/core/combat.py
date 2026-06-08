@@ -35,11 +35,15 @@ class AttackResult:
     disadvantage: bool
     sneak_attack_damage: int = 0  # Additional damage from sneak attack
     sneak_attack_dice: str | None = None  # Sneak attack dice notation (e.g., "2d6")
+    # SRD § Playing the Game › D20 Tests › Step 5: signed
+    # circumstantial bonus/penalty applied to the attack roll
+    # (Bless, Bane, cover, environment, class features, etc.).
+    circumstantial: int = 0
 
     @property
     def total_attack(self) -> int:
-        """Calculate total attack (roll + bonus)"""
-        return self.attack_roll + self.attack_bonus
+        """Calculate total attack (roll + bonus + circumstantial)"""
+        return self.attack_roll + self.attack_bonus + self.circumstantial
 
     @property
     def total_damage(self) -> int:
@@ -138,6 +142,7 @@ class CombatEngine:
         damage_type: str | None = None,
         attacker_sees_defender: VisibilityRelation | None = None,
         defender_sees_attacker: VisibilityRelation | None = None,
+        circumstantial: int = 0,
     ) -> AttackResult:
         """
         Resolve a complete attack.
@@ -187,6 +192,13 @@ class CombatEngine:
                 unmodified. When both an unseen attacker and an unseen
                 target apply, they cancel via the advantage/disadvantage
                 rule below.
+            circumstantial: Signed bonus/penalty from class features,
+                spells, or "another rule" per SRD § Playing the Game ›
+                D20 Tests › Step 5. Forwarded to the d20-test primitive
+                and surfaced on ``AttackResult.circumstantial`` for
+                telemetry. Hit determination uses
+                ``attack_roll + attack_bonus + circumstantial`` so a
+                Bless-like bonus can flip a borderline miss.
 
         Returns:
             AttackResult containing full attack details including sneak attack if applicable
@@ -241,6 +253,7 @@ class CombatEngine:
                         critical_hit=False,
                         advantage=advantage,
                         disadvantage=disadvantage,
+                        circumstantial=circumstantial,
                     )
 
         # SRD § Actions › Dodge: a dodging defender imposes Disadvantage
@@ -300,6 +313,7 @@ class CombatEngine:
             ability_mod=attack_bonus,
             advantage=advantage,
             disadvantage=disadvantage,
+            circumstantial=circumstantial,
             roller=self.dice_roller,
         )
         attack_roll = roll.d20  # The natural d20 result (1-20)
@@ -315,8 +329,11 @@ class CombatEngine:
             # Fallback to base AC if no game_state (e.g., in unit tests)
             defender_ac = defender._base_ac
 
-        # Determine hit/miss
-        total_attack = attack_roll + attack_bonus
+        # Determine hit/miss. Circumstantial bonus/penalty is summed
+        # into the attack total per SRD § Playing the Game › D20 Tests
+        # › Step 5; the natural d20 outcome (`attack_roll`) is still
+        # the gate for critical hit / fumble below.
+        total_attack = attack_roll + attack_bonus + circumstantial
         hit = total_attack >= defender_ac
 
         # Natural 20 always hits, natural 1 always misses
@@ -423,6 +440,7 @@ class CombatEngine:
             disadvantage=disadvantage,
             sneak_attack_damage=sneak_attack_damage,
             sneak_attack_dice=sneak_attack_dice,
+            circumstantial=circumstantial,
         )
 
     def _calculate_damage(self, damage_dice: str, critical_hit: bool) -> int:

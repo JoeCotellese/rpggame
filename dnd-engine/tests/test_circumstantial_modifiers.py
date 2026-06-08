@@ -21,6 +21,7 @@ Guidance / Bardic Inspiration plumbing in later slices.
 from __future__ import annotations
 
 from dnd_engine.core.character import Character, CharacterClass
+from dnd_engine.core.combat import CombatEngine
 from dnd_engine.core.creature import Abilities, Creature
 from dnd_engine.core.dice import DiceRoller
 
@@ -163,3 +164,44 @@ class TestSavingThrow:
         # Creatures have no proficient saves today, so modifier ==
         # ability mod, and total == d20 + ability_mod + circumstantial.
         assert result["total"] == result["roll"] + result["modifier"] - 2
+
+
+class TestAttackResolution:
+    """`CombatEngine.resolve_attack` exposes the circumstantial channel."""
+
+    def test_resolve_attack_accepts_circumstantial(self):
+        """A `+2` Bless-like bonus is surfaced on `AttackResult` and
+        flows into `total_attack` so a borderline roll connects.
+
+        Same-seeded roller; with `attack_bonus=2` against `AC=12`, the
+        seed-1 roll naturally totals to within one of AC. A +2
+        circumstantial bonus then comfortably crosses the threshold.
+        """
+        attacker = _make_creature()
+        defender = _make_creature()
+        defender._base_ac = 12
+        engine = CombatEngine(dice_roller=DiceRoller(seed=1))
+
+        baseline = engine.resolve_attack(
+            attacker=attacker,
+            defender=defender,
+            attack_bonus=2,
+            damage_dice="1d4",
+        )
+
+        engine = CombatEngine(dice_roller=DiceRoller(seed=1))
+        boosted = engine.resolve_attack(
+            attacker=attacker,
+            defender=defender,
+            attack_bonus=2,
+            damage_dice="1d4",
+            circumstantial=2,
+        )
+
+        # Same seed → same natural d20.
+        assert boosted.attack_roll == baseline.attack_roll
+        # The bonus is itemized on the result.
+        assert baseline.circumstantial == 0
+        assert boosted.circumstantial == 2
+        # `total_attack` includes the bonus.
+        assert boosted.total_attack == baseline.total_attack + 2
