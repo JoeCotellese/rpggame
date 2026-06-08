@@ -854,6 +854,7 @@ class Creature:
         dc: int,
         advantage: bool = False,
         disadvantage: bool = False,
+        circumstantial: int = 0,
         event_bus=None,
     ) -> dict:
         """
@@ -870,10 +871,15 @@ class Creature:
             dc: Difficulty class to beat.
             advantage: Roll 2d20, take higher.
             disadvantage: Roll 2d20, take lower.
+            circumstantial: Signed bonus/penalty from class features,
+                spells, or "another rule" per SRD § Playing the Game ›
+                D20 Tests › Step 5. Forwarded to the d20-test primitive
+                and surfaced on the returned dict for telemetry.
             event_bus: Optional EventBus to emit an ABILITY_CHECK event.
 
         Returns:
-            Dict with success / roll / modifier / total / dc / ability.
+            Dict with success / roll / modifier / total / dc / ability /
+            circumstantial.
 
         Raises:
             ValueError: If ability name is invalid.
@@ -904,6 +910,7 @@ class Creature:
             ability_mod=ability_mod,
             advantage=advantage,
             disadvantage=disadvantage,
+            circumstantial=circumstantial,
         )
 
         success = result.succeeds_against(dc)
@@ -914,6 +921,7 @@ class Creature:
             "total": result.total,
             "dc": dc,
             "ability": ability_short,
+            "circumstantial": circumstantial,
         }
 
         if event_bus is not None:
