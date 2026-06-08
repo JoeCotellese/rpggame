@@ -9,6 +9,7 @@ from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.spell import Spell
 from dnd_engine.systems.d20 import d20_test
 from dnd_engine.systems.inventory import Inventory
+from dnd_engine.systems.proficiency import ProficiencyApplication
 from dnd_engine.systems.resources import ResourcePool
 
 
@@ -803,14 +804,14 @@ class Character(Creature):
         # Get the ability modifier
         ability_mod = getattr(self.abilities, f"{ability_key}_mod")
 
-        # Add proficiency bonus if proficient
+        # SRD § Proficiency › "The Bonus Doesn't Stack": route PB
+        # through ProficiencyApplication so any future multiplier
+        # layered on top trips the multiplied-only-once guard.
         modifier = ability_mod
         if skill in self.skill_proficiencies:
-            # Check expertise (double proficiency bonus)
-            if skill in self.expertise_skills:
-                modifier += self.proficiency_bonus * 2
-            else:
-                modifier += self.proficiency_bonus
+            pb = ProficiencyApplication(self.proficiency_bonus)
+            multiplier = 2 if skill in self.expertise_skills else 1
+            modifier += pb.add(multiplier=multiplier)
 
         return modifier
 
