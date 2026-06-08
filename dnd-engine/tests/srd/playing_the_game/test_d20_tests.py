@@ -259,18 +259,64 @@ class TestStep5_AddModifiers:
         assert result["proficient"] is False
 
     def test_circumstantial_bonuses_can_be_added(self):
-        pytest.skip(
-            "GAP: the third additive channel from SRD step 5 — "
-            "Circumstantial Bonuses and Penalties from class features, "
-            "spells, or 'another rule' — has no caller-supplied "
-            "parameter on `make_skill_check`, `make_saving_throw`, or "
-            "`resolve_attack`. Bless / Bane / Guidance / Bardic "
-            "Inspiration cannot be plumbed without bolting onto each "
-            "call site. See `Character.make_skill_check` "
-            "(dnd-engine/dnd_engine/core/character.py:726) and "
-            "`make_saving_throw` (character.py:237) — both accept "
-            "only advantage/disadvantage flags. Tracked by issue #487."
+        """SRD step 5 third channel reaches every D20-Test caller.
+
+        Verifies the four caller surfaces (skill check, raw ability
+        check, saving throw, attack roll) all accept a caller-supplied
+        ``circumstantial`` modifier and route it through the unified
+        :func:`dnd_engine.systems.d20.d20_test` primitive — unlocking
+        Bless / Bane / Guidance / Bardic Inspiration plumbing without
+        per-callsite hacks.
+        """
+        fighter = _make_fighter()
+        skills = {"athletics": {"ability": "str"}}
+
+        # Skill check — same seed twice, +3 bonus reaches the total.
+        fighter._dice_roller = DiceRoller(seed=1)
+        skill_baseline = fighter.make_skill_check(
+            "athletics", dc=10, skills_data=skills
         )
+        fighter._dice_roller = DiceRoller(seed=1)
+        skill_boosted = fighter.make_skill_check(
+            "athletics", dc=10, skills_data=skills, circumstantial=3
+        )
+        assert skill_boosted["circumstantial"] == 3
+        assert skill_boosted["total"] == skill_baseline["total"] + 3
+
+        # Raw ability check — Guidance-like +2 reaches the total.
+        fighter._dice_roller = DiceRoller(seed=5)
+        ability_baseline = fighter.make_ability_check("str", dc=10)
+        fighter._dice_roller = DiceRoller(seed=5)
+        ability_boosted = fighter.make_ability_check(
+            "str", dc=10, circumstantial=2
+        )
+        assert ability_boosted["circumstantial"] == 2
+        assert ability_boosted["total"] == ability_baseline["total"] + 2
+
+        # Saving throw — Bless-like +1 surfaces on the result dict.
+        save_result = fighter.make_saving_throw("con", dc=10, circumstantial=1)
+        assert save_result["circumstantial"] == 1
+        assert save_result["total"] == (
+            save_result["roll"] + save_result["modifier"] + 1
+        )
+
+        # Attack roll — bonus surfaces on AttackResult and total_attack.
+        from dnd_engine.core.combat import CombatEngine
+
+        attacker = _make_creature()
+        defender = _make_creature()
+        engine = CombatEngine(dice_roller=DiceRoller(seed=1))
+        atk_baseline = engine.resolve_attack(
+            attacker=attacker, defender=defender,
+            attack_bonus=2, damage_dice="1d4",
+        )
+        engine = CombatEngine(dice_roller=DiceRoller(seed=1))
+        atk_boosted = engine.resolve_attack(
+            attacker=attacker, defender=defender,
+            attack_bonus=2, damage_dice="1d4", circumstantial=2,
+        )
+        assert atk_boosted.circumstantial == 2
+        assert atk_boosted.total_attack == atk_baseline.total_attack + 2
 
 
 class TestStep6_TargetNumber:
