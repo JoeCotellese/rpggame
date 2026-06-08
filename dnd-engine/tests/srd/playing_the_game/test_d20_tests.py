@@ -105,13 +105,13 @@ class TestDefinition_ThreeKinds:
     def test_attack_roll_surface_exists(self):
         """Attack rolls are resolved by `CombatEngine.resolve_attack`.
 
-        `CombatEngine.resolve_attack`
-        (dnd-engine/dnd_engine/core/combat.py:91) rolls 1d20 + attack
-        bonus vs AC and is the third leg of the SRD's "three kinds" of
-        D20 tests.
+        Plan-08 slice 1 migrated the d20 portion to delegate to the
+        unified `dnd_engine.systems.d20.d20_test` primitive while
+        keeping the surrounding orchestration (reach, sneak attack,
+        unseen attacker/target, etc.) on the callsite.
         """
         src = inspect.getsource(CombatEngine.resolve_attack)
-        assert '"1d20"' in src or "'1d20'" in src
+        assert "d20_test" in src
 
     def test_general_ability_check_primitive_is_unified(self):
         pytest.skip(

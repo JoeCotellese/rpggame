@@ -9,6 +9,7 @@ from dnd_engine.core.creature import Creature
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.distance import distance_in_feet
 from dnd_engine.rules.damage import apply_damage_adjustments, apply_damage_modifiers
+from dnd_engine.systems.d20 import d20_test
 from dnd_engine.systems.perception import VisibilityRelation
 from dnd_engine.utils.events import Event, EventType
 
@@ -290,11 +291,18 @@ class CombatEngine:
             advantage = False
             disadvantage = False
 
-        # Roll attack (1d20 + bonus)
-        attack_roll_result = self.dice_roller.roll(
-            "1d20", advantage=advantage, disadvantage=disadvantage
+        # Roll attack via the unified D20Test primitive. `attack_bonus`
+        # is the bundled to-hit number (ability + PB + magic); slice 1
+        # passes the entire bundle as `ability_mod` to preserve the
+        # legacy `AttackResult.attack_bonus` semantics. The fine-grained
+        # PB-vs-magic split lands in plan-08 slice 2.
+        roll = d20_test(
+            ability_mod=attack_bonus,
+            advantage=advantage,
+            disadvantage=disadvantage,
+            roller=self.dice_roller,
         )
-        attack_roll = attack_roll_result.total  # The actual d20 result (without bonus)
+        attack_roll = roll.d20  # The natural d20 result (1-20)
 
         # Determine critical hit/miss
         critical_hit = attack_roll == 20
