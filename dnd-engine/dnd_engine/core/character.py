@@ -7,6 +7,7 @@ from typing import Any
 from dnd_engine.core.creature import Abilities, Creature, Size
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.spell import Spell
+from dnd_engine.systems.d20 import d20_test
 from dnd_engine.systems.inventory import Inventory
 from dnd_engine.systems.resources import ResourcePool
 
@@ -857,7 +858,9 @@ class Character(Creature):
             raise KeyError(f"Unknown skill: {skill}")
 
         skill_info = skills_data[skill]
+        ability_key = skill_info["ability"]
         modifier = self.get_skill_modifier(skill, skills_data)
+        proficient = skill in self.skill_proficiencies
 
         # SRD § Actions › Help: a creature receiving Help rolls its
         # next ability check with Advantage; the one-shot grant is
@@ -866,28 +869,25 @@ class Character(Creature):
             advantage = True
             self.pending_help_from = None
 
-        # SRD: advantage and disadvantage cancel. The dice roller
-        # raises on both-set, so cancel here before delegating.
-        if advantage and disadvantage:
-            advantage = False
-            disadvantage = False
-
-        # Roll the d20
-        dice_roll = self._dice_roller.roll("1d20", advantage=advantage, disadvantage=disadvantage)
-
-        # Extract the d20 roll result (before modifier is added)
-        roll_result = dice_roll.total - dice_roll.modifier  # Get just the die result
-        total = roll_result + modifier
+        result = d20_test(
+            ability_mod=getattr(self.abilities, f"{ability_key}_mod"),
+            proficient=proficient,
+            proficiency_bonus=self.proficiency_bonus,
+            expertise=skill in self.expertise_skills,
+            advantage=advantage,
+            disadvantage=disadvantage,
+            roller=self._dice_roller,
+        )
 
         return {
             "skill": skill,
-            "ability": skill_info["ability"],
+            "ability": ability_key,
             "dc": dc,
-            "roll": roll_result,
+            "roll": result.d20,
             "modifier": modifier,
-            "total": total,
-            "success": total >= dc,
-            "proficient": skill in self.skill_proficiencies,
+            "total": result.total,
+            "success": result.succeeds_against(dc),
+            "proficient": proficient,
         }
 
     def get_sneak_attack_dice(self) -> str | None:

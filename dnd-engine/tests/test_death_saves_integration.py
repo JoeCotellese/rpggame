@@ -449,7 +449,10 @@ class TestDeathSaveEvents:
         skills_data = data_loader.load_skills()
 
         with patch.object(rogue._dice_roller, "roll") as mock_roll:
-            mock_roll.return_value = Mock(total=15, modifier=0)  # High roll to ensure success
+            # `make_skill_check` delegates to `d20_test`, which reads
+            # `rolls[0]` from the DiceRoll. Provide both `rolls` and the
+            # legacy `total`/`modifier` so the mock fits either layer.
+            mock_roll.return_value = Mock(total=15, modifier=0, rolls=[15])
             check_result = rogue.make_skill_check("medicine", 10, skills_data)
 
         if check_result["success"]:
