@@ -577,6 +577,23 @@ class Character(Creature):
         armor_type = armor_data.get("armor_type", "")
         return armor_type in self.armor_proficiencies
 
+    def is_proficient_with_tool(self, tool_id: str) -> bool:
+        """
+        Check if character is proficient with a tool.
+
+        SRD § Proficiency › Equipment Proficiencies › Tools predicates
+        the Proficiency Bonus on this answer: "If you have proficiency
+        with a tool, you can add your Proficiency Bonus to any ability
+        check you make that uses the tool."
+
+        Args:
+            tool_id: Tool kit identifier (e.g., "thieves_tools").
+
+        Returns:
+            True iff ``tool_id`` is in ``self.tool_proficiencies``.
+        """
+        return tool_id in self.tool_proficiencies
+
     def gain_xp(self, amount: int) -> None:
         """
         Add experience points.
@@ -1048,6 +1065,169 @@ class Character(Creature):
             "total": result.total,
             "success": result.succeeds_against(dc),
             "proficient": proficient,
+            "circumstantial": circumstantial,
+        }
+
+    def make_tool_check(
+        self,
+        tool_id: str,
+        dc: int,
+        *,
+        skill: str | None = None,
+        ability: str | None = None,
+        skills_data: dict | None = None,
+        advantage: bool = False,
+        disadvantage: bool = False,
+        circumstantial: int = 0,
+    ) -> dict:
+        """
+        Roll an ability check that involves a tool.
+
+        SRD § Proficiency › Equipment Proficiencies › Tools:
+
+            If you have proficiency with a tool, you can add your
+            Proficiency Bonus to any ability check you make that uses
+            the tool. If you have proficiency in the skill that's also
+            used with that check, you have Advantage on the check too.
+
+        Behavioral matrix:
+
+        ===================  ==========================  =================
+        tool-proficient      skill named & proficient    Result
+        ===================  ==========================  =================
+        yes                  yes                         PB + Advantage
+        yes                  no                          PB only
+        no                   yes                         Delegate to skill
+        no                   no                          Plain ability
+        ===================  ==========================  =================
+
+        ``make_skill_check`` is invoked for the "no tool, skill only"
+        case so existing skill PB / Expertise wiring is reused. The
+        primitive ``d20_test`` enforces PB-applied-once when both
+        proficiencies are present.
+
+        Args:
+            tool_id: Tool kit identifier (e.g., "thieves_tools").
+            dc: Difficulty class to beat.
+            skill: Optional skill name. When provided, ``skills_data``
+                is required and the ability is derived from
+                ``skills_data[skill]["ability"]``. Tool + skill
+                proficiency together grant Advantage.
+            ability: Ability name (e.g., "dex"); required when
+                ``skill`` is None.
+            skills_data: Skills dictionary loaded from
+                ``data/srd/skills.json``; required when ``skill`` is
+                provided.
+            advantage: Caller-asserted advantage (stacks with the
+                tool+skill grant).
+            disadvantage: Cancels advantage per SRD.
+            circumstantial: Signed bonus/penalty (Bless / Bane /
+                Guidance / etc.).
+
+        Returns:
+            Dict with ``tool``, ``skill``, ``ability``, ``dc``,
+            ``roll``, ``modifier``, ``total``, ``success``,
+            ``tool_proficient``, ``skill_proficient``,
+            ``advantage_from_tool_skill``, ``circumstantial``.
+
+        Raises:
+            ValueError: If neither ``skill`` nor ``ability`` is given,
+                or if ``skill`` is given without ``skills_data``, or
+                if ``ability`` is not a valid ability name.
+            KeyError: If ``skill`` is not present in ``skills_data``.
+        """
+        if skill is None and ability is None:
+            raise ValueError(
+                "make_tool_check requires either 'skill' or 'ability'"
+            )
+
+        tool_proficient = self.is_proficient_with_tool(tool_id)
+        skill_proficient = (
+            skill is not None and skill in self.skill_proficiencies
+        )
+
+        # SRD: tool-only PB requires tool proficiency. When the caller
+        # has the skill but not the tool, defer to the skill path so
+        # skill PB / Expertise still applies — no regression for a
+        # skill-proficient character who happens to use a tool they
+        # aren't proficient with.
+        if not tool_proficient and skill_proficient:
+            result = self.make_skill_check(
+                skill, dc, skills_data,
+                advantage=advantage,
+                disadvantage=disadvantage,
+                circumstantial=circumstantial,
+            )
+            return {
+                "tool": tool_id,
+                "skill": skill,
+                "ability": result["ability"],
+                "dc": dc,
+                "roll": result["roll"],
+                "modifier": result["modifier"],
+                "total": result["total"],
+                "success": result["success"],
+                "tool_proficient": False,
+                "skill_proficient": True,
+                "advantage_from_tool_skill": False,
+                "circumstantial": circumstantial,
+            }
+
+        if skill is not None:
+            if skills_data is None:
+                raise ValueError(
+                    "make_tool_check requires 'skills_data' when 'skill' is given"
+                )
+            if skill not in skills_data:
+                raise KeyError(f"Unknown skill: {skill}")
+            ability_short = skills_data[skill]["ability"]
+        else:
+            short_to_full = {
+                "str": "strength",
+                "dex": "dexterity",
+                "con": "constitution",
+                "int": "intelligence",
+                "wis": "wisdom",
+                "cha": "charisma",
+            }
+            full_to_short = {v: k for k, v in short_to_full.items()}
+            ability_lower = ability.lower()
+            if ability_lower in short_to_full:
+                ability_short = ability_lower
+            elif ability_lower in full_to_short:
+                ability_short = full_to_short[ability_lower]
+            else:
+                raise ValueError(f"Invalid ability name: {ability}")
+
+        ability_mod = getattr(self.abilities, f"{ability_short}_mod")
+        auto_advantage = tool_proficient and skill_proficient
+
+        result = d20_test(
+            ability_mod=ability_mod,
+            proficient=tool_proficient,
+            proficiency_bonus=self.proficiency_bonus,
+            advantage=advantage or auto_advantage,
+            disadvantage=disadvantage,
+            circumstantial=circumstantial,
+            roller=self._dice_roller,
+        )
+
+        modifier = ability_mod + (
+            self.proficiency_bonus if tool_proficient else 0
+        )
+
+        return {
+            "tool": tool_id,
+            "skill": skill,
+            "ability": ability_short,
+            "dc": dc,
+            "roll": result.d20,
+            "modifier": modifier,
+            "total": result.total,
+            "success": result.succeeds_against(dc),
+            "tool_proficient": tool_proficient,
+            "skill_proficient": skill_proficient,
+            "advantage_from_tool_skill": auto_advantage,
             "circumstantial": circumstantial,
         }
 

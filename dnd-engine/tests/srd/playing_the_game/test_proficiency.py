@@ -20,6 +20,7 @@ import pytest
 
 from dnd_engine.core.character import Character, CharacterClass
 from dnd_engine.core.creature import Abilities
+from dnd_engine.core.dice import DiceRoller
 
 pytestmark = pytest.mark.srd(
     "playing-the-game/proficiency.md",
@@ -820,24 +821,136 @@ class TestProficiency_Tools:
         char.tool_proficiencies = ["thieves_tools"]
         assert "thieves_tools" in char.tool_proficiencies
 
+    def test_is_proficient_with_tool_helper(self) -> None:
+        """`Character.is_proficient_with_tool` answers SRD's tool gate.
+
+        SRD § Proficiency › Equipment Proficiencies › Tools predicates
+        PB on the question "do you have proficiency with the tool used
+        for this check?". A direct helper keeps callers tidy.
+        """
+        char = _make_fighter(level=1)
+        char.tool_proficiencies = ["thieves_tools"]
+        assert char.is_proficient_with_tool("thieves_tools") is True
+        assert char.is_proficient_with_tool("smiths_tools") is False
+
     def test_tool_check_adds_pb_when_proficient(self) -> None:
-        pytest.skip(
-            "GAP: `Character.tool_proficiencies` is stored (dnd-engine/"
-            "dnd_engine/core/character.py:109) but no `make_tool_check` "
-            "or `is_proficient_with_tool` API exists. No ability-check "
-            "surface adds PB based on the tool being used. Tracked by "
-            "issue #483."
+        """Tool proficiency adds PB to the ability check that uses it.
+
+        SRD: "If you have proficiency with a tool, you can add your
+        Proficiency Bonus to any ability check you make that uses the
+        tool." Verified by comparing a tool-proficient character to an
+        identical control without the proficiency, on the same seeded
+        d20.
+        """
+        proficient = _make_fighter(level=1)
+        proficient.tool_proficiencies = ["thieves_tools"]
+        proficient._dice_roller = DiceRoller(seed=7)
+
+        control = _make_fighter(level=1)
+        control.tool_proficiencies = []
+        control._dice_roller = DiceRoller(seed=7)
+
+        prof_result = proficient.make_tool_check(
+            "thieves_tools", dc=15, ability="dex"
+        )
+        ctrl_result = control.make_tool_check(
+            "thieves_tools", dc=15, ability="dex"
         )
 
+        assert prof_result["tool_proficient"] is True
+        assert ctrl_result["tool_proficient"] is False
+        # Same seed → same d20 → totals differ exactly by PB.
+        assert prof_result["roll"] == ctrl_result["roll"]
+        assert prof_result["total"] == ctrl_result["total"] + proficient.proficiency_bonus
+
     def test_tool_plus_skill_proficiency_grants_advantage(self) -> None:
-        pytest.skip(
-            "GAP: SRD: 'If you have proficiency in the skill that's "
-            "also used with that check, you have Advantage on the "
-            "check too.' `Character.make_skill_check` (dnd-engine/"
-            "dnd_engine/core/character.py:726) accepts advantage flags "
-            "but never auto-derives advantage from tool+skill overlap. "
-            "Tracked by issue #483."
+        """Tool + matching skill proficiency auto-grants Advantage.
+
+        SRD: "If you have proficiency in the skill that's also used
+        with that check, you have Advantage on the check too." A
+        seeded roller is shared between two runs: the both-proficient
+        rogue picks the higher of two d20s, so its d20 is >= the
+        tool-only rogue's single d20 (with equality only on
+        same-roll seeds).
+        """
+        skills_data = json.loads(SKILLS_JSON.read_text())
+
+        rogue_both = _make_fighter(level=1)
+        rogue_both.tool_proficiencies = ["thieves_tools"]
+        rogue_both.skill_proficiencies = ["sleight_of_hand", "athletics"]
+        rogue_both._dice_roller = DiceRoller(seed=3)
+
+        rogue_tool_only = _make_fighter(level=1)
+        rogue_tool_only.tool_proficiencies = ["thieves_tools"]
+        rogue_tool_only.skill_proficiencies = ["athletics"]
+        rogue_tool_only._dice_roller = DiceRoller(seed=3)
+
+        both = rogue_both.make_tool_check(
+            "thieves_tools", dc=12,
+            skill="sleight_of_hand", skills_data=skills_data,
         )
+        tool_only = rogue_tool_only.make_tool_check(
+            "thieves_tools", dc=12,
+            skill="sleight_of_hand", skills_data=skills_data,
+        )
+
+        assert both["advantage_from_tool_skill"] is True
+        assert tool_only["advantage_from_tool_skill"] is False
+        # Advantage takes max(d20, d20) — never lower than a single d20.
+        assert both["roll"] >= tool_only["roll"]
+        # PB applied once in both cases (SRD multiplier-once guard).
+        assert both["tool_proficient"] is True and tool_only["tool_proficient"] is True
+
+    def test_tool_check_falls_back_to_skill_when_no_tool_proficiency(self) -> None:
+        """No tool proficiency but skill-proficient → skill PB applies.
+
+        SRD only gates the *tool's* PB on tool proficiency. A
+        skill-proficient character still gets the skill's PB on a
+        plain skill check. `make_tool_check` therefore delegates to
+        `make_skill_check` when only the skill is proficient — no
+        advantage (that requires the tool too), but no regression.
+        """
+        skills_data = json.loads(SKILLS_JSON.read_text())
+
+        char = _make_fighter(level=1)
+        char.tool_proficiencies = []
+        char.skill_proficiencies = ["sleight_of_hand"]
+        char._dice_roller = DiceRoller(seed=11)
+
+        skill_check = char.make_skill_check(
+            "sleight_of_hand", dc=12, skills_data=skills_data,
+        )
+        char._dice_roller = DiceRoller(seed=11)
+        tool_check = char.make_tool_check(
+            "thieves_tools", dc=12,
+            skill="sleight_of_hand", skills_data=skills_data,
+        )
+
+        # Same seed, same path → identical roll and total.
+        assert tool_check["roll"] == skill_check["roll"]
+        assert tool_check["total"] == skill_check["total"]
+        assert tool_check["tool_proficient"] is False
+        assert tool_check["advantage_from_tool_skill"] is False
+
+    def test_tool_check_falls_back_to_plain_ability_check_when_neither(self) -> None:
+        """Neither tool nor skill proficient → plain ability check.
+
+        No PB, no advantage. Identical to `make_ability_check`.
+        """
+        char = _make_fighter(level=1)
+        char.tool_proficiencies = []
+        char.skill_proficiencies = []
+        char._dice_roller = DiceRoller(seed=5)
+
+        baseline = char.make_ability_check("dex", dc=15)
+        char._dice_roller = DiceRoller(seed=5)
+        tool_check = char.make_tool_check("thieves_tools", dc=15, ability="dex")
+
+        assert tool_check["roll"] == baseline["roll"]
+        assert tool_check["total"] == baseline["total"]
+        assert tool_check["tool_proficient"] is False
+        assert tool_check["skill_proficient"] is False
+        assert tool_check["advantage_from_tool_skill"] is False
 
 
 class TestProficiency_Expertise:

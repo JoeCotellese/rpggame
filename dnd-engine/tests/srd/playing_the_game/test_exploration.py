@@ -298,8 +298,9 @@ class TestExploration_AdventuringEquipment_ThievesTools:
     def test_character_carries_tool_proficiencies(self) -> None:
         """`Character` exposes `tool_proficiencies` as a first-class field.
 
-        The proficiency is read by `GameState._unlock_door`
-        (`game_state.py:1097-1099`) during the skill-based unlock path.
+        Read by `Character.is_proficient_with_tool` /
+        `Character.make_tool_check` during the skill-based unlock path
+        and any other tool-mediated ability check.
         """
         rogue = _make_rogue()
         assert hasattr(rogue, "tool_proficiencies"), (
@@ -309,21 +310,23 @@ class TestExploration_AdventuringEquipment_ThievesTools:
         assert "thieves_tools" in rogue.tool_proficiencies
 
     def test_unlock_door_path_inspects_thieves_tools_proficiency(self) -> None:
-        """`GameState.attempt_unlock` reads `character.tool_proficiencies`.
+        """`GameState.attempt_unlock` routes tool-flagged unlocks through
+        `make_tool_check`, which is the engine's single consumer of
+        `character.tool_proficiencies`.
 
         Source-level guard: the SRD's "bypass locked doors... with
         Thieves' Tools" promise has a real consumer at
-        `dnd-engine/dnd_engine/core/game_state.py:1093-1099`, where the
-        unlock path checks `method.get("tool_proficiency")` against
-        `character.tool_proficiencies` before resolving the skill
-        check.
+        `dnd-engine/dnd_engine/core/game_state.py` — the unlock path
+        reads `method.get("tool_proficiency")` and delegates to
+        `Character.make_tool_check(...)` so PB applies when the
+        character is tool-proficient and Advantage applies when they
+        are also skill-proficient (SRD § Proficiency › Equipment
+        Proficiencies › Tools).
 
-        The current implementation softens this to "still attempt but
-        without proficiency bonus" rather than blocking the attempt
-        outright — that softer behavior is by design (the SRD does
-        not actually require tool proficiency to make the check; it
-        only adds proficiency bonus). This test pins the
-        consultation, not the rejection.
+        The SRD does not actually require tool proficiency to attempt
+        the check; it only adds PB / Advantage. `make_tool_check`
+        handles the "lacks proficiency" case (delegates to
+        `make_skill_check` or a plain ability check).
         """
         unlock_src = inspect.getsource(GameState.attempt_unlock)
         assert "tool_proficiency" in unlock_src, (
@@ -331,9 +334,10 @@ class TestExploration_AdventuringEquipment_ThievesTools:
             "`tool_proficiency` requirement to honor the SRD's "
             "'bypass locked doors with Thieves' Tools' clause."
         )
-        assert "tool_proficiencies" in unlock_src, (
-            "GameState.attempt_unlock must check the character's "
-            "`tool_proficiencies` list, not just the requirement."
+        assert "make_tool_check" in unlock_src, (
+            "GameState.attempt_unlock must route tool-flagged unlocks "
+            "through `Character.make_tool_check` so PB and the tool+"
+            "skill Advantage are applied per SRD."
         )
 
 
