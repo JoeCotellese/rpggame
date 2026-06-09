@@ -68,31 +68,80 @@ class TestProficiency_HeroicInspiration:
     > die immediately after rolling it, and you must use the new roll.
     """
 
-    def test_heroic_inspiration_lets_you_reroll_any_die(self) -> None:
-        pytest.skip(
-            "GAP: Heroic Inspiration is not implemented anywhere. No "
-            "`has_heroic_inspiration` flag on `Character` (dnd-engine/"
-            "dnd_engine/core/character.py:23), and `DiceRoller` "
-            "(dnd-engine/dnd_engine/core/dice.py) has no consume-to-"
-            "reroll API. Tracked by issue #478."
+    def test_heroic_inspiration_lets_you_reroll_any_die(
+        self, monkeypatch
+    ) -> None:
+        """A saving-throw reroll uses the new d20 result.
+
+        SRD: a character may expend Heroic Inspiration to reroll any
+        die and must use the new roll. Verified on
+        `Character.make_saving_throw` (issue #489).
+        """
+        from dnd_engine.core import character as character_module
+        from dnd_engine.systems.d20 import AdvantageState, D20Result
+
+        fighter = _make_fighter()
+        fighter.grant_heroic_inspiration()
+
+        def make_result(d20: int) -> D20Result:
+            return D20Result(
+                d20=d20,
+                total=d20 + fighter.proficiency_bonus + fighter.abilities.str_mod,
+                advantage_state=AdvantageState.NORMAL,
+                components={
+                    "ability_mod": fighter.abilities.str_mod,
+                    "proficiency": fighter.proficiency_bonus,
+                    "circumstantial": 0,
+                },
+                rolls=(d20,),
+            )
+
+        rolls = iter([make_result(2), make_result(17)])
+        monkeypatch.setattr(
+            character_module,
+            "d20_test",
+            lambda *a, **kw: next(rolls),
         )
+
+        result = fighter.make_saving_throw(
+            "str", dc=15, use_heroic_inspiration=True
+        )
+        assert result["roll"] == 17
+        assert result["heroic_inspiration_spent"] is True
+        assert fighter.has_heroic_inspiration is False
 
     def test_heroic_inspiration_cap_of_one_instance(self) -> None:
-        pytest.skip(
-            "GAP: SRD: 'You can never have more than one instance of "
-            "Heroic Inspiration. If something gives you Heroic "
-            "Inspiration and you already have it, you can give it to a "
-            "player character in your group who lacks it.' No cap-and-"
-            "transfer surface on `Character`. Tracked by issue #478."
-        )
+        """Cap of one instance; second grant signals transferable.
+
+        SRD: a character can never hold more than one instance. The
+        grant API returns False when the character already holds
+        Heroic Inspiration so the caller can offer it to another PC.
+        """
+        fighter = _make_fighter()
+        assert fighter.grant_heroic_inspiration() is True
+        assert fighter.has_heroic_inspiration is True
+        assert fighter.grant_heroic_inspiration() is False
+        assert fighter.has_heroic_inspiration is True
 
     def test_human_starts_each_day_with_heroic_inspiration(self) -> None:
-        pytest.skip(
-            "GAP: SRD: 'Human characters start each day with Heroic "
-            "Inspiration.' `races.json` defines a Human entry but no "
-            "engine code grants the flag at session start or after a "
-            "long rest. Tracked by issue #478."
-        )
+        """Long rest grants Heroic Inspiration to Humans only.
+
+        SRD: 'Human characters start each day with Heroic
+        Inspiration.' Long Rest is the engine's proxy for the day
+        boundary (issue #489). Non-human races do not get the grant.
+        """
+        human = _make_fighter()
+        human.race = "human"
+        assert human.has_heroic_inspiration is False
+        result = human.take_long_rest()
+        assert result["heroic_inspiration_granted"] is True
+        assert human.has_heroic_inspiration is True
+
+        elf = _make_fighter()
+        elf.race = "high_elf"
+        elf_result = elf.take_long_rest()
+        assert elf_result["heroic_inspiration_granted"] is False
+        assert elf.has_heroic_inspiration is False
 
 
 class TestProficiency_BonusByLevel:
