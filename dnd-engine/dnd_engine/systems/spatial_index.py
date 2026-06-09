@@ -62,14 +62,10 @@ class SpatialIndex:
         self._by_entity: dict[str, Position] = {}
         self._by_position: dict[Position, str] = {}
         self._size_by_entity: dict[str, Size] = {}
-        self._occupants_view: MappingProxyType[str, Position] = MappingProxyType(
-            self._by_entity
-        )
+        self._occupants_view: MappingProxyType[str, Position] = MappingProxyType(self._by_entity)
 
     @staticmethod
-    def footprint_tiles(
-        anchor: Position, size: Size = Size.MEDIUM
-    ) -> frozenset[Position]:
+    def footprint_tiles(anchor: Position, size: Size = Size.MEDIUM) -> frozenset[Position]:
         """Tiles a creature of ``size`` occupies when anchored at ``anchor``.
 
         The anchor is the minimum-x / minimum-y corner; the square block
@@ -80,9 +76,7 @@ class SpatialIndex:
         """
         side = size.footprint
         return frozenset(
-            Position(anchor.x + dx, anchor.y + dy)
-            for dx in range(side)
-            for dy in range(side)
+            Position(anchor.x + dx, anchor.y + dy) for dx in range(side) for dy in range(side)
         )
 
     # ------------------------------------------------------------------ #
@@ -90,7 +84,12 @@ class SpatialIndex:
     # ------------------------------------------------------------------ #
 
     def place(
-        self, entity_id: str, position: Position, size: Size = Size.MEDIUM
+        self,
+        entity_id: str,
+        position: Position,
+        size: Size = Size.MEDIUM,
+        *,
+        allow_overlap: bool = False,
     ) -> None:
         """Place a new occupant anchored at ``position``.
 
@@ -100,11 +99,19 @@ class SpatialIndex:
         anchor and the creature's size are retained so ``move`` and ``remove``
         can relocate or clear the whole footprint.
 
+        ``allow_overlap`` widens the occupancy gate: when ``True``, footprint
+        tiles already claimed by another entity are accepted (their reverse-
+        index entry is left pointing at the original occupant, so
+        ``occupant_at`` keeps resolving to the prior placer). Blocking-tile
+        and duplicate-entity rejections still apply. The default preserves
+        the original strict behavior.
+
         Raises:
             ValueError: If ``entity_id`` is already placed, or if *any* tile
                 of the footprint is blocking per ``map.is_blocking`` (this
-                also rejects footprints that spill off the map) or is already
-                occupied by another entity.
+                also rejects footprints that spill off the map) or — unless
+                ``allow_overlap`` is True — is already occupied by another
+                entity.
         """
         if entity_id in self._by_entity:
             raise ValueError(f"entity {entity_id!r} is already placed")
@@ -113,16 +120,24 @@ class SpatialIndex:
             if self._map.is_blocking(tile.x, tile.y):
                 raise ValueError(f"footprint tile {tile!r} is blocking")
             occupant = self._by_position.get(tile)
-            if occupant is not None:
-                raise ValueError(
-                    f"footprint tile {tile!r} is occupied by {occupant!r}"
-                )
+            if occupant is not None and not allow_overlap:
+                raise ValueError(f"footprint tile {tile!r} is occupied by {occupant!r}")
         self._by_entity[entity_id] = position
         self._size_by_entity[entity_id] = size
         for tile in tiles:
-            self._by_position[tile] = entity_id
+            # When overlapping, leave the original occupant's reverse entry
+            # in place so ``occupant_at`` keeps resolving to the prior
+            # placer; the new entity's anchor still lives in ``_by_entity``.
+            if tile not in self._by_position:
+                self._by_position[tile] = entity_id
 
-    def move(self, entity_id: str, position: Position) -> None:
+    def move(
+        self,
+        entity_id: str,
+        position: Position,
+        *,
+        allow_overlap: bool = False,
+    ) -> None:
         """Move an existing occupant so its footprint is anchored at ``position``.
 
         The creature's size is preserved from ``place``; the whole footprint
@@ -131,10 +146,17 @@ class SpatialIndex:
         Large creature may slide into a position whose new block overlaps its
         old one.
 
+        ``allow_overlap`` widens the occupancy gate the same way it does on
+        ``place``: when ``True``, destination tiles already claimed by another
+        entity are accepted (the prior occupant's reverse entry is preserved
+        so ``occupant_at`` keeps resolving to them). Blocking-tile rejections
+        still apply.
+
         Raises:
             KeyError: If ``entity_id`` is not currently placed.
             ValueError: If any tile of the destination footprint is blocking
-                or occupied by another entity.
+                or — unless ``allow_overlap`` is True — occupied by another
+                entity.
         """
         if entity_id not in self._by_entity:
             raise KeyError(entity_id)
@@ -148,10 +170,8 @@ class SpatialIndex:
             if self._map.is_blocking(tile.x, tile.y):
                 raise ValueError(f"footprint tile {tile!r} is blocking")
             occupant = self._by_position.get(tile)
-            if occupant is not None and occupant != entity_id:
-                raise ValueError(
-                    f"footprint tile {tile!r} is occupied by {occupant!r}"
-                )
+            if occupant is not None and occupant != entity_id and not allow_overlap:
+                raise ValueError(f"footprint tile {tile!r} is occupied by {occupant!r}")
         # Vacate the old footprint first so an overlapping new block does not
         # collide with the creature's own former tiles, then claim the new one.
         for tile in old_tiles:
@@ -159,7 +179,11 @@ class SpatialIndex:
                 del self._by_position[tile]
         self._by_entity[entity_id] = position
         for tile in new_tiles:
-            self._by_position[tile] = entity_id
+            # Skip tiles already claimed by another entity (only reachable
+            # when allow_overlap=True) so we don't clobber the prior
+            # occupant's reverse-index entry.
+            if tile not in self._by_position:
+                self._by_position[tile] = entity_id
 
     def remove(self, entity_id: str) -> None:
         """Remove a placed occupant, clearing every tile of its footprint.
@@ -176,6 +200,16 @@ class SpatialIndex:
             for tile in self.footprint_tiles(position, size):
                 if self._by_position.get(tile) == entity_id:
                     del self._by_position[tile]
+                    # If another entity is anchored such that its
+                    # footprint covers this tile (only possible after an
+                    # ``allow_overlap`` placement), rebind the reverse
+                    # entry so ``occupant_at`` keeps resolving to a
+                    # live occupant.
+                    for other_id, other_anchor in self._by_entity.items():
+                        other_size = self._size_by_entity[other_id]
+                        if tile in self.footprint_tiles(other_anchor, other_size):
+                            self._by_position[tile] = other_id
+                            break
 
     # ------------------------------------------------------------------ #
     # Queries
@@ -260,9 +294,7 @@ class SpatialIndex:
             ValueError: If ``range_feet`` is negative.
         """
         if range_feet < 0:
-            raise ValueError(
-                f"range_feet must be non-negative, got {range_feet}"
-            )
+            raise ValueError(f"range_feet must be non-negative, got {range_feet}")
         r = range_feet // 5
         return {
             Position(origin.x + dx, origin.y + dy)
@@ -301,9 +333,7 @@ class SpatialIndex:
         return True
 
 
-def _supercover_line(
-    x0: int, y0: int, x1: int, y1: int
-) -> Iterator[tuple[int, int]]:
+def _supercover_line(x0: int, y0: int, x1: int, y1: int) -> Iterator[tuple[int, int]]:
     """Supercover line traversal — yields every tile the segment from
     ``(x0, y0)`` to ``(x1, y1)`` geometrically touches, inclusive of both
     endpoints. Unlike standard Bresenham this never skips tiles the line

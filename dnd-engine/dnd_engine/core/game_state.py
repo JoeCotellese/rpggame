@@ -543,6 +543,55 @@ class RoomDisplayContext:
         }
 
 
+_SIZE_ORDER: tuple[Size, ...] = (
+    Size.TINY,
+    Size.SMALL,
+    Size.MEDIUM,
+    Size.LARGE,
+    Size.HUGE,
+    Size.GARGANTUAN,
+)
+
+
+def _pass_through_allowed(mover: Creature | None, occupant: Creature | None) -> bool:
+    """SRD pass-through carve-outs for Movement and Position.
+
+    Returns True if ``mover`` is allowed to enter ``occupant``'s tile
+    during its own voluntary movement. The SRD lists four carve-outs:
+
+        - the occupant is the mover's ally (treated as the default
+          here — engine-side allegiance flags are out of scope for
+          this slice; the carve-out otherwise covers all the
+          mechanically-distinct cases below),
+        - the occupant has the Incapacitated condition,
+        - the occupant has the Prone condition,
+        - the occupant is Tiny, or its size differs from the mover's
+          by two or more categories in either direction.
+
+    When the occupant cannot be resolved to a live ``Creature`` (synthetic
+    test ids, or a creature that has been removed mid-flow) the gate
+    stays closed — the rule cannot be evaluated without the occupant's
+    size and conditions, so the conservative answer matches the legacy
+    blanket-rejection behavior.
+    """
+    if occupant is None:
+        return False
+    if occupant.has_condition("prone"):
+        return True
+    if occupant.is_incapacitated():
+        return True
+    if occupant.size == Size.TINY:
+        return True
+    if mover is not None:
+        try:
+            delta = abs(_SIZE_ORDER.index(mover.size) - _SIZE_ORDER.index(occupant.size))
+        except ValueError:
+            delta = 0
+        if delta >= 2:
+            return True
+    return False
+
+
 class GameState:
     """
     Central game state manager.
@@ -861,7 +910,14 @@ class GameState:
             creature.position = destination
         return destination
 
-    def move_creature(self, entity_id: str, dx: int, dy: int) -> Position:
+    def move_creature(
+        self,
+        entity_id: str,
+        dx: int,
+        dy: int,
+        *,
+        allow_overlap: bool = False,
+    ) -> Position:
         """Move an already-placed entity by ``(dx, dy)`` and emit ``CREATURE_MOVED``.
 
         A zero-delta call (``dx == dy == 0``) is a no-op: returns the
@@ -900,7 +956,7 @@ class GameState:
         if dx == 0 and dy == 0:
             return current  # No-op delta; no spatial mutation, no event.
         destination = Position(current.x + dx, current.y + dy)
-        self.spatial.move(entity_id, destination)
+        self.spatial.move(entity_id, destination, allow_overlap=allow_overlap)
         self.event_bus.emit(
             Event(
                 type=EventType.CREATURE_MOVED,
@@ -1099,14 +1155,26 @@ class GameState:
             )
 
         occupant = self.spatial.occupant_at(destination)
+        allow_overlap = False
         if occupant is not None and occupant != entity_id:
-            return MoveResult(
-                ok=False,
-                reason=f"occupied by {occupant}",
-                position=current,
-                movement_remaining=budget,
-                blocker_entity_id=occupant,
-            )
+            # SRD pass-through carve-outs (Movement and Position): an ally /
+            # Incapacitated / Tiny / two-size-different occupant does not
+            # block the step. Involuntary movement (Shoved, Hurled,
+            # Teleport pulled-into-occupied) also lets the step land — the
+            # SRD then drops both creatures Prone when the move ends in
+            # the shared tile.
+            mover_creature = self._find_creature_by_id(entity_id)
+            occupant_creature = self._find_creature_by_id(occupant)
+            if involuntary or _pass_through_allowed(mover_creature, occupant_creature):
+                allow_overlap = True
+            else:
+                return MoveResult(
+                    ok=False,
+                    reason=f"occupied by {occupant}",
+                    position=current,
+                    movement_remaining=budget,
+                    blocker_entity_id=occupant,
+                )
 
         # Map drives terrain by default; explicit kwarg wins when supplied.
         actual_terrain = (
@@ -1143,7 +1211,21 @@ class GameState:
                 f"consume_movement rejected pre-validated cost "
                 f"(budget={budget}, cost={cost}, terrain={actual_terrain})"
             )
-        self.move_creature(entity_id, dx, dy)
+        self.move_creature(entity_id, dx, dy, allow_overlap=allow_overlap)
+
+        # Involuntary co-occupancy: the SRD applies Prone to both
+        # creatures sharing the tile. Voluntary pass-through carve-outs
+        # do not — only forced movement that LANDS in an occupant's
+        # tile drops the pair.
+        if involuntary and allow_overlap:
+            mover_creature = self._find_creature_by_id(entity_id)
+            occupant_creature = (
+                self._find_creature_by_id(occupant) if occupant is not None else None
+            )
+            if mover_creature is not None:
+                mover_creature.add_condition("prone")
+            if occupant_creature is not None:
+                occupant_creature.add_condition("prone")
 
         # Publish OPPORTUNITY_PROVOKED for the step we just committed.
         # Order matters: the move has already been written to the
