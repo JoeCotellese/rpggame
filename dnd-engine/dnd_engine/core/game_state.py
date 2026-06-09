@@ -3852,7 +3852,11 @@ class GameState:
 
         return desc
 
-    def get_effective_ac(self, creature: "Creature") -> int:
+    def get_effective_ac(
+        self,
+        creature: "Creature",
+        cover: "Cover | None" = None,
+    ) -> int:
         """
         Calculate effective AC including base AC and active effect modifiers.
 
@@ -3864,6 +3868,13 @@ class GameState:
            formula is selected, this is the stored `_base_ac` (armor or
            natural-armor default).
         2. AC bonus effects (Shield, Haste) — all stack on top.
+        3. Per-attack cover bonus (Half: +2, Three-Quarters: +5). Cover
+           is a property of the *attack's geometry*, not the defender's
+           persistent state, so it is supplied per call by the caller
+           (which computes line-of-sight). Total cover contributes no
+           AC bonus — a target behind total cover cannot be targeted
+           and the attack is short-circuited by `resolve_attack` before
+           AC is consulted.
 
         Spells that previously set the base AC via a `modifier_type:
         "ac_set_base"` active-effect entry are now expected to migrate
@@ -3877,11 +3888,19 @@ class GameState:
 
         Args:
             creature: Creature to calculate AC for
+            cover: SRD cover degree applied to *this* AC query (default
+                `Cover.NONE`). Half / Three-Quarters bump the result by
+                +2 / +5; Total contributes 0 (total-cover targets are
+                rejected before AC is read).
 
         Returns:
             Effective AC after applying all modifiers
         """
+        from dnd_engine.core.creature import Cover
         from dnd_engine.systems.time_manager import ModifierType
+
+        if cover is None:
+            cover = Cover.NONE
 
         # Use get_base_ac() so an active alternate base-AC formula (per
         # SRD "Only One Base AC") feeds into the layered-modifier stack.
@@ -3905,6 +3924,11 @@ class GameState:
             if modifier_type == ModifierType.AC_BONUS.value:
                 # Bonuses stack (Shield: +5, Haste: +2, etc.)
                 final_ac += effect_data.get("value", 0)
+
+        # SRD § Cover: per-attack AC bonus from the resolved cover
+        # degree (geometry computed by the caller). No-op when the
+        # caller didn't supply a cover state.
+        final_ac += cover.ac_bonus
 
         return final_ac
 
@@ -4185,9 +4209,7 @@ class GameState:
                 group_order.append(enemy.name)
             groups[enemy.name].append(enemy)
         for name in group_order:
-            self.initiative_tracker.add_combatant_group(
-                groups[name], surprised=enemies_surprised
-            )
+            self.initiative_tracker.add_combatant_group(groups[name], surprised=enemies_surprised)
 
         # Emit surprise round event if either side is surprised
         if surprise_result["enemies_surprised"] or surprise_result["party_surprised"]:
