@@ -190,33 +190,119 @@ class TestHeroicInspiration:
     """
 
     def test_character_carries_heroic_inspiration_state(self):
-        pytest.skip(
-            "GAP: Heroic Inspiration is not implemented. No "
-            "`heroic_inspiration` field on `Character` "
-            "(dnd-engine/dnd_engine/core/character.py:35-127). "
-            "`dnd_engine/systems/resources.py` manages spell slots, "
-            "ki, rage uses, and bardic inspiration — Heroic "
-            "Inspiration is absent. Tracked by issue #489."
+        """`Character.heroic_inspiration` is a one-shot flag.
+
+        Fresh characters do not hold Heroic Inspiration. The
+        `grant_heroic_inspiration` / `spend_heroic_inspiration`
+        helpers (dnd-engine/dnd_engine/core/character.py) and the
+        `has_heroic_inspiration` property gate the reroll path.
+        """
+        fighter = _make_fighter()
+        assert fighter.has_heroic_inspiration is False
+        assert fighter.grant_heroic_inspiration() is True
+        assert fighter.has_heroic_inspiration is True
+        assert fighter.spend_heroic_inspiration() is True
+        assert fighter.has_heroic_inspiration is False
+
+    def test_heroic_inspiration_can_be_spent_to_reroll_d20(self, monkeypatch):
+        """The d20-test surface reroll uses the new roll, per SRD.
+
+        With Heroic Inspiration held, a `make_skill_check` opting in
+        via `use_heroic_inspiration=True` rerolls the d20 once and
+        keeps the new result (not the better of the two).
+        """
+        from dnd_engine.core import character as character_module
+        from dnd_engine.systems.d20 import AdvantageState, D20Result
+
+        fighter = _make_fighter()
+        fighter.grant_heroic_inspiration()
+
+        rolls = iter([
+            D20Result(
+                d20=3,
+                total=3 + fighter.proficiency_bonus + fighter.abilities.str_mod,
+                advantage_state=AdvantageState.NORMAL,
+                components={
+                    "ability_mod": fighter.abilities.str_mod,
+                    "proficiency": fighter.proficiency_bonus,
+                    "circumstantial": 0,
+                },
+                rolls=(3,),
+            ),
+            D20Result(
+                d20=18,
+                total=18 + fighter.proficiency_bonus + fighter.abilities.str_mod,
+                advantage_state=AdvantageState.NORMAL,
+                components={
+                    "ability_mod": fighter.abilities.str_mod,
+                    "proficiency": fighter.proficiency_bonus,
+                    "circumstantial": 0,
+                },
+                rolls=(18,),
+            ),
+        ])
+        monkeypatch.setattr(
+            character_module,
+            "d20_test",
+            lambda *a, **kw: next(rolls),
         )
 
-    def test_heroic_inspiration_can_be_spent_to_reroll_d20(self):
-        pytest.skip(
-            "GAP: no hook on `make_skill_check` / `make_saving_throw` "
-            "/ `resolve_attack` to spend Heroic Inspiration for a "
-            "reroll. The dice roller's advantage path "
-            "(dnd-engine/dnd_engine/core/dice.py:111-113) is the "
-            "closest mechanic but it picks max(d1,d2) — Heroic "
-            "Inspiration picks *either* die, which is different. "
-            "Tracked by issue #489."
+        skills_data = {"athletics": {"ability": "str"}}
+        result = fighter.make_skill_check(
+            "athletics", dc=15, skills_data=skills_data,
+            use_heroic_inspiration=True,
         )
 
-    def test_heroic_inspiration_is_consumed_on_use(self):
-        pytest.skip(
-            "GAP: depends on the field existing. The SRD rule is that "
-            "Heroic Inspiration is a one-shot per character — once "
-            "spent it's gone until granted again. Tracked by issue "
-            "#489."
+        # SRD: "must use the new roll" — second roll wins, not max.
+        assert result["roll"] == 18
+        assert result["heroic_inspiration_spent"] is True
+
+    def test_heroic_inspiration_is_consumed_on_use(self, monkeypatch):
+        """Spending Heroic Inspiration clears the flag.
+
+        A second check with `use_heroic_inspiration=True` after the
+        flag is consumed does not reroll and reports no spend.
+        """
+        from dnd_engine.core import character as character_module
+        from dnd_engine.systems.d20 import AdvantageState, D20Result
+
+        fighter = _make_fighter()
+        fighter.grant_heroic_inspiration()
+
+        def make_result(d20: int) -> D20Result:
+            return D20Result(
+                d20=d20,
+                total=d20 + fighter.proficiency_bonus + fighter.abilities.str_mod,
+                advantage_state=AdvantageState.NORMAL,
+                components={
+                    "ability_mod": fighter.abilities.str_mod,
+                    "proficiency": fighter.proficiency_bonus,
+                    "circumstantial": 0,
+                },
+                rolls=(d20,),
+            )
+
+        rolls = iter([make_result(1), make_result(20), make_result(5)])
+        monkeypatch.setattr(
+            character_module,
+            "d20_test",
+            lambda *a, **kw: next(rolls),
         )
+
+        skills_data = {"athletics": {"ability": "str"}}
+        first = fighter.make_skill_check(
+            "athletics", dc=15, skills_data=skills_data,
+            use_heroic_inspiration=True,
+        )
+        assert first["heroic_inspiration_spent"] is True
+        assert fighter.has_heroic_inspiration is False
+
+        second = fighter.make_skill_check(
+            "athletics", dc=15, skills_data=skills_data,
+            use_heroic_inspiration=True,
+        )
+        assert second["heroic_inspiration_spent"] is False
+        assert second["roll"] == 5
 
 
 class TestSurfaceParity_NotPropagatedOnCreature:

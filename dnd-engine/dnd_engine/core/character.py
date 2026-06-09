@@ -174,6 +174,84 @@ class Character(Creature):
         # Darkvision range in feet (0 if no darkvision)
         self.darkvision_range: int = 0
 
+        # SRD § Playing the Game › Heroic Inspiration: a one-shot
+        # reroll any d20; capped at 1 instance per character. Humans
+        # start each day with it (granted on long rest).
+        self.heroic_inspiration: bool = False
+
+    @property
+    def has_heroic_inspiration(self) -> bool:
+        """Return whether the character currently holds Heroic Inspiration."""
+        return self.heroic_inspiration
+
+    def grant_heroic_inspiration(self) -> bool:
+        """
+        Grant Heroic Inspiration to this character.
+
+        SRD § Playing the Game › Heroic Inspiration: a character can
+        never have more than one instance. If something would grant
+        it while the character already has it, the caller is expected
+        to offer the instance to a teammate who lacks it.
+
+        Returns:
+            True if Heroic Inspiration was granted. False if the
+            character already had it (cap of one) — the caller may
+            offer it to another PC.
+        """
+        if self.heroic_inspiration:
+            return False
+        self.heroic_inspiration = True
+        return True
+
+    def spend_heroic_inspiration(self) -> bool:
+        """
+        Consume the held Heroic Inspiration.
+
+        Returns:
+            True if Heroic Inspiration was held and is now spent.
+            False if the character did not have any to spend.
+        """
+        if not self.heroic_inspiration:
+            return False
+        self.heroic_inspiration = False
+        return True
+
+    def _maybe_reroll_d20_for_heroic_inspiration(
+        self,
+        result,
+        use_heroic_inspiration: bool,
+        **d20_kwargs,
+    ):
+        """
+        Spend Heroic Inspiration to reroll the d20 immediately after
+        the initial roll, returning the new roll.
+
+        SRD: "If you have Heroic Inspiration, you can expend it to
+        reroll any die immediately after rolling it, and you must
+        use the new roll." Consumed only when the character actually
+        had Heroic Inspiration and the caller opted in.
+
+        Args:
+            result: The initial :class:`D20Result` to potentially replace.
+            use_heroic_inspiration: Caller intent to spend.
+            **d20_kwargs: Keyword args forwarded to a fresh
+                :func:`d20_test` invocation for the reroll. Must
+                match the original roll's conditions so the reroll
+                is mechanically identical (same ability mod,
+                proficiency, advantage state, circumstantial bonus).
+
+        Returns:
+            Tuple of ``(result, spent)`` where ``result`` is the new
+            :class:`D20Result` if a reroll occurred, otherwise the
+            original; ``spent`` is True iff the inspiration was
+            consumed.
+        """
+        if not use_heroic_inspiration or not self.heroic_inspiration:
+            return result, False
+        new_result = d20_test(roller=self._dice_roller, **d20_kwargs)
+        self.heroic_inspiration = False
+        return new_result, True
+
     @property
     def proficiency_bonus(self) -> int:
         """
@@ -289,6 +367,7 @@ class Character(Creature):
         advantage: bool = False,
         disadvantage: bool = False,
         circumstantial: int = 0,
+        use_heroic_inspiration: bool = False,
         event_bus=None,
     ) -> dict[str, Any]:
         """
@@ -365,13 +444,19 @@ class Character(Creature):
         # preserves that — the primitive defaults to a fresh roller.
         # `Abilities` exposes modifier attrs by short name (`str_mod`,
         # `dex_mod`, …), so look up by `ability_short`.
-        result = d20_test(
-            ability_mod=getattr(self.abilities, f"{ability_short}_mod"),
-            proficient=ability_short in self.saving_throw_proficiencies,
-            proficiency_bonus=self.proficiency_bonus,
-            advantage=advantage,
-            disadvantage=disadvantage,
-            circumstantial=circumstantial,
+        d20_kwargs = {
+            "ability_mod": getattr(self.abilities, f"{ability_short}_mod"),
+            "proficient": ability_short in self.saving_throw_proficiencies,
+            "proficiency_bonus": self.proficiency_bonus,
+            "advantage": advantage,
+            "disadvantage": disadvantage,
+            "circumstantial": circumstantial,
+        }
+        result = d20_test(**d20_kwargs)
+        result, heroic_inspiration_spent = (
+            self._maybe_reroll_d20_for_heroic_inspiration(
+                result, use_heroic_inspiration, **d20_kwargs
+            )
         )
 
         success = result.succeeds_against(dc)
@@ -384,6 +469,7 @@ class Character(Creature):
             "dc": dc,
             "ability": ability_short,
             "circumstantial": circumstantial,
+            "heroic_inspiration_spent": heroic_inspiration_spent,
         }
 
         # Emit event if event bus is provided
@@ -908,6 +994,7 @@ class Character(Creature):
         advantage: bool = False,
         disadvantage: bool = False,
         circumstantial: int = 0,
+        use_heroic_inspiration: bool = False,
         event_bus=None,
     ) -> dict[str, Any]:
         """
@@ -961,12 +1048,17 @@ class Character(Creature):
 
         ability_mod = getattr(self.abilities, f"{ability_short}_mod")
 
-        result = d20_test(
-            ability_mod=ability_mod,
-            advantage=advantage,
-            disadvantage=disadvantage,
-            circumstantial=circumstantial,
-            roller=self._dice_roller,
+        d20_kwargs = {
+            "ability_mod": ability_mod,
+            "advantage": advantage,
+            "disadvantage": disadvantage,
+            "circumstantial": circumstantial,
+        }
+        result = d20_test(**d20_kwargs, roller=self._dice_roller)
+        result, heroic_inspiration_spent = (
+            self._maybe_reroll_d20_for_heroic_inspiration(
+                result, use_heroic_inspiration, **d20_kwargs
+            )
         )
 
         success = result.succeeds_against(dc)
@@ -978,6 +1070,7 @@ class Character(Creature):
             "dc": dc,
             "ability": ability_short,
             "circumstantial": circumstantial,
+            "heroic_inspiration_spent": heroic_inspiration_spent,
         }
 
         if event_bus is not None:
@@ -998,6 +1091,7 @@ class Character(Creature):
         advantage: bool = False,
         disadvantage: bool = False,
         circumstantial: int = 0,
+        use_heroic_inspiration: bool = False,
     ) -> dict:
         """
         Roll a skill check against a difficulty class (DC).
@@ -1045,15 +1139,20 @@ class Character(Creature):
             advantage = True
             self.pending_help_from = None
 
-        result = d20_test(
-            ability_mod=getattr(self.abilities, f"{ability_key}_mod"),
-            proficient=proficient,
-            proficiency_bonus=self.proficiency_bonus,
-            expertise=skill in self.expertise_skills,
-            advantage=advantage,
-            disadvantage=disadvantage,
-            circumstantial=circumstantial,
-            roller=self._dice_roller,
+        d20_kwargs = {
+            "ability_mod": getattr(self.abilities, f"{ability_key}_mod"),
+            "proficient": proficient,
+            "proficiency_bonus": self.proficiency_bonus,
+            "expertise": skill in self.expertise_skills,
+            "advantage": advantage,
+            "disadvantage": disadvantage,
+            "circumstantial": circumstantial,
+        }
+        result = d20_test(**d20_kwargs, roller=self._dice_roller)
+        result, heroic_inspiration_spent = (
+            self._maybe_reroll_d20_for_heroic_inspiration(
+                result, use_heroic_inspiration, **d20_kwargs
+            )
         )
 
         return {
@@ -1066,6 +1165,7 @@ class Character(Creature):
             "success": result.succeeds_against(dc),
             "proficient": proficient,
             "circumstantial": circumstantial,
+            "heroic_inspiration_spent": heroic_inspiration_spent,
         }
 
     def make_tool_check(
@@ -1079,6 +1179,7 @@ class Character(Creature):
         advantage: bool = False,
         disadvantage: bool = False,
         circumstantial: int = 0,
+        use_heroic_inspiration: bool = False,
     ) -> dict:
         """
         Roll an ability check that involves a tool.
@@ -1157,6 +1258,7 @@ class Character(Creature):
                 advantage=advantage,
                 disadvantage=disadvantage,
                 circumstantial=circumstantial,
+                use_heroic_inspiration=use_heroic_inspiration,
             )
             return {
                 "tool": tool_id,
@@ -1171,6 +1273,9 @@ class Character(Creature):
                 "skill_proficient": True,
                 "advantage_from_tool_skill": False,
                 "circumstantial": circumstantial,
+                "heroic_inspiration_spent": result.get(
+                    "heroic_inspiration_spent", False
+                ),
             }
 
         if skill is not None:
@@ -1202,14 +1307,19 @@ class Character(Creature):
         ability_mod = getattr(self.abilities, f"{ability_short}_mod")
         auto_advantage = tool_proficient and skill_proficient
 
-        result = d20_test(
-            ability_mod=ability_mod,
-            proficient=tool_proficient,
-            proficiency_bonus=self.proficiency_bonus,
-            advantage=advantage or auto_advantage,
-            disadvantage=disadvantage,
-            circumstantial=circumstantial,
-            roller=self._dice_roller,
+        d20_kwargs = {
+            "ability_mod": ability_mod,
+            "proficient": tool_proficient,
+            "proficiency_bonus": self.proficiency_bonus,
+            "advantage": advantage or auto_advantage,
+            "disadvantage": disadvantage,
+            "circumstantial": circumstantial,
+        }
+        result = d20_test(**d20_kwargs, roller=self._dice_roller)
+        result, heroic_inspiration_spent = (
+            self._maybe_reroll_d20_for_heroic_inspiration(
+                result, use_heroic_inspiration, **d20_kwargs
+            )
         )
 
         modifier = ability_mod + (
@@ -1229,6 +1339,7 @@ class Character(Creature):
             "skill_proficient": skill_proficient,
             "advantage_from_tool_skill": auto_advantage,
             "circumstantial": circumstantial,
+            "heroic_inspiration_spent": heroic_inspiration_spent,
         }
 
     def get_sneak_attack_dice(self) -> str | None:
@@ -1815,6 +1926,13 @@ class Character(Creature):
         prepared_caster_classes = {CharacterClass.WIZARD, CharacterClass.CLERIC}
         can_prepare = self.character_class in prepared_caster_classes and not character_is_dead
 
+        # SRD § Heroic Inspiration: "Human characters start each day
+        # with Heroic Inspiration." Long Rest is the engine's proxy
+        # for the day boundary; dead characters do not benefit.
+        heroic_inspiration_granted = False
+        if not character_is_dead and self.race.lower() == "human":
+            heroic_inspiration_granted = self.grant_heroic_inspiration()
+
         return {
             "character": self.name,
             "rest_type": "long",
@@ -1822,6 +1940,7 @@ class Character(Creature):
             "resources_recovered": resources_recovered,
             "can_prepare_spells": can_prepare,
             "conditions_removed": conditions_removed,
+            "heroic_inspiration_granted": heroic_inspiration_granted,
         }
 
     @property
