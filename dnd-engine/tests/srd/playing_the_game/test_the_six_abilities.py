@@ -213,32 +213,73 @@ class TestSixAbilities_ScoreRange:
     > have a score as high as 30.
     """
 
-    def test_score_floor_of_one_is_not_enforced_at_construction(self) -> None:
-        pytest.skip(
-            "GAP: `Abilities` (dnd-engine/dnd_engine/core/creature.py:"
-            "10-24) is a plain dataclass with no `__post_init__` "
-            "validation. Constructing `Abilities(strength=0, ...)` "
-            "succeeds, violating the SRD floor of 1. Tracked by "
-            "issue #486."
-        )
+    def test_score_floor_of_one_is_enforced_at_construction(self) -> None:
+        """`Abilities(strength=0, ...)` raises ``ValueError``.
 
-    def test_adventurer_score_cap_of_20_is_not_enforced(self) -> None:
-        pytest.skip(
-            "GAP: SRD pins a soft cap of 20 for adventurers (player "
-            "characters), with 21-30 reserved for extraordinary "
-            "creatures (typically monsters). `Character.__init__` "
-            "(dnd-engine/dnd_engine/core/character.py:35) accepts any "
-            "`Abilities` instance without checking whether a feature "
-            "permits exceeding 20. Tracked by issue #486."
-        )
+        SRD pins the floor at 1; a score of 0 is only reachable
+        transiently via :meth:`Abilities.reduce_score`, never at
+        construction. Source-level binding at
+        dnd-engine/dnd_engine/core/creature.py — `Abilities.__post_init__`.
+        """
+        with pytest.raises(ValueError, match="strength=0"):
+            Abilities(
+                strength=0,
+                dexterity=10,
+                constitution=10,
+                intelligence=10,
+                wisdom=10,
+                charisma=10,
+            )
 
-    def test_hard_score_cap_of_30_is_not_enforced(self) -> None:
-        pytest.skip(
-            "GAP: SRD pins an absolute ceiling of 30 for any creature. "
-            "`Abilities` (dnd-engine/dnd_engine/core/creature.py:10-24) "
-            "does not validate this — `Abilities(strength=99, ...)` "
-            "succeeds silently. Tracked by issue #486."
+    def test_adventurer_score_cap_of_20_is_enforced(self) -> None:
+        """`Abilities.for_adventurer(..., strength=21)` raises by default.
+
+        SRD pins a soft cap of 20 for adventurers (player characters),
+        with 21-30 reserved for extraordinary creatures or feature-gated
+        edge cases. :meth:`Abilities.for_adventurer` enforces the 20
+        ceiling unless the caller passes
+        ``features_allowing_above_20`` naming the feature that permits
+        the higher value.
+        """
+        with pytest.raises(ValueError, match="adventurer cap"):
+            Abilities.for_adventurer(
+                strength=21,
+                dexterity=10,
+                constitution=10,
+                intelligence=10,
+                wisdom=10,
+                charisma=10,
+            )
+
+        # Feature override permits exceeding 20 (still bounded by the
+        # absolute [1, 30] ceiling from __post_init__).
+        abilities = Abilities.for_adventurer(
+            strength=22,
+            dexterity=10,
+            constitution=10,
+            intelligence=10,
+            wisdom=10,
+            charisma=10,
+            features_allowing_above_20=("Manual of Gainful Exercise",),
         )
+        assert abilities.strength == 22
+
+    def test_hard_score_cap_of_30_is_enforced(self) -> None:
+        """`Abilities(strength=31, ...)` raises ``ValueError``.
+
+        SRD pins an absolute ceiling of 30 for any creature.
+        Source-level binding at
+        dnd-engine/dnd_engine/core/creature.py — `Abilities.__post_init__`.
+        """
+        with pytest.raises(ValueError, match="strength=31"):
+            Abilities(
+                strength=31,
+                dexterity=10,
+                constitution=10,
+                intelligence=10,
+                wisdom=10,
+                charisma=10,
+            )
 
     def test_monster_ability_scores_are_within_one_to_thirty(self) -> None:
         """Catalog parity: every monster's ability scores are in [1, 30].
@@ -271,15 +312,42 @@ class TestSixAbilities_ScoreReducedToZero:
     > happens.
     """
 
-    def test_no_general_zero_reduction_pathway_exists(self) -> None:
-        pytest.skip(
-            "GAP: no engine code path lets an effect 'reduce a score "
-            "to 0' — `Abilities` (dnd-engine/dnd_engine/core/creature.py:"
-            "10-24) has no mutator API at all; scores are set once at "
-            "construction. The SRD requires that the *effect* explain "
-            "the consequences, which presupposes the mutator exists. "
-            "Tracked by issue #486."
+    def test_reduce_score_mutator_requires_a_named_source(self) -> None:
+        """`Abilities.reduce_score` requires a non-empty ``source``.
+
+        The SRD requires that any effect reducing a score to 0 *explain*
+        the consequences. :meth:`Abilities.reduce_score` enforces that by
+        refusing to mutate unless the caller names the effect, so a
+        score cannot be driven to 0 anonymously. The score floors at 0
+        rather than going negative.
+        """
+        abilities = Abilities(
+            strength=10,
+            dexterity=10,
+            constitution=10,
+            intelligence=10,
+            wisdom=10,
+            charisma=10,
         )
+
+        # Anonymous reduction is rejected.
+        with pytest.raises(ValueError, match="non-empty `source`"):
+            abilities.reduce_score("strength", 5, source="")
+        assert abilities.strength == 10  # unchanged
+
+        # Named reduction is allowed and floors at 0 (not negative).
+        abilities.reduce_score(
+            "strength", amount=15, source="Shadow strength drain"
+        )
+        assert abilities.strength == 0
+
+        # Reduction by 0 with a named source is a no-op (but still requires source).
+        abilities.reduce_score("dexterity", 0, source="Slow spell")
+        assert abilities.dexterity == 10
+
+        # Unknown ability names are rejected.
+        with pytest.raises(ValueError, match="Unknown ability"):
+            abilities.reduce_score("luck", 1, source="Anything")
 
 
 class TestSixAbilities_Modifiers:
