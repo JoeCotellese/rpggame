@@ -385,14 +385,24 @@ class TestStep6_TargetNumber:
         assert hasattr(result, "attack_roll")
 
     def test_typical_difficulty_class_ladder_is_documented(self):
-        pytest.skip(
-            "GAP: the SRD's Typical Difficulty Classes ladder (Very "
-            "easy 5 / Easy 10 / Medium 15 / Hard 20 / Very hard 25 / "
-            "Nearly impossible 30) is not exposed as a named enum or "
-            "constant. DCs are scattered as integer literals in "
-            "conditions.json, scenario YAMLs, and spells.json. No "
-            "central reference exists. Tracked by issue #491."
-        )
+        """`DC` enum exposes the SRD's Typical Difficulty Classes ladder.
+
+        SRD § Playing the Game › D20 Tests › Typical Difficulty Classes
+        (docs/srd/playing-the-game/d20-tests.md lines 731-865) names
+        Very easy 5 / Easy 10 / Medium 15 / Hard 20 / Very hard 25 /
+        Nearly impossible 30. `dnd_engine.core.constants.DC` is the
+        importable enum that surfaces these values for callers.
+        """
+        from dnd_engine.core.constants import DC
+
+        assert DC.VERY_EASY == 5
+        assert DC.EASY == 10
+        assert DC.MEDIUM == 15
+        assert DC.HARD == 20
+        assert DC.VERY_HARD == 25
+        assert DC.NEARLY_IMPOSSIBLE == 30
+        # IntEnum: members usable wherever an int DC is expected.
+        assert int(DC.MEDIUM) == 15
 
 
 class TestKinds_AbilityCheckExamples:
