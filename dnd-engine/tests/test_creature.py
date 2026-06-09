@@ -220,7 +220,13 @@ class TestCreature:
         assert creature.can_take_actions() is False
 
     def test_can_take_actions_with_various_conditions(self):
-        """Test incapacitating vs non-incapacitating conditions"""
+        """Test incapacitating vs non-incapacitating conditions.
+
+        Per SRD 2024 § Order of Combat › Initiative, "Surprised" is
+        not a turn-skipping condition — it is consumed as
+        Disadvantage on the Initiative roll itself — so it does NOT
+        appear in the incapacitating list.
+        """
         creature = Creature(name="Fighter", max_hp=20, ac=16, abilities=self.abilities)
 
         # Non-incapacitating conditions
@@ -232,7 +238,7 @@ class TestCreature:
         assert creature.can_take_actions() is True
 
         # Incapacitating conditions
-        incapacitating = ["paralyzed", "stunned", "unconscious", "petrified", "surprised"]
+        incapacitating = ["paralyzed", "stunned", "unconscious", "petrified"]
         for condition in incapacitating:
             creature.remove_condition("poisoned")
             creature.add_condition(condition)
@@ -367,24 +373,22 @@ class TestCreature:
                     == initial_duration
                 )
 
-    def test_process_end_of_turn_removes_surprised(self):
-        """Test that surprised condition is automatically removed at end of turn"""
+    def test_surprise_is_not_modeled_as_a_turn_skipping_condition(self):
+        """Per SRD 2024, surprise does not gate the creature's first turn.
+
+        The 2024 SRD demotes "Surprised" from a turn-skipping condition
+        to "Disadvantage on the Initiative roll." The engine therefore
+        consumes the state at roll time
+        (``InitiativeTracker.add_combatant(creature, surprised=True)``)
+        and never persists a ``'surprised'`` flag on the creature. A
+        creature that happens to have a stray ``'surprised'`` key in
+        its conditions dict can still take actions — the key is
+        decorative, not action-gating.
+        """
         creature = Creature(name="Fighter", max_hp=20, ac=16, abilities=self.abilities)
-
-        # Add surprised condition
+        # Even when explicitly set, surprised does not block actions.
         creature.add_condition("surprised")
-        assert creature.has_condition("surprised")
-        assert creature.can_take_actions() is False
-
-        # Process end of turn
-        results = creature.process_end_of_turn_conditions()
-
-        # Surprised should be removed
-        assert not creature.has_condition("surprised")
         assert creature.can_take_actions() is True
-        assert len(results) == 1
-        assert results[0]["type"] == "condition_expired"
-        assert results[0]["condition"] == "surprised"
 
     def test_conditions_backward_compatibility(self):
         """Test that conditions property returns set of condition names"""

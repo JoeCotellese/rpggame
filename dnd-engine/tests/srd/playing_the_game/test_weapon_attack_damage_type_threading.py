@@ -163,7 +163,7 @@ def _run_opportunity_attack(data_loader, *, resistances=None):
         dungeon_name="test_dungeon",
         event_bus=EventBus(),
         data_loader=data_loader,
-        dice_roller=DiceRoller(seed=1),
+        dice_roller=DiceRoller(seed=2),
     )
     gs.bootstrap_spatial(_floor_map())
     goblin = gs.data_loader.create_monster("goblin")

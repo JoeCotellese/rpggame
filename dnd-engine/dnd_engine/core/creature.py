@@ -682,14 +682,19 @@ class Creature:
 
     def can_take_actions(self) -> bool:
         """
-        Check if creature can take actions (not incapacitated or surprised).
+        Check if creature can take actions (not incapacitated).
 
-        Incapacitating conditions: paralyzed, stunned, unconscious, petrified, surprised
+        Incapacitating conditions: paralyzed, stunned, unconscious, petrified.
+
+        Per SRD 2024 § Order of Combat › Initiative, "Surprised" is no
+        longer a turn-skipping condition; it is consumed at roll time
+        as Disadvantage on the Initiative roll. See
+        ``InitiativeTracker.add_combatant``.
 
         Returns:
             True if creature can act
         """
-        incapacitating = ["paralyzed", "stunned", "unconscious", "petrified", "surprised"]
+        incapacitating = ["paralyzed", "stunned", "unconscious", "petrified"]
         return not any(cond in self.active_conditions for cond in incapacitating)
 
     def is_incapacitated(self) -> bool:
@@ -725,11 +730,6 @@ class Creature:
             List of dicts describing save results and expired conditions
         """
         results = []
-
-        # Surprised condition always ends at end of turn
-        if "surprised" in self.active_conditions:
-            self.remove_condition("surprised")
-            results.append({"type": "condition_expired", "condition": "surprised"})
 
         for condition_name, metadata in list(self.active_conditions.items()):
             # Process repeat saves if allowed

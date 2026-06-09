@@ -181,12 +181,20 @@ class TestSurpriseChecks:
 
 
 class TestSurprisedCondition:
-    """Test surprised condition application and handling."""
+    """Surprise no longer applies a condition — it's consumed at roll time.
 
-    def test_combat_start_applies_surprised_to_enemies(self, game_state, monkeypatch):
-        """Surprised enemies should get the surprised condition."""
+    Per SRD 2024 § Order of Combat › Initiative, a surprised
+    combatant has Disadvantage on their Initiative roll and nothing
+    else. ``_start_combat`` flows that disadvantage into
+    ``InitiativeTracker.add_combatant(..., surprised=True)`` and
+    does NOT apply a ``'surprised'`` condition to the creature.
+    """
 
-        # Mock successful stealth
+    def test_combat_start_does_not_apply_surprised_condition(
+        self, game_state, monkeypatch
+    ):
+        """Even when enemies are surprised, no condition is set."""
+
         def mock_make_skill_check(self, skill, dc, skills_data, **kwargs):
             return {
                 "skill": skill,
@@ -203,9 +211,9 @@ class TestSurprisedCondition:
         game_state.active_enemies = [game_state.data_loader.create_monster("goblin")]
         game_state._start_combat()
 
-        # Enemies should have surprised condition
+        # Per 2024 SRD, no condition is applied to surprised enemies.
         for enemy in game_state.active_enemies:
-            assert "surprised" in enemy.conditions
+            assert "surprised" not in enemy.conditions
 
     def test_combat_start_no_surprise_no_condition(self, game_state, monkeypatch):
         """If no surprise, creatures should not have surprised condition."""

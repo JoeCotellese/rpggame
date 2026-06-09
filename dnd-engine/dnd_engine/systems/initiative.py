@@ -46,10 +46,14 @@ class InitiativeTracker:
     """
     Manages initiative order and turn tracking for combat.
 
-    D&D 5E initiative rules:
+    D&D 5E 2024 SRD initiative rules:
     - Each combatant rolls 1d20 + DEX modifier
+    - A surprised combatant rolls with Disadvantage on the d20
+    - A group of identical creatures uses a single shared roll
     - Combatants act in order from highest to lowest initiative
-    - Ties are broken by DEX modifier (higher goes first)
+    - Ties are resolved side-by-side (PCs precede non-PCs); the GM
+      decides intra-side order. The engine preserves insertion order
+      for stable behavior within a side.
     - Turn order cycles through all combatants
     - Round increments when all combatants have acted
     """
@@ -79,20 +83,29 @@ class InitiativeTracker:
         # of its handler, then resume the interrupted turn.
         self._pause_stack: list[int] = []
 
-    def add_combatant(self, creature: Creature) -> InitiativeEntry:
+    def add_combatant(
+        self, creature: Creature, surprised: bool = False
+    ) -> InitiativeEntry:
         """
         Add a combatant and roll their initiative.
+
+        Per SRD 2024 § Order of Combat › Initiative: a surprised
+        combatant rolls with Disadvantage on their Initiative roll
+        (no other action-economy penalty). The surprised state is
+        consumed by the roll itself — it does not persist on the
+        creature as a condition.
 
         Automatically sorts the initiative order after adding.
 
         Args:
             creature: The creature to add to initiative
+            surprised: If True, roll the d20 with Disadvantage.
 
         Returns:
             The created InitiativeEntry
         """
-        # Roll initiative (1d20 + DEX modifier)
-        roll = self.dice_roller.roll("1d20")
+        # Roll initiative (1d20 + DEX modifier); surprise gives Disadvantage.
+        roll = self.dice_roller.roll("1d20", disadvantage=surprised)
         initiative_roll = roll.total
 
         entry = InitiativeEntry(creature=creature, initiative_roll=initiative_roll)
@@ -101,10 +114,52 @@ class InitiativeTracker:
         # Initialize turn state for this combatant with their movement speed
         self.turn_states[creature] = TurnState(movement_remaining=creature.speed)
 
-        # Sort by initiative (highest first), ties broken by DEX modifier
+        # Sort by initiative (highest first); ties resolved side-by-side.
         self._sort_initiative()
 
         return entry
+
+    def add_combatant_group(
+        self, creatures: list[Creature], surprised: bool = False
+    ) -> list[InitiativeEntry]:
+        """
+        Add a group of identical creatures using a single shared roll.
+
+        Per SRD 2024 § Order of Combat › Initiative: "For a group of
+        identical creatures, the GM makes a single roll, so each
+        member of the group has the same Initiative." The shared
+        d20 is rolled once and applied to every member. If
+        ``surprised`` is True, the single roll is taken with
+        Disadvantage.
+
+        Args:
+            creatures: List of creatures sharing one Initiative roll.
+                Callers are responsible for confirming the group is
+                actually identical (same monster type / stat block).
+            surprised: If True, the shared roll is made with
+                Disadvantage.
+
+        Returns:
+            List of created InitiativeEntry objects, one per creature,
+            in the same order as ``creatures``. Empty list if
+            ``creatures`` is empty (no roll is made).
+        """
+        if not creatures:
+            return []
+
+        # One shared d20 for the whole group.
+        roll = self.dice_roller.roll("1d20", disadvantage=surprised)
+        shared_roll = roll.total
+
+        entries: list[InitiativeEntry] = []
+        for creature in creatures:
+            entry = InitiativeEntry(creature=creature, initiative_roll=shared_roll)
+            self.combatants.append(entry)
+            self.turn_states[creature] = TurnState(movement_remaining=creature.speed)
+            entries.append(entry)
+
+        self._sort_initiative()
+        return entries
 
     def remove_combatant(self, creature: Creature) -> None:
         """
@@ -305,11 +360,29 @@ class InitiativeTracker:
         """
         Sort combatants by initiative order.
 
-        Sorts by total initiative (descending), with ties broken by DEX modifier.
+        Sorts by total initiative (descending). Per SRD 2024, ties are
+        not broken by any creature statistic. The engine resolves ties
+        side-by-side: player characters (``Character`` instances) come
+        before non-PCs on the same Initiative count, matching the
+        SRD's "GM decides cross-side ties" with an opinionated
+        player-favored default. Within a side, Python's stable sort
+        preserves the order combatants were added, which mirrors the
+        SRD's "GM decides among tied monsters / players decide among
+        tied characters" guidance — callers can express that decision
+        by controlling the add order.
         """
+        # Local import to avoid an initiative<->character cycle at
+        # module import time.
+        from dnd_engine.core.character import Character
+
+        # Side key: 0 for PCs, 1 for non-PCs. Python's sort is stable,
+        # so creatures with equal (initiative_total, side) preserve
+        # their insertion order.
         self.combatants.sort(
-            key=lambda entry: (entry.initiative_total, entry.creature.initiative_modifier),
-            reverse=True,
+            key=lambda entry: (
+                -entry.initiative_total,
+                0 if isinstance(entry.creature, Character) else 1,
+            ),
         )
 
     def assign_combat_numbers(self, player_creatures: list[Creature]) -> None:
