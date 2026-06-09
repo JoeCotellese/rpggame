@@ -547,46 +547,130 @@ class TestMovingAroundOtherCreatures_PassThroughAllowed:
     > larger or smaller than you.
     """
 
-    def test_move_can_pass_through_an_allys_space(self) -> None:
-        pytest.skip(
-            "GAP: engine `attempt_combat_step` blanket-rejects any "
-            "occupied destination tile. The engine now owns tactical "
-            "movement (the rule no longer lives in the client): "
-            "`GameState.attempt_combat_step` "
-            "(dnd_engine/core/game_state.py) returns not-ok for any "
-            "occupant other than the mover, with no ally / Incapacitated "
-            "/ Tiny / two-sizes-apart carve-out, and `SpatialIndex` "
-            "(dnd_engine/systems/spatial_index.py) rejects all "
-            "double-occupancy. The pass-through query does not exist "
-            "engine-side. Tracked by issue #445."
+    @staticmethod
+    def _build_passthrough_fixture(
+        *,
+        occupant_size: Size = Size.MEDIUM,
+        occupant_conditions: tuple[str, ...] = (),
+    ) -> tuple[object, str, str]:
+        """A mover at (1,1) and an occupant at (2,1) on a 6x6 floor.
+
+        Returns ``(game_state, mover_id, occupant_id)``. The mover's
+        TurnState is reset to its full speed so ``attempt_combat_step``
+        has budget for the 5-ft step into the occupant's tile. The map
+        is sized to accommodate occupant footprints up to Gargantuan
+        (4x4 anchored at (2,1) reaches (5,4)).
+        """
+        from dnd_engine.core.character import Character, CharacterClass
+        from dnd_engine.core.entity_ids import pc_entity_id
+        from dnd_engine.core.game_state import GameState
+        from dnd_engine.core.party import Party
+        from dnd_engine.rules.loader import DataLoader
+        from dnd_engine.utils.events import EventBus
+
+        tiles: dict[tuple[int, int], TileType] = {}
+        for y in range(6):
+            for x in range(6):
+                tiles[(x, y)] = TileType.FLOOR
+        grid_map = Map(width=6, height=6, tiles=tiles)
+
+        mover = Character(
+            name="Walker",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=Abilities(
+                strength=14,
+                dexterity=14,
+                constitution=14,
+                intelligence=10,
+                wisdom=10,
+                charisma=10,
+            ),
+            max_hp=20,
+            ac=15,
+            xp=0,
         )
+        party = Party(characters=[mover])
+        game_state = GameState(
+            party=party,
+            dungeon_name="test_dungeon",
+            event_bus=EventBus(),
+            data_loader=DataLoader(),
+            dice_roller=DiceRoller(seed=1),
+        )
+        game_state.bootstrap_spatial(grid_map)
+
+        occupant = Creature(
+            name="Bystander",
+            max_hp=10,
+            ac=10,
+            abilities=Abilities(10, 10, 10, 10, 10, 10),
+            size=occupant_size,
+        )
+        for cond in occupant_conditions:
+            occupant.add_condition(cond)
+        game_state.active_enemies.append(occupant)
+
+        mover_id = pc_entity_id(mover.name)
+        occupant_id = "bystander_0"
+        game_state.set_position(mover_id, 1, 1)
+        game_state.set_position(occupant_id, 2, 1)
+
+        game_state._start_combat()
+        tracker = game_state.initiative_tracker
+        assert tracker is not None
+        for idx, entry in enumerate(tracker.combatants):
+            if entry.creature is mover:
+                tracker.current_turn_index = idx
+                break
+        tracker.turn_states[mover].reset(speed=mover.speed)
+        return game_state, mover_id, occupant_id
+
+    def test_move_can_pass_through_an_allys_space(self) -> None:
+        """Stepping onto a Prone ally's tile succeeds at the normal 5-ft cost.
+
+        Engine-side allegiance flags are out of scope for this slice;
+        the Prone carve-out (the mechanically distinct ally-friendly
+        case) is what the engine actually evaluates.
+        """
+        game_state, mover_id, _ = self._build_passthrough_fixture(
+            occupant_conditions=("prone",),
+        )
+        result = game_state.attempt_combat_step(mover_id, dx=1, dy=0)
+        assert result.ok, f"step rejected: {result.reason}"
+        assert result.position == Position(2, 1)
+        # Full per-step cost (no Difficult-Terrain double yet for this slice).
+        assert result.movement_remaining == 25
 
     def test_move_can_pass_through_incapacitated_creature(self) -> None:
-        pytest.skip(
-            "GAP: dependent on pass-through carve-outs existing (#445). "
-            "Per SRD, an Incapacitated creature does not block movement. "
-            "`attempt_combat_step` (dnd_engine/core/game_state.py) "
-            "rejects on bare occupancy and never consults "
-            "`Creature.is_incapacitated()` (dnd_engine/core/creature.py) "
-            "or any size comparison. Tracked by issue #445."
+        """An Incapacitated occupant does not block the mover's step."""
+        game_state, mover_id, _ = self._build_passthrough_fixture(
+            occupant_conditions=("unconscious",),
         )
+        result = game_state.attempt_combat_step(mover_id, dx=1, dy=0)
+        assert result.ok, f"step rejected: {result.reason}"
+        assert result.position == Position(2, 1)
 
     def test_move_can_pass_through_tiny_creature(self) -> None:
-        pytest.skip(
-            "GAP: dependent on pass-through carve-outs existing (#445). "
-            "Per SRD, a Tiny creature does not block movement. Until "
-            "creature size is read by the movement path (#442 / #445), "
-            "this carve-out cannot be honored."
+        """A Tiny occupant does not block the mover's step."""
+        game_state, mover_id, _ = self._build_passthrough_fixture(
+            occupant_size=Size.TINY,
         )
+        result = game_state.attempt_combat_step(mover_id, dx=1, dy=0)
+        assert result.ok, f"step rejected: {result.reason}"
+        assert result.position == Position(2, 1)
 
     def test_move_can_pass_through_creature_two_sizes_apart(self) -> None:
-        pytest.skip(
-            "GAP: dependent on pass-through carve-outs existing (#445) "
-            "and creature size being modeled (#442). Per SRD, a "
-            "creature can pass through one that is two sizes larger or "
-            "smaller (e.g., a Medium PC can move through a Huge "
-            "monster's space)."
+        """A Medium mover passes through a Huge occupant (two sizes larger)."""
+        game_state, mover_id, _ = self._build_passthrough_fixture(
+            occupant_size=Size.HUGE,
         )
+        # Place huge occupant manually — set_position above already
+        # placed a 3x3 footprint anchored at (2,1) which spills past
+        # (4,2); the 5x3 map accommodates that and the mover is at (1,1).
+        result = game_state.attempt_combat_step(mover_id, dx=1, dy=0)
+        assert result.ok, f"step rejected: {result.reason}"
+        assert result.position == Position(2, 1)
 
 
 class TestMovingAroundOtherCreatures_DifficultTerrain:
@@ -653,18 +737,82 @@ class TestMovingAroundOtherCreatures_CannotEndInOccupiedSpace:
         )
 
     def test_involuntarily_ending_in_occupied_space_applies_prone(self) -> None:
-        pytest.skip(
-            "GAP: involuntary co-occupancy -> Prone is not modeled. "
-            "`attempt_combat_step` has an `involuntary` flag "
-            "(dnd_engine/core/game_state.py) but it only suppresses the "
-            "opportunity-attack publish; it does not permit co-occupancy "
-            "or apply Prone. `SpatialIndex` "
-            "(dnd_engine/systems/spatial_index.py) rejects any occupied "
-            "tile, so two creatures can never share a space, and no path "
-            "calls `add_condition('prone')` on forced co-occupancy "
-            "(size exception: Tiny or larger than the other). Tracked by "
-            "issue #445."
+        """Forced movement that lands on an occupant drops BOTH Prone.
+
+        `attempt_combat_step(involuntary=True)` lets the step land on
+        an occupied tile via the spatial co-occupancy primitive and
+        applies the Prone condition to both creatures per the SRD
+        ("If you somehow end a turn in a space with another creature,
+        you have the Prone condition…").
+        """
+        from dnd_engine.core.character import Character, CharacterClass
+        from dnd_engine.core.entity_ids import pc_entity_id
+        from dnd_engine.core.game_state import GameState
+        from dnd_engine.core.party import Party
+        from dnd_engine.rules.loader import DataLoader
+        from dnd_engine.utils.events import EventBus
+
+        tiles: dict[tuple[int, int], TileType] = {}
+        for y in range(3):
+            for x in range(5):
+                tiles[(x, y)] = TileType.FLOOR
+        grid_map = Map(width=5, height=3, tiles=tiles)
+
+        mover = Character(
+            name="Shovee",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=Abilities(
+                strength=14,
+                dexterity=14,
+                constitution=14,
+                intelligence=10,
+                wisdom=10,
+                charisma=10,
+            ),
+            max_hp=20,
+            ac=15,
+            xp=0,
         )
+        party = Party(characters=[mover])
+        game_state = GameState(
+            party=party,
+            dungeon_name="test_dungeon",
+            event_bus=EventBus(),
+            data_loader=DataLoader(),
+            dice_roller=DiceRoller(seed=1),
+        )
+        game_state.bootstrap_spatial(grid_map)
+
+        occupant = Creature(
+            name="Bystander",
+            max_hp=10,
+            ac=10,
+            abilities=Abilities(10, 10, 10, 10, 10, 10),
+        )
+        game_state.active_enemies.append(occupant)
+        mover_id = pc_entity_id(mover.name)
+        occupant_id = "bystander_0"
+        game_state.set_position(mover_id, 1, 1)
+        game_state.set_position(occupant_id, 2, 1)
+        game_state._start_combat()
+        tracker = game_state.initiative_tracker
+        assert tracker is not None
+        for idx, entry in enumerate(tracker.combatants):
+            if entry.creature is mover:
+                tracker.current_turn_index = idx
+                break
+        tracker.turn_states[mover].reset(speed=mover.speed)
+
+        assert mover.has_condition("prone") is False
+        assert occupant.has_condition("prone") is False
+
+        result = game_state.attempt_combat_step(mover_id, dx=1, dy=0, involuntary=True)
+
+        assert result.ok, f"forced step rejected: {result.reason}"
+        assert result.position == Position(2, 1)
+        assert mover.has_condition("prone") is True
+        assert occupant.has_condition("prone") is True
 
 
 class TestLeavingReach_ProvokesOpportunityAttack:
