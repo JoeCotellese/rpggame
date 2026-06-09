@@ -41,9 +41,7 @@ pytestmark = pytest.mark.srd(
 MONSTERS_JSON = (
     Path(__file__).resolve().parents[3] / "dnd_engine" / "data" / "srd" / "monsters.json"
 )
-RACES_JSON = (
-    Path(__file__).resolve().parents[3] / "dnd_engine" / "data" / "srd" / "races.json"
-)
+RACES_JSON = Path(__file__).resolve().parents[3] / "dnd_engine" / "data" / "srd" / "races.json"
 
 
 def _make_creature(*, speed: int = 30) -> Creature:
@@ -98,7 +96,7 @@ class TestSpeed_MoveUpToSpeed:
         assert state.movement_remaining == 20
 
     def test_no_movement_is_allowed(self) -> None:
-        """"Or you can decide not to move." — zero consumption is legal.
+        """ "Or you can decide not to move." — zero consumption is legal.
 
         The TurnState supports skipping movement entirely: no API
         forces the pool to drain. A creature that takes an action and
@@ -250,51 +248,52 @@ class TestMovement_Modes:
     """
 
     def test_climbing_costs_extra_movement(self) -> None:
-        pytest.skip(
-            "GAP: climbing has no per-mode movement cost. The Rules "
-            "Glossary imposes a 1-ft extra cost per foot climbed without "
-            "a Climb Speed. The `MovementMode`/`Creature.speeds` data "
-            "model shipped under #432 (dnd_engine/core/creature.py:31), "
-            "but no system reads `.speeds` to compute cost: `cost_for` "
-            "(dnd_engine/systems/action_economy.py:41) and "
-            "`TurnState.consume_movement` "
-            "(dnd_engine/systems/action_economy.py:140) key cost only on "
-            "`Terrain` (NORMAL/DIFFICULT), with no per-mode multiplier. "
-            "Tracked by issue #433."
-        )
+        """Climbing without a Climb Speed costs 1 extra foot per foot.
+
+        A creature with a Climb Speed pays the normal 1 ft per foot.
+        """
+        walker = _make_creature()
+        assert cost_for(5, mode=MovementMode.CLIMB, speeds=walker.speeds) == 10
+
+        climber_speeds = {MovementMode.WALK: 30, MovementMode.CLIMB: 30}
+        assert cost_for(5, mode=MovementMode.CLIMB, speeds=climber_speeds) == 5
+
+        state = TurnState(movement_remaining=30)
+        assert state.consume_movement(5, mode=MovementMode.CLIMB, speeds=walker.speeds) is True
+        assert state.movement_remaining == 20
 
     def test_swimming_costs_extra_movement(self) -> None:
-        pytest.skip(
-            "GAP: swimming has no per-mode movement cost. Per Rules "
-            "Glossary, swimming without a Swim Speed costs 1 extra foot "
-            "per foot. The `MovementMode`/`Creature.speeds` data model "
-            "shipped under #432, but `cost_for` "
-            "(dnd_engine/systems/action_economy.py:41) and "
-            "`TurnState.consume_movement` "
-            "(dnd_engine/systems/action_economy.py:140) key cost only on "
-            "`Terrain`, with no swim-mode multiplier. Tracked by "
-            "issue #433."
-        )
+        """Swimming without a Swim Speed costs 1 extra foot per foot.
+
+        A creature with a Swim Speed pays the normal 1 ft per foot.
+        """
+        walker = _make_creature()
+        assert cost_for(5, mode=MovementMode.SWIM, speeds=walker.speeds) == 10
+
+        swimmer_speeds = {MovementMode.WALK: 30, MovementMode.SWIM: 30}
+        assert cost_for(5, mode=MovementMode.SWIM, speeds=swimmer_speeds) == 5
+
+        state = TurnState(movement_remaining=30)
+        assert state.consume_movement(5, mode=MovementMode.SWIM, speeds=walker.speeds) is True
+        assert state.movement_remaining == 20
 
     def test_crawling_costs_extra_movement(self) -> None:
-        pytest.skip(
-            "GAP: crawling has no per-mode movement cost. Per Rules "
-            "Glossary, every foot of crawling costs 1 extra foot. "
-            "`MovementMode.CRAWL` exists (dnd_engine/core/creature.py:31) "
-            "but there is no Prone-aware cost path: `consume_movement` "
-            "(dnd_engine/systems/action_economy.py:140) keys cost only on "
-            "`Terrain`. Tracked by issue #433."
-        )
+        """Every foot of crawling costs 1 extra foot (always doubled)."""
+        walker = _make_creature()
+        assert cost_for(5, mode=MovementMode.CRAWL, speeds=walker.speeds) == 10
+
+        state = TurnState(movement_remaining=30)
+        assert state.consume_movement(5, mode=MovementMode.CRAWL, speeds=walker.speeds) is True
+        assert state.movement_remaining == 20
 
     def test_jumping_consumes_movement(self) -> None:
-        pytest.skip(
-            "GAP: jumping has no per-mode movement cost. Per Rules "
-            "Glossary, a long jump and a high jump each consume movement "
-            "equal to the distance covered (with STR- and DEX-derived "
-            "maxima). `MovementMode.JUMP` exists "
-            "(dnd_engine/core/creature.py:31) but no jump-distance helper "
-            "or movement-cost model reads it. Tracked by issue #433."
-        )
+        """A jump consumes movement equal to the distance covered (1 ft/ft)."""
+        walker = _make_creature()
+        assert cost_for(5, mode=MovementMode.JUMP, speeds=walker.speeds) == 5
+
+        state = TurnState(movement_remaining=30)
+        assert state.consume_movement(10, mode=MovementMode.JUMP, speeds=walker.speeds) is True
+        assert state.movement_remaining == 20
 
 
 class TestDifficultTerrain_CostsExtra:
@@ -522,9 +521,7 @@ class TestCreatureSize_SpaceFromSizeCategory:
 
         # A Large creature anchored at (1,1) claims the 2x2 block, and
         # occupancy is footprint-aware across every covered tile.
-        ogre = Creature(
-            name="Ogre", max_hp=59, ac=11, abilities=abilities, size=Size.LARGE
-        )
+        ogre = Creature(name="Ogre", max_hp=59, ac=11, abilities=abilities, size=Size.LARGE)
         index = self._clear_index()
         index.place("ogre", Position(1, 1), size=ogre.size)
         assert index.footprint_of("ogre") == frozenset(
@@ -534,9 +531,7 @@ class TestCreatureSize_SpaceFromSizeCategory:
         assert index.occupant_at(Position(3, 3)) is None  # outside the block
 
         # A Huge creature claims the full 3x3 block.
-        giant = Creature(
-            name="Hill Giant", max_hp=105, ac=13, abilities=abilities, size=Size.HUGE
-        )
+        giant = Creature(name="Hill Giant", max_hp=105, ac=13, abilities=abilities, size=Size.HUGE)
         index.place("giant", Position(3, 3), size=giant.size)
         assert index.footprint_of("giant") == frozenset(
             Position(3 + dx, 3 + dy) for dx in range(3) for dy in range(3)
@@ -640,20 +635,12 @@ class TestMovingAroundOtherCreatures_CannotEndInOccupiedSpace:
         client's render dependency) into engine-only tests.
         """
         session_path = (
-            Path(__file__).resolve().parents[4]
-            / "client-2d"
-            / "src"
-            / "client_2d"
-            / "session.py"
+            Path(__file__).resolve().parents[4] / "client-2d" / "src" / "client_2d" / "session.py"
         )
-        assert session_path.exists(), (
-            f"expected client-2d session.py at {session_path}"
-        )
+        assert session_path.exists(), f"expected client-2d session.py at {session_path}"
 
         src = session_path.read_text()
-        assert "def combat_move" in src, (
-            "client-2d session.py must define `combat_move`."
-        )
+        assert "def combat_move" in src, "client-2d session.py must define `combat_move`."
         assert "Path blocked!" in src, (
             "combat_move must reject moves into a tile already "
             "occupied by another creature to honor the SRD's "
@@ -724,8 +711,10 @@ class TestLeavingReach_ProvokesOpportunityAttack:
 
         # Mover steps from 5 ft (in reach) to 15 ft (out of reach).
         outcomes = publish_movement_provoke(
-            dispatcher, mover=mover,
-            from_position=Position(6, 5), to_position=Position(8, 5),
+            dispatcher,
+            mover=mover,
+            from_position=Position(6, 5),
+            to_position=Position(8, 5),
         )
 
         assert any(o.reacted for o in outcomes), "leaving reach did not provoke an OA"
@@ -746,8 +735,10 @@ class TestLeavingReach_ProvokesOpportunityAttack:
 
         # The same out-of-reach step now provokes nothing.
         outcomes = publish_movement_provoke(
-            dispatcher, mover=mover,
-            from_position=Position(6, 5), to_position=Position(8, 5),
+            dispatcher,
+            mover=mover,
+            from_position=Position(6, 5),
+            to_position=Position(8, 5),
         )
 
         assert outcomes == [], "Disengage did not suppress OA provocation"
