@@ -2052,23 +2052,25 @@ class GameState:
         if "skill" in method:
             skill = method["skill"]
             dc = method["dc"]
-
-            # Check tool proficiency requirement
             tool_proficiency = method.get("tool_proficiency")
-            if tool_proficiency:
-                # Load proficiencies data to check if character has the tool
-                if (
-                    not hasattr(character, "tool_proficiencies")
-                    or tool_proficiency not in character.tool_proficiencies
-                ):
-                    # Character lacks required tool proficiency - they can still attempt but without proficiency bonus
-                    pass
-
-            # Load skills data
             skills_data = self.data_loader.load_skills()
 
-            # Make skill check
-            check_result = character.make_skill_check(skill, dc, skills_data)
+            # SRD § Proficiency › Equipment Proficiencies › Tools: when
+            # an unlock method declares a tool, route through
+            # `make_tool_check` so a tool-proficient character gains
+            # PB, and a character also proficient in the skill gains
+            # Advantage. The primitive handles the no-tool-proficiency
+            # fallback (delegates to `make_skill_check` when only the
+            # skill is proficient, plain ability check otherwise).
+            if tool_proficiency:
+                check_result = character.make_tool_check(
+                    tool_proficiency,
+                    dc,
+                    skill=skill,
+                    skills_data=skills_data,
+                )
+            else:
+                check_result = character.make_skill_check(skill, dc, skills_data)
 
             # Emit skill check event
             self.event_bus.emit(

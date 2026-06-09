@@ -429,6 +429,26 @@ class TestLockedDoors:
         fighter_result = game_state.attempt_unlock("west", 0, fighter)
         assert fighter_result["success"] is False
 
+    def test_tool_plus_skill_proficient_unlock_gets_advantage(
+        self, game_state_with_locked_doors
+    ):
+        """SRD §483: tool + skill proficient rogue gets Advantage on the unlock.
+
+        The crypt-style west door declares `skill=sleight_of_hand` +
+        `tool_proficiency=thieves_tools`. The rogue fixture has BOTH
+        proficiencies, so `make_tool_check` should auto-grant advantage
+        and the result dict should expose the flag for the event log.
+        """
+        game_state = game_state_with_locked_doors
+        rogue = game_state.party.characters[0]  # has thieves_tools + sleight_of_hand
+
+        result = game_state.attempt_unlock("west", 0, rogue)
+
+        skill_check = result["skill_check_result"]
+        assert skill_check["tool_proficient"] is True
+        assert skill_check["skill_proficient"] is True
+        assert skill_check["advantage_from_tool_skill"] is True
+
     def test_invalid_direction(self, game_state_with_locked_doors):
         """Test attempting to unlock a non-existent exit."""
         game_state = game_state_with_locked_doors
