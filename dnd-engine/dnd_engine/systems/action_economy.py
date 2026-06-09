@@ -4,6 +4,8 @@
 from dataclasses import dataclass
 from enum import Enum
 
+from dnd_engine.core.creature import MovementMode
+
 
 class ActionType(Enum):
     """
@@ -38,23 +40,47 @@ class Terrain(str, Enum):
     DIFFICULT = "difficult"
 
 
-def cost_for(feet: int, terrain: Terrain) -> int:
+def cost_for(
+    feet: int,
+    terrain: Terrain = Terrain.NORMAL,
+    *,
+    mode: MovementMode = MovementMode.WALK,
+    speeds: dict[MovementMode, int] | None = None,
+) -> int:
     """
     Compute the movement-pool cost for traveling ``feet`` through ``terrain``.
 
-    Difficult terrain costs 1 extra foot per foot moved (effectively 2x).
-    Normal terrain costs exactly ``feet``.
+    Difficult terrain costs 1 extra foot per foot moved (SRD Rules Glossary).
+    Per-mode rules (SRD Rules Glossary):
+      - Climbing or Swimming without a matching Climb/Swim Speed costs
+        1 extra foot per foot moved.
+      - Every foot of Crawling costs 1 extra foot.
+      - Jumping consumes movement equal to the distance covered (1 ft/ft).
+      - Walk/Fly/Burrow cost the normal 1 ft/ft.
+
+    Each cause adds ``feet`` to the base cost; they stack additively, so
+    swimming without a swim speed through Difficult Terrain costs 3 ft/ft.
 
     Args:
         feet: Distance the creature wants to travel, in feet.
         terrain: Terrain kind being traversed.
+        mode: Movement mode used for the step.
+        speeds: Per-mode speed map for the moving creature
+            (``Creature.speeds``); used to decide whether the creature has
+            a matching Climb/Swim Speed.
 
     Returns:
         The number of feet to deduct from the movement pool.
     """
+    cost = feet
     if terrain == Terrain.DIFFICULT:
-        return feet * 2
-    return feet
+        cost += feet
+    if mode == MovementMode.CRAWL:
+        cost += feet
+    elif mode in (MovementMode.CLIMB, MovementMode.SWIM):
+        if speeds is None or mode not in speeds:
+            cost += feet
+    return cost
 
 
 @dataclass
@@ -138,7 +164,12 @@ class TurnState:
         return False
 
     def consume_movement(
-        self, feet: int = 5, terrain: Terrain = Terrain.NORMAL
+        self,
+        feet: int = 5,
+        terrain: Terrain = Terrain.NORMAL,
+        *,
+        mode: MovementMode = MovementMode.WALK,
+        speeds: dict[MovementMode, int] | None = None,
     ) -> bool:
         """
         Consume movement from remaining movement pool.
@@ -149,6 +180,11 @@ class TurnState:
                 the cost per foot (SRD: each foot in difficult terrain costs
                 1 extra foot). Defaults to NORMAL so existing callers are
                 unaffected.
+            mode: Movement mode used for the step (Walk/Climb/Swim/Crawl/Jump
+                /Fly/Burrow). Per-mode SRD costs are applied via ``cost_for``.
+            speeds: Per-mode speed map for the moving creature
+                (``Creature.speeds``); a matching Climb/Swim Speed waives the
+                without-speed surcharge for that mode.
 
         Returns:
             True if movement was available and consumed, False if insufficient.
@@ -165,7 +201,7 @@ class TurnState:
             >>> turn.movement_remaining
             15
         """
-        cost = cost_for(feet, terrain)
+        cost = cost_for(feet, terrain, mode=mode, speeds=speeds)
         if self.movement_remaining >= cost:
             self.movement_remaining -= cost
             return True
