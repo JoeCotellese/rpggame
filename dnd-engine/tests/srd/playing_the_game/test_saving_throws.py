@@ -248,18 +248,38 @@ class TestAbilityModifier_SaveExamplesTable:
     """
 
     def test_effects_default_to_srd_recommended_save_ability(self):
-        pytest.skip(
-            "GAP: The engine has no central mapping from effect "
-            "category (force / dodge / poison / illusion / mental / "
-            "identity) to its recommended save ability. Each spell "
-            "and monster trait hardcodes its save in JSON "
-            "(`dnd_engine/data/srd/spells.json`, "
-            "`dnd_engine/data/srd/monsters.json`), so a content "
-            "author can — and sometimes does — pick a save that "
-            "doesn't match the SRD examples table. No validator "
-            "checks this. The examples table is advisory, not "
-            "normative, so this gap is low-severity but worth a "
-            "lint-style audit. Tracked by issue #450."
+        """Advisory lint: declared saves match the examples table.
+
+        `dnd_engine.validation.save_ability_lint` walks
+        `data/srd/spells.json` and `data/srd/monsters.json`, classifies
+        each save-bearing effect by category (force/dodge/poison/
+        illusion/mental/identity) from damage type, school, tags, and
+        description keywords, and reports entries whose declared save
+        ability sits outside every plausible category. Content authors
+        can opt out of any specific entry by adding an
+        `srd_save_override_reason` string to the entry (or to its
+        `saving_throw` block) explaining the intentional divergence.
+
+        The check is advisory -- the SRD examples table is guidance, not
+        a hard rule -- but every divergence in shipped data must be
+        either fixed or explicitly justified so the lint stays useful.
+        Tracked by issue #450.
+        """
+        from dnd_engine.validation.save_ability_lint import (
+            lint_srd_save_abilities,
+        )
+
+        divergences = lint_srd_save_abilities()
+
+        assert divergences == [], (
+            "Unjustified save-ability divergences from the SRD examples "
+            "table. Either correct the JSON or add an "
+            "`srd_save_override_reason` to the entry:\n"
+            + "\n".join(
+                f"  {d.entry}: declared={d.declared}, "
+                f"expected={d.expected} ({d.reason})"
+                for d in divergences
+            )
         )
 
 
