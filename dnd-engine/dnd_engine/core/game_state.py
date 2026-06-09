@@ -4161,19 +4161,33 @@ class GameState:
         # Check for surprise
         surprise_result = self._check_for_surprise()
 
-        # Add all living party members to initiative
+        # Add all living party members to initiative. Per SRD 2024,
+        # surprise is consumed as Disadvantage on the Initiative roll
+        # itself — no condition is applied to the creature.
+        party_surprised = surprise_result["party_surprised"]
         for character in self.party.get_living_members():
-            self.initiative_tracker.add_combatant(character)
-            # Apply surprised condition if party is surprised
-            if surprise_result["party_surprised"]:
-                character.add_condition("surprised")
+            self.initiative_tracker.add_combatant(character, surprised=party_surprised)
 
-        # Add enemies to initiative
+        # Add enemies to initiative. Per SRD 2024 § Order of Combat ›
+        # Initiative, a group of identical creatures uses a single
+        # shared d20. We bucket enemies by name (the engine's stable
+        # identifier for "same monster type") and call the group
+        # helper, falling through to single-combatant rolls for
+        # uniques. Order of buckets follows first-appearance in
+        # ``active_enemies`` to keep deterministic, replayable rolls
+        # under seeded dice rollers.
+        enemies_surprised = surprise_result["enemies_surprised"]
+        groups: dict[str, list[Creature]] = {}
+        group_order: list[str] = []
         for enemy in self.active_enemies:
-            self.initiative_tracker.add_combatant(enemy)
-            # Apply surprised condition if enemies are surprised
-            if surprise_result["enemies_surprised"]:
-                enemy.add_condition("surprised")
+            if enemy.name not in groups:
+                groups[enemy.name] = []
+                group_order.append(enemy.name)
+            groups[enemy.name].append(enemy)
+        for name in group_order:
+            self.initiative_tracker.add_combatant_group(
+                groups[name], surprised=enemies_surprised
+            )
 
         # Emit surprise round event if either side is surprised
         if surprise_result["enemies_surprised"] or surprise_result["party_surprised"]:

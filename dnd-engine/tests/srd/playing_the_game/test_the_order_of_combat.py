@@ -21,7 +21,7 @@ from dnd_engine.core.creature import Abilities, Creature
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.distance import chebyshev_distance, distance_in_feet, is_adjacent
 from dnd_engine.systems.action_economy import ActionType, TurnState
-from dnd_engine.systems.initiative import InitiativeTracker
+from dnd_engine.systems.initiative import InitiativeEntry, InitiativeTracker
 
 pytestmark = pytest.mark.srd(
     "playing-the-game/the-order-of-combat.md",
@@ -241,20 +241,26 @@ class TestInitiative_GroupOfIdenticalCreatures:
     """
 
     def test_identical_creatures_share_a_single_initiative_roll(self) -> None:
-        pytest.skip(
-            "GAP: each enemy rolls its own initiative. "
-            "`GameState._start_combat` (dnd_engine/core/game_state.py:"
-            "3094-3105) loops `self.active_enemies` and calls "
-            "`InitiativeTracker.add_combatant(enemy)` per enemy, which "
-            "rolls 1d20 independently each time "
-            "(dnd_engine/systems/initiative.py:89-91). Three identical "
-            "goblins each get their own initiative roll. The "
-            "engine *does* later disambiguate duplicate names via "
-            "`InitiativeTracker.assign_combat_numbers` "
-            "(initiative.py:235-266), but that runs *after* the "
-            "per-creature rolls have already happened. Tracked by "
-            "issue #474."
+        """`add_combatant_group` rolls 1d20 once and applies it to all members.
+
+        Per SRD 2024 § Order of Combat › Initiative, a group of
+        identical creatures uses a single shared roll. The engine
+        surfaces this via ``InitiativeTracker.add_combatant_group``.
+        """
+        tracker = InitiativeTracker(DiceRoller(seed=42))
+        goblins = [_make_creature("Goblin", dex=14) for _ in range(3)]
+
+        entries = tracker.add_combatant_group(goblins)
+
+        assert len(entries) == 3
+        # All three share the same d20 result.
+        rolls = {entry.initiative_roll for entry in entries}
+        assert len(rolls) == 1, (
+            f"identical-creatures group must share one roll; got {rolls}"
         )
+        # And the same total (all have the same DEX modifier).
+        totals = {entry.initiative_total for entry in entries}
+        assert len(totals) == 1
 
 
 class TestInitiative_Surprise:
@@ -267,36 +273,51 @@ class TestInitiative_Surprise:
     """
 
     def test_surprised_combatant_rolls_initiative_with_disadvantage(self) -> None:
-        pytest.skip(
-            "GAP: the engine implements the *older* 5E surprise model "
-            "(condition that skips a turn), not the 2024 SRD's "
-            "'Disadvantage on Initiative roll' model. "
-            "`GameState._check_for_surprise` "
-            "(dnd_engine/core/game_state.py:3014-3083) and `_start_combat` "
-            "(game_state.py:3094-3105) apply the `'surprised'` condition "
-            "to losing-side creatures. `Creature.can_take_actions` "
-            "(dnd_engine/core/creature.py:308-318) lists "
-            "`'surprised'` as an incapacitating condition that blocks "
-            "actions, and "
-            "`Creature.process_end_of_turn_conditions` "
-            "(creature.py:354-357) clears it after one turn — i.e., "
-            "surprised creatures *skip their first turn entirely* "
-            "rather than rolling initiative with Disadvantage. "
-            "`InitiativeTracker.add_combatant` "
-            "(dnd_engine/systems/initiative.py:89-91) rolls `1d20` with "
-            "no `disadvantage` kwarg. Tracked by issue #474."
+        """A surprised combatant's d20 is rolled with Disadvantage.
+
+        Per SRD 2024: "If a combatant is surprised by combat starting,
+        that combatant has Disadvantage on their Initiative roll."
+        Statistically, rolling 2d20 and taking the lower yields a
+        mean of ~6.85 vs ~10.5 for a flat d20. Across many trials,
+        surprised combatants must roll lower on average than
+        un-surprised ones. We use a tight statistical bound rather
+        than a single-roll comparison so the test is seed-stable.
+        """
+        normal_totals: list[int] = []
+        surprised_totals: list[int] = []
+        for seed in range(200):
+            tracker = InitiativeTracker(DiceRoller(seed=seed))
+            normal = tracker.add_combatant(_make_creature("Normal", dex=10))
+            surprised = tracker.add_combatant(
+                _make_creature("Ambushed", dex=10), surprised=True
+            )
+            normal_totals.append(normal.initiative_roll)
+            surprised_totals.append(surprised.initiative_roll)
+
+        mean_normal = sum(normal_totals) / len(normal_totals)
+        mean_surprised = sum(surprised_totals) / len(surprised_totals)
+        # Expected gap is ~3.65; require a comfortable margin.
+        assert mean_surprised < mean_normal - 2.0, (
+            f"surprised mean {mean_surprised:.2f} should be well below "
+            f"normal mean {mean_normal:.2f}"
         )
 
     def test_surprised_state_does_not_skip_the_creatures_first_turn(self) -> None:
-        pytest.skip(
-            "GAP: per 2024 SRD, surprise is *only* Disadvantage on the "
-            "Initiative roll — the creature still takes its turn "
-            "normally. Today, `Creature.can_take_actions` returns False "
-            "for any creature with the `'surprised'` condition "
-            "(dnd_engine/core/creature.py:317), so a surprised creature "
-            "loses its entire first round of actions. Tracked by "
-            "issue #474."
-        )
+        """A surprised creature still gets its full first turn.
+
+        Per SRD 2024, surprise is consumed entirely by the
+        Disadvantage on the Initiative roll. The creature is NOT
+        flagged with a turn-skipping condition. ``can_take_actions``
+        must not be tripped by surprise, and adding the combatant
+        with ``surprised=True`` must not leave any 'surprised'
+        condition on the creature.
+        """
+        tracker = InitiativeTracker(DiceRoller(seed=42))
+        creature = _make_creature("Ambushed", dex=14)
+        tracker.add_combatant(creature, surprised=True)
+
+        assert creature.can_take_actions() is True
+        assert "surprised" not in creature.active_conditions
 
 
 class TestInitiative_OrderHighestToLowest:
@@ -363,17 +384,88 @@ class TestInitiative_Ties:
     """
 
     def test_ties_resolved_by_side_not_by_stat(self) -> None:
-        pytest.skip(
-            "GAP: the engine breaks ties by DEX modifier — a holdover "
-            "from older 5E play guidance, not 2024 SRD. "
-            "`InitiativeTracker._sort_initiative` "
-            "(dnd_engine/systems/initiative.py:224-233) sorts by "
-            "`(initiative_total, dex_mod)` descending, so a DEX-16 "
-            "combatant beats a DEX-10 combatant on a tied roll without "
-            "any side-aware decision. The 2024 SRD specifies the GM "
-            "decides monster ties, players decide PC ties, and the GM "
-            "decides cross-side ties; there is no per-stat tiebreaker. "
-            "Tracked by issue #474."
+        """On a tied Initiative count, PCs precede non-PCs.
+
+        Per SRD 2024, no creature statistic breaks Initiative ties.
+        The GM decides the order; the engine's opinionated default
+        is "PCs before non-PCs" on the tied count, with stable
+        insertion order within a side. We construct a tie at the
+        same total and check that the higher-DEX monster does not
+        leap ahead of the lower-DEX player character.
+        """
+        from dnd_engine.core.character import Character, CharacterClass
+
+        # Force a tied roll by reseating the dice roller between adds.
+        tracker = InitiativeTracker(DiceRoller(seed=1))
+
+        # Low-DEX player character (DEX 10, +0 mod).
+        pc_abilities = Abilities(
+            strength=14,
+            dexterity=10,
+            constitution=14,
+            intelligence=10,
+            wisdom=10,
+            charisma=10,
+        )
+        pc = Character(
+            name="Hero",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=pc_abilities,
+            max_hp=10,
+            ac=14,
+        )
+        tracker.add_combatant(pc)
+
+        # High-DEX monster (DEX 14, +2 mod). Old engine would put
+        # the monster first on a tied roll thanks to the DEX
+        # tiebreak; the 2024 SRD says no stat tiebreak, so the PC
+        # should win the tied count.
+        monster = _make_creature("Goblin", dex=14)
+        # Re-seed to repeat the same d20 result.
+        tracker.dice_roller = DiceRoller(seed=1)
+        tracker.add_combatant(monster)
+
+        if (
+            tracker.combatants[0].initiative_roll
+            == tracker.combatants[1].initiative_roll
+        ):
+            # Tied counts: PC must come first.
+            # (Their TOTALS differ — PC +0 vs monster +2 — but the
+            # SRD 2024 wording considers the count after modifier;
+            # if the *totals* are equal because the rolls came in
+            # exactly opposite, the PC still wins on side.)
+            tied_pairs = [
+                (a, b)
+                for a, b in zip(
+                    tracker.combatants, tracker.combatants[1:], strict=False
+                )
+                if a.initiative_total == b.initiative_total
+            ]
+            for a, b in tied_pairs:
+                assert isinstance(a.creature, Character) or not isinstance(
+                    b.creature, Character
+                ), "On tied Initiative, a PC must precede a non-PC."
+
+        # Independent assertion that does not depend on the roll
+        # coming out tied: feed two synthetic tied entries directly
+        # and verify the sort order.
+        tracker2 = InitiativeTracker(DiceRoller(seed=2))
+        pc2 = Character(
+            name="Hero2",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=pc_abilities,  # DEX +0
+            max_hp=10,
+            ac=14,
+        )
+        monster2 = _make_creature("Goblin2", dex=14)  # DEX +2
+        tracker2.combatants.append(InitiativeEntry(pc2, initiative_roll=10))
+        tracker2.combatants.append(InitiativeEntry(monster2, initiative_roll=8))
+        # PC total = 10+0 = 10; monster total = 8+2 = 10. Tied.
+        tracker2._sort_initiative()
+        assert tracker2.combatants[0].creature is pc2, (
+            "On tied Initiative totals, PC must sort before non-PC."
         )
 
 

@@ -181,14 +181,20 @@ class TestProcessEnemyTurnIncapacitated(TestProcessEnemyTurn):
         assert result.action_taken == EnemyTurnAction.INCAPACITATED
         assert "STUNNED" in result.incapacitating_conditions
 
-    def test_surprised_enemy_cannot_act(self, game_state, goblin):
-        """Surprised enemy cannot take actions."""
+    def test_surprised_enemy_can_still_act(self, game_state, goblin):
+        """Per SRD 2024, surprise does not skip the creature's turn.
+
+        Surprise is consumed at Initiative-roll time as Disadvantage
+        and never persists as a turn-skipping condition. Even if a
+        stale ``'surprised'`` key were present on the creature, the
+        enemy must still take its turn (here: an attack).
+        """
         goblin.add_condition("surprised")
 
         result = game_state.process_enemy_turn()
 
-        assert result.action_taken == EnemyTurnAction.INCAPACITATED
-        assert "SURPRISED" in result.incapacitating_conditions
+        # The enemy is not gated out by surprise.
+        assert result.action_taken != EnemyTurnAction.INCAPACITATED
 
 
 class TestProcessEnemyTurnNoTargets(TestProcessEnemyTurn):

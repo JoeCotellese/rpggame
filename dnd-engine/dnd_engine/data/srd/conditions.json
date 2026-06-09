@@ -23,19 +23,6 @@
         "failure_message": "❌ {creature_name} fails to extinguish the flames (rolled {roll} vs DC {dc})"
       }
     },
-    "surprised": {
-      "name": "Surprised",
-      "description": "A surprised creature cannot move or take actions on its first turn of combat, and it cannot take reactions until that turn ends. The surprised condition ends after the creature's first turn.",
-      "effects": {
-        "no_actions": true,
-        "no_movement": true,
-        "no_reactions": true,
-        "skip_turn": true
-      },
-      "duration_type": "end_of_first_turn",
-      "turn_start_message": "⚠️  {creature_name} is SURPRISED and cannot act this turn!",
-      "turn_end_removal": true
-    },
     "blinded": {
       "name": "Blinded",
       "description": "A Blinded creature can't see and automatically fails any ability check that requires sight. Attack rolls against the creature have Advantage, and the creature's attack rolls have Disadvantage. A creature trying to see into a Heavily Obscured area is Blinded with respect to that area.",
