@@ -359,13 +359,10 @@ class CombatEngine:
         # Get effective AC (includes modifiers from spells/effects if game_state provided).
         # SRD § Cover: Half / Three-Quarters cover add +2 / +5 to the
         # defender's AC for this attack only; total cover was already
-        # short-circuited above. The cover bump is layered on top of
-        # `get_effective_ac` here (rather than passed in) so test stubs
-        # and any third-party `game_state` lookalikes that predate the
-        # cover kwarg still work — the engine remains the source of
-        # truth for the cover bonus.
+        # short-circuited above. The cover bump is owned by
+        # `get_effective_ac` so a single place layers the bonus.
         if game_state is not None:
-            defender_ac = game_state.get_effective_ac(defender) + cover.ac_bonus
+            defender_ac = game_state.get_effective_ac(defender, cover=cover)
         else:
             # Fallback to base AC if no game_state (e.g., in unit tests)
             defender_ac = defender._base_ac + cover.ac_bonus
