@@ -125,17 +125,48 @@ class TestDefinition_ChooseToFail:
     """
 
     def test_save_target_can_opt_to_fail_without_rolling(self):
-        pytest.skip(
-            "GAP: `Character.make_saving_throw` and "
-            "`Creature.make_saving_throw` always roll a d20 — there is "
-            "no `auto_fail`/`choose_to_fail` parameter and no call "
-            "site that lets a target voluntarily forgo the save. "
-            "See dnd_engine/core/character.py:237-339 and "
-            "dnd_engine/core/creature.py:475-578. A search for "
-            "'choose to fail' / 'auto fail' in the engine returns no "
-            "hits. Used in play when a willing target opts into a "
-            "friendly Charm or Polymorph. Tracked by issue #447."
+        """`auto_fail=True` short-circuits the save before any d20 roll.
+
+        SRD: "If you don't want to resist the effect, you can choose
+        to fail the save without rolling." Engine surface is an
+        `auto_fail` kwarg on `Character.make_saving_throw` and
+        `Creature.make_saving_throw`. When set, the methods return the
+        same SRD-shaped result dict as the rolling path but with
+        `success=False`, `roll=0`, and `total=modifier` — no d20 is
+        rolled.
+        """
+        fighter = _make_fighter()
+
+        result = fighter.make_saving_throw(
+            ability="con", dc=10, auto_fail=True
         )
+
+        assert result["success"] is False
+        assert result["roll"] == 0
+        assert result["ability"] == "con"
+        assert result["dc"] == 10
+        # All documented payload keys are still present so downstream
+        # effect handlers don't have to special-case voluntary fails.
+        for key in (
+            "success",
+            "roll",
+            "modifier",
+            "total",
+            "dc",
+            "ability",
+            "circumstantial",
+        ):
+            assert key in result, f"auto_fail result missing field {key!r}"
+
+        # Creatures (monsters) expose the same opt-in.
+        creature = _make_creature()
+        creature_result = creature.make_saving_throw(
+            ability="dex", dc=15, auto_fail=True
+        )
+        assert creature_result["success"] is False
+        assert creature_result["roll"] == 0
+        assert creature_result["ability"] == "dex"
+        assert creature_result["dc"] == 15
 
 
 class TestAbilityModifier_NamedForAbility:

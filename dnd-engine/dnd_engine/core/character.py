@@ -368,6 +368,7 @@ class Character(Creature):
         disadvantage: bool = False,
         circumstantial: int = 0,
         use_heroic_inspiration: bool = False,
+        auto_fail: bool = False,
         event_bus=None,
     ) -> dict[str, Any]:
         """
@@ -384,6 +385,12 @@ class Character(Creature):
                 once those spells are plumbed. Forwarded to the
                 d20-test primitive and surfaced on the returned dict
                 and emitted event for telemetry.
+            auto_fail: SRD § Playing the Game › Saving Throws › "If you
+                don't want to resist the effect, you can choose to fail
+                the save without rolling." When True, no d20 is rolled
+                and the result dict reports `success=False`, `roll=0`,
+                `total=modifier`. Used by willing targets opting into
+                friendly Charm/Polymorph and similar effects.
             event_bus: Optional EventBus instance to emit saving throw event
 
         Returns:
@@ -427,6 +434,45 @@ class Character(Creature):
         else:
             raise ValueError(f"Invalid ability name: {ability}")
 
+        modifier = self.get_saving_throw_modifier(ability)
+
+        # SRD § Playing the Game › Saving Throws › Choose to Fail:
+        # "If you don't want to resist the effect, you can choose to
+        # fail the save without rolling." Short-circuit before any
+        # d20 is rolled and return the same payload shape as the
+        # rolling path so downstream effect handlers don't need to
+        # special-case voluntary fails.
+        if auto_fail:
+            result_dict: dict[str, Any] = {
+                "success": False,
+                "roll": 0,
+                "modifier": modifier,
+                "total": modifier,
+                "dc": dc,
+                "ability": ability_short,
+                "circumstantial": circumstantial,
+                "heroic_inspiration_spent": False,
+            }
+            if event_bus is not None:
+                from dnd_engine.utils.events import Event, EventType
+
+                event = Event(
+                    type=EventType.SAVING_THROW,
+                    data={
+                        "character": self.name,
+                        "ability": ability_short,
+                        "dc": dc,
+                        "roll": 0,
+                        "modifier": modifier,
+                        "total": modifier,
+                        "success": False,
+                        "circumstantial": circumstantial,
+                        "auto_fail": True,
+                    },
+                )
+                event_bus.emit(event)
+            return result_dict
+
         # SRD § Actions › Dodge: a dodging creature rolls DEX saves with
         # Advantage, unless they are Incapacitated or their Speed is 0.
         if (
@@ -436,8 +482,6 @@ class Character(Creature):
             and self.speed > 0
         ):
             advantage = True
-
-        modifier = self.get_saving_throw_modifier(ability)
 
         # Legacy `make_saving_throw` constructed a fresh `DiceRoller`
         # rather than reusing `self._dice_roller`; omitting `roller`
