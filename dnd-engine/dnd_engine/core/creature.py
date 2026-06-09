@@ -69,13 +69,34 @@ class MovementMode(str, Enum):
     BURROW = "burrow"
 
 
+ABILITY_SCORE_FLOOR = 1
+ABILITY_SCORE_CEILING = 30
+ADVENTURER_SCORE_CAP = 20
+
+ABILITY_KEYS = (
+    "strength",
+    "dexterity",
+    "constitution",
+    "intelligence",
+    "wisdom",
+    "charisma",
+)
+
+
 @dataclass
 class Abilities:
     """
     D&D 5E ability scores (STR, DEX, CON, INT, WIS, CHA).
 
-    Ability scores typically range from 1-20 for player characters and monsters.
-    Each score provides a modifier calculated as: (score - 10) // 2
+    Per SRD § Playing the Game › The Six Abilities › Ability Scores, every
+    score is in the inclusive range ``[1, 30]``. Adventurers (player
+    characters) are additionally soft-capped at 20 unless a feature
+    explicitly permits exceeding it; use :meth:`for_adventurer` to enforce
+    that tighter ceiling at construction time. Scores of 0 are only
+    reachable transiently via :meth:`reduce_score`, which the SRD reserves
+    for named ability-score-reducing effects.
+
+    Each score provides a modifier calculated as: ``(score - 10) // 2``.
     """
 
     strength: int
@@ -84,6 +105,90 @@ class Abilities:
     intelligence: int
     wisdom: int
     charisma: int
+
+    def __post_init__(self) -> None:
+        """Validate every score is within the SRD's absolute ``[1, 30]`` range.
+
+        The SRD pins an absolute ceiling of 30 for any creature and a floor
+        of 1 (a score of 0 is only reachable transiently via ability-score
+        reduction effects -- see :meth:`reduce_score`). Out-of-range values
+        at construction time are bugs and raise ``ValueError``.
+        """
+        for key in ABILITY_KEYS:
+            value = getattr(self, key)
+            if not ABILITY_SCORE_FLOOR <= value <= ABILITY_SCORE_CEILING:
+                raise ValueError(
+                    f"Ability score {key}={value} is outside the SRD's "
+                    f"[{ABILITY_SCORE_FLOOR}, {ABILITY_SCORE_CEILING}] range."
+                )
+
+    @classmethod
+    def for_adventurer(
+        cls,
+        *,
+        strength: int,
+        dexterity: int,
+        constitution: int,
+        intelligence: int,
+        wisdom: int,
+        charisma: int,
+        features_allowing_above_20: tuple[str, ...] = (),
+    ) -> Abilities:
+        """Construct an :class:`Abilities` for a player character.
+
+        Adventurers are soft-capped at 20 (SRD § The Six Abilities ›
+        Ability Scores). Scores above 20 are only legal when a feature
+        explicitly permits exceeding the cap (e.g., a magic item or
+        epic-tier feature); pass the names of such features in
+        ``features_allowing_above_20`` to permit the higher value. The
+        absolute ``[1, 30]`` range from :meth:`__post_init__` still
+        applies.
+        """
+        scores = {
+            "strength": strength,
+            "dexterity": dexterity,
+            "constitution": constitution,
+            "intelligence": intelligence,
+            "wisdom": wisdom,
+            "charisma": charisma,
+        }
+        if not features_allowing_above_20:
+            for key, value in scores.items():
+                if value > ADVENTURER_SCORE_CAP:
+                    raise ValueError(
+                        f"Ability score {key}={value} exceeds the adventurer "
+                        f"cap of {ADVENTURER_SCORE_CAP}; supply "
+                        f"`features_allowing_above_20` to permit the higher "
+                        f"value."
+                    )
+        return cls(**scores)
+
+    def reduce_score(self, ability: str, amount: int, source: str) -> None:
+        """Reduce an ability score by ``amount`` from a named effect.
+
+        Implements SRD § The Six Abilities › Ability Scores › "If an effect
+        reduces a score to 0, that effect explains what happens." The
+        ``source`` parameter names that effect; it MUST be a non-empty
+        string so a score cannot be driven to (or below) 0 anonymously.
+        The score is floored at 0 -- ability-score reduction cannot drive
+        a score negative.
+        """
+        if ability not in ABILITY_KEYS:
+            raise ValueError(
+                f"Unknown ability {ability!r}; expected one of {ABILITY_KEYS}."
+            )
+        if amount < 0:
+            raise ValueError(
+                f"reduce_score amount must be non-negative; got {amount}."
+            )
+        if not source:
+            raise ValueError(
+                "reduce_score requires a non-empty `source` naming the "
+                "effect (SRD: the effect explains what reaching 0 means)."
+            )
+        current = getattr(self, ability)
+        new_value = max(0, current - amount)
+        setattr(self, ability, new_value)
 
     @property
     def str_mod(self) -> int:
