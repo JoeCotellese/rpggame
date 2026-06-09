@@ -26,7 +26,13 @@ import inspect
 import pytest
 
 from dnd_engine.core.combat import CombatEngine
-from dnd_engine.core.creature import Abilities, Creature
+from dnd_engine.core.creature import (
+    Abilities,
+    Cover,
+    Creature,
+    Size,
+    creature_provides_cover,
+)
 from dnd_engine.core.dice import DiceRoller
 
 pytestmark = pytest.mark.srd(
@@ -313,16 +319,15 @@ class TestAttackStructure_Step2_DetermineModifiers:
         assert "disadvantage" in sig.parameters
 
     def test_cover_is_an_input_to_step_2(self) -> None:
-        pytest.skip(
-            "GAP: Cover is the headline Step-2 modifier, and it is not "
-            "implemented anywhere. `CombatEngine.resolve_attack` "
-            "(dnd-engine/dnd_engine/core/combat.py:91) has no `cover` "
-            "parameter, `GameState.get_effective_ac` "
-            "(dnd-engine/dnd_engine/core/game_state.py:2777) layers AC "
-            "modifiers but has no cover source, and no code path "
-            "applies the SRD's +2 / +5 AC bonus. Tracked by issue "
-            "#473."
-        )
+        """`resolve_attack(cover=...)` is the Step-2 cover seam.
+
+        Cover is the headline Step-2 modifier ("the GM determines
+        whether the target has Cover"). The engine's consumption seam
+        is the `cover` parameter on `CombatEngine.resolve_attack`.
+        """
+        sig = inspect.signature(CombatEngine.resolve_attack)
+        assert "cover" in sig.parameters
+        assert sig.parameters["cover"].default == Cover.NONE
 
 
 class TestAttackStructure_Step3_ResolveTheAttack:
@@ -406,15 +411,25 @@ class TestCover_Intro:
     """
 
     def test_cover_state_is_representable_on_an_attack(self) -> None:
-        pytest.skip(
-            "GAP: cover is not modeled anywhere. There is no enum / "
-            "string for the three degrees, no `cover` parameter on "
-            "`CombatEngine.resolve_attack` "
-            "(dnd-engine/dnd_engine/core/combat.py:91), and no cover-"
-            "modifier source in `GameState.get_effective_ac` "
-            "(dnd-engine/dnd_engine/core/game_state.py:2777). Tracked "
-            "by issue #473."
-        )
+        """The three SRD degrees of cover round-trip through the enum.
+
+        Cover is modeled as a `Cover` enum with the three SRD degrees
+        plus an explicit `NONE`, and accepted as a kwarg by
+        `CombatEngine.resolve_attack`.
+        """
+        # All three SRD degrees plus an explicit no-cover state.
+        assert {Cover.NONE, Cover.HALF, Cover.THREE_QUARTERS, Cover.TOTAL} == set(Cover)
+
+        engine, attacker, defender = _make_engine_and_combatants()
+        # Each degree is accepted without error.
+        for degree in Cover:
+            engine.resolve_attack(
+                attacker=attacker,
+                defender=defender,
+                attack_bonus=5,
+                damage_dice="1d8+3",
+                cover=degree,
+            )
 
 
 class TestCover_Geometry:
@@ -425,15 +440,33 @@ class TestCover_Geometry:
     """
 
     def test_cover_only_applies_when_attack_originates_on_opposite_side(self) -> None:
-        pytest.skip(
-            "GAP: no cover system exists, so the geometric carve-out "
-            "is also missing. Once `resolve_attack` accepts a `cover` "
-            "parameter (#473), this rule lives in the *caller* (the "
-            "client computes line-of-sight, akin to how "
-            "`dnd-engine/dnd_engine/systems/ranged_attacks.py:24` "
-            "currently lets the caller pass an `attacker_visible_to` "
-            "callback). Tracked by issue #473."
+        """Geometry lives in the caller; the engine consumes the result.
+
+        Per plan-03, line-of-sight / which-side-of-the-cover lives in
+        the caller (the client). The engine's job is to honor whatever
+        degree the caller resolved: when the caller decides no cover
+        applies (attacker on the same side as the defender), it passes
+        `Cover.NONE` and the AC bump is zero.
+        """
+        engine, attacker, defender = _make_engine_and_combatants()
+        # Same defender, two callers: one resolves to NONE (attacker
+        # on the same side as the defender), one to HALF (opposite
+        # side). The engine produces a +2 AC delta between them.
+        result_same_side = engine.resolve_attack(
+            attacker=attacker,
+            defender=defender,
+            attack_bonus=5,
+            damage_dice="1d8+3",
+            cover=Cover.NONE,
         )
+        result_opposite = engine.resolve_attack(
+            attacker=attacker,
+            defender=defender,
+            attack_bonus=5,
+            damage_dice="1d8+3",
+            cover=Cover.HALF,
+        )
+        assert result_opposite.target_ac - result_same_side.target_ac == 2
 
 
 class TestCover_NoStacking:
@@ -447,13 +480,24 @@ class TestCover_NoStacking:
     """
 
     def test_only_most_protective_cover_applies(self) -> None:
-        pytest.skip(
-            "GAP: with no cover system in place (issue #473), the "
-            "'most protective applies' no-stacking rule has no code "
-            "path. Mirrors the no-stacking rule for damage modifiers "
-            "(issue #468), which is also pending a pipeline. Tracked "
-            "by issue #473."
+        """No-stacking is enforced by the single-value API.
+
+        `resolve_attack` accepts one `Cover` value, so the SRD
+        no-stacking rule ("only the most protective degree applies")
+        is enforced by construction: the caller resolves the winner
+        before calling, and the engine applies exactly one bonus.
+        """
+        engine, attacker, defender = _make_engine_and_combatants()
+        # Caller resolves Half + Three-Quarters -> Three-Quarters wins.
+        result = engine.resolve_attack(
+            attacker=attacker,
+            defender=defender,
+            attack_bonus=5,
+            damage_dice="1d8+3",
+            cover=Cover.THREE_QUARTERS,
         )
+        # +5 (not +5+2=+7) on top of base 13.
+        assert result.target_ac == defender._base_ac + 5
 
 
 class TestCover_HalfCover:
@@ -465,25 +509,54 @@ class TestCover_HalfCover:
     """
 
     def test_half_cover_grants_plus_two_ac(self) -> None:
-        pytest.skip(
-            "GAP: no cover system, so no +2 AC application. "
-            "`GameState.get_effective_ac` "
-            "(dnd-engine/dnd_engine/core/game_state.py:2777) layers AC "
-            "modifiers from spells and effects but has no per-attack "
-            "cover input — cover is a property of *this* attack's "
-            "geometry, not of the defender's persistent state. Tracked "
-            "by issue #473."
+        """Half cover adds +2 to the defender's AC for this attack."""
+        engine, attacker, defender = _make_engine_and_combatants()
+        baseline = engine.resolve_attack(
+            attacker=attacker,
+            defender=defender,
+            attack_bonus=5,
+            damage_dice="1d8+3",
         )
+        with_half = engine.resolve_attack(
+            attacker=attacker,
+            defender=defender,
+            attack_bonus=5,
+            damage_dice="1d8+3",
+            cover=Cover.HALF,
+        )
+        assert with_half.target_ac - baseline.target_ac == 2
 
     def test_half_cover_grants_plus_two_to_dex_saves(self) -> None:
-        pytest.skip(
-            "GAP: cover's saving-throw side is not implemented. "
-            "`Creature.make_saving_throw` "
-            "(dnd-engine/dnd_engine/core/creature.py) has no `cover` "
-            "kwarg, and no spell-save path (e.g., Fireball) bumps DEX "
-            "saves by +2 when the target is behind half cover. Tracked "
-            "by issue #473."
-        )
+        """Half cover adds +2 to a DEX save (Fireball-shaped effect).
+
+        The +2 is surfaced via the `circumstantial` telemetry slot
+        (per SRD Step 5) and reflected in `total = roll + modifier +
+        circumstantial`.
+        """
+        _, _, defender = _make_engine_and_combatants()
+        result = defender.make_saving_throw("dex", dc=10, cover=Cover.HALF)
+        assert result["circumstantial"] == 2
+        assert result["total"] == result["roll"] + result["modifier"] + 2
+
+    def test_creature_two_sizes_smaller_grants_no_cover(self) -> None:
+        """A creature two sizes smaller than the target grants no cover.
+
+        SRD § Cover: a creature provides cover unless it is two or
+        more sizes smaller than the target. The engine consumes a
+        resolved `Cover` degree from the caller, but exposes a
+        helper (`creature_provides_cover`) the caller uses to gate
+        the two-sizes-smaller carve-out before deciding which degree
+        to pass.
+        """
+        # Medium target: Tiny is two sizes smaller, Small is one.
+        assert creature_provides_cover(Size.SMALL, Size.MEDIUM) is True
+        assert creature_provides_cover(Size.TINY, Size.MEDIUM) is False
+        # Large target: Small is two sizes smaller, Medium is one.
+        assert creature_provides_cover(Size.MEDIUM, Size.LARGE) is True
+        assert creature_provides_cover(Size.SMALL, Size.LARGE) is False
+        # Bigger-or-equal providers always grant cover.
+        assert creature_provides_cover(Size.LARGE, Size.MEDIUM) is True
+        assert creature_provides_cover(Size.MEDIUM, Size.MEDIUM) is True
 
 
 class TestCover_ThreeQuartersCover:
@@ -495,21 +568,41 @@ class TestCover_ThreeQuartersCover:
     """
 
     def test_three_quarters_cover_grants_plus_five_ac(self) -> None:
-        pytest.skip(
-            "GAP: no cover system. Same code path as the half-cover AC "
-            "bonus above — `resolve_attack` "
-            "(dnd-engine/dnd_engine/core/combat.py:91) lacks a `cover` "
-            "parameter and `get_effective_ac` has no cover source. "
-            "Tracked by issue #473."
+        """Three-quarters cover adds +5 to the defender's AC."""
+        engine, attacker, defender = _make_engine_and_combatants()
+        baseline = engine.resolve_attack(
+            attacker=attacker,
+            defender=defender,
+            attack_bonus=5,
+            damage_dice="1d8+3",
         )
+        with_tq = engine.resolve_attack(
+            attacker=attacker,
+            defender=defender,
+            attack_bonus=5,
+            damage_dice="1d8+3",
+            cover=Cover.THREE_QUARTERS,
+        )
+        assert with_tq.target_ac - baseline.target_ac == 5
 
     def test_three_quarters_cover_grants_plus_five_to_dex_saves(self) -> None:
-        pytest.skip(
-            "GAP: cover's saving-throw side is not implemented. "
-            "`Creature.make_saving_throw` "
-            "(dnd-engine/dnd_engine/core/creature.py) has no `cover` "
-            "kwarg. Tracked by issue #473."
-        )
+        """Three-quarters cover adds +5 to a DEX save."""
+        _, _, defender = _make_engine_and_combatants()
+        result = defender.make_saving_throw("dex", dc=10, cover=Cover.THREE_QUARTERS)
+        assert result["circumstantial"] == 5
+        assert result["total"] == result["roll"] + result["modifier"] + 5
+
+    def test_cover_does_not_apply_to_non_dex_saves(self) -> None:
+        """Per SRD the cover save bonus is DEX-only.
+
+        Cover protects against effects that originate at a point
+        (Fireball, Lightning Bolt) and target DEX. WIS/CON/etc. saves
+        are unaffected — a target behind a tree is not better at
+        resisting a Hold Person.
+        """
+        _, _, defender = _make_engine_and_combatants()
+        result = defender.make_saving_throw("wis", dc=10, cover=Cover.THREE_QUARTERS)
+        assert result["circumstantial"] == 0
 
 
 class TestCover_TotalCover:
@@ -520,14 +613,22 @@ class TestCover_TotalCover:
     """
 
     def test_total_cover_rejects_an_attack_at_step_1(self) -> None:
-        pytest.skip(
-            "GAP: there is no early-rejection path for an attack "
-            "against a Total-cover target. `CombatEngine.resolve_attack`"
-            " (dnd-engine/dnd_engine/core/combat.py:91) and "
-            "`GameState.execute_player_attack` "
-            "(dnd-engine/dnd_engine/core/game_state.py:2182) will both "
-            "happily roll dice against a fully-covered creature. The "
-            "Total-cover rule belongs at Step 1 ('can't be targeted "
-            "directly') rather than at the AC layer. Tracked by issue "
-            "#473."
+        """Total cover short-circuits the attack at Step 1 with a sentinel.
+
+        SRD: a target with Total Cover "can't be targeted directly."
+        `CombatEngine.resolve_attack` returns an `AttackResult` with
+        `attack_roll=0` (the same sentinel reach-rejection uses),
+        `hit=False`, and zero damage. No dice are rolled.
+        """
+        engine, attacker, defender = _make_engine_and_combatants()
+        result = engine.resolve_attack(
+            attacker=attacker,
+            defender=defender,
+            attack_bonus=5,
+            damage_dice="1d8+3",
+            cover=Cover.TOTAL,
         )
+        assert result.attack_roll == 0
+        assert result.hit is False
+        assert result.damage == 0
+        assert result.critical_hit is False

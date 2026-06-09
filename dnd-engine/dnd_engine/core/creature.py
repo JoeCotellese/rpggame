@@ -49,6 +49,71 @@ class Size(str, Enum):
         }[self]
 
 
+class Cover(str, Enum):
+    """
+    SRD cover degrees (SRD § Playing the Game › Making an Attack › Cover).
+
+    Half and Three-Quarters cover bump the target's AC and DEX saves by
+    +2 and +5 respectively. Total cover means the target cannot be
+    targeted directly — `CombatEngine.resolve_attack` short-circuits to
+    a missed-target sentinel result.
+
+    Line-of-sight geometry — which obstacles sit between attacker and
+    defender, and which degree they grant — is the caller's job (the
+    client computes geometry from positions; the engine consumes the
+    resolved degree). This mirrors the ranged-range seam where the
+    caller supplies the gated decision.
+
+    Per SRD "no stacking", the most-protective degree applies; this API
+    takes a single `Cover` value, so no-stacking is enforced by
+    construction — the caller picks the winner before calling.
+    """
+
+    NONE = "none"
+    HALF = "half"
+    THREE_QUARTERS = "three_quarters"
+    TOTAL = "total"
+
+    @property
+    def ac_bonus(self) -> int:
+        """+2 for Half, +5 for Three-Quarters, 0 otherwise (incl. Total)."""
+        return {
+            Cover.NONE: 0,
+            Cover.HALF: 2,
+            Cover.THREE_QUARTERS: 5,
+            Cover.TOTAL: 0,
+        }[self]
+
+    @property
+    def dex_save_bonus(self) -> int:
+        """Saves track AC: +2 / +5 for Half / Three-Quarters; 0 otherwise."""
+        return self.ac_bonus
+
+
+_SIZE_ORDER = (
+    Size.TINY,
+    Size.SMALL,
+    Size.MEDIUM,
+    Size.LARGE,
+    Size.HUGE,
+    Size.GARGANTUAN,
+)
+
+
+def creature_provides_cover(provider_size: Size, target_size: Size) -> bool:
+    """
+    Whether a creature of `provider_size` can grant cover to a target of `target_size`.
+
+    SRD § Playing the Game › Making an Attack › Cover: a creature
+    provides cover unless it is two or more sizes smaller than the
+    target. (A halfling can hide behind a human; a pixie cannot grant
+    cover to a dragon.)
+    """
+    provider_idx = _SIZE_ORDER.index(provider_size)
+    target_idx = _SIZE_ORDER.index(target_size)
+    return (target_idx - provider_idx) < 2
+
+
 class MovementMode(str, Enum):
     """
     SRD movement modes (SRD § Playing the Game › Movement › Movement Modes).
@@ -174,13 +239,9 @@ class Abilities:
         a score negative.
         """
         if ability not in ABILITY_KEYS:
-            raise ValueError(
-                f"Unknown ability {ability!r}; expected one of {ABILITY_KEYS}."
-            )
+            raise ValueError(f"Unknown ability {ability!r}; expected one of {ABILITY_KEYS}.")
         if amount < 0:
-            raise ValueError(
-                f"reduce_score amount must be non-negative; got {amount}."
-            )
+            raise ValueError(f"reduce_score amount must be non-negative; got {amount}.")
         if not source:
             raise ValueError(
                 "reduce_score requires a non-empty `source` naming the "
@@ -856,6 +917,7 @@ class Creature:
         circumstantial: int = 0,
         auto_fail: bool = False,
         event_bus=None,
+        cover: Cover = Cover.NONE,
     ) -> dict:
         """
         Roll an ability saving throw against a DC.
@@ -878,6 +940,14 @@ class Creature:
                 and the result dict reports `success=False`, `roll=0`,
                 `total=modifier`.
             event_bus: Optional EventBus instance to emit saving throw event
+            cover: SRD § Playing the Game › Making an Attack › Cover.
+                Half / Three-Quarters cover bump DEX saves by +2 / +5
+                against effects that originate at a point (Fireball,
+                etc.). The bonus applies only when `ability` is "dex" /
+                "dexterity"; for other abilities it is ignored. Total
+                cover has no save bonus — per SRD a totally-covered
+                creature usually can't be targeted, but if a save still
+                resolves the cover degree contributes nothing.
 
         Returns:
             Dictionary with:
@@ -929,6 +999,13 @@ class Creature:
             and self.speed > 0
         ):
             advantage = True
+
+        # SRD § Cover: Half / Three-Quarters cover bumps DEX saves by
+        # +2 / +5 against effects that originate at a point. Folded
+        # into the circumstantial bonus so it surfaces on the result
+        # dict alongside other Step-5 modifiers.
+        if ability_short == "dex":
+            circumstantial += cover.dex_save_bonus
 
         # Get ability modifier
         if ability_full == "strength":

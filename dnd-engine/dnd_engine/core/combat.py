@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from dnd_engine.core.combat_geometry import attack_reach_for, is_ranged_action
-from dnd_engine.core.creature import Creature
+from dnd_engine.core.creature import Cover, Creature
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.distance import distance_in_feet
 from dnd_engine.rules.damage import apply_damage_adjustments, apply_damage_modifiers
@@ -143,6 +143,7 @@ class CombatEngine:
         attacker_sees_defender: VisibilityRelation | None = None,
         defender_sees_attacker: VisibilityRelation | None = None,
         circumstantial: int = 0,
+        cover: Cover = Cover.NONE,
     ) -> AttackResult:
         """
         Resolve a complete attack.
@@ -199,10 +200,45 @@ class CombatEngine:
                 telemetry. Hit determination uses
                 ``attack_roll + attack_bonus + circumstantial`` so a
                 Bless-like bonus can flip a borderline miss.
+            cover: SRD § Playing the Game › Making an Attack › Cover.
+                The caller resolves geometry (which obstacles sit
+                between attacker and defender, whether a creature
+                between them is two-sizes-smaller and therefore grants
+                no cover, which of multiple obstacles wins under "most
+                protective applies") and passes the single resulting
+                degree. ``HALF`` / ``THREE_QUARTERS`` add +2 / +5 to
+                the defender's effective AC for this attack only.
+                ``TOTAL`` short-circuits the attack at Step 1 — the
+                target "can't be targeted directly" — and the engine
+                returns a sentinel ``AttackResult`` (``attack_roll=0``,
+                ``hit=False``, ``damage=0``) with no dice rolled and
+                no side effects (no hidden-state revelation, no Help
+                consumption). Default ``Cover.NONE`` preserves legacy
+                behavior for callers that don't compute geometry.
 
         Returns:
             AttackResult containing full attack details including sneak attack if applicable
         """
+        # SRD § Cover › Total Cover: "a target with Total Cover can't
+        # be targeted directly by an attack or a spell." Short-circuit
+        # at Step 1 (Choose a Target) with a sentinel result mirroring
+        # the reach-rejection shape (`attack_roll=0`). No dice are
+        # rolled, no Hidden state is consumed, no Help is spent.
+        if cover == Cover.TOTAL:
+            return AttackResult(
+                attacker_name=attacker.name,
+                defender_name=defender.name,
+                attack_roll=0,
+                attack_bonus=attack_bonus,
+                target_ac=defender._base_ac,
+                hit=False,
+                damage=0,
+                critical_hit=False,
+                advantage=advantage,
+                disadvantage=disadvantage,
+                circumstantial=circumstantial,
+            )
+
         # SRD § Playing the Game › Melee Attacks › Reach: a melee attack
         # may only target a creature within the attacker's reach (5 ft
         # by default; greater for some creatures/weapons as noted on
@@ -228,18 +264,16 @@ class CombatEngine:
         # The short-circuit emits an ``AttackResult`` with
         # ``attack_roll=0`` as a sentinel so callers / tests can
         # distinguish a gate rejection from a missed roll.
-        if (
-            action is not None
-            and game_state is not None
-            and not is_ranged_action(action)
-        ):
+        if action is not None and game_state is not None and not is_ranged_action(action):
             attacker_pos = getattr(attacker, "position", None)
             defender_pos = getattr(defender, "position", None)
             if attacker_pos is not None and defender_pos is not None:
                 reach_ft = attack_reach_for(action)
                 distance_ft = distance_in_feet(
-                    attacker_pos.x, attacker_pos.y,
-                    defender_pos.x, defender_pos.y,
+                    attacker_pos.x,
+                    attacker_pos.y,
+                    defender_pos.x,
+                    defender_pos.y,
                 )
                 if distance_ft > reach_ft:
                     return AttackResult(
@@ -322,12 +356,16 @@ class CombatEngine:
         critical_hit = attack_roll == 20
         critical_miss = attack_roll == 1
 
-        # Get effective AC (includes modifiers from spells/effects if game_state provided)
+        # Get effective AC (includes modifiers from spells/effects if game_state provided).
+        # SRD § Cover: Half / Three-Quarters cover add +2 / +5 to the
+        # defender's AC for this attack only; total cover was already
+        # short-circuited above. The cover bump is owned by
+        # `get_effective_ac` so a single place layers the bonus.
         if game_state is not None:
-            defender_ac = game_state.get_effective_ac(defender)
+            defender_ac = game_state.get_effective_ac(defender, cover=cover)
         else:
             # Fallback to base AC if no game_state (e.g., in unit tests)
-            defender_ac = defender._base_ac
+            defender_ac = defender._base_ac + cover.ac_bonus
 
         # Determine hit/miss. Circumstantial bonus/penalty is summed
         # into the attack total per SRD § Playing the Game › D20 Tests

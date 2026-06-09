@@ -4,7 +4,7 @@
 from enum import Enum
 from typing import Any
 
-from dnd_engine.core.creature import Abilities, Creature, Size
+from dnd_engine.core.creature import Abilities, Cover, Creature, Size
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.spell import Spell
 from dnd_engine.systems.d20 import d20_test
@@ -370,6 +370,7 @@ class Character(Creature):
         use_heroic_inspiration: bool = False,
         auto_fail: bool = False,
         event_bus=None,
+        cover: Cover = Cover.NONE,
     ) -> dict[str, Any]:
         """
         Roll a saving throw against a DC.
@@ -392,6 +393,11 @@ class Character(Creature):
                 `total=modifier`. Used by willing targets opting into
                 friendly Charm/Polymorph and similar effects.
             event_bus: Optional EventBus instance to emit saving throw event
+            cover: SRD § Playing the Game › Making an Attack › Cover.
+                Half / Three-Quarters cover bump DEX saves by +2 / +5
+                against effects that originate at a point (Fireball,
+                etc.). Applies only to DEX saves; ignored for other
+                abilities. Total cover contributes no save bonus.
 
         Returns:
             Dictionary with:
@@ -483,6 +489,12 @@ class Character(Creature):
         ):
             advantage = True
 
+        # SRD § Cover: Half / Three-Quarters cover bumps DEX saves by
+        # +2 / +5 against effects that originate at a point. Folded
+        # into the circumstantial bonus.
+        if ability_short == "dex":
+            circumstantial += cover.dex_save_bonus
+
         # Legacy `make_saving_throw` constructed a fresh `DiceRoller`
         # rather than reusing `self._dice_roller`; omitting `roller`
         # preserves that — the primitive defaults to a fresh roller.
@@ -497,10 +509,8 @@ class Character(Creature):
             "circumstantial": circumstantial,
         }
         result = d20_test(**d20_kwargs)
-        result, heroic_inspiration_spent = (
-            self._maybe_reroll_d20_for_heroic_inspiration(
-                result, use_heroic_inspiration, **d20_kwargs
-            )
+        result, heroic_inspiration_spent = self._maybe_reroll_d20_for_heroic_inspiration(
+            result, use_heroic_inspiration, **d20_kwargs
         )
 
         success = result.succeeds_against(dc)
@@ -1099,10 +1109,8 @@ class Character(Creature):
             "circumstantial": circumstantial,
         }
         result = d20_test(**d20_kwargs, roller=self._dice_roller)
-        result, heroic_inspiration_spent = (
-            self._maybe_reroll_d20_for_heroic_inspiration(
-                result, use_heroic_inspiration, **d20_kwargs
-            )
+        result, heroic_inspiration_spent = self._maybe_reroll_d20_for_heroic_inspiration(
+            result, use_heroic_inspiration, **d20_kwargs
         )
 
         success = result.succeeds_against(dc)
@@ -1193,10 +1201,8 @@ class Character(Creature):
             "circumstantial": circumstantial,
         }
         result = d20_test(**d20_kwargs, roller=self._dice_roller)
-        result, heroic_inspiration_spent = (
-            self._maybe_reroll_d20_for_heroic_inspiration(
-                result, use_heroic_inspiration, **d20_kwargs
-            )
+        result, heroic_inspiration_spent = self._maybe_reroll_d20_for_heroic_inspiration(
+            result, use_heroic_inspiration, **d20_kwargs
         )
 
         return {
@@ -1282,14 +1288,10 @@ class Character(Creature):
             KeyError: If ``skill`` is not present in ``skills_data``.
         """
         if skill is None and ability is None:
-            raise ValueError(
-                "make_tool_check requires either 'skill' or 'ability'"
-            )
+            raise ValueError("make_tool_check requires either 'skill' or 'ability'")
 
         tool_proficient = self.is_proficient_with_tool(tool_id)
-        skill_proficient = (
-            skill is not None and skill in self.skill_proficiencies
-        )
+        skill_proficient = skill is not None and skill in self.skill_proficiencies
 
         # SRD: tool-only PB requires tool proficiency. When the caller
         # has the skill but not the tool, defer to the skill path so
@@ -1298,7 +1300,9 @@ class Character(Creature):
         # aren't proficient with.
         if not tool_proficient and skill_proficient:
             result = self.make_skill_check(
-                skill, dc, skills_data,
+                skill,
+                dc,
+                skills_data,
                 advantage=advantage,
                 disadvantage=disadvantage,
                 circumstantial=circumstantial,
@@ -1317,16 +1321,12 @@ class Character(Creature):
                 "skill_proficient": True,
                 "advantage_from_tool_skill": False,
                 "circumstantial": circumstantial,
-                "heroic_inspiration_spent": result.get(
-                    "heroic_inspiration_spent", False
-                ),
+                "heroic_inspiration_spent": result.get("heroic_inspiration_spent", False),
             }
 
         if skill is not None:
             if skills_data is None:
-                raise ValueError(
-                    "make_tool_check requires 'skills_data' when 'skill' is given"
-                )
+                raise ValueError("make_tool_check requires 'skills_data' when 'skill' is given")
             if skill not in skills_data:
                 raise KeyError(f"Unknown skill: {skill}")
             ability_short = skills_data[skill]["ability"]
@@ -1360,15 +1360,11 @@ class Character(Creature):
             "circumstantial": circumstantial,
         }
         result = d20_test(**d20_kwargs, roller=self._dice_roller)
-        result, heroic_inspiration_spent = (
-            self._maybe_reroll_d20_for_heroic_inspiration(
-                result, use_heroic_inspiration, **d20_kwargs
-            )
+        result, heroic_inspiration_spent = self._maybe_reroll_d20_for_heroic_inspiration(
+            result, use_heroic_inspiration, **d20_kwargs
         )
 
-        modifier = ability_mod + (
-            self.proficiency_bonus if tool_proficient else 0
-        )
+        modifier = ability_mod + (self.proficiency_bonus if tool_proficient else 0)
 
         return {
             "tool": tool_id,
