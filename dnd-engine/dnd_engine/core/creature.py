@@ -749,6 +749,7 @@ class Creature:
         advantage: bool = False,
         disadvantage: bool = False,
         circumstantial: int = 0,
+        auto_fail: bool = False,
         event_bus=None,
     ) -> dict:
         """
@@ -766,6 +767,11 @@ class Creature:
                 spells, or "another rule" per SRD § Playing the Game ›
                 D20 Tests › Step 5. Forwarded to the d20-test primitive
                 and surfaced on the returned dict for telemetry.
+            auto_fail: SRD § Playing the Game › Saving Throws › "If you
+                don't want to resist the effect, you can choose to fail
+                the save without rolling." When True, no d20 is rolled
+                and the result dict reports `success=False`, `roll=0`,
+                `total=modifier`.
             event_bus: Optional EventBus instance to emit saving throw event
 
         Returns:
@@ -834,6 +840,22 @@ class Creature:
             modifier = self.abilities.cha_mod
         else:
             raise ValueError(f"Invalid ability name: {ability}")
+
+        # SRD § Playing the Game › Saving Throws › Choose to Fail:
+        # "If you don't want to resist the effect, you can choose to
+        # fail the save without rolling." Short-circuit before any
+        # d20 is rolled and return the same payload shape as the
+        # rolling path.
+        if auto_fail:
+            return {
+                "success": False,
+                "roll": 0,
+                "modifier": modifier,
+                "total": modifier,
+                "dc": dc,
+                "ability": ability_short,
+                "circumstantial": circumstantial,
+            }
 
         # Creatures have no proficient saves in the data model today
         # (PB-from-CR derivation is plan-08 slice 2). The primitive's
