@@ -1154,6 +1154,27 @@ class GameState:
                 movement_remaining=budget,
             )
 
+        # SRD § Playing on a Grid › Corners: "Diagonal movement can't
+        # cross the corner of a wall, a large object, or other terrain
+        # feature that fills its space." A diagonal step is illegal
+        # when either cardinal neighbor between current and destination
+        # is space-filling — the diagonal segment clips that neighbor's
+        # corner even though the destination tile itself is clear.
+        if (
+            dx != 0
+            and dy != 0
+            and (
+                spatial_map.is_blocking(current.x + dx, current.y)
+                or spatial_map.is_blocking(current.x, current.y + dy)
+            )
+        ):
+            return MoveResult(
+                ok=False,
+                reason="diagonal blocked by wall corner",
+                position=current,
+                movement_remaining=budget,
+            )
+
         occupant = self.spatial.occupant_at(destination)
         allow_overlap = False
         if occupant is not None and occupant != entity_id:

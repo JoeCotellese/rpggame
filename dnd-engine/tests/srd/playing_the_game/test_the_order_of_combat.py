@@ -255,9 +255,7 @@ class TestInitiative_GroupOfIdenticalCreatures:
         assert len(entries) == 3
         # All three share the same d20 result.
         rolls = {entry.initiative_roll for entry in entries}
-        assert len(rolls) == 1, (
-            f"identical-creatures group must share one roll; got {rolls}"
-        )
+        assert len(rolls) == 1, f"identical-creatures group must share one roll; got {rolls}"
         # And the same total (all have the same DEX modifier).
         totals = {entry.initiative_total for entry in entries}
         assert len(totals) == 1
@@ -288,9 +286,7 @@ class TestInitiative_Surprise:
         for seed in range(200):
             tracker = InitiativeTracker(DiceRoller(seed=seed))
             normal = tracker.add_combatant(_make_creature("Normal", dex=10))
-            surprised = tracker.add_combatant(
-                _make_creature("Ambushed", dex=10), surprised=True
-            )
+            surprised = tracker.add_combatant(_make_creature("Ambushed", dex=10), surprised=True)
             normal_totals.append(normal.initiative_roll)
             surprised_totals.append(surprised.initiative_roll)
 
@@ -426,10 +422,7 @@ class TestInitiative_Ties:
         tracker.dice_roller = DiceRoller(seed=1)
         tracker.add_combatant(monster)
 
-        if (
-            tracker.combatants[0].initiative_roll
-            == tracker.combatants[1].initiative_roll
-        ):
+        if tracker.combatants[0].initiative_roll == tracker.combatants[1].initiative_roll:
             # Tied counts: PC must come first.
             # (Their TOTALS differ — PC +0 vs monster +2 — but the
             # SRD 2024 wording considers the count after modifier;
@@ -437,15 +430,13 @@ class TestInitiative_Ties:
             # exactly opposite, the PC still wins on side.)
             tied_pairs = [
                 (a, b)
-                for a, b in zip(
-                    tracker.combatants, tracker.combatants[1:], strict=False
-                )
+                for a, b in zip(tracker.combatants, tracker.combatants[1:], strict=False)
                 if a.initiative_total == b.initiative_total
             ]
             for a, b in tied_pairs:
-                assert isinstance(a.creature, Character) or not isinstance(
-                    b.creature, Character
-                ), "On tied Initiative, a PC must precede a non-PC."
+                assert isinstance(a.creature, Character) or not isinstance(b.creature, Character), (
+                    "On tied Initiative, a PC must precede a non-PC."
+                )
 
         # Independent assertion that does not depend on the roll
         # coming out tied: feed two synthetic tied entries directly
@@ -806,16 +797,73 @@ class TestPlayingOnGrid_Corners:
     """
 
     def test_diagonal_move_cannot_cross_a_wall_corner(self) -> None:
-        pytest.skip(
-            "GAP: corner-blocking is not implemented. "
-            "`chebyshev_distance` (dnd_engine/core/distance.py:5-28) "
-            "treats every diagonal as a free 1-square step, with no "
-            "consultation of map / wall data. The client-2d combat-"
-            "move path (client-2d/src/client_2d/session.py:912) checks "
-            "only the destination tile for walls, never the two "
-            "orthogonal neighbors that form the corner. Tracked by "
-            "issue #476."
+        """`attempt_combat_step` rejects a diagonal that clips a wall corner.
+
+        Geometry: a wall at ``(1, 0)`` and a creature at ``(0, 0)``. The
+        diagonal step ``(dx=1, dy=1)`` would land on a floor tile
+        ``(1, 1)`` but its two cardinal neighbors are ``(1, 0)`` (wall)
+        and ``(0, 1)`` (floor). Per the SRD ("Diagonal movement can't
+        cross the corner of a wall…"), the step must fail because one
+        of those cardinal neighbors is space-filling — the diagonal
+        would clip the wall's corner. Pairs with
+        ``test_spatial_index.py::test_open_diagonal_corner_to_corner``
+        which pins the open-diagonal symmetry.
+        """
+        from dnd_engine.core.character import Character, CharacterClass
+        from dnd_engine.core.game_state import GameState
+        from dnd_engine.core.map import Map, TileType
+        from dnd_engine.core.party import Party
+        from dnd_engine.core.position import Position
+        from dnd_engine.rules.loader import DataLoader
+        from dnd_engine.utils.events import EventBus
+
+        tiles: dict[tuple[int, int], TileType] = {
+            (x, y): TileType.FLOOR for x in range(3) for y in range(3)
+        }
+        tiles[(1, 0)] = TileType.WALL
+        grid_map = Map(width=3, height=3, tiles=tiles)
+
+        abilities = Abilities(
+            strength=14,
+            dexterity=14,
+            constitution=14,
+            intelligence=10,
+            wisdom=10,
+            charisma=10,
         )
+        pc = Character(
+            name="Diag",
+            character_class=CharacterClass.FIGHTER,
+            level=1,
+            abilities=abilities,
+            max_hp=12,
+            ac=12,
+            xp=0,
+        )
+        gs = GameState(
+            party=Party(characters=[pc]),
+            dungeon_name="test_dungeon",
+            event_bus=EventBus(),
+            data_loader=DataLoader(),
+            dice_roller=DiceRoller(),
+        )
+        gs.bootstrap_spatial(grid_map)
+        gs.initiative_tracker = InitiativeTracker(dice_roller=gs.dice_roller)
+        gs.initiative_tracker.add_combatant(pc)
+        for idx, entry in enumerate(gs.initiative_tracker.combatants):
+            if entry.creature is pc:
+                gs.initiative_tracker.current_turn_index = idx
+                break
+        gs.initiative_tracker.turn_states[pc].reset(speed=pc.speed)
+        entity_id = f"pc_{pc.name.lower()}"
+        gs.set_position(entity_id, 0, 0)
+
+        result = gs.attempt_combat_step(entity_id, 1, 1)
+
+        assert result.ok is False
+        assert result.reason is not None
+        assert "corner" in result.reason
+        assert result.position == Position(0, 0)
 
 
 class TestPlayingOnGrid_Ranges:
@@ -849,13 +897,46 @@ class TestPlayingOnGrid_Ranges:
         assert distance_in_feet(0, 0, 3, 3) == 15
 
     def test_range_count_honors_corner_blocking(self) -> None:
-        pytest.skip(
-            "GAP: 'count by the shortest route' implicitly excludes "
-            "routes that cross blocked corners, but the engine's "
-            "distance helpers don't take map context. Until corner-"
-            "blocking ships (issue #476), the shortest-route count "
-            "may pass through walls."
-        )
+        """`shortest_route_squares` rejects diagonals that clip wall corners.
+
+        The SRD says "count by the shortest route" but the route can't
+        cross a wall corner. ``chebyshev_distance`` doesn't take map
+        context — ``shortest_route_squares`` does. On an open grid the
+        diagonal route (0,0) → (1,1) is 1 square. With a wall at (1, 0)
+        AND a wall at (0, 1), the diagonal clips the corner of both,
+        so the only legal route runs through (1, 1) via a longer arc
+        that doesn't exist in this 2×2 carve-out — meaning the helper
+        either returns more than the Chebyshev count or reports the
+        target unreachable. The fixture leaves a corridor through
+        (2, 0) → (2, 1) → (1, 1), so the shortest route is 3 squares
+        (vs. Chebyshev's 1).
+        """
+        from dnd_engine.core.distance import shortest_route_squares
+        from dnd_engine.core.map import Map, TileType
+        from dnd_engine.core.position import Position
+
+        tiles: dict[tuple[int, int], TileType] = {
+            (x, y): TileType.FLOOR for x in range(3) for y in range(3)
+        }
+        tiles[(1, 0)] = TileType.WALL
+        tiles[(0, 1)] = TileType.WALL
+        grid_map = Map(width=3, height=3, tiles=tiles)
+
+        # Chebyshev (corner-blind) would say 1.
+        assert chebyshev_distance(0, 0, 1, 1) == 1
+        # Corner-aware shortest route walks (0,0)→(2,0)? No — (1,0) is a
+        # wall. The only legal path is (0,0)→(1,1) via cardinal-only
+        # steps that don't clip the corner: that's blocked too. The
+        # remaining route is (0,0) → ? The wall configuration makes
+        # (1, 1) unreachable from (0, 0) — the helper returns None.
+        assert shortest_route_squares(grid_map, Position(0, 0), Position(1, 1)) is None
+
+        # Sanity: with no walls, the helper agrees with Chebyshev.
+        open_tiles: dict[tuple[int, int], TileType] = {
+            (x, y): TileType.FLOOR for x in range(3) for y in range(3)
+        }
+        open_map = Map(width=3, height=3, tiles=open_tiles)
+        assert shortest_route_squares(open_map, Position(0, 0), Position(2, 2)) == 2
 
 
 class TestEndingCombat_OneSideDefeated:
