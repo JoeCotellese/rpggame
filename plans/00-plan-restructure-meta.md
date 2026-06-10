@@ -7,7 +7,7 @@ Cross-plan audit of epics #530–#539 after observing that several "closed" plan
 | Plan | Epic | Verdict | Children shipped / total | Notes |
 |---|---|---|---|---|
 | plan-01 Action Economy | #530 | **PREMATURE** | 5 / 19 | 14 `NOT_PLANNED` batch-close in 52s window (2026-05-23 18:05:23 → 18:06:15). Dash / Dodge / Help / Knockout / Drop Prone / Search-as-action / Study / outside-combat one-action gate all dormant. |
-| plan-02 Damage-Type Pipeline | #531 | **REAL** | 11 / 11 + #595 | Genuinely shipped end-to-end. Canonical `apply_damage_modifiers` pipeline + AST regression lint (`test_take_damage_pipeline_guard.py`). Metadata wart only: 8 children stamped `NOT_PLANNED` despite matching merged impl PRs. |
+| plan-02 Damage-Type Pipeline | #531 | **REAL** | 11 / 11 + #595 | Genuinely shipped end-to-end. Canonical `apply_damage_modifiers` pipeline + AST regression lint (`test_take_damage_pipeline_guard.py`). Metadata hygiene completed 2026-06-09: 7 children (#461 #462 #464 #466 #468 #470 #490) re-closed `COMPLETED`. |
 | plan-03 Movement / Terrain | #532 | **PARTIAL** | 5 / 8 | OAs / difficult terrain / size + footprint / special speeds shipped. Dormant: cover (#473 — surfaced by orphan #619), per-mode movement costs (#433), pass-through + involuntary Prone (#445), diagonal corner-cutting (#476 unconfirmed). |
 | plan-04 0-HP / Death Saves | #533 | **REAL** | 11 / 11 | Shipped this session. |
 | plan-05 Vision / Stealth | #534 | **PARTIAL** | ~5 / 6 | Real `perception.py` module + `VisibilityRelation` + Hide action shipped. 5 GAP skips in `test_vision_and_light.py` still cite closed #494 and #495 (per-creature lighting, magical Darkness vs Truesight). |
