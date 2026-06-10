@@ -901,15 +901,13 @@ class TestPlayingOnGrid_Ranges:
 
         The SRD says "count by the shortest route" but the route can't
         cross a wall corner. ``chebyshev_distance`` doesn't take map
-        context — ``shortest_route_squares`` does. On an open grid the
-        diagonal route (0,0) → (1,1) is 1 square. With a wall at (1, 0)
-        AND a wall at (0, 1), the diagonal clips the corner of both,
-        so the only legal route runs through (1, 1) via a longer arc
-        that doesn't exist in this 2×2 carve-out — meaning the helper
-        either returns more than the Chebyshev count or reports the
-        target unreachable. The fixture leaves a corridor through
-        (2, 0) → (2, 1) → (1, 1), so the shortest route is 3 squares
-        (vs. Chebyshev's 1).
+        context — ``shortest_route_squares`` does. With walls at
+        ``(1, 0)`` and ``(0, 1)``, the mover at ``(0, 0)`` is boxed in:
+        both cardinal neighbors to ``(1, 1)`` are space-filling, so the
+        diagonal clips a corner and is illegal, and the only orthogonal
+        neighbors are themselves walls. ``(1, 1)`` is unreachable from
+        ``(0, 0)`` and the helper returns ``None`` — even though
+        Chebyshev (corner-blind) would report a distance of 1.
         """
         from dnd_engine.core.distance import shortest_route_squares
         from dnd_engine.core.map import Map, TileType
@@ -924,11 +922,9 @@ class TestPlayingOnGrid_Ranges:
 
         # Chebyshev (corner-blind) would say 1.
         assert chebyshev_distance(0, 0, 1, 1) == 1
-        # Corner-aware shortest route walks (0,0)→(2,0)? No — (1,0) is a
-        # wall. The only legal path is (0,0)→(1,1) via cardinal-only
-        # steps that don't clip the corner: that's blocked too. The
-        # remaining route is (0,0) → ? The wall configuration makes
-        # (1, 1) unreachable from (0, 0) — the helper returns None.
+        # Corner-aware: (0,0) has no legal exit toward (1,1). The
+        # diagonal clips both walls' corners; (1,0) and (0,1) are
+        # themselves walls. (1, 1) is unreachable.
         assert shortest_route_squares(grid_map, Position(0, 0), Position(1, 1)) is None
 
         # Sanity: with no walls, the helper agrees with Chebyshev.
