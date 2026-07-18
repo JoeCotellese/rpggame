@@ -1466,6 +1466,97 @@ class GameState:
             )
         )
 
+    def _reenter_node_surface(self, node_id: str) -> bool:
+        """
+        Re-enter a settlement's node surface via a grid exit naming a node id.
+
+        The reverse direction of the transition seam: an authored grid exit
+        whose destination is a node id (e.g. the crypt stairs back up to town)
+        lands the party at that node. Grid-only arrival concerns (passive
+        perception, enemy checks) do not apply on a node surface.
+
+        Args:
+            node_id: The exit destination, tried as a node id.
+
+        Returns:
+            True if the destination resolved to a node and the surface
+            switched; False if no settlement authors that node.
+        """
+        node_dungeon_name = self.room_registry.get_dungeon_for_node(node_id)
+        if not node_dungeon_name:
+            return False
+        node_dungeon = self.room_registry.load_dungeon(node_dungeon_name)
+        if not node_dungeon or node_id not in node_dungeon.get("nodes", {}):
+            logger.warning(f"Node {node_id} not found in settlement {node_dungeon_name}")
+            return False
+
+        logger.info(
+            f"Transition seam: {self.current_room_id} -> node {node_id} "
+            f"(switched to {node_dungeon_name})"
+        )
+        self._arrive_at_node(node_dungeon_name, node_dungeon, node_id)
+        return True
+
+    def _arrive_at_node(self, dungeon_name: str, dungeon: dict[str, Any], node_id: str) -> None:
+        """
+        Point the game at a settlement node reached across the seam.
+
+        Shared arrival bookkeeping for both seam paths that land on a node
+        surface: the tile-room fields clear, and node history resets — the
+        way back to a grid is always authored, never remembered state.
+        """
+        self.dungeon = dungeon
+        self.dungeon_name = dungeon_name
+        self.current_room_id = None
+        self.previous_room_id = None
+        self.current_node_id = node_id
+        self.previous_node_id = None
+        # Flee direction has no meaning without walked geometry
+        self.last_entry_direction = None
+
+        self._emit_room_enter(node_id, dungeon["nodes"][node_id]["name"])
+        self.time_manager.advance_time(10, reason="surface_transition")
+
+    def _enter_dungeon_via_seam(self, dungeon_name: str, dungeon: dict[str, Any]) -> str:
+        """
+        Switch to a dungeon reached through a node's transition (forward seam).
+
+        Arrival follows the target's surface: a grid dungeon starts at its
+        start room with the usual arrival checks (passive perception, time,
+        enemies — this is the funnel where combat gets a grid); a node
+        target starts at its start node. Node bookkeeping resets on
+        crossing: the way back is authored as a grid exit naming a node id,
+        never remembered state.
+
+        Args:
+            dungeon_name: Target dungeon filename (without .json).
+            dungeon: The loaded (validated, registry-cached) dungeon data.
+
+        Returns:
+            The arrival location id (room or node).
+        """
+        logger.info(f"Transition seam: node {self.current_node_id} -> {dungeon_name}")
+        if dungeon.get("surface") == "node":
+            start_node = dungeon["start_node"]
+            self._arrive_at_node(dungeon_name, dungeon, start_node)
+            return start_node
+
+        # Resolve the arrival room before any state mutates so a malformed
+        # target (no start_room) fails with the game still on the node surface
+        start_room = dungeon["start_room"]
+        self.dungeon = dungeon
+        self.dungeon_name = dungeon_name
+        self.previous_node_id = None
+        self.previous_room_id = None
+        self.last_entry_direction = None
+        self.current_node_id = None
+        self.current_room_id = start_room
+        self._emit_room_enter(start_room, self.get_current_room()["name"])
+        self._check_passive_perception()
+        self.time_manager.advance_time(10, reason="surface_transition")
+        self._check_for_enemies()
+        return start_room
+
     def current_node(self) -> dict[str, Any]:
         """
         Get the current node's data (node surfaces only).
@@ -2024,9 +2115,6 @@ class GameState:
         if not req_check["met"]:
             return False  # Requirements not met
 
-        # Track direction for flee mechanic (before moving)
-        self.last_entry_direction = direction
-
         # Get destination (handle both string and dict formats)
         exit_info = exits[direction]
         if isinstance(exit_info, str):
@@ -2044,22 +2132,30 @@ class GameState:
                 return False
 
             new_dungeon_name = self.room_registry.get_dungeon_for_room(new_room_id)
+            resolved_as_room = False
             if new_dungeon_name:
                 new_dungeon = self.room_registry.load_dungeon(new_dungeon_name)
                 if new_dungeon and new_room_id in new_dungeon.get("rooms", {}):
                     # Switch to new dungeon
                     self.dungeon = new_dungeon
                     self.dungeon_name = new_dungeon_name
+                    resolved_as_room = True
                     logger.info(
                         f"Cross-dungeon move: {self.current_room_id} -> {new_room_id} "
                         f"(switched to {new_dungeon_name})"
                     )
-                else:
-                    logger.warning(f"Room {new_room_id} not found in dungeon {new_dungeon_name}")
-                    return False
-            else:
-                logger.warning(f"No dungeon found for room {new_room_id}")
+            if not resolved_as_room:
+                # A dotted node id can share its prefix with a grid dungeon's
+                # rooms, so the node index is consulted whenever room
+                # resolution comes up empty — not only when the prefix misses.
+                if self._reenter_node_surface(new_room_id):
+                    return True
+                logger.warning(f"No dungeon authors {new_room_id!r} as a room or node")
                 return False
+
+        # Track direction for flee mechanic (before moving); only a resolved
+        # destination may set it, so failed moves never stale the flee path
+        self.last_entry_direction = direction
 
         # Track previous room for narrative transitions
         self.previous_room_id = self.current_room_id
@@ -5956,9 +6052,9 @@ class GameState:
                 "reason": f"Failed to retreat {retreat_direction} - exit may not exist",
             }
 
-        # Get new room info for return data
-        new_room = self.get_current_room()
-        retreat_room_name = new_room.get("name", "Unknown")
+        # Get new location info for return data; a retreat can cross the
+        # transition seam onto a settlement's node surface
+        _, retreat_room_name = self._current_location_identity()
 
         # Emit flee event
         self.event_bus.emit(

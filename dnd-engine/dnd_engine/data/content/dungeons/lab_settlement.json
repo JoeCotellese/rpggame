@@ -33,7 +33,7 @@
         }
       ],
       "transition": {
-        "to": "test_dungeon",
+        "to": "lab_dungeon",
         "gate": {"skill": "athletics", "dc": 10},
         "on_success": "The gate groans open, and stale air rolls up from the dark.",
         "on_failure": "You heave at the gate, but it will not budge."
