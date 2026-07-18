@@ -186,7 +186,8 @@ class CampaignManager:
         campaign = self.load_campaign(campaign_name)
         campaign.last_played = datetime.now()
         campaign.current_dungeon = game_state.dungeon_name
-        campaign.current_room = game_state.current_room_id
+        # Node surfaces have no room; record the node id as the resume location
+        campaign.current_room = game_state.current_room_id or game_state.current_node_id
 
         # Update party character IDs
         campaign.party_character_ids = [char.name for char in game_state.party.characters]
@@ -353,10 +354,17 @@ class CampaignManager:
                     party_hp_parts.append(f"{name} {current_hp}/{max_hp}")
                 party_hp_summary = ", ".join(party_hp_parts)
 
-                # Get location description
-                current_room = game_state_data.get("current_room_id", "Unknown")
+                # Get location description (room id on grid surfaces,
+                # node id on node surfaces)
+                current_room = game_state_data.get("current_room_id")
+                current_node = game_state_data.get("current_node_id")
                 dungeon_name = game_state_data.get("dungeon_name", "Unknown")
-                location = f"{dungeon_name} - Room {current_room}"
+                if current_room is not None:
+                    location = f"{dungeon_name} - Room {current_room}"
+                elif current_node is not None:
+                    location = f"{dungeon_name} - {current_node}"
+                else:
+                    location = f"{dungeon_name} - Unknown"
 
                 save_slot = SaveSlotMetadata(
                     slot_name=save_file.stem,
@@ -516,6 +524,8 @@ class CampaignManager:
             "game_state": {
                 "dungeon_name": game_state.dungeon_name,
                 "current_room_id": game_state.current_room_id,
+                "current_node_id": game_state.current_node_id,
+                "previous_node_id": game_state.previous_node_id,
                 "dungeon_state": self._serialize_dungeon_state(game_state.dungeon),
                 "in_combat": game_state.in_combat,
                 "action_history": game_state.action_history,
@@ -664,8 +674,10 @@ class CampaignManager:
                 game_state.dungeon["rooms"][room_id]["searched"] = room_state.get("searched", False)
                 game_state.dungeon["rooms"][room_id]["enemies"] = room_state.get("enemies", [])
 
-        # Restore current position
+        # Restore current position (room for grid surfaces, node for node surfaces)
         game_state.current_room_id = gs_data["current_room_id"]
+        game_state.current_node_id = gs_data.get("current_node_id")
+        game_state.previous_node_id = gs_data.get("previous_node_id")
 
         # Restore action history
         game_state.action_history = gs_data.get("action_history", [])

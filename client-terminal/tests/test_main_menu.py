@@ -301,6 +301,8 @@ class TestShowCampaignSaveSlots:
         mock_game_state.party.characters = []
         mock_game_state.dungeon_name = "dungeon"
         mock_game_state.current_room_id = "room_1"
+        mock_game_state.current_node_id = None
+        mock_game_state.previous_node_id = None
         mock_game_state.dungeon = {"rooms": {}}
         mock_game_state.action_history = []
         mock_game_state.last_entry_direction = None
@@ -329,6 +331,8 @@ class TestShowCampaignSaveSlots:
         mock_game_state.party.characters = []
         mock_game_state.dungeon_name = "dungeon"
         mock_game_state.current_room_id = "room_1"
+        mock_game_state.current_node_id = None
+        mock_game_state.previous_node_id = None
         mock_game_state.dungeon = {"rooms": {}}
         mock_game_state.action_history = []
         mock_game_state.last_entry_direction = None

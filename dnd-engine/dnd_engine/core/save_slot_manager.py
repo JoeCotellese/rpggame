@@ -343,6 +343,8 @@ class SaveSlotManager:
                 "dungeon_name": game_state.dungeon_name,
                 "campaign_id": game_state.campaign_id,
                 "current_room_id": game_state.current_room_id,
+                "current_node_id": game_state.current_node_id,
+                "previous_node_id": game_state.previous_node_id,
                 "dungeon_state": self._serialize_dungeon_state(game_state.dungeon),
                 "all_dungeon_states": self._serialize_all_dungeon_states(game_state),
                 "in_combat": game_state.in_combat,
@@ -581,8 +583,10 @@ class SaveSlotManager:
         all_dungeon_states = gs_data.get("all_dungeon_states", {})
         self._restore_all_dungeon_states(game_state, all_dungeon_states)
 
-        # Restore current position
+        # Restore current position (room for grid surfaces, node for node surfaces)
         game_state.current_room_id = gs_data["current_room_id"]
+        game_state.current_node_id = gs_data.get("current_node_id")
+        game_state.previous_node_id = gs_data.get("previous_node_id")
 
         # Restore action history
         game_state.action_history = gs_data.get("action_history", [])
@@ -600,14 +604,15 @@ class SaveSlotManager:
                 slot_data["quest_objective_states"]
             )
 
-        # Fire ROOM_ENTER event for the loaded position
-        # This ensures discover objectives trigger for the restored room
+        # Fire ROOM_ENTER event for the loaded position (room or node)
+        # This ensures discover objectives trigger for the restored location
+        location_id, location_name = game_state._current_location_identity()
         game_state.event_bus.emit(
             Event(
                 type=EventType.ROOM_ENTER,
                 data={
-                    "room_id": game_state.current_room_id,
-                    "room_name": game_state.get_current_room().get("name", ""),
+                    "room_id": location_id,
+                    "room_name": location_name,
                     "dungeon_id": game_state.dungeon_name,
                 },
             )

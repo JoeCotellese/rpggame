@@ -185,3 +185,78 @@ class TestResetDungeon:
         assert grid_game.is_node_surface()
         assert grid_game.current_node_id == "lab_square"
         assert grid_game.current_room_id is None
+
+
+class TestNodeSurfaceGuards:
+    def test_creature_environment_none_on_node_surface(self, node_game):
+        """Best-effort contract: no room means no environment, never an exception."""
+        creature = node_game.party.characters[0]
+        assert node_game.creature_environment(creature) is None
+
+    def test_enter_current_node_reenters_without_side_effects(self, node_game):
+        events = []
+        node_game.event_bus.subscribe(EventType.ROOM_ENTER, events.append)
+
+        context = node_game.enter_node("lab_square")
+
+        assert context["id"] == "lab_square"
+        assert events == []
+        assert node_game.previous_node_id is None
+
+    def test_enter_node_rejected_during_combat(self, node_game):
+        node_game.in_combat = True
+        with pytest.raises(RuntimeError, match="combat"):
+            node_game.enter_node("lab_tavern")
+        assert node_game.current_node_id == "lab_square"
+
+    def test_current_node_does_not_alias_dungeon_content(self, node_game):
+        node_game.current_node()["actions"].append("hacked")
+        assert "hacked" not in node_game.dungeon["nodes"]["lab_square"]["actions"]
+
+    def test_enter_node_context_does_not_alias_dungeon_content(self, node_game):
+        context = node_game.enter_node("lab_gate")
+        context["actions"][0]["gate"]["dc"] = 1
+        context["transition"]["gate"]["dc"] = 1
+        gate_node = node_game.dungeon["nodes"]["lab_gate"]
+        assert gate_node["actions"][0]["gate"]["dc"] == 12
+        assert gate_node["transition"]["gate"]["dc"] == 10
+
+
+class TestNodeSurfaceSaveLoad:
+    def test_slot_save_load_round_trips_node_position(self, node_game, tmp_path):
+        from dnd_engine.core.save_slot_manager import SaveSlotManager
+
+        node_game.enter_node("lab_gate")
+        manager = SaveSlotManager(saves_dir=tmp_path)
+        manager.save_game(1, node_game)
+
+        loaded, _ = manager.load_game(1)
+
+        assert loaded.current_node_id == "lab_gate"
+        assert loaded.previous_node_id == "lab_square"
+        assert loaded.current_room_id is None
+
+    def test_campaign_save_load_round_trips_node_position(self, node_game, tmp_path):
+        from dnd_engine.core.campaign_manager import CampaignManager
+
+        manager = CampaignManager(campaigns_dir=tmp_path)
+        manager.create_campaign("Lab Test", dungeon_name="lab_settlement")
+        node_game.enter_node("lab_tavern")
+        manager.save_campaign_state("Lab Test", node_game)
+
+        loaded = manager.load_campaign_state("Lab Test")
+
+        assert loaded.current_node_id == "lab_tavern"
+        assert loaded.current_room_id is None
+
+    def test_slot_metadata_shows_node_location(self, node_game, tmp_path):
+        from dnd_engine.core.campaign_manager import CampaignManager
+
+        manager = CampaignManager(campaigns_dir=tmp_path)
+        manager.create_campaign("Lab Test", dungeon_name="lab_settlement")
+        node_game.enter_node("lab_tavern")
+        manager.save_campaign_state("Lab Test", node_game)
+
+        slots = manager.list_save_slots("Lab Test")
+        assert slots, "expected at least one save slot"
+        assert "None" not in slots[0].location

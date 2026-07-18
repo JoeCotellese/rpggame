@@ -1,6 +1,7 @@
 # ABOUTME: Central game state manager coordinating all game systems
 # ABOUTME: Manages dungeon exploration, combat state, player actions, and game flow
 
+import copy
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
@@ -713,17 +714,7 @@ class GameState:
                 # Emit initial room enter event to trigger quest auto-activation
                 # Skip if loading from save (save_slot_manager will emit at right time)
                 if not self._skip_initial_room_enter:
-                    location_id, location_name = self._current_location_identity()
-                    self.event_bus.emit(
-                        Event(
-                            type=EventType.ROOM_ENTER,
-                            data={
-                                "room_id": location_id,
-                                "room_name": location_name,
-                                "dungeon_id": self.dungeon_name,
-                            },
-                        )
-                    )
+                    self._emit_room_enter(*self._current_location_identity())
             except FileNotFoundError:
                 logger.warning(f"No quest data found for campaign '{self.campaign_id}'")
 
@@ -1450,18 +1441,35 @@ class GameState:
             return node["id"], node["name"]
         return self.current_room_id, self.get_current_room()["name"]
 
+    def _emit_room_enter(self, location_id: str, location_name: str) -> None:
+        """Emit ROOM_ENTER for a room or node; nodes unify with rooms at the
+        event level so quest auto-activation and narrative listeners work
+        identically on both surfaces."""
+        self.event_bus.emit(
+            Event(
+                type=EventType.ROOM_ENTER,
+                data={
+                    "room_id": location_id,
+                    "room_name": location_name,
+                    "dungeon_id": self.dungeon_name,
+                },
+            )
+        )
+
     def current_node(self) -> dict[str, Any]:
         """
         Get the current node's data (node surfaces only).
 
         Returns:
-            Node dict with its "id" included.
+            Deep copy of the node dict with its "id" included; mutating it
+            never touches the authored dungeon content.
 
         Raises:
             RuntimeError: If the current location is not a node surface.
         """
         self._require_node_surface()
-        return {"id": self.current_node_id, **self.dungeon["nodes"][self.current_node_id]}
+        node = copy.deepcopy(self.dungeon["nodes"][self.current_node_id])
+        return {"id": self.current_node_id, **node}
 
     def list_nodes(self) -> list[dict[str, Any]]:
         """
@@ -1495,30 +1503,25 @@ class GameState:
             NPCs currently at the node.
 
         Raises:
-            RuntimeError: If the current location is not a node surface.
+            RuntimeError: If the current location is not a node surface, or
+                if combat is in progress.
             ValueError: If node_id is not a node in this settlement.
         """
         self._require_node_surface()
+        if self.in_combat:
+            raise RuntimeError("Cannot change nodes during combat")
         nodes = self.dungeon["nodes"]
         if node_id not in nodes:
             raise ValueError(f"Unknown node {node_id!r} in {self.dungeon_name}")
 
-        self.previous_node_id = self.current_node_id
-        self.current_node_id = node_id
-        node = nodes[node_id]
+        # Re-entering the current node re-renders without re-firing arrival:
+        # no ROOM_ENTER, and previous_node_id keeps the real "came from".
+        if node_id != self.current_node_id:
+            self.previous_node_id = self.current_node_id
+            self.current_node_id = node_id
+            self._emit_room_enter(node_id, nodes[node_id]["name"])
 
-        # Nodes unify with rooms at the event level so quest auto-activation
-        # and narrative listeners work unchanged on node surfaces.
-        self.event_bus.emit(
-            Event(
-                type=EventType.ROOM_ENTER,
-                data={
-                    "room_id": node_id,
-                    "room_name": node["name"],
-                    "dungeon_id": self.dungeon_name,
-                },
-            )
-        )
+        node = copy.deepcopy(nodes[node_id])
 
         npcs = []
         if self.npc_manager:
@@ -1532,7 +1535,7 @@ class GameState:
             "name": node["name"],
             "description": node["description"],
             "npcs": npcs,
-            "actions": list(node.get("actions", [])),
+            "actions": node.get("actions", []),
             "transition": node.get("transition"),
         }
 
@@ -1583,6 +1586,8 @@ class GameState:
         # dungeon map have no current room, hence no environment context.
         # Treat an unresolvable room as "no environment" rather than
         # raising, since environment-granted carve-outs are optional.
+        if self.is_node_surface():
+            return None  # Node surfaces have no tile rooms, hence no environment
         try:
             room = self.get_current_room()
         except (KeyError, AttributeError, TypeError):
