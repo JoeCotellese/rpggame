@@ -17,6 +17,7 @@ from dnd_engine.core.distance import distance_in_feet
 from dnd_engine.core.entity_ids import pc_entity_id
 from dnd_engine.core.map import Map
 from dnd_engine.core.move_result import MoveResult
+from dnd_engine.core.node_surface import NodeSurfaceActions
 from dnd_engine.core.npc_manager import NPCManager
 from dnd_engine.core.party import Party
 from dnd_engine.core.position import Position
@@ -695,6 +696,7 @@ class GameState:
             pass
         # Surface discrimination (issue #684): a node surface tracks a
         # current node and leaves the tile-grid room machinery dormant.
+        self._node_actions: NodeSurfaceActions | None = None
         self.current_node_id: str | None = None
         self.previous_node_id: str | None = None
         self.current_room_id: str | None = None
@@ -1418,6 +1420,13 @@ class GameState:
     def is_node_surface(self) -> bool:
         """True when the current location presents as a node surface (settlement)."""
         return self.surface == "node"
+
+    @property
+    def node_actions(self) -> NodeSurfaceActions:
+        """Action dispatch for the current node (talk/shop/rest/rumors/examine)."""
+        if self._node_actions is None:
+            self._node_actions = NodeSurfaceActions(self)
+        return self._node_actions
 
     def _require_node_surface(self) -> None:
         if not self.is_node_surface():
