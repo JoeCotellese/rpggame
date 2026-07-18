@@ -7,6 +7,13 @@ an ordered slice roster for **autonomous** implementation: every slice gates on 
 check that runs without a human (pytest, pexpect, or headless MCP playtest), and
 each slice is one PR.
 
+Progress: slice 1 merged (PR #686), slice 2 merged (PR #687), slice 3 merged
+(PR #689). Next: slice 4 (transition seam). Standing review policy: deep
+multi-agent review offered to Joe only at slices 4 and 6; `/code-review` high on
+those two, medium elsewhere; architecture-guardian on 2/4/7. Merges are done by
+Joe (permission classifier blocks `gh pr merge`). Related: #688 tracks the
+pre-existing `load_skills()` caching gap found in slice-3 review.
+
 Parent design: `docs/PARTIAL_TOTM_DESIGN.md` (town node surface).
 Related epics: plan-07 #536 (pillars — NOT built here), plan-10 #539 (engine owns
 rules, clients thin — governing constraint).
@@ -158,6 +165,13 @@ tile-room → node remap.
 **Gating tests:** data validation; save-migration unit tests; scripted pexpect
 run of the acceptance beat — quest hook, shop, rest, gather rumors, depart to
 crypt, return to town.
+
+**Carried findings from slice 3 review (authoring lints for this slice):**
+`disposition_effects` keys other than friendly/neutral/hostile are unreachable
+(the 3-state disposition model never yields "unfriendly"/"allied") — don't
+author them for Arden NPCs, or add an NPC-data lint; gate skills are not
+validated against skills.json at load (a typo fails at play time as
+NodeActionError) — lint authored gate skills when writing Arden content.
 
 **Checkpoint:** deep adversarial panel. Candidate for `/code-review ultra`
 (user-triggered).
