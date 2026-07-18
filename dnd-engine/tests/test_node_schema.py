@@ -381,3 +381,22 @@ class TestRoomRegistryValidation:
         data = registry.load_dungeon("good_settlement")
         assert data is not None
         assert data["surface"] == "node"
+
+
+class TestVocabularyActionsCannotBeGated:
+    """Only examine_* and transitions are skill-gated in v1; a gate on a
+    vocabulary action would be silently ignored at dispatch, so it fails
+    at load instead."""
+
+    def test_gated_vocabulary_action_rejected(self):
+        data = _minimal_settlement()
+        data["nodes"]["square"]["actions"] = [
+            {
+                "id": "shop",
+                "gate": {"skill": "persuasion", "dc": 15},
+                "on_success": "x",
+                "on_failure": "y",
+            }
+        ]
+        with pytest.raises(NodeSchemaError, match="gate"):
+            validate_node_location(data)

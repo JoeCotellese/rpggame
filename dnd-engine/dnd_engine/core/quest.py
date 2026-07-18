@@ -151,6 +151,35 @@ class Quest:
         if self.turn_in_npc is None and self.quest_giver is not None:
             self.turn_in_npc = self.quest_giver
 
+    def hint_for(self, state_value: str, npc_id: str) -> str:
+        """
+        Get the authored NPC-specific hint for this quest in a given state.
+
+        npc_hints[state] may be a string (same wording for every NPC) or a
+        dict keyed by NPC id or by role suffix (e.g. "innkeeper" from
+        "marta_innkeeper"). Returns "" when nothing is authored — callers
+        choose their own fallback.
+
+        Args:
+            state_value: Quest state value ("available", "active", ...)
+            npc_id: The NPC voicing the hint
+
+        Returns:
+            The authored hint line, or "" if none applies.
+        """
+        if not self.npc_hints:
+            return ""
+        state_hints = self.npc_hints.get(state_value, {})
+        if isinstance(state_hints, str):
+            return state_hints
+        if isinstance(state_hints, dict):
+            if npc_id in state_hints:
+                return state_hints[npc_id]
+            role = npc_id.split("_")[-1]
+            if role in state_hints:
+                return state_hints[role]
+        return ""
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Quest":
         """
