@@ -361,7 +361,7 @@ class TestUnderwaterCombat_FireResistance:
         class _StubGameState:
             """Minimal game_state stub for the chokepoint env seam."""
 
-            def get_effective_ac(self, creature):
+            def get_effective_ac(self, creature, cover=None):
                 return creature._base_ac
 
             def creature_environment(self, creature):
