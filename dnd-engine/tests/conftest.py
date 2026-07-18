@@ -1,7 +1,11 @@
-# ABOUTME: Pytest plumbing for scenario-driven auto-play tests (issue #363).
-# ABOUTME: Exposes `scenario_session` + auto-discovers YAMLs under tests/scenarios/yaml/auto/.
+# ABOUTME: Pytest plumbing for scenario-driven auto-play tests (issue #363) and shared fixtures.
+# ABOUTME: Exposes `scenario_session` + auto-discovers YAMLs; shared node-surface fixtures (#684).
 
 """Auto-play harness conftest.
+
+Also home to fixtures shared across the node-surface test files
+(``test_party``, ``node_game``); files needing a specialized variant
+override the fixture locally, wrapping the shared one.
 
 Provides two pieces of pytest plumbing:
 
@@ -25,9 +29,47 @@ from pathlib import Path
 
 import pytest
 
+from dnd_engine.core.character import Character, CharacterClass
+from dnd_engine.core.creature import Abilities
+from dnd_engine.core.game_state import GameState
+from dnd_engine.core.party import Party
+from dnd_engine.rules.loader import DataLoader
 from dnd_engine.scenarios import LoadedScenario, ScenarioLoader
+from dnd_engine.utils.events import EventBus
 
 AUTO_SCENARIO_DIR = Path(__file__).parent / "scenarios" / "yaml" / "auto"
+
+
+@pytest.fixture
+def test_party() -> Party:
+    """One level-1 fighter, the standard party for node-surface tests."""
+    character = Character(
+        name="Test Hero",
+        character_class=CharacterClass.FIGHTER,
+        level=1,
+        abilities=Abilities(
+            strength=14,
+            dexterity=12,
+            constitution=13,
+            intelligence=10,
+            wisdom=11,
+            charisma=8,
+        ),
+        max_hp=12,
+        ac=16,
+    )
+    return Party([character])
+
+
+@pytest.fixture
+def node_game(test_party: Party) -> GameState:
+    """A GameState started on the lab settlement's node surface."""
+    return GameState(
+        party=test_party,
+        dungeon_name="lab_settlement",
+        event_bus=EventBus(),
+        data_loader=DataLoader(),
+    )
 
 
 def pytest_configure(config: pytest.Config) -> None:

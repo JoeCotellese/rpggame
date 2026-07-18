@@ -3,15 +3,9 @@
 
 import pytest
 
-from dnd_engine.core.character import Character, CharacterClass
-from dnd_engine.core.creature import Abilities
-from dnd_engine.core.game_state import GameState
 from dnd_engine.core.node_surface import NodeActionError
 from dnd_engine.core.npc import NPC
-from dnd_engine.core.party import Party
 from dnd_engine.core.quest import QuestManager
-from dnd_engine.rules.loader import DataLoader
-from dnd_engine.utils.events import EventBus
 
 
 def _npc(npc_id: str, location: str, reputation: int = 0, **overrides) -> NPC:
@@ -68,42 +62,16 @@ class StubNPCManager:
 
 
 @pytest.fixture
-def test_party():
-    abilities = Abilities(
-        strength=14,
-        dexterity=12,
-        constitution=13,
-        intelligence=10,
-        wisdom=11,
-        charisma=8,
-    )
-    character = Character(
-        name="Test Hero",
-        character_class=CharacterClass.FIGHTER,
-        level=1,
-        abilities=abilities,
-        max_hp=12,
-        ac=16,
-    )
-    return Party([character])
-
-
-@pytest.fixture
-def node_game(test_party):
-    game = GameState(
-        party=test_party,
-        dungeon_name="lab_settlement",
-        event_bus=EventBus(),
-        data_loader=DataLoader(),
-    )
-    game.npc_manager = StubNPCManager(
+def node_game(node_game):
+    """The shared lab-settlement game, staffed with stub NPCs at the tavern."""
+    node_game.npc_manager = StubNPCManager(
         [
             _npc("tavernkeep", "lab_tavern", reputation=0),
             _npc("friendly", "lab_tavern", reputation=15),
             _npc("grump", "lab_tavern", reputation=-30),
         ]
     )
-    return game
+    return node_game
 
 
 @pytest.fixture

@@ -15,6 +15,7 @@ class TestStatusBar:
     def mock_game_state(self):
         """Create a mock game state for testing."""
         game_state = Mock()
+        game_state.is_node_surface.return_value = False
         game_state.dungeon = {"name": "The Crypt"}
         game_state.get_current_room.return_value = {"name": "Entrance Hall"}
         game_state.get_effective_lighting.return_value = "bright"

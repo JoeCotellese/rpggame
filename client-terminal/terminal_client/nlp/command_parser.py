@@ -58,6 +58,14 @@ class GameContextProvider(Protocol):
         """Return True if currently in combat."""
         ...
 
+    def is_node_surface(self) -> bool:
+        """Return True when the current location is a settlement node surface."""
+        ...
+
+    def get_available_nodes(self) -> list[str]:
+        """Return display names of the settlement's nodes (node surfaces only)."""
+        ...
+
 
 class CommandParser:
     """
@@ -93,7 +101,24 @@ class CommandParser:
         "effects": ["effects", "conditions", "buffs", "debuffs"],
         "time": ["time", "clock", "hour", "day"],
         "unlock": ["unlock", "open", "pick"],
+        "enter_node": ["visit", "go to", "head to", "walk to", "travel to"],
+        "gather_rumors": ["gather rumors", "rumors", "gossip", "ask around"],
+        "read_job_board": [
+            "job board",
+            "read board",
+            "notice board",
+            "read the job",
+            "read the board",
+            "postings",
+        ],
+        "depart": ["depart", "leave", "set out"],
     }
+
+    # Actions that only exist on a settlement node surface
+    NODE_ONLY_ACTIONS = frozenset(["enter_node", "gather_rumors", "read_job_board", "depart"])
+
+    # Grid-only actions that have no meaning on a node surface
+    GRID_ONLY_ACTIONS = frozenset(["search", "take", "unlock"])
 
     # Direction aliases
     DIRECTION_ALIASES: dict[str, str] = {
@@ -188,6 +213,22 @@ class CommandParser:
                 suggestions=self._suggest_actions(tokens),
             )
 
+        # The same prose keywords resolve per surface: "go"/"head to" mean a
+        # direction on a grid but a destination node in a settlement, and
+        # "leave"/"depart" mean the settlement transition only on a node surface.
+        if action == "move" and self._on_node_surface():
+            action = "enter_node"
+        elif action in ("enter_node", "depart") and not self._on_node_surface():
+            # "leave" during grid combat means fleeing, not walking a direction
+            if (
+                action == "depart"
+                and self.context_provider
+                and self.context_provider.is_in_combat()
+            ):
+                action = "flee"
+            else:
+                action = "move"
+
         # Extract parameters based on action type
         params, param_confidence, entity_suggestions = self._extract_params(
             action, remaining_tokens
@@ -263,6 +304,14 @@ class CommandParser:
         elif action == "cast":
             return self._extract_spell_and_target(filtered)
         elif action in ("take", "use", "equip", "unequip", "look"):
+            # On a node surface, look/examine targets are authored node
+            # actions, not inventory items — pass the text through raw so
+            # inventory names can't hijack it.
+            if action == "look" and self._on_node_surface():
+                target = " ".join(t for t in filtered if t not in self.TARGET_INDICATORS)
+                if target:
+                    return {"item": target}, 0.7, {}
+                return {}, 0.5, {}
             return self._extract_item(filtered)
         elif action == "talk":
             return self._extract_npc(filtered)
@@ -271,6 +320,8 @@ class CommandParser:
         elif action == "unlock":
             params, conf = self._extract_direction(filtered)
             return params, conf, {}
+        elif action == "enter_node":
+            return self._extract_node(filtered)
 
         # Actions with no params (inventory, status, help, etc.)
         return {}, 1.0, {}
@@ -305,9 +356,7 @@ class CommandParser:
                 break
 
         target_text = " ".join(tokens[target_start_idx:])
-        target_text = " ".join(
-            t for t in target_text.split() if t not in self.TARGET_INDICATORS
-        )
+        target_text = " ".join(t for t in target_text.split() if t not in self.TARGET_INDICATORS)
 
         if not target_text:
             return {}, 0.5, {}
@@ -414,9 +463,7 @@ class CommandParser:
 
         return params, confidence, entity_suggestions
 
-    def _extract_item(
-        self, tokens: list[str]
-    ) -> tuple[dict, float, dict[str, list[str]]]:
+    def _extract_item(self, tokens: list[str]) -> tuple[dict, float, dict[str, list[str]]]:
         """Extract item name from tokens."""
         if not tokens:
             return {}, 0.5, {}
@@ -445,9 +492,7 @@ class CommandParser:
 
         return {"item": item_text}, 0.7, {}
 
-    def _extract_npc(
-        self, tokens: list[str]
-    ) -> tuple[dict, float, dict[str, list[str]]]:
+    def _extract_npc(self, tokens: list[str]) -> tuple[dict, float, dict[str, list[str]]]:
         """Extract NPC name from tokens."""
         if not tokens:
             return {}, 0.5, {}
@@ -474,6 +519,47 @@ class CommandParser:
                     )
 
         return {"npc": npc_text}, 0.7, {}
+
+    def _extract_node(self, tokens: list[str]) -> tuple[dict, float, dict[str, list[str]]]:
+        """Extract a settlement node name from tokens."""
+        if not tokens:
+            return {}, 0.5, {}
+
+        node_text = " ".join(t for t in tokens if t not in self.TARGET_INDICATORS)
+
+        if not node_text:
+            return {}, 0.5, {}
+
+        candidates = self._available_nodes()
+        if candidates:
+            match = process.extractOne(node_text, candidates, scorer=fuzz.WRatio)
+            if match and match[1] >= self.FUZZY_THRESHOLD:
+                return {"node": match[0]}, match[1] / 100.0, {}
+
+            # Unlike free-text NPC names, an unknown node can never be acted
+            # on, so it is always flagged unmatched (suggestions may be empty).
+            suggestions = self._get_entity_suggestions(node_text, candidates)
+            return (
+                {"node": node_text, "node_unmatched": True},
+                0.3,
+                {"node": suggestions} if suggestions else {},
+            )
+
+        return {"node": node_text, "node_unmatched": True}, 0.3, {}
+
+    def _on_node_surface(self) -> bool:
+        """True when the provider reports a node surface.
+
+        Providers without the node protocol methods degrade to grid
+        behavior rather than raising.
+        """
+        checker = getattr(self.context_provider, "is_node_surface", None)
+        return bool(checker()) if callable(checker) else False
+
+    def _available_nodes(self) -> list[str]:
+        """Node display names from the provider; [] when unsupported."""
+        getter = getattr(self.context_provider, "get_available_nodes", None)
+        return getter() if callable(getter) else []
 
     def _get_entity_suggestions(
         self, text: str, candidates: list[str], limit: int = 5
@@ -508,6 +594,19 @@ class CommandParser:
             return None
 
         in_combat = self.context_provider.is_in_combat()
+
+        # Node-surface actions: exploration-only, and only in a settlement.
+        # Messages use the spaced form of the action name, never internal ids.
+        if action in self.NODE_ONLY_ACTIONS:
+            display_name = action.replace("_", " ")
+            if in_combat:
+                return f"'{display_name}' is not available during combat"
+            if not self._on_node_surface():
+                return f"'{display_name}' is only available in a settlement"
+            return None
+
+        if action in self.GRID_ONLY_ACTIONS and self._on_node_surface():
+            return f"'{action}' is not available in a settlement"
 
         # Actions only valid in combat
         combat_only = {"attack", "flee", "stabilize", "end_turn"}
