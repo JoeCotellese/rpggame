@@ -1,0 +1,17 @@
+{
+  "name": "Lab Dungeon",
+  "description": "The grid half of the lab settlement's transition seam. A tiny dungeon reached through the Old Gate; used by transition-seam tests and manual lab sessions.",
+  "start_room": "lab_entry",
+  "rooms": {
+    "lab_entry": {
+      "name": "Lab Dungeon Entry",
+      "description": "A cold stone chamber at the foot of the gate stairs. The way back up is behind you.",
+      "lighting": "bright",
+      "exits": {"up": "lab_gate"},
+      "enemies": [],
+      "items": [],
+      "searched": false,
+      "searchable": true
+    }
+  }
+}

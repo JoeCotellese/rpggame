@@ -138,7 +138,7 @@ class TestInteractions:
     def test_transition_surfaces_in_view(self, node_game):
         node_game.enter_node("lab_gate")
         view = node_game.node_actions.interactions()
-        assert view["transition"]["to"] == "test_dungeon"
+        assert view["transition"]["to"] == "lab_dungeon"
 
 
 class TestTalk:

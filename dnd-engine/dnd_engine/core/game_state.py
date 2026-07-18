@@ -1466,6 +1466,47 @@ class GameState:
             )
         )
 
+    def _reenter_node_surface(self, node_id: str) -> bool:
+        """
+        Re-enter a settlement's node surface via a grid exit naming a node id.
+
+        The reverse direction of the transition seam: an authored grid exit
+        whose destination is a node id (e.g. the crypt stairs back up to town)
+        lands the party at that node. Grid-only arrival concerns (passive
+        perception, enemy checks) do not apply on a node surface.
+
+        Args:
+            node_id: The exit destination, tried as a node id.
+
+        Returns:
+            True if the destination resolved to a node and the surface
+            switched; False if no settlement authors that node.
+        """
+        node_dungeon_name = self.room_registry.get_dungeon_for_node(node_id)
+        if not node_dungeon_name:
+            return False
+        node_dungeon = self.room_registry.load_dungeon(node_dungeon_name)
+        if not node_dungeon or node_id not in node_dungeon.get("nodes", {}):
+            logger.warning(f"Node {node_id} not found in settlement {node_dungeon_name}")
+            return False
+
+        logger.info(
+            f"Transition seam: {self.current_room_id} -> node {node_id} "
+            f"(switched to {node_dungeon_name})"
+        )
+        self.dungeon = node_dungeon
+        self.dungeon_name = node_dungeon_name
+        self.current_room_id = None
+        self.previous_room_id = None
+        self.current_node_id = node_id
+        self.previous_node_id = None
+        # Flee direction has no meaning without walked geometry
+        self.last_entry_direction = None
+
+        self._emit_room_enter(node_id, node_dungeon["nodes"][node_id]["name"])
+        self.time_manager.advance_time(10, reason="surface_transition")
+        return True
+
     def current_node(self) -> dict[str, Any]:
         """
         Get the current node's data (node surfaces only).
@@ -2057,6 +2098,8 @@ class GameState:
                 else:
                     logger.warning(f"Room {new_room_id} not found in dungeon {new_dungeon_name}")
                     return False
+            elif self._reenter_node_surface(new_room_id):
+                return True
             else:
                 logger.warning(f"No dungeon found for room {new_room_id}")
                 return False
