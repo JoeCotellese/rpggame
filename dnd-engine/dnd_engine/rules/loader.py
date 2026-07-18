@@ -7,6 +7,7 @@ from typing import Any
 
 from dnd_engine.core.creature import Abilities, Creature, MovementMode, Size
 from dnd_engine.core.dice import DiceRoller
+from dnd_engine.rules.node_schema import validate_node_location
 from dnd_engine.systems.perception import parse_senses
 
 
@@ -225,7 +226,14 @@ class DataLoader:
             raise FileNotFoundError(f"Dungeon file not found: {dungeon_file}")
 
         with open(dungeon_file) as f:
-            return json.load(f)
+            data = json.load(f)
+
+        # Node-surface locations are validated at load time; grid dungeons
+        # (no "surface" key) keep their historical unvalidated path.
+        if data.get("surface") == "node":
+            validate_node_location(data, source=str(dungeon_file))
+
+        return data
 
     def load_classes(self) -> dict[str, Any]:
         """
