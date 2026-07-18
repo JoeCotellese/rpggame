@@ -1,0 +1,43 @@
+{
+  "id": "lab_settlement",
+  "name": "Lab Settlement",
+  "description": "A tiny test settlement exercising every node-surface schema shape. Used by automated tests and manual lab sessions; not part of any campaign.",
+  "surface": "node",
+  "start_node": "lab_square",
+  "nodes": {
+    "lab_square": {
+      "name": "Lab Square",
+      "blurb": "The heart of the lab settlement; a notice board stands by the well.",
+      "description": "You stand in a small square ringed by test buildings. A notice board leans beside a well, papered with parchments.",
+      "npcs": [],
+      "actions": ["gather_rumors", "read_job_board"]
+    },
+    "lab_tavern": {
+      "name": "The Testing Tankard",
+      "blurb": "A warm tavern for exercising talk, shop, and rest.",
+      "description": "Woodsmoke and spilled ale. The taproom is quiet; a fire crackles in the hearth.",
+      "npcs": [],
+      "actions": ["talk", "shop", "rest"]
+    },
+    "lab_gate": {
+      "name": "The Old Gate",
+      "blurb": "A sealed gate bearing a strange symbol.",
+      "description": "A rusted gate blocks a stairwell descending into darkness. A symbol is scratched into the lintel.",
+      "npcs": [],
+      "actions": [
+        {
+          "id": "examine_symbol",
+          "gate": {"skill": "religion", "dc": 12},
+          "on_success": "The symbol is a ward against the restless dead — someone sealed this gate on purpose.",
+          "on_failure": "The scratches look old and deliberate, but their meaning escapes you."
+        }
+      ],
+      "transition": {
+        "to": "test_dungeon",
+        "gate": {"skill": "athletics", "dc": 10},
+        "on_success": "The gate groans open, and stale air rolls up from the dark.",
+        "on_failure": "You heave at the gate, but it will not budge."
+      }
+    }
+  }
+}
