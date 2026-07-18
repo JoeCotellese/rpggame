@@ -16,6 +16,7 @@ from dnd_engine.core.game_state import (
     PartyRestResult,
     PlayerAttackResult,
 )
+from dnd_engine.core.node_surface import NodeActionError
 from dnd_engine.llm.npc_chat import NPCChatManager
 from dnd_engine.systems.action_economy import ActionType
 from dnd_engine.systems.ai import EnemyAI
@@ -195,6 +196,426 @@ class CLI:
 
         # Mark room as displayed so subsequent "look" commands show "already in room" narrative
         self.game_state.mark_room_displayed()
+
+    def display_location(self) -> None:
+        """Render the current location for its surface (node or grid)."""
+        if self.game_state.is_node_surface():
+            self.display_node()
+        else:
+            self.display_room()
+
+    def display_node(self) -> None:
+        """Render the current node in three zones: status strip, prose, numbered actions."""
+        context = self.game_state.enter_node(self.game_state.current_node_id)
+
+        self._print_node_status_strip()
+        print_room_description(context["name"], context["description"], [])
+
+        npcs = context["npcs"]
+        if npcs:
+            print_status_message("\nPresent:", "info")
+            for npc in npcs:
+                print_status_message(f"  • {npc['display_name']} ({npc['disposition']})", "info")
+
+        self._node_menu = self._build_node_menu(context)
+        print_status_message("\nWhat do you do?", "info")
+        for number, item in enumerate(self._node_menu, 1):
+            print_message(f"  {number}. {item['label']}")
+        print_status_message("(Pick a number, or say what you do.)", "info")
+
+    def _print_node_status_strip(self) -> None:
+        """Zone 1: one-line location · time · gold strip."""
+        node = self.game_state.current_node()
+        settlement = self.game_state.dungeon.get("name", self.game_state.dungeon_name)
+        time_display = self.game_state.time_manager.get_elapsed_time_display()
+        print_status_message(
+            f"{settlement} — {node['name']}  ·  {time_display}  ·  {self._party_gold_display()} gp",
+            "info",
+        )
+
+    def _party_gold_display(self) -> int:
+        """Party's pooled coin expressed in whole gold pieces."""
+        total_copper = sum(
+            char.inventory.currency.to_copper()
+            for char in self.game_state.party.characters
+            if char.is_alive
+        )
+        return total_copper // 100
+
+    def _current_location_id(self) -> str:
+        """Location id NPC presence is keyed by (node id or room id)."""
+        if self.game_state.is_node_surface():
+            return self.game_state.current_node_id
+        return self.game_state.get_current_room().get("id", "")
+
+    @staticmethod
+    def _gate_suffix(gate: dict | None) -> str:
+        """Bracketed mechanics cue for a skill-gated action, e.g. ' [Religion DC 12]'."""
+        if not gate:
+            return ""
+        return f" [{gate['skill'].title()} DC {gate['dc']}]"
+
+    def _build_node_menu(self, context: dict) -> list[dict]:
+        """Build the numbered action list for a node's display context.
+
+        Items are dicts of {"label", "kind", "arg"}; kinds are dispatched by
+        _dispatch_node_menu_item. Talk expands to one item per present NPC;
+        the node list itself hides behind the trailing 'Go elsewhere' item.
+        """
+        menu: list[dict] = []
+        npcs = context["npcs"]
+
+        for action in context["actions"]:
+            entry = {"id": action} if isinstance(action, str) else action
+            action_id = entry["id"]
+            if action_id == "talk":
+                for npc in npcs:
+                    menu.append(
+                        {
+                            "label": f"Talk to {npc['display_name']}",
+                            "kind": "talk",
+                            "arg": npc["name"],
+                        }
+                    )
+            elif action_id == "shop":
+                if len(npcs) == 1:
+                    menu.append(
+                        {
+                            "label": f"Trade with {npcs[0]['display_name']}",
+                            "kind": "shop",
+                            "arg": npcs[0]["name"],
+                        }
+                    )
+                elif npcs:
+                    menu.append({"label": "Trade", "kind": "shop_menu", "arg": None})
+            elif action_id == "rest":
+                menu.append({"label": "Rest", "kind": "rest", "arg": None})
+            elif action_id == "gather_rumors":
+                menu.append({"label": "Gather rumors", "kind": "gather_rumors", "arg": None})
+            elif action_id == "read_job_board":
+                menu.append({"label": "Read the job board", "kind": "read_job_board", "arg": None})
+            elif action_id.startswith("examine_"):
+                target = action_id[len("examine_") :].replace("_", " ")
+                label = f"Examine the {target}{self._gate_suffix(entry.get('gate'))}"
+                menu.append({"label": label, "kind": "examine", "arg": entry})
+
+        transition = context.get("transition")
+        if transition:
+            destination = transition["to"].replace("_", " ").title()
+            label = f"Depart for {destination}{self._gate_suffix(transition.get('gate'))}"
+            menu.append({"label": label, "kind": "depart", "arg": None})
+
+        menu.append({"label": "Go elsewhere ▸", "kind": "go_elsewhere", "arg": None})
+        return menu
+
+    def _dispatch_node_menu_item(self, item: dict) -> None:
+        """Run one numbered menu item."""
+        kind = item["kind"]
+        try:
+            if kind == "talk":
+                self.handle_talk(item["arg"])
+            elif kind == "shop":
+                self.handle_shop(item["arg"])
+            elif kind == "shop_menu":
+                self.handle_shop_menu()
+            elif kind == "rest":
+                self.handle_node_rest()
+            elif kind == "gather_rumors":
+                self.handle_gather_rumors()
+            elif kind == "read_job_board":
+                self.handle_read_job_board()
+            elif kind == "examine":
+                self.handle_node_examine(item["arg"])
+            elif kind == "depart":
+                self.handle_node_depart()
+            elif kind == "go_elsewhere":
+                self.handle_go_elsewhere()
+        except NodeActionError as e:
+            print_error(str(e))
+
+    def process_node_command(self, command: str) -> None:
+        """
+        Process a command while on a settlement node surface.
+
+        Accepts a menu number or typed prose (hybrid input); prose routes
+        through the same fuzzy parser as exploration.
+        """
+        if self.debug_console.is_debug_command(command):
+            self.debug_console.execute(command)
+            return
+
+        if command in ["quit", "exit", "q"]:
+            self.running = False
+            print_status_message("Thanks for playing!", "success")
+            return
+
+        if command in ["help", "h", "?"]:
+            self.display_help_node()
+            return
+
+        if command in ["look", "l"]:
+            self.display_node()
+            return
+
+        if command in ["status", "stats"]:
+            self.display_player_status()
+            return
+
+        if command in ["qs", "quicksave"]:
+            self.handle_quick_save()
+            return
+
+        if command == "rest":
+            self.handle_node_rest()
+            return
+
+        if command.isdigit():
+            menu = getattr(self, "_node_menu", [])
+            index = int(command)
+            if menu and 1 <= index <= len(menu):
+                self._dispatch_node_menu_item(menu[index - 1])
+            elif menu:
+                print_error(f"Pick a number between 1 and {len(menu)}.")
+            else:
+                print_error("No actions to pick yet — try 'look'.")
+            return
+
+        if self._try_fuzzy_parse(command):
+            return
+
+        print_status_message("Unknown command. Type 'help' for available commands.", "warning")
+
+    def handle_enter_node(self, node_name: str) -> None:
+        """Enter a settlement node by display name (parser output) or id."""
+        lowered = node_name.lower()
+        target_id = None
+        for node in self.game_state.list_nodes():
+            if (
+                node["id"] == node_name
+                or node["name"].lower() == lowered
+                or lowered in node["name"].lower()
+            ):
+                target_id = node["id"]
+                break
+
+        if target_id is None:
+            names = ", ".join(n["name"] for n in self.game_state.list_nodes())
+            print_error(f"No place called '{node_name}' here. You know of: {names}")
+            return
+
+        if target_id == self.game_state.current_node_id:
+            print_status_message("You're already there.", "info")
+            return
+
+        try:
+            self.game_state.enter_node(target_id)
+        except RuntimeError as e:
+            print_error(str(e))
+            return
+        self.display_node()
+
+    def handle_go_elsewhere(self) -> None:
+        """Show the settlement's node list and enter the chosen node."""
+        nodes = self.game_state.list_nodes()
+        current_id = self.game_state.current_node_id
+
+        print_section("Go elsewhere")
+        for number, node in enumerate(nodes, 1):
+            marker = " (you are here)" if node["id"] == current_id else ""
+            print_message(f"  {number}. {node['name']}{marker} — {node['blurb']}")
+
+        choice = input("Where to? (number or name, blank to stay): ").strip()
+        if not choice:
+            print_status_message("You stay where you are.", "info")
+            return
+
+        target = None
+        if choice.isdigit():
+            index = int(choice)
+            if 1 <= index <= len(nodes):
+                target = nodes[index - 1]
+        else:
+            lowered = choice.lower()
+            for node in nodes:
+                if lowered in node["name"].lower():
+                    target = node
+                    break
+
+        if target is None:
+            print_error(f"No place called '{choice}' here.")
+            return
+        self.handle_enter_node(target["name"])
+
+    def handle_node_rest(self) -> None:
+        """Rest at the current node when the node authors a rest action."""
+        interactions = self.game_state.node_actions.interactions()
+        if not any(action["id"] == "rest" for action in interactions["actions"]):
+            print_status_message("There's nowhere to rest here.", "warning")
+            return
+        self.handle_rest()
+
+    def handle_gather_rumors(self) -> None:
+        """Collect and display rumors from NPCs at the current node."""
+        try:
+            result = self.game_state.node_actions.gather_rumors()
+        except NodeActionError as e:
+            print_error(str(e))
+            return
+
+        rumors = result["rumors"]
+        refusals = result["refusals"]
+        if not rumors and not refusals:
+            print_status_message("You find no one with news to share.", "info")
+            return
+
+        for rumor in rumors:
+            print_status_message(
+                f"{rumor['npc_name']} ({rumor['disposition']}): “{rumor['text']}”", "info"
+            )
+        for refusal in refusals:
+            print_status_message(
+                f"{refusal['npc_name']} waves you off: “{refusal['prose']}”", "warning"
+            )
+
+    def handle_read_job_board(self) -> None:
+        """Read the job board: hooks for currently available quests."""
+        try:
+            result = self.game_state.node_actions.read_job_board()
+        except NodeActionError as e:
+            print_error(str(e))
+            return
+
+        postings = result["postings"]
+        if not postings:
+            print_status_message("The job board is bare.", "info")
+            return
+
+        print_section("Job Board")
+        for posting in postings:
+            print_status_message(f"• {posting['name']}: {posting['description']}", "info")
+
+    def handle_node_examine(self, action: dict) -> None:
+        """Resolve a skill-gated examine action on the current node."""
+        gate = action["gate"]
+        target = action["id"][len("examine_") :].replace("_", " ")
+        character = self._prompt_character_for_skill_check(
+            f"examine the {target}", gate["skill"], gate["dc"]
+        )
+        if character is None:
+            return
+
+        try:
+            result = self.game_state.node_actions.examine(action["id"], character)
+        except NodeActionError as e:
+            print_error(str(e))
+            return
+
+        self._print_gate_check(character, result["check"])
+        print_status_message(result["prose"], "info")
+
+    def handle_node_examine_by_name(self, text: str) -> None:
+        """Route typed 'examine <thing>' to the node's authored examine actions."""
+        examine_actions = [
+            action
+            for action in self.game_state.node_actions.interactions()["actions"]
+            if action["id"].startswith("examine_")
+        ]
+        if not examine_actions:
+            print_status_message("There's nothing here to examine that way.", "info")
+            return
+
+        text_lower = (text or "").lower()
+        match = None
+        for action in examine_actions:
+            target = action["id"][len("examine_") :].replace("_", " ")
+            if not text_lower or text_lower in target or target in text_lower:
+                match = action
+                break
+        if match is None and len(examine_actions) == 1:
+            match = examine_actions[0]
+
+        if match is None:
+            targets = ", ".join(
+                action["id"][len("examine_") :].replace("_", " ") for action in examine_actions
+            )
+            print_status_message(f"You can examine: {targets}", "info")
+            return
+        self.handle_node_examine(match)
+
+    def handle_node_depart(self) -> None:
+        """Depart through the current node's authored transition."""
+        node = self.game_state.current_node()
+        spec = node.get("transition")
+        if spec is None:
+            print_status_message("There's no way onward from here — try 'go elsewhere'.", "warning")
+            return
+
+        gate = spec.get("gate")
+        if gate:
+            destination = spec["to"].replace("_", " ")
+            character = self._prompt_character_for_skill_check(
+                f"depart for the {destination}", gate["skill"], gate["dc"]
+            )
+            if character is None:
+                return
+        else:
+            character = next((c for c in self.game_state.party.characters if c.is_alive), None)
+            if character is None:
+                print_error("No one in the party can travel.")
+                return
+
+        try:
+            result = self.game_state.node_actions.transition(character)
+        except (NodeActionError, RuntimeError) as e:
+            print_error(str(e))
+            return
+
+        if result["check"]:
+            self._print_gate_check(character, result["check"])
+        if not result["success"]:
+            print_status_message(result["prose"], "warning")
+            return
+
+        if result.get("prose"):
+            print_status_message(result["prose"], "info")
+        self.display_location()
+
+    def _print_gate_check(self, character: Character, check: dict) -> None:
+        """Bracketed mechanics line for an authored skill gate."""
+        verdict = "success" if check["success"] else "failure"
+        print_status_message(
+            f"[{check['skill'].title()} DC {check['dc']}] {character.name} rolled "
+            f"{check['roll']} + {check['modifier']} = {check['total']} — {verdict}",
+            "success" if check["success"] else "warning",
+        )
+
+    def display_help_node(self) -> None:
+        """Display help for settlement (node surface) commands."""
+        print_help_section(
+            "Settlement Commands",
+            [
+                ("<number>", "Do one of the listed actions"),
+                ("go / visit <place>", "Go to another spot in the settlement"),
+                ("talk <name>", "Talk to someone present"),
+                ("shop", "Trade with someone present"),
+                ("gather rumors", "Ask around for news"),
+                ("read board", "Read the job board"),
+                ("examine <thing>", "Take a closer look"),
+                ("depart", "Leave through the marked way"),
+                ("look", "Show this place again"),
+                ("rest", "Rest, where the place allows it"),
+            ],
+        )
+        print_help_section(
+            "General Commands",
+            [
+                ("status", "Show party status"),
+                ("inventory (i)", "Manage inventory"),
+                ("save / qs", "Save the game"),
+                ("help (h, ?)", "Show this help"),
+                ("quit (q)", "Exit the game"),
+            ],
+        )
 
     def display_player_status(self) -> None:
         """Display status for all party members."""
@@ -431,6 +852,22 @@ class CLI:
         """Build the status bar content for the bottom toolbar."""
         from prompt_toolkit.formatted_text import HTML
 
+        # Node surfaces have no room, lighting, or exits — show the
+        # settlement strip instead (location · time · gold).
+        if self.game_state.is_node_surface():
+            node = self.game_state.current_node()
+            settlement = self.game_state.dungeon.get("name", "Unknown")
+            time_display = self.game_state.time_manager.get_elapsed_time_display()
+            return HTML(
+                f'<style fg="cyan">{settlement}</style>'
+                f' <style fg="white">│</style> '
+                f'<style fg="white">{node["name"]}</style>'
+                f' <style fg="white">│</style> '
+                f'<style fg="yellow">{time_display}</style>'
+                f' <style fg="white">│</style> '
+                f'<style fg="green">{self._party_gold_display()} gp</style>'
+            )
+
         # Get current location
         room = self.game_state.get_current_room()
         room_name = room.get("name", "Unknown")
@@ -456,7 +893,14 @@ class CLI:
         icon, color, label = lighting_display.get(best_lighting, ("?", "white", "Unknown"))
 
         # Get available exits (compact format: N, S, E, W)
-        direction_abbrev = {"north": "N", "south": "S", "east": "E", "west": "W", "up": "U", "down": "D"}
+        direction_abbrev = {
+            "north": "N",
+            "south": "S",
+            "east": "E",
+            "west": "W",
+            "up": "U",
+            "down": "D",
+        }
         exits = self.game_state.get_available_exits()
         exit_dirs = [direction_abbrev.get(d, d.upper()[:1]) for d in exits.keys()]
         exits_str = ", ".join(exit_dirs) if exit_dirs else "None"
@@ -521,6 +965,12 @@ class CLI:
         result = self.command_parser.parse(command)
 
         if not result.success:
+            # A recognized action rejected by context validation (wrong
+            # surface, in/out of combat) gets its specific error, not
+            # "unknown command".
+            if result.action and result.error:
+                print_status_message(result.error, "warning")
+                return True
             # Show suggestions if available
             if result.suggestions:
                 suggestions_str = ", ".join(result.suggestions)
@@ -540,6 +990,36 @@ class CLI:
                 self.handle_move(direction)
             else:
                 print_error("Which direction? Try: north, south, east, west, up, down")
+            return True
+
+        if action == "enter_node":
+            node = params.get("node")
+            if params.get("node_unmatched"):
+                if "node" in result.entity_suggestions:
+                    selected = self._prompt_entity_suggestion(
+                        "place", result.entity_suggestions["node"], node
+                    )
+                    if selected:
+                        self.handle_enter_node(selected)
+                else:
+                    names = ", ".join(n["name"] for n in self.game_state.list_nodes())
+                    print_error(f"No place called '{node}' here. You know of: {names}")
+            elif node:
+                self.handle_enter_node(node)
+            else:
+                self.handle_go_elsewhere()
+            return True
+
+        if action == "gather_rumors":
+            self.handle_gather_rumors()
+            return True
+
+        if action == "read_job_board":
+            self.handle_read_job_board()
+            return True
+
+        if action == "depart":
+            self.handle_node_depart()
             return True
 
         if action == "attack":
@@ -676,6 +1156,14 @@ class CLI:
             return True
 
         if action == "look":
+            if self.game_state.is_node_surface():
+                # Node examine targets are authored actions, not room items
+                item = params.get("item")
+                if item:
+                    self.handle_node_examine_by_name(item)
+                else:
+                    self.display_node()
+                return True
             item = params.get("item")
             # Check if item didn't match and we have suggestions
             if params.get("item_unmatched") and "item" in result.entity_suggestions:
@@ -729,7 +1217,10 @@ class CLI:
             return True
 
         if action == "rest":
-            self.handle_rest()
+            if self.game_state.is_node_surface():
+                self.handle_node_rest()
+            else:
+                self.handle_rest()
             return True
 
         if action == "inventory":
@@ -1344,6 +1835,12 @@ class CLI:
         success = self.game_state.move(direction, check_for_enemies=False)
         if success:
             print_status_message(f"You move {direction}", "info")
+            # The reverse transition seam: a grid exit can land on a
+            # settlement's node surface, where room rendering and enemy
+            # checks don't apply.
+            if self.game_state.is_node_surface():
+                self.display_node()
+                return
             # Display room description FIRST
             self.display_room()
             # THEN check for enemies and potentially start combat
@@ -2329,10 +2826,8 @@ class CLI:
             print_error("No NPCs available in this campaign.")
             return
 
-        # Get NPCs in current room
-        current_room = self.game_state.get_current_room()
-        room_id = current_room.get("id", "")
-        npcs = self.game_state.npc_manager.get_npcs_in_room(room_id)
+        # Get NPCs at the current location (room or node)
+        npcs = self.game_state.npc_manager.get_npcs_in_room(self._current_location_id())
 
         if not npcs:
             print_status_message("There's no one here to talk to.", "info")
@@ -2369,10 +2864,8 @@ class CLI:
             print_error("No NPCs available in this campaign.")
             return
 
-        # Get NPCs in current room
-        current_room = self.game_state.get_current_room()
-        room_id = current_room.get("id", "")
-        npcs = self.game_state.npc_manager.get_npcs_in_room(room_id)
+        # Get NPCs at the current location (room or node)
+        npcs = self.game_state.npc_manager.get_npcs_in_room(self._current_location_id())
 
         if not npcs:
             print_status_message("There's no one here to talk to.", "info")
@@ -2530,10 +3023,8 @@ class CLI:
             print_error("No NPCs available in this campaign.")
             return
 
-        # Get NPCs in current room
-        current_room = self.game_state.get_current_room()
-        room_id = current_room.get("id", "")
-        npcs = self.game_state.npc_manager.get_npcs_in_room(room_id)
+        # Get NPCs at the current location (room or node)
+        npcs = self.game_state.npc_manager.get_npcs_in_room(self._current_location_id())
 
         # Filter to shopkeepers
         shopkeeper_npcs = []
@@ -2573,10 +3064,8 @@ class CLI:
             print_error("No NPCs available in this campaign.")
             return
 
-        # Get NPCs in current room
-        current_room = self.game_state.get_current_room()
-        room_id = current_room.get("id", "")
-        npcs = self.game_state.npc_manager.get_npcs_in_room(room_id)
+        # Get NPCs at the current location (room or node)
+        npcs = self.game_state.npc_manager.get_npcs_in_room(self._current_location_id())
 
         # Find NPC by name (case-insensitive partial match)
         target_npc = None
@@ -5441,8 +5930,8 @@ class CLI:
             print_status_message("Campaign reset successfully!", "success")
             print_message(f"Returned to dungeon entrance in {self.game_state.dungeon_name}")
 
-            # Display the new room
-            self.display_room()
+            # Display the new location (room or settlement node)
+            self.display_location()
 
         except Exception as e:
             print_error(f"Failed to reset campaign: {e}")
@@ -5547,7 +6036,7 @@ class CLI:
     def run(self) -> None:
         """Run the main game loop."""
         self.display_banner()
-        self.display_room()
+        self.display_location()
         self.display_player_status()
 
         # Start the game (GameState handles checking starting room for enemies)
@@ -5679,7 +6168,10 @@ class CLI:
                     self.process_enemy_turns()
             else:
                 command = self.get_player_command()
-                self.process_exploration_command(command)
+                if self.game_state.is_node_surface():
+                    self.process_node_command(command)
+                else:
+                    self.process_exploration_command(command)
 
         # Game over
         if self.game_state.is_game_over():

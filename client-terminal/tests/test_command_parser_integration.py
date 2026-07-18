@@ -20,7 +20,7 @@ def create_mock_game_state():
     char1.spells.prepared_spells = ["magic_missile", "shield"]
     char1.spells.known_spells = []
     char1.inventory.get_items_by_category.return_value = []
-    char1.inventory.equipment = {}
+    char1.inventory.equipped = {}
 
     char2 = MagicMock()
     char2.name = "Aragorn"
@@ -29,7 +29,7 @@ def create_mock_game_state():
     char2.spells.prepared_spells = []
     char2.spells.known_spells = []
     char2.inventory.get_items_by_category.return_value = []
-    char2.inventory.equipment = {}
+    char2.inventory.equipped = {}
 
     game_state.party.characters = [char1, char2]
 
@@ -38,8 +38,11 @@ def create_mock_game_state():
     game_state.initiative_tracker = None
     game_state.active_enemies = []
 
+    # Grid surface by default
+    game_state.is_node_surface.return_value = False
+
     # Mock room items
-    game_state.get_room_items.return_value = [
+    game_state.get_available_items_in_room.return_value = [
         {"id": "longsword", "name": "Longsword", "type": "weapon"},
         {"id": "healing_potion", "name": "Healing Potion", "type": "consumable"},
     ]
@@ -152,7 +155,7 @@ def create_combat_game_state():
     game_state.initiative_tracker.get_current_combatant.return_value = entry3
 
     # Mock other required attributes
-    game_state.get_room_items.return_value = []
+    game_state.get_available_items_in_room.return_value = []
     game_state.npc_manager = None
     game_state.data_loader.load_spells.return_value = {
         "fire_bolt": {"name": "Fire Bolt"},
@@ -216,7 +219,7 @@ def create_simple_combat_parser():
     game_state.initiative_tracker.get_combatant_display_name.return_value = "Goblin 1"
     game_state.initiative_tracker.get_current_combatant.return_value = entry2
 
-    game_state.get_room_items.return_value = []
+    game_state.get_available_items_in_room.return_value = []
     game_state.npc_manager = None
     game_state.data_loader.load_spells.return_value = {
         "magic_missile": {"name": "Magic Missile"},

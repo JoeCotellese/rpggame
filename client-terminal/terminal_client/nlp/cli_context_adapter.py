@@ -47,12 +47,13 @@ class CLIContextAdapter(GameContextProvider):
         """Return list of item names available (room + inventory)."""
         items = []
 
-        # Get items from current room
-        room_items = self.game_state.get_room_items()
-        for item in room_items:
-            if item.get("type") not in ("gold", "currency"):
-                item_name = item.get("name", item.get("id", "unknown"))
-                items.append(item_name)
+        # Get items from current room (node surfaces have no room items)
+        if not self.game_state.is_node_surface():
+            room_items = self.game_state.get_available_items_in_room()
+            for item in room_items:
+                if item.get("type") not in ("gold", "currency"):
+                    item_name = item.get("name", item.get("id", "unknown"))
+                    items.append(item_name)
 
         # Get items from party inventories
         for char in self.game_state.party.characters:
@@ -67,13 +68,13 @@ class CLIContextAdapter(GameContextProvider):
                     if item_name not in items:
                         items.append(item_name)
 
-                # Get equipment
-                for slot in char.inventory.equipment.values():
-                    if slot:
+                # Get equipment (equipped maps slot -> item id)
+                for equipped_id in char.inventory.equipped.values():
+                    if equipped_id:
                         item_data = self.game_state.data_loader.load_items(
                             self.game_state.campaign_id
-                        ).get(slot.item_id, {})
-                        item_name = item_data.get("name", slot.item_id)
+                        ).get(equipped_id, {})
+                        item_name = item_data.get("name", equipped_id)
                         if item_name not in items:
                             items.append(item_name)
 
@@ -100,9 +101,9 @@ class CLIContextAdapter(GameContextProvider):
 
         # Get cantrips (always available)
         for spell_id in char.spells.cantrips:
-            spell_data = self.game_state.data_loader.load_spells(
-                self.game_state.campaign_id
-            ).get(spell_id, {})
+            spell_data = self.game_state.data_loader.load_spells(self.game_state.campaign_id).get(
+                spell_id, {}
+            )
             spell_name = spell_data.get("name", spell_id)
             spells.append(spell_name)
 
@@ -127,12 +128,14 @@ class CLIContextAdapter(GameContextProvider):
         return spells
 
     def get_available_npcs(self) -> list[str]:
-        """Return list of NPC names in the current room."""
+        """Return list of NPC names at the current location (room or node)."""
         npcs = []
         if self.game_state.npc_manager:
-            npc_list = self.game_state.npc_manager.get_npcs_in_room(
-                self.game_state.current_room_id
-            )
+            if self.game_state.is_node_surface():
+                location_id = self.game_state.current_node_id
+            else:
+                location_id = self.game_state.current_room_id
+            npc_list = self.game_state.npc_manager.get_npcs_in_room(location_id)
             for npc in npc_list:
                 npcs.append(npc.name)
         return npcs
@@ -144,3 +147,13 @@ class CLIContextAdapter(GameContextProvider):
     def is_in_combat(self) -> bool:
         """Return True if currently in combat."""
         return self.game_state.in_combat
+
+    def is_node_surface(self) -> bool:
+        """Return True when the current location is a settlement node surface."""
+        return self.game_state.is_node_surface()
+
+    def get_available_nodes(self) -> list[str]:
+        """Return display names of the settlement's nodes (node surfaces only)."""
+        if not self.game_state.is_node_surface():
+            return []
+        return [node["name"] for node in self.game_state.list_nodes()]

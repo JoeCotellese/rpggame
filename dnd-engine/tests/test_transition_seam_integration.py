@@ -7,35 +7,13 @@ from tempfile import TemporaryDirectory
 
 import pytest
 
-from dnd_engine.core.character import Character, CharacterClass
-from dnd_engine.core.creature import Abilities
 from dnd_engine.core.game_state import GameState
 from dnd_engine.core.node_surface import NodeActionError
-from dnd_engine.core.party import Party
 from dnd_engine.core.room_registry import RoomRegistry
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.utils.events import EventBus, EventType
 
-
-@pytest.fixture
-def test_party():
-    abilities = Abilities(
-        strength=14,
-        dexterity=12,
-        constitution=13,
-        intelligence=10,
-        wisdom=11,
-        charisma=8,
-    )
-    character = Character(
-        name="Test Hero",
-        character_class=CharacterClass.FIGHTER,
-        level=1,
-        abilities=abilities,
-        max_hp=12,
-        ac=16,
-    )
-    return Party([character])
+# test_party and node_game come from tests/conftest.py
 
 
 @pytest.fixture
@@ -44,16 +22,6 @@ def grid_game(test_party):
     return GameState(
         party=test_party,
         dungeon_name="lab_dungeon",
-        event_bus=EventBus(),
-        data_loader=DataLoader(),
-    )
-
-
-@pytest.fixture
-def node_game(test_party):
-    return GameState(
-        party=test_party,
-        dungeon_name="lab_settlement",
         event_bus=EventBus(),
         data_loader=DataLoader(),
     )
