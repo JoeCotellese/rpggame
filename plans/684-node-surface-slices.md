@@ -8,7 +8,9 @@ check that runs without a human (pytest, pexpect, or headless MCP playtest), and
 each slice is one PR.
 
 Progress: slice 1 merged (PR #686), slice 2 merged (PR #687), slice 3 merged
-(PR #689). Next: slice 4 (transition seam). Standing review policy: deep
+(PR #689). Slice 4 implemented on `feature/684-s4-transition-seam`
+(architecture-guardian approved; /code-review high findings fixed in-branch);
+PR pending. Next after merge: slice 5 (terminal rendering). Standing review policy: deep
 multi-agent review offered to Joe only at slices 4 and 6; `/code-review` high on
 those two, medium elsewhere; architecture-guardian on 2/4/7. Merges are done by
 Joe (permission classifier blocks `gh pr merge`). Related: #688 tracks the
@@ -125,6 +127,16 @@ This is the crypt ↔ town seam.
 
 **Checkpoints:** architecture-guardian + deep adversarial panel.
 
+**Slice 4 outcome notes:** the seam's grid half is a dedicated
+`lab_dungeon.json` fixture (`test_dungeon.json` stays a pristine no-exit arena
+for ~35 unrelated test files; the settlement's `transition.to` was repointed).
+`previous_node_id` resets to None on every seam crossing — the way back is
+always authored (a grid exit naming a node id), never remembered state. Review
+fixes hardened resolution: node lookup runs whenever room resolution comes up
+empty (prefix-shadowing guard), `flee_combat` is surface-aware, failed moves
+can't stale `last_entry_direction`, malformed transition targets fail with
+zero state change, and registry scan order is sorted/deterministic.
+
 ### Slice 5 — Terminal three-zone rendering + hybrid input
 
 **Surface:** `client-terminal` — `ui/cli.py` node-surface branch in the run
@@ -150,6 +162,16 @@ resetting into a settlement; if an event consumer ever needs to distinguish
 surfaces, add a `surface` field to ROOM_ENTER data rather than a new event
 type.
 
+**Carried findings from slice 4 review:** the reverse seam makes the
+`display_room` crash concretely reachable — `cli.py` `handle_move` calls
+`display_room()` then `_check_for_enemies()` after any successful move, both
+of which raise on a node surface; the node render branch must gate on
+`is_node_surface()` right after `move()` returns. Also: `test_party` /
+`node_game` fixtures are now triplicated across the node test files
+(`test_node_surface_state.py`, `test_node_actions.py`,
+`test_transition_seam_integration.py`) — consolidate into `tests/conftest.py`
+during this slice's test work.
+
 ### Slice 6 — Arden cutover + full-beat e2e
 
 **Surface:** campaign data + save-load remap.
@@ -173,6 +195,14 @@ author them for Arden NPCs, or add an NPC-data lint; gate skills are not
 validated against skills.json at load (a typo fails at play time as
 NodeActionError) — lint authored gate skills when writing Arden content.
 
+**Carried design note from slice 4 review:** arrival logic now lives in three
+shapes (`move()`'s tail, `_arrive_at_node`, `_enter_dungeon_via_seam`'s grid
+branch). The slice-4 prefix-shadowing fallback de-fangs the acute `arden.*`
+hazard, but if cutover work touches arrival behavior (quest triggers on entry,
+NPC repositioning), consider consolidating into one
+resolve(id) → (dungeon, surface, location) + arrive() primitive rather than
+threading a fourth copy.
+
 **Checkpoint:** deep adversarial panel. Candidate for `/code-review ultra`
 (user-triggered).
 
@@ -186,6 +216,12 @@ terminal lacks.
 
 **Risk flag:** scope-check at slice start — current campaign/town support in
 client-2d is unverified; slice may shrink (MCP-only) or split.
+
+**Carried finding from slice 4 review:** `GameSession._transition_room`
+(`session.py:657`) calls `get_current_room()` with no surface guard after a
+successful `move()`; the reverse seam makes that a live crash for WASD and
+MCP-driven movement into a settlement — make it surface-aware alongside the
+adapter fix below.
 
 **Carried finding from slice 2 review:** `EngineAdapter.new_game` sets
 `_initialized = True` before calling `get_current_room()`, so a node-surface
