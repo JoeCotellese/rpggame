@@ -7,7 +7,7 @@ from typing import Any
 
 from dnd_engine.core.creature import Abilities, Creature, MovementMode, Size
 from dnd_engine.core.dice import DiceRoller
-from dnd_engine.rules.node_schema import validate_node_location
+from dnd_engine.rules.node_schema import validate_location_surface
 from dnd_engine.systems.perception import parse_senses
 
 
@@ -208,6 +208,8 @@ class DataLoader:
 
         Raises:
             FileNotFoundError: If dungeon file doesn't exist
+            NodeSchemaError: If the file declares a surface and violates
+                the node-surface schema
         """
         if campaign_id:
             dungeon_file = (
@@ -228,10 +230,9 @@ class DataLoader:
         with open(dungeon_file) as f:
             data = json.load(f)
 
-        # Node-surface locations are validated at load time; grid dungeons
-        # (no "surface" key) keep their historical unvalidated path.
-        if data.get("surface") == "node":
-            validate_node_location(data, source=str(dungeon_file))
+        # Locations that declare a surface are validated on load; grid
+        # dungeons without a "surface" key load as-is.
+        validate_location_surface(data, source=str(dungeon_file))
 
         return data
 

@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from dnd_engine.rules.node_schema import validate_location_surface
+
 
 class RoomRegistry:
     """
@@ -124,10 +126,16 @@ class RoomRegistry:
         try:
             with open(dungeon_file) as f:
                 dungeon_data = json.load(f)
-            self._loaded_dungeons[dungeon_name] = dungeon_data
-            return dungeon_data
         except (json.JSONDecodeError, OSError):
             return None
+
+        # Surface-declaring locations are validated on every load path, not
+        # only DataLoader's; a schema violation is an authoring bug and must
+        # surface loudly rather than degrade to a missing dungeon.
+        validate_location_surface(dungeon_data, source=str(dungeon_file))
+
+        self._loaded_dungeons[dungeon_name] = dungeon_data
+        return dungeon_data
 
     def get_room(self, room_id: str) -> dict[str, Any] | None:
         """

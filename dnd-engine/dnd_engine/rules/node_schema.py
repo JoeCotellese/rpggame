@@ -4,8 +4,8 @@
 from typing import Any
 
 # Simple actions the engine dispatches without extra authoring. examine_* is
-# deliberately absent: it is skill-gated by definition, so it must be authored
-# in object form where the gate and both prose branches live.
+# deliberately absent: it is a skill check, so it must be authored in object
+# form where the gate and both prose branches live.
 NODE_ACTION_VOCABULARY = frozenset(
     {
         "talk",
@@ -18,7 +18,19 @@ NODE_ACTION_VOCABULARY = frozenset(
 
 EXAMINE_PREFIX = "examine_"
 
-VALID_SURFACES = frozenset({"grid", "node"})
+# Every key a node may carry. Unknown keys fail at load so a typo like
+# "transtion" can't silently drop content.
+NODE_KEYS = frozenset(
+    {
+        "name",
+        "blurb",
+        "description",
+        "npcs",
+        "actions",
+        "transition",
+        "quest_hook",
+    }
+)
 
 
 class NodeSchemaError(Exception):
@@ -27,6 +39,36 @@ class NodeSchemaError(Exception):
     The message always includes the offending key path so an author can fix
     the JSON without spelunking through tracebacks.
     """
+
+
+def validate_location_surface(data: Any, source: str = "") -> None:
+    """
+    Validate any parsed location JSON according to its declared surface.
+
+    The single entry point for every load path (DataLoader, RoomRegistry).
+    Locations without a ``surface`` key are legacy grid dungeons and pass
+    through untouched, as do non-dict payloads.
+
+    Args:
+        data: Parsed location JSON.
+        source: Optional file path for error messages.
+
+    Raises:
+        NodeSchemaError: On an unknown surface value or any node-schema
+            violation.
+    """
+    if not isinstance(data, dict):
+        return
+
+    surface = data.get("surface")
+    if surface is None or surface == "grid":
+        return
+    if surface == "node":
+        validate_node_location(data, source=source)
+        return
+
+    where = f" in {source}" if source else ""
+    raise NodeSchemaError(f"Unknown surface {surface!r}{where}; expected 'grid' or 'node'")
 
 
 def validate_node_location(data: dict[str, Any], source: str = "") -> None:
@@ -42,10 +84,10 @@ def validate_node_location(data: dict[str, Any], source: str = "") -> None:
     """
     where = f" in {source}" if source else ""
 
-    surface = data.get("surface")
-    if surface not in VALID_SURFACES:
+    if data.get("surface") != "node":
         raise NodeSchemaError(
-            f"Unknown surface {surface!r}{where}; expected one of {sorted(VALID_SURFACES)}"
+            f"validate_node_location called for surface {data.get('surface')!r}{where}; "
+            "expected 'node'"
         )
 
     if "rooms" in data:
@@ -73,16 +115,24 @@ def _validate_node(node_id: str, node: Any, where: str) -> None:
     if not isinstance(node, dict):
         raise NodeSchemaError(f"{path} must be an object{where}")
 
+    unknown_keys = set(node) - NODE_KEYS
+    if unknown_keys:
+        raise NodeSchemaError(
+            f"{path} has unknown key(s) {sorted(unknown_keys)}{where}; "
+            f"expected only {sorted(NODE_KEYS)}"
+        )
+
     for prose_field in ("name", "blurb", "description"):
-        value = node.get(prose_field)
-        if not isinstance(value, str) or not value.strip():
-            raise NodeSchemaError(f"{path} requires non-empty '{prose_field}'{where}")
+        _require_nonempty_str(node, prose_field, path, where)
 
     npcs = node.get("npcs", [])
     if not isinstance(npcs, list) or any(not isinstance(n, str) for n in npcs):
         raise NodeSchemaError(f"{path}.npcs must be a list of NPC ids{where}")
 
-    for index, action in enumerate(node.get("actions", [])):
+    actions = node.get("actions", [])
+    if not isinstance(actions, list):
+        raise NodeSchemaError(f"{path}.actions must be a list{where}")
+    for index, action in enumerate(actions):
         _validate_action(f"{path}.actions[{index}]", action, where)
 
     if "transition" in node:
@@ -90,20 +140,10 @@ def _validate_node(node_id: str, node: Any, where: str) -> None:
 
 
 def _validate_action(path: str, action: Any, where: str) -> None:
+    # String actions are shorthand for {"id": <string>}; one branch validates both.
     if isinstance(action, str):
-        if action.startswith(EXAMINE_PREFIX):
-            raise NodeSchemaError(
-                f"{path}: {action!r} is skill-gated and must be authored in object "
-                f"form with 'gate', 'on_success', and 'on_failure'{where}"
-            )
-        if action not in NODE_ACTION_VOCABULARY:
-            raise NodeSchemaError(
-                f"{path}: unknown action {action!r}{where}; "
-                f"expected one of {sorted(NODE_ACTION_VOCABULARY)} or an object form"
-            )
-        return
-
-    if not isinstance(action, dict):
+        action = {"id": action}
+    elif not isinstance(action, dict):
         raise NodeSchemaError(f"{path} must be a string or object{where}")
 
     action_id = action.get("id")
@@ -111,8 +151,14 @@ def _validate_action(path: str, action: Any, where: str) -> None:
         action_id in NODE_ACTION_VOCABULARY or action_id.startswith(EXAMINE_PREFIX)
     ):
         raise NodeSchemaError(
-            f"{path}: unknown action id {action_id!r}{where}; "
+            f"{path}: unknown action {action_id!r}{where}; "
             f"expected one of {sorted(NODE_ACTION_VOCABULARY)} or '{EXAMINE_PREFIX}*'"
+        )
+
+    if action_id.startswith(EXAMINE_PREFIX) and "gate" not in action:
+        raise NodeSchemaError(
+            f"{path}: {action_id!r} is a skill check and must be authored in object "
+            f"form with 'gate', 'on_success', and 'on_failure'{where}"
         )
 
     _validate_gate_and_prose(path, action, where)
@@ -122,10 +168,7 @@ def _validate_transition(path: str, transition: Any, where: str) -> None:
     if not isinstance(transition, dict):
         raise NodeSchemaError(f"{path} must be an object{where}")
 
-    destination = transition.get("to")
-    if not isinstance(destination, str) or not destination.strip():
-        raise NodeSchemaError(f"{path} requires a non-empty 'to' destination{where}")
-
+    _require_nonempty_str(transition, "to", path, where)
     _validate_gate_and_prose(path, transition, where)
 
 
@@ -137,14 +180,16 @@ def _validate_gate_and_prose(path: str, entry: dict[str, Any], where: str) -> No
 
     if not isinstance(gate, dict):
         raise NodeSchemaError(f"{path}.gate must be an object{where}")
-    if not isinstance(gate.get("skill"), str) or not gate.get("skill"):
-        raise NodeSchemaError(f"{path}.gate requires 'skill'{where}")
-    if not isinstance(gate.get("dc"), int):
+    _require_nonempty_str(gate, "skill", f"{path}.gate", where)
+    dc = gate.get("dc")
+    if not isinstance(dc, int) or isinstance(dc, bool):
         raise NodeSchemaError(f"{path}.gate requires an integer 'dc'{where}")
 
     for branch in ("on_success", "on_failure"):
-        value = entry.get(branch)
-        if not isinstance(value, str) or not value.strip():
-            raise NodeSchemaError(
-                f"{path}: gated entries require non-empty '{branch}' prose{where}"
-            )
+        _require_nonempty_str(entry, branch, path, where)
+
+
+def _require_nonempty_str(container: dict[str, Any], field: str, path: str, where: str) -> None:
+    value = container.get(field)
+    if not isinstance(value, str) or not value.strip():
+        raise NodeSchemaError(f"{path} requires non-empty '{field}'{where}")

@@ -2,6 +2,9 @@
 # ABOUTME: Handles multi-step campaign creation with party building and dungeon selection
 
 
+import json
+from pathlib import Path
+
 import questionary
 from questionary import Choice
 from rich import box
@@ -341,6 +344,33 @@ class CampaignCreationWizard:
         except ValueError:
             print_error("Please enter a number")
 
+    def _list_adventure_files(self) -> list[Path]:
+        """
+        List dungeon files selectable as adventures.
+
+        Excludes generated dungeons (timestamped names) and node-surface
+        locations: this wizard starts the grid game loop, which requires
+        rooms/start_room. Files that fail to parse stay listed and fail at
+        load with a real error.
+
+        Returns:
+            Sorted list of selectable dungeon file paths
+        """
+        dungeons_dir = self.data_loader.data_path / "content" / "dungeons"
+        dungeon_files = sorted(dungeons_dir.glob("*.json"))
+
+        dungeon_files = [f for f in dungeon_files if not f.stem.startswith("generated_")]
+
+        def is_node_surface(path: Path) -> bool:
+            try:
+                with open(path) as f:
+                    data = json.load(f)
+            except (json.JSONDecodeError, OSError):
+                return False
+            return isinstance(data, dict) and data.get("surface") == "node"
+
+        return [f for f in dungeon_files if not is_node_surface(f)]
+
     def _step_select_adventure(self) -> bool:
         """
         Step 4: Select adventure/dungeon.
@@ -352,12 +382,7 @@ class CampaignCreationWizard:
         print_section("Step 4: Select Adventure")
         console.print()
 
-        # List available dungeons
-        dungeons_dir = self.data_loader.data_path / "content" / "dungeons"
-        dungeon_files = sorted(dungeons_dir.glob("*.json"))
-
-        # Filter out generated dungeons (they have timestamps in name)
-        dungeon_files = [f for f in dungeon_files if not f.stem.startswith("generated_")]
+        dungeon_files = self._list_adventure_files()
 
         if not dungeon_files:
             print_error("No adventures found in dungeon directory")

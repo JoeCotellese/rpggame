@@ -2,13 +2,16 @@
 # ABOUTME: Covers surface discrimination, nodes validation, and gated-action prose rules.
 
 import copy
+import json
 
 import pytest
 
+from dnd_engine.core.room_registry import RoomRegistry
 from dnd_engine.rules.loader import DataLoader
 from dnd_engine.rules.node_schema import (
     NODE_ACTION_VOCABULARY,
     NodeSchemaError,
+    validate_location_surface,
     validate_node_location,
 )
 
@@ -35,6 +38,12 @@ def _minimal_settlement() -> dict:
             },
         },
     }
+
+
+def _write_dungeon(tmp_path, name: str, data: dict) -> None:
+    dungeon_dir = tmp_path / "content" / "dungeons"
+    dungeon_dir.mkdir(parents=True, exist_ok=True)
+    (dungeon_dir / f"{name}.json").write_text(json.dumps(data))
 
 
 class TestLabSettlementFixture:
@@ -75,6 +84,48 @@ class TestGridPathUnchanged:
     def test_campaign_grid_dungeon_loads(self, loader):
         data = loader.load_dungeon("crypt", campaign_id="the_unquiet_dead")
         assert "rooms" in data
+
+
+class TestSurfaceDispatch:
+    """validate_location_surface is the single entry point for surface handling."""
+
+    def test_missing_surface_passes(self):
+        validate_location_surface({"rooms": {}})  # legacy grid; should not raise
+
+    def test_explicit_grid_surface_passes(self):
+        validate_location_surface({"surface": "grid", "rooms": {}})  # should not raise
+
+    def test_node_surface_dispatches_to_node_validation(self):
+        data = _minimal_settlement()
+        del data["start_node"]
+        with pytest.raises(NodeSchemaError, match="start_node"):
+            validate_location_surface(data)
+
+    def test_unknown_surface_rejected(self):
+        with pytest.raises(NodeSchemaError, match="surface"):
+            validate_location_surface({"surface": "holodeck"})
+
+    def test_non_dict_passes_through(self):
+        validate_location_surface([])  # legacy tolerance; should not raise
+
+    def test_loader_rejects_typoed_surface(self, loader, tmp_path, monkeypatch):
+        """A typo like surface:"nodes" must fail loudly, not load as a grid."""
+        bad = _minimal_settlement()
+        bad["surface"] = "nodes"
+        _write_dungeon(tmp_path, "typo_settlement", bad)
+        monkeypatch.setattr(loader, "data_path", tmp_path)
+
+        with pytest.raises(NodeSchemaError, match="surface"):
+            loader.load_dungeon("typo_settlement")
+
+    def test_loader_tolerates_non_dict_top_level(self, loader, tmp_path, monkeypatch):
+        """Non-object top-level JSON keeps its legacy behavior: returned as-is."""
+        dungeon_dir = tmp_path / "content" / "dungeons"
+        dungeon_dir.mkdir(parents=True)
+        (dungeon_dir / "weird.json").write_text("[]")
+        monkeypatch.setattr(loader, "data_path", tmp_path)
+
+        assert loader.load_dungeon("weird") == []
 
 
 class TestSurfaceDiscrimination:
@@ -127,6 +178,21 @@ class TestNodeProse:
             validate_node_location(data)
 
 
+class TestNodeKeys:
+    """Unknown keys fail at load so typos can't silently drop content."""
+
+    def test_typoed_key_rejected(self):
+        data = _minimal_settlement()
+        data["nodes"]["square"]["transtion"] = {"to": "test_dungeon"}
+        with pytest.raises(NodeSchemaError, match="transtion"):
+            validate_node_location(data)
+
+    def test_quest_hook_allowed(self):
+        data = _minimal_settlement()
+        data["nodes"]["square"]["quest_hook"] = "investigate_crypt"
+        validate_node_location(data)  # should not raise
+
+
 class TestActionVocabulary:
     def test_vocabulary_contents(self):
         assert NODE_ACTION_VOCABULARY == {
@@ -149,8 +215,8 @@ class TestActionVocabulary:
             validate_node_location(data)
 
     def test_bare_examine_string_rejected(self):
-        """examine_* is skill-gated by definition; it must be object form
-        so the gate and both prose branches have somewhere to live."""
+        """examine_* is a skill check; without object form there is nowhere
+        for the gate and its two prose branches to live."""
         data = _minimal_settlement()
         data["nodes"]["square"]["actions"] = ["examine_door"]
         with pytest.raises(NodeSchemaError, match="examine_door"):
@@ -168,12 +234,33 @@ class TestActionVocabulary:
         ]
         validate_node_location(data)  # should not raise
 
+    def test_examine_object_without_gate_rejected(self):
+        """The examine invariant holds in object form too, not only string form."""
+        data = _minimal_settlement()
+        data["nodes"]["square"]["actions"] = [{"id": "examine_door"}]
+        with pytest.raises(NodeSchemaError, match="gate"):
+            validate_node_location(data)
+
     def test_unknown_object_action_id_rejected(self):
         data = _minimal_settlement()
         data["nodes"]["square"]["actions"] = [
             {"id": "moonwalk", "on_success": "x", "on_failure": "y"}
         ]
         with pytest.raises(NodeSchemaError, match="moonwalk"):
+            validate_node_location(data)
+
+
+class TestActionsShape:
+    def test_actions_string_rejected(self):
+        data = _minimal_settlement()
+        data["nodes"]["square"]["actions"] = "talk"
+        with pytest.raises(NodeSchemaError, match="actions"):
+            validate_node_location(data)
+
+    def test_actions_non_iterable_rejected_as_schema_error(self):
+        data = _minimal_settlement()
+        data["nodes"]["square"]["actions"] = 5
+        with pytest.raises(NodeSchemaError, match="actions"):
             validate_node_location(data)
 
 
@@ -207,6 +294,32 @@ class TestGatedActionProse:
         with pytest.raises(NodeSchemaError, match="dc"):
             validate_node_location(data)
 
+    def test_boolean_dc_rejected(self):
+        """bool is a subclass of int; dc: true must not validate as DC 1."""
+        data = _minimal_settlement()
+        data["nodes"]["square"]["actions"] = [
+            {
+                "id": "examine_door",
+                "gate": {"skill": "religion", "dc": True},
+                "on_success": "x",
+                "on_failure": "y",
+            }
+        ]
+        with pytest.raises(NodeSchemaError, match="dc"):
+            validate_node_location(data)
+
+    def test_zero_dc_accepted(self):
+        data = _minimal_settlement()
+        data["nodes"]["square"]["actions"] = [
+            {
+                "id": "examine_door",
+                "gate": {"skill": "religion", "dc": 0},
+                "on_success": "x",
+                "on_failure": "y",
+            }
+        ]
+        validate_node_location(data)  # should not raise
+
 
 class TestTransition:
     def test_transition_requires_destination(self):
@@ -239,14 +352,32 @@ class TestLoaderIntegration:
     """load_dungeon validates node-surface files at load time."""
 
     def test_invalid_node_file_raises_at_load(self, loader, tmp_path, monkeypatch):
-        import json
-
         bad = copy.deepcopy(_minimal_settlement())
         bad["start_node"] = "nowhere"
-        dungeon_dir = tmp_path / "content" / "dungeons"
-        dungeon_dir.mkdir(parents=True)
-        (dungeon_dir / "bad_settlement.json").write_text(json.dumps(bad))
+        _write_dungeon(tmp_path, "bad_settlement", bad)
         monkeypatch.setattr(loader, "data_path", tmp_path)
 
         with pytest.raises(NodeSchemaError, match="start_node"):
             loader.load_dungeon("bad_settlement")
+
+
+class TestRoomRegistryValidation:
+    """The registry load path enforces the same surface validation as DataLoader."""
+
+    def test_registry_rejects_invalid_node_file(self, tmp_path):
+        bad = _minimal_settlement()
+        bad["start_node"] = "nowhere"
+        (tmp_path / "bad_settlement.json").write_text(json.dumps(bad))
+        registry = RoomRegistry(dungeons_path=tmp_path)
+
+        with pytest.raises(NodeSchemaError, match="start_node"):
+            registry.load_dungeon("bad_settlement")
+
+    def test_registry_loads_valid_node_file(self, tmp_path):
+        good = _minimal_settlement()
+        (tmp_path / "good_settlement.json").write_text(json.dumps(good))
+        registry = RoomRegistry(dungeons_path=tmp_path)
+
+        data = registry.load_dungeon("good_settlement")
+        assert data is not None
+        assert data["surface"] == "node"
