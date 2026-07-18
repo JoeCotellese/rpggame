@@ -55,15 +55,14 @@ class CLIContextAdapter(GameContextProvider):
                     item_name = item.get("name", item.get("id", "unknown"))
                     items.append(item_name)
 
-        # Get items from party inventories
+        # Get items from party inventories (one catalog load for all lookups)
+        items_db = self.game_state.data_loader.load_items(self.game_state.campaign_id)
         for char in self.game_state.party.characters:
             if char.is_alive:
                 # Get consumables
                 consumables = char.inventory.get_items_by_category("consumables")
                 for inv_item in consumables:
-                    item_data = self.game_state.data_loader.load_items(
-                        self.game_state.campaign_id
-                    ).get(inv_item.item_id, {})
+                    item_data = items_db.get(inv_item.item_id, {})
                     item_name = item_data.get("name", inv_item.item_id)
                     if item_name not in items:
                         items.append(item_name)
@@ -71,9 +70,7 @@ class CLIContextAdapter(GameContextProvider):
                 # Get equipment (equipped maps slot -> item id)
                 for equipped_id in char.inventory.equipped.values():
                     if equipped_id:
-                        item_data = self.game_state.data_loader.load_items(
-                            self.game_state.campaign_id
-                        ).get(equipped_id, {})
+                        item_data = items_db.get(equipped_id, {})
                         item_name = item_data.get("name", equipped_id)
                         if item_name not in items:
                             items.append(item_name)

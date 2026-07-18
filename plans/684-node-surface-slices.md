@@ -8,13 +8,16 @@ check that runs without a human (pytest, pexpect, or headless MCP playtest), and
 each slice is one PR.
 
 Progress: slice 1 merged (PR #686), slice 2 merged (PR #687), slice 3 merged
-(PR #689). Slice 4 implemented on `feature/684-s4-transition-seam`
-(architecture-guardian approved; /code-review high findings fixed in-branch);
-PR pending. Next after merge: slice 5 (terminal rendering). Standing review policy: deep
-multi-agent review offered to Joe only at slices 4 and 6; `/code-review` high on
-those two, medium elsewhere; architecture-guardian on 2/4/7. Merges are done by
-Joe (permission classifier blocks `gh pr merge`). Related: #688 tracks the
-pre-existing `load_skills()` caching gap found in slice-3 review.
+(PR #689), slice 4 merged (PR #690). Slice 5 implemented on
+`feature/684-s5-terminal-node-ui` (/code-review medium: 8 verified findings,
+fixed in-branch); PR pending. Next after merge: slice 6 (Arden cutover).
+Standing review policy: deep multi-agent review offered to Joe only at slices
+4 and 6; `/code-review` high on those two, medium elsewhere;
+architecture-guardian on 2/4/7. Merges are done by Joe (permission classifier
+blocks `gh pr merge`). Related: #688 tracks the pre-existing `load_skills()`
+caching gap found in slice-3 review; #691 (adapter item-lookup dead
+references) was found and fixed during slice 5; #692 tracks debug-console
+node-awareness.
 
 Parent design: `docs/PARTIAL_TOTM_DESIGN.md` (town node surface).
 Related epics: plan-07 #536 (pillars — NOT built here), plan-10 #539 (engine owns
@@ -171,6 +174,31 @@ of which raise on a node surface; the node render branch must gate on
 (`test_node_surface_state.py`, `test_node_actions.py`,
 `test_transition_seam_integration.py`) — consolidate into `tests/conftest.py`
 during this slice's test work.
+
+**Slice 5 outcome notes:** hybrid input landed as designed (numbers + prose
+through the rule-based parser; per-surface keyword remapping, with "leave"
+resolving to flee during grid combat). Review fixes hardened the seam UX:
+the bare "read" alias was narrowed to board phrases, examine targets bypass
+inventory fuzzy-matching on nodes, validation errors use spaced action names,
+fuzzy help is surface-aware, the numbered menu rebuilds after every action
+(reprints when it changed), and node rest executes through
+`NodeSurfaceActions.rest` so authoring is enforced engine-side. The node
+status strip and prompt toolbar share one field helper reading raw authored
+dicts (no deepcopy on the repaint path). Client-terminal node tests and the
+pexpect driver share one party builder (`tests/support.py`).
+
+**Carried findings from slice 5 review (for slice 6):** departing a node into
+a grid whose start room has enemies prints combat start BEFORE the departure
+prose and room description — `_enter_dungeon_via_seam` runs
+`_check_for_enemies` inside `transition()`, inverting the room-first ordering
+`handle_move` preserves; if the Arden→crypt seam authors enemies at the
+arrival room, add an engine seam (e.g. `transition(check_for_enemies=False)`
++ client-triggered check) rather than reordering client-side. Also: the
+schema's fixed `NODE_ACTION_VOCABULARY` means any vocabulary addition must
+update `CLI._build_node_menu`'s label chain in the same change; menu
+staleness on NPC movement is now handled, but `update_npc_locations` still
+has no production caller — wiring it to time advance is where that refresh
+starts mattering.
 
 ### Slice 6 — Arden cutover + full-beat e2e
 

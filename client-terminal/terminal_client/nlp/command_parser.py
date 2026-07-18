@@ -103,7 +103,14 @@ class CommandParser:
         "unlock": ["unlock", "open", "pick"],
         "enter_node": ["visit", "go to", "head to", "walk to", "travel to"],
         "gather_rumors": ["gather rumors", "rumors", "gossip", "ask around"],
-        "read_job_board": ["job board", "read board", "notice board", "read", "postings"],
+        "read_job_board": [
+            "job board",
+            "read board",
+            "notice board",
+            "read the job",
+            "read the board",
+            "postings",
+        ],
         "depart": ["depart", "leave", "set out"],
     }
 
@@ -212,7 +219,15 @@ class CommandParser:
         if action == "move" and self._on_node_surface():
             action = "enter_node"
         elif action in ("enter_node", "depart") and not self._on_node_surface():
-            action = "move"
+            # "leave" during grid combat means fleeing, not walking a direction
+            if (
+                action == "depart"
+                and self.context_provider
+                and self.context_provider.is_in_combat()
+            ):
+                action = "flee"
+            else:
+                action = "move"
 
         # Extract parameters based on action type
         params, param_confidence, entity_suggestions = self._extract_params(
@@ -289,6 +304,14 @@ class CommandParser:
         elif action == "cast":
             return self._extract_spell_and_target(filtered)
         elif action in ("take", "use", "equip", "unequip", "look"):
+            # On a node surface, look/examine targets are authored node
+            # actions, not inventory items — pass the text through raw so
+            # inventory names can't hijack it.
+            if action == "look" and self._on_node_surface():
+                target = " ".join(t for t in filtered if t not in self.TARGET_INDICATORS)
+                if target:
+                    return {"item": target}, 0.7, {}
+                return {}, 0.5, {}
             return self._extract_item(filtered)
         elif action == "talk":
             return self._extract_npc(filtered)
@@ -527,7 +550,7 @@ class CommandParser:
     def _on_node_surface(self) -> bool:
         """True when the provider reports a node surface.
 
-        Providers predating the node protocol methods degrade to grid
+        Providers without the node protocol methods degrade to grid
         behavior rather than raising.
         """
         checker = getattr(self.context_provider, "is_node_surface", None)
@@ -572,12 +595,14 @@ class CommandParser:
 
         in_combat = self.context_provider.is_in_combat()
 
-        # Node-surface actions: exploration-only, and only in a settlement
+        # Node-surface actions: exploration-only, and only in a settlement.
+        # Messages use the spaced form of the action name, never internal ids.
         if action in self.NODE_ONLY_ACTIONS:
+            display_name = action.replace("_", " ")
             if in_combat:
-                return f"'{action}' is not available during combat"
+                return f"'{display_name}' is not available during combat"
             if not self._on_node_surface():
-                return f"'{action}' is only available in a settlement"
+                return f"'{display_name}' is only available in a settlement"
             return None
 
         if action in self.GRID_ONLY_ACTIONS and self._on_node_surface():

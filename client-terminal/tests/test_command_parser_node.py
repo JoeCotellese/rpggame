@@ -15,11 +15,13 @@ class NodeContextProvider:
         self,
         nodes: list[str] | None = None,
         npcs: list[str] | None = None,
+        items: list[str] | None = None,
         node_surface: bool = True,
         in_combat: bool = False,
     ):
         self._nodes = nodes if nodes is not None else list(LAB_NODES)
         self._npcs = npcs or []
+        self._items = items or []
         self._node_surface = node_surface
         self._in_combat = in_combat
 
@@ -27,7 +29,7 @@ class NodeContextProvider:
         return []
 
     def get_available_items(self) -> list[str]:
-        return []
+        return self._items
 
     def get_available_spells(self) -> list[str]:
         return []
@@ -131,12 +133,26 @@ class TestNodeSocialIntents:
 
     @pytest.mark.parametrize(
         "text",
-        ["read the job board", "job board", "read board", "notice board", "read"],
+        ["read the job board", "job board", "read board", "notice board", "read the board"],
     )
     def test_read_job_board(self, node_parser, text):
         result = node_parser.parse(text)
         assert result.success, result.error
         assert result.action == "read_job_board"
+
+    def test_read_of_other_things_is_not_job_board(self, node_parser):
+        # "read the plaque" must not open the job board
+        result = node_parser.parse("read the plaque")
+        assert result.action != "read_job_board"
+
+    def test_examine_target_not_hijacked_by_inventory(self):
+        # On a node, examine targets are authored actions; inventory names
+        # (Scimitar fuzzy-matches "altar") must not substitute the target.
+        parser = CommandParser(context_provider=NodeContextProvider(items=["Scimitar"]))
+        result = parser.parse("examine the altar")
+        assert result.success, result.error
+        assert result.action == "look"
+        assert result.params["item"] == "altar"
 
     @pytest.mark.parametrize("text", ["depart", "leave", "set out"])
     def test_depart(self, node_parser, text):
@@ -168,6 +184,23 @@ class TestSurfaceRemap:
     def test_depart_remaps_to_move_on_grid(self, grid_parser):
         result = grid_parser.parse("leave")
         assert result.action == "move"
+
+    def test_leave_during_grid_combat_means_flee(self):
+        parser = CommandParser(
+            context_provider=NodeContextProvider(node_surface=False, in_combat=True)
+        )
+        result = parser.parse("leave")
+        assert result.success, result.error
+        assert result.action == "flee"
+
+    def test_read_on_grid_is_not_a_settlement_error(self, grid_parser):
+        result = grid_parser.parse("read the inscription")
+        assert result.error is None or "settlement" not in result.error
+
+    def test_validation_errors_use_spaced_names(self, grid_parser):
+        result = grid_parser.parse("gather rumors")
+        assert "gather rumors" in result.error
+        assert "gather_rumors" not in result.error
 
     def test_gather_rumors_rejected_on_grid(self, grid_parser):
         result = grid_parser.parse("gather rumors")
@@ -202,36 +235,10 @@ class TestAdapterNodeIntegration:
 
     @pytest.fixture
     def lab_adapter(self):
-        from dnd_engine.core.character import Character, CharacterClass
-        from dnd_engine.core.creature import Abilities
-        from dnd_engine.core.game_state import GameState
-        from dnd_engine.core.party import Party
-        from dnd_engine.rules.loader import DataLoader
-        from dnd_engine.utils.events import EventBus
         from terminal_client.nlp.cli_context_adapter import CLIContextAdapter
+        from tests.support import make_lab_game_state
 
-        character = Character(
-            name="Test Hero",
-            character_class=CharacterClass.FIGHTER,
-            level=1,
-            abilities=Abilities(
-                strength=14,
-                dexterity=12,
-                constitution=13,
-                intelligence=10,
-                wisdom=11,
-                charisma=8,
-            ),
-            max_hp=12,
-            ac=16,
-        )
-        game_state = GameState(
-            party=Party([character]),
-            dungeon_name="lab_settlement",
-            event_bus=EventBus(),
-            data_loader=DataLoader(),
-        )
-        return CLIContextAdapter(game_state)
+        return CLIContextAdapter(make_lab_game_state())
 
     def test_reports_node_surface(self, lab_adapter):
         assert lab_adapter.is_node_surface() is True
@@ -263,47 +270,11 @@ class TestAdapterNodeIntegration:
         assert isinstance(lab_adapter.get_available_items(), list)
 
     def test_get_available_items_over_real_engine_on_grid(self):
-        from dnd_engine.core.game_state import GameState
-        from dnd_engine.rules.loader import DataLoader
-        from dnd_engine.utils.events import EventBus
         from terminal_client.nlp.cli_context_adapter import CLIContextAdapter
+        from tests.support import make_lab_game_state
 
-        lab_adapter_cls = CLIContextAdapter
-        node_adapter = lab_adapter_cls(
-            GameState(
-                party=self._party(),
-                dungeon_name="lab_dungeon",
-                event_bus=EventBus(),
-                data_loader=DataLoader(),
-            )
-        )
-        assert isinstance(node_adapter.get_available_items(), list)
-
-    @staticmethod
-    def _party():
-        from dnd_engine.core.character import Character, CharacterClass
-        from dnd_engine.core.creature import Abilities
-        from dnd_engine.core.party import Party
-
-        return Party(
-            [
-                Character(
-                    name="Test Hero",
-                    character_class=CharacterClass.FIGHTER,
-                    level=1,
-                    abilities=Abilities(
-                        strength=14,
-                        dexterity=12,
-                        constitution=13,
-                        intelligence=10,
-                        wisdom=11,
-                        charisma=8,
-                    ),
-                    max_hp=12,
-                    ac=16,
-                )
-            ]
-        )
+        grid_adapter = CLIContextAdapter(make_lab_game_state("lab_dungeon"))
+        assert isinstance(grid_adapter.get_available_items(), list)
 
     def test_parser_end_to_end_over_real_adapter(self, lab_adapter):
         parser = CommandParser(context_provider=lab_adapter)

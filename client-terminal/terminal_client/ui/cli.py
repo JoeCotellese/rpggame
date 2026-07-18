@@ -120,6 +120,9 @@ class CLI:
         # Combat display management
         self.combat_status_shown = False
 
+        # Numbered action menu for the current settlement node
+        self._node_menu: list[dict] = []
+
         # Debug console for testing and development
         self.debug_console = DebugConsole(game_state, cli=self)
 
@@ -204,9 +207,16 @@ class CLI:
         else:
             self.display_room()
 
-    def display_node(self) -> None:
-        """Render the current node in three zones: status strip, prose, numbered actions."""
-        context = self.game_state.enter_node(self.game_state.current_node_id)
+    def display_node(self, context: dict | None = None) -> None:
+        """Render the current node in three zones: status strip, prose, numbered actions.
+
+        Args:
+            context: An enter_node display context to render; when None the
+                current node's context is fetched (same-node re-entry does
+                not re-fire arrival events).
+        """
+        if context is None:
+            context = self.game_state.enter_node(self.game_state.current_node_id)
 
         self._print_node_status_strip()
         print_room_description(context["name"], context["description"], [])
@@ -218,18 +228,46 @@ class CLI:
                 print_status_message(f"  • {npc['display_name']} ({npc['disposition']})", "info")
 
         self._node_menu = self._build_node_menu(context)
+        self._print_node_action_list()
+        print_status_message("(Pick a number, or say what you do.)", "info")
+
+    def _print_node_action_list(self) -> None:
+        """Zone 3: the numbered contextual action list for the current menu."""
         print_status_message("\nWhat do you do?", "info")
         for number, item in enumerate(self._node_menu, 1):
             print_message(f"  {number}. {item['label']}")
-        print_status_message("(Pick a number, or say what you do.)", "info")
+
+    def _refresh_node_menu(self) -> None:
+        """Rebuild the numbered menu after an action; reprint it when it changed.
+
+        Keeps the on-screen numbering honest when an action mutates node
+        state (NPC presence, authored actions) without a full re-render.
+        """
+        if not self.game_state.is_node_surface():
+            return
+        view = self.game_state.node_actions.interactions()
+        menu = self._build_node_menu(view)
+        changed = [item["label"] for item in menu] != [item["label"] for item in self._node_menu]
+        self._node_menu = menu
+        if changed:
+            self._print_node_action_list()
+
+    def _node_status_fields(self) -> tuple[str, str, str, int]:
+        """(settlement, node name, time, gold) for the strip and the toolbar.
+
+        Reads the raw authored dict — no deep copy; this runs on the
+        prompt-toolkit repaint path.
+        """
+        settlement = self.game_state.dungeon.get("name", self.game_state.dungeon_name)
+        node_name = self.game_state.dungeon["nodes"][self.game_state.current_node_id]["name"]
+        time_display = self.game_state.time_manager.get_elapsed_time_display()
+        return settlement, node_name, time_display, self._party_gold_display()
 
     def _print_node_status_strip(self) -> None:
         """Zone 1: one-line location · time · gold strip."""
-        node = self.game_state.current_node()
-        settlement = self.game_state.dungeon.get("name", self.game_state.dungeon_name)
-        time_display = self.game_state.time_manager.get_elapsed_time_display()
+        settlement, node_name, time_display, gold = self._node_status_fields()
         print_status_message(
-            f"{settlement} — {node['name']}  ·  {time_display}  ·  {self._party_gold_display()} gp",
+            f"{settlement} — {node_name}  ·  {time_display}  ·  {gold} gp",
             "info",
         )
 
@@ -370,10 +408,11 @@ class CLI:
             return
 
         if command.isdigit():
-            menu = getattr(self, "_node_menu", [])
+            menu = self._node_menu
             index = int(command)
             if menu and 1 <= index <= len(menu):
                 self._dispatch_node_menu_item(menu[index - 1])
+                self._refresh_node_menu()
             elif menu:
                 print_error(f"Pick a number between 1 and {len(menu)}.")
             else:
@@ -381,6 +420,7 @@ class CLI:
             return
 
         if self._try_fuzzy_parse(command):
+            self._refresh_node_menu()
             return
 
         print_status_message("Unknown command. Type 'help' for available commands.", "warning")
@@ -408,11 +448,11 @@ class CLI:
             return
 
         try:
-            self.game_state.enter_node(target_id)
+            context = self.game_state.enter_node(target_id)
         except RuntimeError as e:
             print_error(str(e))
             return
-        self.display_node()
+        self.display_node(context)
 
     def handle_go_elsewhere(self) -> None:
         """Show the settlement's node list and enter the chosen node."""
@@ -444,15 +484,21 @@ class CLI:
         if target is None:
             print_error(f"No place called '{choice}' here.")
             return
-        self.handle_enter_node(target["name"])
+        self.handle_enter_node(target["id"])
 
     def handle_node_rest(self) -> None:
         """Rest at the current node when the node authors a rest action."""
-        interactions = self.game_state.node_actions.interactions()
-        if not any(action["id"] == "rest" for action in interactions["actions"]):
+        node = self.game_state.dungeon["nodes"][self.game_state.current_node_id]
+        authored = any(
+            action == "rest" or (isinstance(action, dict) and action.get("id") == "rest")
+            for action in node.get("actions", [])
+        )
+        if not authored:
             print_status_message("There's nowhere to rest here.", "warning")
             return
-        self.handle_rest()
+        # Execution routes through the engine's node dispatch so the
+        # authored-action rule is enforced engine-side, not just here.
+        self.handle_rest(rest_executor=self.game_state.node_actions.rest)
 
     def handle_gather_rumors(self) -> None:
         """Collect and display rumors from NPCs at the current node."""
@@ -544,7 +590,7 @@ class CLI:
 
     def handle_node_depart(self) -> None:
         """Depart through the current node's authored transition."""
-        node = self.game_state.current_node()
+        node = self.game_state.dungeon["nodes"][self.game_state.current_node_id]
         spec = node.get("transition")
         if spec is None:
             print_status_message("There's no way onward from here — try 'go elsewhere'.", "warning")
@@ -855,17 +901,15 @@ class CLI:
         # Node surfaces have no room, lighting, or exits — show the
         # settlement strip instead (location · time · gold).
         if self.game_state.is_node_surface():
-            node = self.game_state.current_node()
-            settlement = self.game_state.dungeon.get("name", "Unknown")
-            time_display = self.game_state.time_manager.get_elapsed_time_display()
+            settlement, node_name, time_display, gold = self._node_status_fields()
             return HTML(
                 f'<style fg="cyan">{settlement}</style>'
                 f' <style fg="white">│</style> '
-                f'<style fg="white">{node["name"]}</style>'
+                f'<style fg="white">{node_name}</style>'
                 f' <style fg="white">│</style> '
                 f'<style fg="yellow">{time_display}</style>'
                 f' <style fg="white">│</style> '
-                f'<style fg="green">{self._party_gold_display()} gp</style>'
+                f'<style fg="green">{gold} gp</style>'
             )
 
         # Get current location
@@ -1240,6 +1284,8 @@ class CLI:
         if action == "help":
             if self.game_state.in_combat:
                 self.display_help_combat()
+            elif self.game_state.is_node_surface():
+                self.display_help_node()
             else:
                 self.display_help_exploration()
             return True
@@ -5275,12 +5321,18 @@ class CLI:
         except Exception as e:
             print_error(f"Failed to quick-save: {e}")
 
-    def handle_rest(self) -> None:
+    def handle_rest(self, rest_executor=None) -> None:
         """
         Handle rest command to allow party to rest and recover.
 
         Prompts player to choose between short rest or long rest.
         Game logic is handled by GameState.party_rest().
+
+        Args:
+            rest_executor: Callable taking a rest type ("short"/"long") and
+                returning a PartyRestResult; defaults to GameState.party_rest.
+                Node surfaces pass NodeSurfaceActions.rest so the engine
+                enforces the authored rest action.
         """
         from terminal_client.ui.rich_ui import print_message, print_section, print_status_message
 
@@ -5306,8 +5358,9 @@ class CLI:
         # Determine rest type
         rest_type = "short" if choice == "1" else "long"
 
-        # Delegate all game logic to GameState
-        result = self.game_state.party_rest(rest_type)
+        # Delegate all game logic to the engine
+        executor = rest_executor or self.game_state.party_rest
+        result = executor(rest_type)
 
         # Display rest results
         self._display_rest_results(result)

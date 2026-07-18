@@ -1,44 +1,26 @@
 # ABOUTME: E2E driver that boots the real CLI on the lab settlement (no LLM, no menus).
 # ABOUTME: Run under pexpect by test_node_surface_e2e.py; only game setup is scripted.
 
-from dnd_engine.core.character import Character, CharacterClass
-from dnd_engine.core.creature import Abilities
-from dnd_engine.core.game_state import GameState
-from dnd_engine.core.party import Party
-from dnd_engine.rules.loader import DataLoader
-from dnd_engine.utils.events import EventBus
+import sys
+from pathlib import Path
+
 from terminal_client.ui.cli import CLI
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from tests.support import make_lab_game_state  # noqa: E402
 
 
 class NoopCampaignManager:
     """Save-less campaign manager so the e2e run never touches real save slots."""
 
-    def save_game(self, *args, **kwargs):
+    def save_game(self, *args: object, **kwargs: object) -> None:
+        """Discard the save request."""
         return None
 
 
 def main() -> None:
-    character = Character(
-        name="Test Hero",
-        character_class=CharacterClass.FIGHTER,
-        level=1,
-        abilities=Abilities(
-            strength=14,
-            dexterity=12,
-            constitution=13,
-            intelligence=10,
-            wisdom=11,
-            charisma=8,
-        ),
-        max_hp=12,
-        ac=16,
-    )
-    game_state = GameState(
-        party=Party([character]),
-        dungeon_name="lab_settlement",
-        event_bus=EventBus(),
-        data_loader=DataLoader(),
-    )
+    """Boot the CLI on the lab settlement with a standard one-fighter party."""
+    game_state = make_lab_game_state()
     cli = CLI(
         game_state,
         NoopCampaignManager(),

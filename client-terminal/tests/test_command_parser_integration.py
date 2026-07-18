@@ -139,6 +139,7 @@ def create_combat_game_state():
 
     # Mock combat state
     game_state.in_combat = True
+    game_state.is_node_surface.return_value = False
 
     # Mock initiative tracker
     entry1 = MagicMock()
@@ -209,6 +210,7 @@ def create_simple_combat_parser():
     enemy1.current_hp = 5
 
     game_state.in_combat = True
+    game_state.is_node_surface.return_value = False
 
     entry1 = MagicMock()
     entry1.creature = enemy1

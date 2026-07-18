@@ -5,43 +5,13 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from dnd_engine.core.character import Character, CharacterClass
-from dnd_engine.core.creature import Abilities
-from dnd_engine.core.game_state import GameState
-from dnd_engine.core.party import Party
-from dnd_engine.rules.loader import DataLoader
-from dnd_engine.utils.events import EventBus
 from terminal_client.ui.cli import CLI
 from terminal_client.ui.rich_ui import console
-
-
-def _make_party() -> Party:
-    character = Character(
-        name="Test Hero",
-        character_class=CharacterClass.FIGHTER,
-        level=1,
-        abilities=Abilities(
-            strength=14,
-            dexterity=12,
-            constitution=13,
-            intelligence=10,
-            wisdom=11,
-            charisma=8,
-        ),
-        max_hp=12,
-        ac=16,
-    )
-    return Party([character])
+from tests.support import make_lab_game_state
 
 
 def _make_cli(dungeon_name: str) -> CLI:
-    game_state = GameState(
-        party=_make_party(),
-        dungeon_name=dungeon_name,
-        event_bus=EventBus(),
-        data_loader=DataLoader(),
-    )
-    return CLI(game_state, Mock(), "lab", auto_save_enabled=False)
+    return CLI(make_lab_game_state(dungeon_name), Mock(), "lab", auto_save_enabled=False)
 
 
 @pytest.fixture
@@ -153,6 +123,35 @@ class TestProseInput:
     def test_look_rerenders_node(self, node_cli):
         output = _capture(node_cli.process_node_command, "look")
         assert "Lab Square" in output
+
+    def test_fuzzy_help_shows_settlement_help(self, node_cli):
+        output = _capture(node_cli.process_node_command, "commands")
+        assert "Settlement Commands" in output
+
+    def test_menu_reprints_when_actions_change(self, node_cli):
+        _capture(node_cli.display_node)
+        assert any("job board" in item["label"].lower() for item in node_cli._node_menu)
+        # Simulate node state changing between render and dispatch
+        node_cli.game_state.dungeon["nodes"]["lab_square"]["actions"].remove("read_job_board")
+        output = _capture(node_cli.process_node_command, "1")
+        assert not any("job board" in item["label"].lower() for item in node_cli._node_menu)
+        assert "What do you do?" in output
+
+
+class TestNodeRest:
+    """Rest routes through the engine's node dispatch and respects authoring."""
+
+    def test_rest_unauthored_node_declines(self, node_cli):
+        output = _capture(node_cli.process_node_command, "rest")
+        assert "nowhere to rest" in output.lower()
+
+    def test_rest_authored_node_heals(self, node_cli):
+        node_cli.game_state.enter_node("lab_tavern")
+        hero = node_cli.game_state.party.characters[0]
+        hero.current_hp = 1
+        with patch("builtins.input", return_value="2"):
+            _capture(node_cli.process_node_command, "rest")
+        assert hero.current_hp == hero.max_hp
 
 
 class TestGoElsewhere:
