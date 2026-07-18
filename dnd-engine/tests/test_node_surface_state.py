@@ -111,11 +111,16 @@ class TestNodeNavigation:
         assert events[0].data["room_name"] == "The Old Gate"
 
     def test_enter_node_includes_npcs_present(self, node_game):
+        from dnd_engine.core.npc import NPCDisposition
+
         class StubNPC:
             def __init__(self):
                 self.id = "stub_npc"
                 self.name = "Stubby"
                 self.display_name = "Stubby the Stub"
+
+            def get_disposition(self):
+                return NPCDisposition.NEUTRAL
 
         class StubNPCManager:
             def get_npcs_in_room(self, room_guid):
@@ -125,7 +130,12 @@ class TestNodeNavigation:
 
         context = node_game.enter_node("lab_tavern")
         assert context["npcs"] == [
-            {"id": "stub_npc", "name": "Stubby", "display_name": "Stubby the Stub"}
+            {
+                "id": "stub_npc",
+                "name": "Stubby",
+                "display_name": "Stubby the Stub",
+                "disposition": "neutral",
+            }
         ]
 
     def test_node_api_raises_on_grid_surface(self, grid_game):

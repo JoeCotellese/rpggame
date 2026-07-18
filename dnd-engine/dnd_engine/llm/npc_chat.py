@@ -610,28 +610,12 @@ class NPCChatManager:
         return {"quests": available}
 
     def _get_quest_hint(self, quest_id: str, npc_id: str) -> str:
-        """Get NPC-specific hint for a quest."""
-        # Try to get hint from quest data
+        """Get NPC-specific hint for a quest (delegates to Quest.hint_for)."""
         if self.game_state.quest_manager:
             quest = self.game_state.quest_manager.quests.get(quest_id)
-            if quest and quest.npc_hints:
+            if quest:
                 state = self.game_state.quest_manager.get_quest_state(quest_id)
-                state_hints = quest.npc_hints.get(state.value, {})
-
-                # state_hints can be a string (same for all NPCs) or dict (NPC-specific)
-                if isinstance(state_hints, str):
-                    return state_hints
-
-                if isinstance(state_hints, dict):
-                    if npc_id in state_hints:
-                        return state_hints[npc_id]
-                    # Try by NPC role
-                    npc = self._current_conversation.npc if self._current_conversation else None
-                    if npc:
-                        role = npc.id.split("_")[-1]  # e.g., "innkeeper" from "marta_innkeeper"
-                        if role in state_hints:
-                            return state_hints[role]
-
+                return quest.hint_for(state.value, npc_id)
         return ""
 
     def _handle_open_shop(self) -> dict[str, Any]:

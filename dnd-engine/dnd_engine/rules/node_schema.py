@@ -161,6 +161,15 @@ def _validate_action(path: str, action: Any, where: str) -> None:
             f"form with 'gate', 'on_success', and 'on_failure'{where}"
         )
 
+    # Only examine_* actions (and transitions) may be skill-gated: the
+    # dispatch layer does not roll gates on vocabulary actions, so a gate
+    # authored there would be silently ignored at play time.
+    if not action_id.startswith(EXAMINE_PREFIX) and "gate" in action:
+        raise NodeSchemaError(
+            f"{path}: {action_id!r} cannot carry a 'gate'; only "
+            f"'{EXAMINE_PREFIX}*' actions and transitions are skill-gated"
+        )
+
     _validate_gate_and_prose(path, action, where)
 
 

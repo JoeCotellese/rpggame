@@ -19,6 +19,20 @@ class NodeActionError(Exception):
     """
 
 
+def npc_view(npc: NPC) -> dict[str, Any]:
+    """Client-facing NPC data; disposition is a word, never a number.
+
+    The single NPC shape shared by enter_node and interactions so the two
+    payloads cannot drift.
+    """
+    return {
+        "id": npc.id,
+        "name": npc.name,
+        "display_name": npc.display_name,
+        "disposition": npc.get_disposition().value,
+    }
+
+
 class NodeSurfaceActions:
     """
     Dispatches the fixed node-action vocabulary for the current node.
@@ -181,21 +195,20 @@ class NodeSurfaceActions:
         Returns:
             {"success": bool, "prose": authored branch, "check": check dict}
         """
-        node = self.game_state.current_node()
-        action = next(
-            (
-                a
-                for a in self._normalized_actions(node)
-                if a["id"] == action_id and a["id"].startswith("examine_")
-            ),
-            None,
-        )
+        action = self._find_action(action_id)
         if action is None:
-            raise NodeActionError(f"No action {action_id!r} at {node['id']}")
+            raise NodeActionError(f"No action {action_id!r} at {self.game_state.current_node_id}")
+        if not action["id"].startswith("examine_"):
+            raise NodeActionError(f"{action_id!r} is not an examinable action")
 
         gate = action["gate"]
         skills_data = self.game_state.data_loader.load_skills()
-        check = character.make_skill_check(gate["skill"], gate["dc"], skills_data)
+        try:
+            check = character.make_skill_check(gate["skill"], gate["dc"], skills_data)
+        except KeyError as exc:
+            raise NodeActionError(
+                f"Unknown skill {gate['skill']!r} authored on {action_id!r}"
+            ) from exc
         success = check["success"]
         return {
             "success": success,
@@ -213,11 +226,25 @@ class NodeSurfaceActions:
             for action in node.get("actions", [])
         ]
 
+    def _live_node(self) -> dict[str, Any]:
+        """The current node's live dict, for internal read-only lookups.
+
+        Avoids current_node()'s defensive deep copy; never returned to
+        callers and never mutated.
+        """
+        self.game_state._require_node_surface()
+        return self.game_state.dungeon["nodes"][self.game_state.current_node_id]
+
+    def _find_action(self, action_id: str) -> dict[str, Any] | None:
+        """Look up an authored action by id on the current node."""
+        for action in self._normalized_actions(self._live_node()):
+            if action["id"] == action_id:
+                return action
+        return None
+
     def _require_action(self, action_id: str) -> None:
-        node = self.game_state.current_node()
-        authored = [a["id"] for a in self._normalized_actions(node)]
-        if action_id not in authored:
-            raise NodeActionError(f"No action {action_id!r} at {node['id']}")
+        if self._find_action(action_id) is None:
+            raise NodeActionError(f"No action {action_id!r} at {self.game_state.current_node_id}")
 
     def _npcs_present(self) -> list[NPC]:
         npc_manager = self.game_state.npc_manager
@@ -232,13 +259,8 @@ class NodeSurfaceActions:
         raise NodeActionError(f"{npc_id!r} is not here")
 
     def _npc_view(self, npc: NPC) -> dict[str, Any]:
-        """Client-facing NPC data; disposition is a word, never a number."""
-        return {
-            "id": npc.id,
-            "name": npc.name,
-            "display_name": npc.display_name,
-            "disposition": npc.get_disposition().value,
-        }
+        """See module-level npc_view — one shape for all NPC payloads."""
+        return npc_view(npc)
 
     def _disposition_effects(self, npc: NPC) -> dict[str, Any]:
         if not npc.reputation_modifiers:
@@ -247,15 +269,19 @@ class NodeSurfaceActions:
         return effects.get(npc.get_disposition().value, {})
 
     def _quest_hook_texts(self, npc: NPC) -> list[str]:
+        """Hook lines for available quests this NPC knows, voiced with the
+        authored per-NPC npc_hints wording when present (the same mechanism
+        the LLM chat path uses), falling back to the quest description."""
         quest_manager = self.game_state.quest_manager
         if not quest_manager:
             return []
-        available = {quest.id: quest for quest in quest_manager.get_available_quests()}
-        return [
-            available[quest_id].description
-            for quest_id in npc.knowledge.quest_hooks
-            if quest_id in available
-        ]
+        texts = []
+        for quest in quest_manager.get_available_quests():
+            if quest.id not in npc.knowledge.quest_hooks:
+                continue
+            hint = quest.hint_for("available", npc.id)
+            texts.append(hint or quest.description)
+        return texts
 
     @staticmethod
     def _adjusted_price(price: int, modifier: float) -> int:

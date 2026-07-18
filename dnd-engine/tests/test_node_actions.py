@@ -347,3 +347,60 @@ class TestExamine:
         node_game.node_actions.examine("examine_symbol", hero)
 
         assert calls == {"skill": "religion", "dc": 12}
+
+
+class TestExamineErrorContract:
+    def test_examine_non_examine_action_names_the_problem(self, tavern_game):
+        """'talk' exists at the tavern; the error must say it isn't examinable,
+        not falsely claim the action doesn't exist."""
+        hero = tavern_game.party.characters[0]
+        with pytest.raises(NodeActionError, match="examin"):
+            tavern_game.node_actions.examine("talk", hero)
+
+    def test_examine_unknown_gate_skill_raises_node_action_error(self, node_game):
+        """A typoed authored skill fails inside the NodeActionError contract,
+        not as a bare KeyError."""
+        node_game.enter_node("lab_gate")
+        node_game.dungeon["nodes"]["lab_gate"]["actions"][0]["gate"]["skill"] = "Religion"
+        hero = node_game.party.characters[0]
+        with pytest.raises(NodeActionError, match="Religion"):
+            node_game.node_actions.examine("examine_symbol", hero)
+
+
+class TestNpcViewUnification:
+    def test_enter_node_npcs_carry_disposition(self, node_game):
+        """enter_node and interactions() must present the same NPC shape."""
+        context = node_game.enter_node("lab_tavern")
+        by_id = {npc["id"]: npc for npc in context["npcs"]}
+        assert by_id["friendly"]["disposition"] == "friendly"
+        assert by_id["grump"]["disposition"] == "hostile"
+
+
+class TestAuthoredQuestHints:
+    def test_gather_rumors_prefers_authored_npc_hint(self, tavern_game):
+        from dnd_engine.core.quest import QuestManager
+
+        tavern_game.dungeon["nodes"]["lab_tavern"]["actions"].append("gather_rumors")
+        quest_manager = QuestManager()
+        quest_manager.load_quests_from_dict(
+            {
+                "quests": [
+                    {
+                        "id": "investigate_crypt",
+                        "name": "The Crypt Problem",
+                        "description": "Strange lights at the crypt.",
+                        "unlocked_by_default": True,
+                        "npc_hints": {
+                            "available": {"friendly": "Psst - lights up at the crypt, love."}
+                        },
+                    }
+                ]
+            }
+        )
+        tavern_game.quest_manager = quest_manager
+
+        result = tavern_game.node_actions.gather_rumors()
+
+        friendly_texts = [r["text"] for r in result["rumors"] if r["npc_id"] == "friendly"]
+        assert "Psst - lights up at the crypt, love." in friendly_texts
+        assert "Strange lights at the crypt." not in friendly_texts

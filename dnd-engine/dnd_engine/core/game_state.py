@@ -18,6 +18,7 @@ from dnd_engine.core.entity_ids import pc_entity_id
 from dnd_engine.core.map import Map
 from dnd_engine.core.move_result import MoveResult
 from dnd_engine.core.node_surface import NodeSurfaceActions
+from dnd_engine.core.node_surface import npc_view as node_surface_npc_view
 from dnd_engine.core.npc_manager import NPCManager
 from dnd_engine.core.party import Party
 from dnd_engine.core.position import Position
@@ -1535,8 +1536,7 @@ class GameState:
         npcs = []
         if self.npc_manager:
             npcs = [
-                {"id": npc.id, "name": npc.name, "display_name": npc.display_name}
-                for npc in self.npc_manager.get_npcs_in_room(node_id)
+                node_surface_npc_view(npc) for npc in self.npc_manager.get_npcs_in_room(node_id)
             ]
 
         return {
