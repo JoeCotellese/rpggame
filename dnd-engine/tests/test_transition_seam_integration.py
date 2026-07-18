@@ -303,6 +303,76 @@ class TestForwardSeam:
             node_game.node_actions.transition(node_game.party.characters[0])
 
 
+class TestSeamResolutionRobustness:
+    """Review findings: resolution and failure paths must degrade cleanly."""
+
+    def test_prefix_shadowed_node_id_still_resolves(self, grid_game, temp_dungeons_dir):
+        """A grid dungeon sharing the settlement's dotted prefix must not
+        shadow node destinations (the slice-6 arden.* hazard): when the
+        prefix-resolved dungeon lacks the room, resolution falls through to
+        the node index instead of failing."""
+        annex = {
+            "name": "Settle Annex",
+            "start_room": "settle.annex",
+            "rooms": {
+                "settle.annex": {
+                    "name": "Annex Hall",
+                    "description": "A hall sharing the settlement prefix",
+                    "exits": {},
+                },
+            },
+        }
+        with open(temp_dungeons_dir / "settle_annex.json", "w") as f:
+            json.dump(annex, f)
+
+        registry = RoomRegistry(dungeons_path=temp_dungeons_dir)
+        # The prefix map resolves "settle." ids to the annex grid dungeon
+        assert registry.get_dungeon_for_room("settle.gate") == "settle_annex"
+
+        grid_game.room_registry = registry
+        grid_game.dungeon["rooms"]["lab_entry"]["exits"]["down"] = "settle.gate"
+
+        assert grid_game.move("down") is True
+        assert grid_game.is_node_surface()
+        assert grid_game.dungeon_name == "test_settlement"
+        assert grid_game.current_node_id == "settle.gate"
+
+    def test_failed_move_does_not_stale_flee_direction(self, grid_game):
+        grid_game.dungeon["rooms"]["lab_entry"]["exits"]["down"] = "no_such_place"
+        assert grid_game.last_entry_direction is None
+        assert grid_game.move("down") is False
+        assert grid_game.last_entry_direction is None
+
+    def test_transition_target_missing_start_room_fails_without_state_change(self, node_game):
+        node_game.enter_node("lab_gate")
+        node_game.dungeon["nodes"]["lab_gate"]["transition"]["gate"]["dc"] = 1
+        node_game.dungeon["nodes"]["lab_gate"]["transition"]["to"] = "broken"
+        # Seed the registry cache with a dungeon that authors no start_room
+        node_game.room_registry._loaded_dungeons["broken"] = {
+            "name": "Broken",
+            "rooms": {"b1": {"name": "B1", "description": "x", "exits": {}}},
+        }
+        with pytest.raises(NodeActionError, match="broken"):
+            node_game.node_actions.transition(node_game.party.characters[0])
+        assert node_game.is_node_surface()
+        assert node_game.dungeon_name == "lab_settlement"
+        assert node_game.current_node_id == "lab_gate"
+
+    def test_flee_across_seam_lands_on_node_surface(self, grid_game):
+        """Fleeing combat through a node-bound exit crosses the seam instead
+        of crashing on the tile-room API."""
+        grid_game.last_entry_direction = "down"  # reverse is "up", the node exit
+        grid_game.in_combat = True
+        grid_game.active_enemies = []
+
+        result = grid_game.flee_combat()
+
+        assert result["success"] is True
+        assert result["retreat_room"] == "The Old Gate"
+        assert grid_game.is_node_surface()
+        assert grid_game.current_node_id == "lab_gate"
+
+
 class TestRoundTrip:
     """The slice gate: settlement -> dungeon -> back to the originating node,
     with state preserved on both sides of the seam."""

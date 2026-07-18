@@ -202,13 +202,7 @@ class NodeSurfaceActions:
             raise NodeActionError(f"{action_id!r} is not an examinable action")
 
         gate = action["gate"]
-        skills_data = self.game_state.data_loader.load_skills()
-        try:
-            check = character.make_skill_check(gate["skill"], gate["dc"], skills_data)
-        except KeyError as exc:
-            raise NodeActionError(
-                f"Unknown skill {gate['skill']!r} authored on {action_id!r}"
-            ) from exc
+        check = self._resolve_gate(gate, character, f"{action_id!r}")
         success = check["success"]
         return {
             "success": success,
@@ -253,14 +247,7 @@ class NodeSurfaceActions:
         check = None
         gate = spec.get("gate")
         if gate is not None:
-            skills_data = game.data_loader.load_skills()
-            try:
-                check = character.make_skill_check(gate["skill"], gate["dc"], skills_data)
-            except KeyError as exc:
-                raise NodeActionError(
-                    f"Unknown skill {gate['skill']!r} authored on the transition "
-                    f"at {game.current_node_id}"
-                ) from exc
+            check = self._resolve_gate(gate, character, f"the transition at {game.current_node_id}")
             if not check["success"]:
                 return {"success": False, "prose": spec["on_failure"], "check": check}
 
@@ -272,6 +259,12 @@ class NodeSurfaceActions:
                 f"Transition target {target_name!r} at {game.current_node_id} "
                 f"could not be loaded"
             )
+        start_key = "start_node" if target.get("surface") == "node" else "start_room"
+        if start_key not in target:
+            raise NodeActionError(
+                f"Transition target {target_name!r} at {game.current_node_id} "
+                f"authors no {start_key}"
+            )
 
         location_id = game._enter_dungeon_via_seam(target_name, target)
         return {
@@ -281,6 +274,32 @@ class NodeSurfaceActions:
             "dungeon": target_name,
             "location_id": location_id,
         }
+
+    def _resolve_gate(
+        self, gate: dict[str, Any], character: "Character", context_label: str
+    ) -> dict[str, Any]:
+        """
+        Roll an authored skill gate through the d20-test primitive.
+
+        Shared by every gated node action so gate mechanics cannot drift
+        between them. An unknown authored skill fails inside the
+        NodeActionError contract, never as a bare KeyError.
+
+        Args:
+            gate: The authored gate ({"skill", "dc"}).
+            character: The character rolling the check.
+            context_label: Where the gate is authored, for the error message.
+
+        Returns:
+            The check dict from Character.make_skill_check.
+        """
+        skills_data = self.game_state.data_loader.load_skills()
+        try:
+            return character.make_skill_check(gate["skill"], gate["dc"], skills_data)
+        except KeyError as exc:
+            raise NodeActionError(
+                f"Unknown skill {gate['skill']!r} authored on {context_label}"
+            ) from exc
 
     # ------------------------------------------------------------------
     # Internals

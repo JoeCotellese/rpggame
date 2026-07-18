@@ -64,7 +64,9 @@ class RoomRegistry:
         if not self.dungeons_path.exists():
             return
 
-        for dungeon_file in self.dungeons_path.glob("*.json"):
+        # Sorted so collision resolution ("first wins") is deterministic
+        # across filesystems, not directory-listing order
+        for dungeon_file in sorted(self.dungeons_path.glob("*.json")):
             # Skip generated dungeons
             if dungeon_file.stem.startswith("generated_"):
                 continue
