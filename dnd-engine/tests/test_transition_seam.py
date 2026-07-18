@@ -301,3 +301,75 @@ class TestForwardSeam:
         node_game.in_combat = True
         with pytest.raises(RuntimeError, match="combat"):
             node_game.node_actions.transition(node_game.party.characters[0])
+
+
+class TestRoundTrip:
+    """The slice gate: settlement -> dungeon -> back to the originating node,
+    with state preserved on both sides of the seam."""
+
+    def test_round_trip_preserves_state_on_both_sides(self, node_game):
+        settlement = node_game.dungeon
+        hero = node_game.party.characters[0]
+        node_game.enter_node("lab_gate")
+        # DC 1 with a non-negative modifier cannot fail (d20 minimum is 1)
+        settlement["nodes"]["lab_gate"]["transition"]["gate"]["dc"] = 1
+
+        result = node_game.node_actions.transition(hero)
+        assert result["success"] is True
+
+        # Mutate dungeon-side state before returning
+        dungeon_side = node_game.dungeon
+        dungeon_side["rooms"]["lab_entry"]["searched"] = True
+
+        assert node_game.move("up") is True
+
+        # Back at the originating node, on the same settlement dict:
+        # session mutations (including the forced DC) survived the seam
+        assert node_game.dungeon is settlement
+        assert node_game.current_node_id == "lab_gate"
+        assert node_game.is_node_surface()
+
+        # Cross again: the dungeon side is the same dict too
+        result = node_game.node_actions.transition(hero)
+        assert result["success"] is True
+        assert node_game.dungeon is dungeon_side
+        assert node_game.dungeon["rooms"]["lab_entry"]["searched"] is True
+
+    def test_round_trip_keeps_party_and_clock(self, node_game):
+        hero = node_game.party.characters[0]
+        hero.current_hp = 5
+        node_game.enter_node("lab_gate")
+        node_game.dungeon["nodes"]["lab_gate"]["transition"]["gate"]["dc"] = 1
+
+        node_game.node_actions.transition(hero)
+        node_game.move("up")
+
+        assert node_game.party.characters[0] is hero
+        assert hero.current_hp == 5
+        # enter_node is free; each seam crossing costs 10 minutes
+        assert node_game.time_manager.elapsed_minutes == 20
+
+
+class TestSaveLoadAcrossSeam:
+    def test_save_in_dungeon_load_and_return_to_settlement(self, node_game, tmp_path):
+        from dnd_engine.core.save_slot_manager import SaveSlotManager
+
+        hero = node_game.party.characters[0]
+        node_game.enter_node("lab_gate")
+        node_game.dungeon["nodes"]["lab_gate"]["transition"]["gate"]["dc"] = 1
+        node_game.node_actions.transition(hero)
+        node_game.dungeon["rooms"]["lab_entry"]["searched"] = True
+
+        manager = SaveSlotManager(saves_dir=tmp_path)
+        manager.save_game(1, node_game)
+        loaded, _ = manager.load_game(1)
+
+        assert loaded.dungeon_name == "lab_dungeon"
+        assert loaded.current_room_id == "lab_entry"
+        assert loaded.current_node_id is None
+        assert loaded.dungeon["rooms"]["lab_entry"]["searched"] is True
+
+        assert loaded.move("up") is True
+        assert loaded.is_node_surface()
+        assert loaded.dungeon_name == "lab_settlement"
+        assert loaded.current_node_id == "lab_gate"
