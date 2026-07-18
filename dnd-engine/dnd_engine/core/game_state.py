@@ -692,8 +692,13 @@ class GameState:
         except (AttributeError, TypeError):
             # data_path may not exist on mocked loaders
             pass
-        self.current_room_id = self.dungeon["start_room"]
+        # Surface discrimination (issue #684): a node surface tracks a
+        # current node and leaves the tile-grid room machinery dormant.
+        self.current_node_id: str | None = None
+        self.previous_node_id: str | None = None
+        self.current_room_id: str | None = None
         self.previous_room_id: str | None = None  # Track room transitions for narrative
+        self._set_start_location(self.dungeon)
 
         # Quest tracking system (optional, only if campaign_id is provided)
         self.quest_manager: QuestManager | None = None
@@ -708,12 +713,13 @@ class GameState:
                 # Emit initial room enter event to trigger quest auto-activation
                 # Skip if loading from save (save_slot_manager will emit at right time)
                 if not self._skip_initial_room_enter:
+                    location_id, location_name = self._current_location_identity()
                     self.event_bus.emit(
                         Event(
                             type=EventType.ROOM_ENTER,
                             data={
-                                "room_id": self.current_room_id,
-                                "room_name": self.get_current_room()["name"],
+                                "room_id": location_id,
+                                "room_name": location_name,
                                 "dungeon_id": self.dungeon_name,
                             },
                         )
@@ -1402,11 +1408,133 @@ class GameState:
         Called once after initialization to check the starting room
         for enemies and perform any other game start logic.
         """
+        if self.is_node_surface():
+            # Settlements have no room enemies or hidden features to sweep;
+            # play begins at the start node.
+            return
+
         # Check for passive perception features
         self._check_passive_perception()
 
         # Check for enemies
         self._check_for_enemies()
+
+    @property
+    def surface(self) -> str:
+        """Presentation surface of the current location ("grid" or "node")."""
+        return self.dungeon.get("surface", "grid")
+
+    def is_node_surface(self) -> bool:
+        """True when the current location presents as a node surface (settlement)."""
+        return self.surface == "node"
+
+    def _require_node_surface(self) -> None:
+        if not self.is_node_surface():
+            raise RuntimeError(f"{self.dungeon_name} is not a node surface; node API unavailable")
+
+    def _set_start_location(self, dungeon: dict[str, Any]) -> None:
+        """Point the current location at the dungeon's start, per surface."""
+        self.previous_node_id = None
+        self.previous_room_id = None
+        if dungeon.get("surface") == "node":
+            self.current_node_id = dungeon["start_node"]
+            self.current_room_id = None
+        else:
+            self.current_room_id = dungeon["start_room"]
+            self.current_node_id = None
+
+    def _current_location_identity(self) -> tuple[str, str]:
+        """Get the (id, display name) of the current node or room."""
+        if self.is_node_surface():
+            node = self.current_node()
+            return node["id"], node["name"]
+        return self.current_room_id, self.get_current_room()["name"]
+
+    def current_node(self) -> dict[str, Any]:
+        """
+        Get the current node's data (node surfaces only).
+
+        Returns:
+            Node dict with its "id" included.
+
+        Raises:
+            RuntimeError: If the current location is not a node surface.
+        """
+        self._require_node_surface()
+        return {"id": self.current_node_id, **self.dungeon["nodes"][self.current_node_id]}
+
+    def list_nodes(self) -> list[dict[str, Any]]:
+        """
+        List every node in the settlement for the flat-list menu.
+
+        Returns:
+            List of {"id", "name", "blurb"} in authored order.
+
+        Raises:
+            RuntimeError: If the current location is not a node surface.
+        """
+        self._require_node_surface()
+        return [
+            {"id": node_id, "name": node["name"], "blurb": node["blurb"]}
+            for node_id, node in self.dungeon["nodes"].items()
+        ]
+
+    def enter_node(self, node_id: str) -> dict[str, Any]:
+        """
+        Enter a node and return its display context.
+
+        Every node in a settlement is directly selectable (flat-list
+        navigation); there is no walked geometry between nodes.
+
+        Args:
+            node_id: The node to enter.
+
+        Returns:
+            {"id", "name", "description", "npcs", "actions", "transition"}
+            where npcs is a list of {"id", "name", "display_name"} for
+            NPCs currently at the node.
+
+        Raises:
+            RuntimeError: If the current location is not a node surface.
+            ValueError: If node_id is not a node in this settlement.
+        """
+        self._require_node_surface()
+        nodes = self.dungeon["nodes"]
+        if node_id not in nodes:
+            raise ValueError(f"Unknown node {node_id!r} in {self.dungeon_name}")
+
+        self.previous_node_id = self.current_node_id
+        self.current_node_id = node_id
+        node = nodes[node_id]
+
+        # Nodes unify with rooms at the event level so quest auto-activation
+        # and narrative listeners work unchanged on node surfaces.
+        self.event_bus.emit(
+            Event(
+                type=EventType.ROOM_ENTER,
+                data={
+                    "room_id": node_id,
+                    "room_name": node["name"],
+                    "dungeon_id": self.dungeon_name,
+                },
+            )
+        )
+
+        npcs = []
+        if self.npc_manager:
+            npcs = [
+                {"id": npc.id, "name": npc.name, "display_name": npc.display_name}
+                for npc in self.npc_manager.get_npcs_in_room(node_id)
+            ]
+
+        return {
+            "id": node_id,
+            "name": node["name"],
+            "description": node["description"],
+            "npcs": npcs,
+            "actions": list(node.get("actions", [])),
+            "transition": node.get("transition"),
+        }
 
     def get_current_room(self) -> dict[str, Any]:
         """
@@ -1414,7 +1542,15 @@ class GameState:
 
         Returns:
             Dictionary containing room information
+
+        Raises:
+            RuntimeError: If the current location is a node surface (nodes
+                have no tile rooms).
         """
+        if self.is_node_surface():
+            raise RuntimeError(
+                f"{self.dungeon_name} is a node surface; the tile-grid room API is unavailable"
+            )
         return self.dungeon["rooms"][self.current_room_id]
 
     def creature_environment(self, creature: "Creature") -> str | None:
@@ -1831,6 +1967,10 @@ class GameState:
             if current is not None and self.can_attempt_hide(current.creature):
                 actions.append("hide")
             return actions
+        elif self.is_node_surface():
+            # Node actions are authored per node and dispatched by the node
+            # surface API, not the grid action list.
+            return []
         else:
             actions = ["move"]
             room = self.get_current_room()
@@ -1851,6 +1991,9 @@ class GameState:
         """
         if self.in_combat:
             return False  # Cannot move during combat
+
+        if self.is_node_surface():
+            return False  # Node surfaces navigate via enter_node, not walked exits
 
         current_room = self.get_current_room()
         exits = current_room.get("exits", {})
@@ -2059,6 +2202,9 @@ class GameState:
         Returns:
             Dict of direction -> exit info for visible exits
         """
+        if self.is_node_surface():
+            return {}  # Node surfaces have no walked exits
+
         current_room = self.get_current_room()
         all_exits = current_room.get("exits", {})
 
@@ -5846,16 +5992,19 @@ class GameState:
             )
         )
 
-        # Load new dungeon if specified, otherwise reload current one
+        # Load new dungeon if specified, otherwise reload current one.
+        # Load before assigning any state so a failed load leaves the
+        # GameState fully on the old dungeon.
         if new_dungeon_name:
+            new_dungeon = self.data_loader.load_dungeon(new_dungeon_name, self.campaign_id)
             self.dungeon_name = new_dungeon_name
-            self.dungeon = self.data_loader.load_dungeon(new_dungeon_name, self.campaign_id)
+            self.dungeon = new_dungeon
         else:
             # Reload current dungeon from disk to reset state
             self.dungeon = self.data_loader.load_dungeon(self.dungeon_name, self.campaign_id)
 
-        # Reset to start room
-        self.current_room_id = self.dungeon["start_room"]
+        # Reset to the dungeon's start location (room or node, per surface)
+        self._set_start_location(self.dungeon)
 
         # Reset combat state
         self.in_combat = False
