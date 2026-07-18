@@ -2,10 +2,13 @@
 # ABOUTME: Scans dungeon files on init and provides room lookup by GUID.
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
 from dnd_engine.rules.node_schema import validate_location_surface
+
+logger = logging.getLogger(__name__)
 
 
 class RoomRegistry:
@@ -47,6 +50,10 @@ class RoomRegistry:
 
         # Maps room GUID prefix to dungeon filename (without .json)
         self._prefix_to_dungeon: dict[str, str] = {}
+        # Maps full node id to the settlement that authors it. Nodes have no
+        # walked geometry, so the index is by full id, not prefix — a grid
+        # exit names a node id as its destination to cross the transition seam.
+        self._node_to_dungeon: dict[str, str] = {}
         # Maps dungeon filename to loaded dungeon data (lazy loaded)
         self._loaded_dungeons: dict[str, dict[str, Any]] = {}
 
@@ -72,6 +79,17 @@ class RoomRegistry:
                     prefix = self._get_prefix(room_id)
                     if prefix:
                         self._prefix_to_dungeon[prefix] = dungeon_file.stem
+
+                # Index node-surface settlements by full node id
+                for node_id in dungeon_data.get("nodes", {}).keys():
+                    existing = self._node_to_dungeon.get(node_id)
+                    if existing and existing != dungeon_file.stem:
+                        logger.warning(
+                            f"Node id {node_id!r} authored in both {existing} and "
+                            f"{dungeon_file.stem}; keeping {existing}"
+                        )
+                        continue
+                    self._node_to_dungeon[node_id] = dungeon_file.stem
 
             except (json.JSONDecodeError, OSError):
                 # Skip files that can't be parsed
@@ -105,6 +123,19 @@ class RoomRegistry:
         if prefix:
             return self._prefix_to_dungeon.get(prefix)
         return None
+
+    def get_dungeon_for_node(self, node_id: str) -> str | None:
+        """
+        Get the settlement filename that authors a node id.
+
+        Args:
+            node_id: Full node id (e.g., "lab_gate", "arden.warrens_alley")
+
+        Returns:
+            Settlement filename (without .json) or None if no settlement
+            authors this node
+        """
+        return self._node_to_dungeon.get(node_id)
 
     def load_dungeon(self, dungeon_name: str) -> dict[str, Any] | None:
         """
