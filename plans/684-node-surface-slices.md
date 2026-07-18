@@ -135,6 +135,14 @@ never color-only.
 pexpect e2e on the lab settlement — full keyboard playthrough via numbers AND
 via typed prose.
 
+**Carried findings from slice 2 review:** `CLI.display_room` →
+`get_room_display_context` → `get_current_room` raises on node surfaces — the
+node render branch this slice builds must be reached first; the CLI `reset`
+handler renders the room after reset and would mis-report "reset failed" when
+resetting into a settlement; if an event consumer ever needs to distinguish
+surfaces, add a `surface` field to ROOM_ENTER data rather than a new event
+type.
+
 ### Slice 6 — Arden cutover + full-beat e2e
 
 **Surface:** campaign data + save-load remap.
@@ -164,6 +172,13 @@ terminal lacks.
 
 **Risk flag:** scope-check at slice start — current campaign/town support in
 client-2d is unverified; slice may shrink (MCP-only) or split.
+
+**Carried finding from slice 2 review:** `EngineAdapter.new_game` sets
+`_initialized = True` before calling `get_current_room()`, so a node-surface
+dungeon leaves the adapter claiming initialized while every room-based call
+raises. Settlements never worked in client-2d (previously failed fast on
+`start_room`); make the adapter surface-aware or fail before flagging
+initialized.
 
 **Gating tests:** client-2d unit tests + headless MCP playtest of the lab
 settlement and Arden.
