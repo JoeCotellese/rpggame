@@ -1507,6 +1507,47 @@ class GameState:
         self.time_manager.advance_time(10, reason="surface_transition")
         return True
 
+    def _enter_dungeon_via_seam(self, dungeon_name: str, dungeon: dict[str, Any]) -> str:
+        """
+        Switch to a dungeon reached through a node's transition (forward seam).
+
+        Arrival follows the target's surface: a grid dungeon starts at its
+        start room with the usual arrival checks (passive perception, time,
+        enemies — this is the funnel where combat gets a grid); a node
+        target starts at its start node. Node bookkeeping resets on
+        crossing: the way back is authored as a grid exit naming a node id,
+        never remembered state.
+
+        Args:
+            dungeon_name: Target dungeon filename (without .json).
+            dungeon: The loaded (validated, registry-cached) dungeon data.
+
+        Returns:
+            The arrival location id (room or node).
+        """
+        logger.info(f"Transition seam: node {self.current_node_id} -> {dungeon_name}")
+        self.dungeon = dungeon
+        self.dungeon_name = dungeon_name
+        self.previous_node_id = None
+        self.previous_room_id = None
+        self.last_entry_direction = None
+
+        if dungeon.get("surface") == "node":
+            self.current_node_id = dungeon["start_node"]
+            self.current_room_id = None
+            node = dungeon["nodes"][self.current_node_id]
+            self._emit_room_enter(self.current_node_id, node["name"])
+            self.time_manager.advance_time(10, reason="surface_transition")
+            return self.current_node_id
+
+        self.current_node_id = None
+        self.current_room_id = dungeon["start_room"]
+        self._emit_room_enter(self.current_room_id, self.get_current_room()["name"])
+        self._check_passive_perception()
+        self.time_manager.advance_time(10, reason="surface_transition")
+        self._check_for_enemies()
+        return self.current_room_id
+
     def current_node(self) -> dict[str, Any]:
         """
         Get the current node's data (node surfaces only).

@@ -216,6 +216,72 @@ class NodeSurfaceActions:
             "check": check,
         }
 
+    def transition(self, character: "Character") -> dict[str, Any]:
+        """
+        Depart the current node through its authored transition.
+
+        The forward direction of the transition seam: on success the target
+        dungeon loads at its start location and the node surface goes
+        dormant. A gated transition resolves through
+        Character.make_skill_check like examine; a failed roll is a
+        narrative beat that leaves the party where it stands.
+
+        Args:
+            character: The character attempting the transition (rolls the
+                gate when one is authored).
+
+        Returns:
+            On success: {"success": True, "prose", "check", "dungeon",
+            "location_id"} — check is None for ungated transitions.
+            On a failed gate: {"success": False, "prose", "check"}.
+
+        Raises:
+            RuntimeError: If the current location is not a node surface, or
+                if combat is in progress.
+            NodeActionError: If the node authors no transition, the gate
+                names an unknown skill, or the target dungeon cannot load.
+        """
+        node = self._live_node()
+        game = self.game_state
+        if game.in_combat:
+            raise RuntimeError("Cannot transition during combat")
+
+        spec = node.get("transition")
+        if spec is None:
+            raise NodeActionError(f"No transition authored at {game.current_node_id}")
+
+        check = None
+        gate = spec.get("gate")
+        if gate is not None:
+            skills_data = game.data_loader.load_skills()
+            try:
+                check = character.make_skill_check(gate["skill"], gate["dc"], skills_data)
+            except KeyError as exc:
+                raise NodeActionError(
+                    f"Unknown skill {gate['skill']!r} authored on the transition "
+                    f"at {game.current_node_id}"
+                ) from exc
+            if not check["success"]:
+                return {"success": False, "prose": spec["on_failure"], "check": check}
+
+        target_name = spec["to"]
+        registry = game.room_registry
+        target = registry.load_dungeon(target_name) if registry else None
+        if target is None:
+            raise NodeActionError(
+                f"Transition target {target_name!r} at {game.current_node_id} "
+                f"could not be loaded"
+            )
+
+        location_id = game._enter_dungeon_via_seam(target_name, target)
+        return {
+            "success": True,
+            "prose": spec.get("on_success"),
+            "check": check,
+            "dungeon": target_name,
+            "location_id": location_id,
+        }
+
     # ------------------------------------------------------------------
     # Internals
 
