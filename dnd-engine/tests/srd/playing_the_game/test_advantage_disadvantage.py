@@ -14,6 +14,7 @@ The conformance "report" is `pytest --collect-only -q tests/srd/`.
 from __future__ import annotations
 
 import inspect
+import itertools
 
 import pytest
 
@@ -48,6 +49,22 @@ def _make_fighter() -> Character:
         saving_throw_proficiencies=["str", "con"],
         skill_proficiencies=["athletics"],
     )
+
+
+def _script_d20_faces(monkeypatch, faces):
+    """Force every ``DiceRoller`` to yield ``faces`` in order, then 1s.
+
+    Patching the single ``_roll_die`` chokepoint makes advantage /
+    disadvantage outcomes deterministic regardless of which roller a
+    D20-test surface constructs internally: under advantage the primitive
+    rolls two d20 and takes the higher, under disadvantage the lower. By
+    scripting two distinct faces we can assert the *outcome* (which die
+    reached the surfaced roll) rather than grepping the source. Extra
+    rolls (e.g. damage dice after a hit) fall back to 1 and don't starve
+    the iterator.
+    """
+    stream = itertools.chain(iter(faces), itertools.repeat(1))
+    monkeypatch.setattr(DiceRoller, "_roll_die", lambda self, sides: next(stream))
 
 
 class TestDefinition_ModifiesD20Test:
@@ -131,55 +148,68 @@ class TestAcquisition_FromSpecialAbilitiesAndActions:
         src = inspect.getsource(CombatEngine.resolve_attack)
         assert "advantage=advantage" in src and "disadvantage=disadvantage" in src
 
-    def test_advantage_propagates_through_saving_throw(self):
-        """`Character.make_saving_throw` accepts `advantage=True`.
+    def test_advantage_propagates_through_saving_throw(self, monkeypatch):
+        """`Character.make_saving_throw` rolls 2d20 and takes the higher.
 
         Used by spells / class features that grant advantage on a
-        save (e.g., Dodge action gives advantage on DEX saves).
-        Implementation: `dnd-engine/dnd_engine/core/character.py:297-298`.
+        save (e.g., Dodge action gives advantage on DEX saves). Scripting
+        two distinct d20 faces (5, 18) proves the flag reaches the dice:
+        without advantage only the first die (5) would surface; with it,
+        the higher (18) does.
         """
-        src = inspect.getsource(Character.make_saving_throw)
-        assert "advantage=advantage" in src
-        # And confirm the dice path actually rolls 2d20 under advantage.
         fighter = _make_fighter()
-        result = fighter.make_saving_throw(ability="con", dc=10, advantage=True)
-        # Result dict carries the same shape regardless of advantage,
-        # but the "roll" surfaced should be the higher of the pair.
-        assert "roll" in result
-        assert isinstance(result["roll"], int)
+        _script_d20_faces(monkeypatch, [5, 18])
+        result = fighter.make_saving_throw(ability="con", dc=1, advantage=True)
+        assert result["roll"] == 18
 
-    def test_advantage_propagates_through_skill_check(self):
-        """`Character.make_skill_check` accepts `advantage=True`.
+    def test_advantage_propagates_through_skill_check(self, monkeypatch):
+        """`Character.make_skill_check` rolls 2d20 and takes the higher.
 
-        Used by Help action (advantage on the helped creature's next
-        ability check). Implementation:
-        `dnd-engine/dnd_engine/core/character.py:765`.
+        Used by the Help action (advantage on the helped creature's next
+        ability check). Same scripted-faces proof as the saving-throw
+        case: advantage surfaces the higher of (5, 18).
         """
-        src = inspect.getsource(Character.make_skill_check)
-        assert "advantage=advantage" in src
         fighter = _make_fighter()
-        fighter._dice_roller = DiceRoller(seed=3)
+        _script_d20_faces(monkeypatch, [5, 18])
         skills = {"athletics": {"ability": "str"}}
-        result = fighter.make_skill_check(
-            "athletics", dc=10, skills_data=skills, advantage=True
-        )
-        assert "roll" in result
+        result = fighter.make_skill_check("athletics", dc=1, skills_data=skills, advantage=True)
+        assert result["roll"] == 18
 
-    def test_disadvantage_propagates_through_all_three_surfaces(self):
-        """All three D20-test surfaces accept `disadvantage=True`.
+    def test_disadvantage_propagates_through_all_three_surfaces(self, monkeypatch):
+        """All three D20-test surfaces take the lower of 2d20 under disadvantage.
 
-        Symmetric to the advantage tests above. Confirms the SRD's
-        opposite-direction case is wired through.
+        Symmetric to the advantage tests above and driven end-to-end:
+        each surface, given scripted faces (5, 18), must surface the
+        lower die (5) — proving disadvantage reaches the dice, not just
+        that the parameter exists.
         """
-        for func in (
-            CombatEngine.resolve_attack,
-            Character.make_saving_throw,
-            Character.make_skill_check,
-        ):
-            src = inspect.getsource(func)
-            assert "disadvantage=disadvantage" in src, (
-                f"{func.__qualname__} must thread disadvantage to the dice."
-            )
+        # Saving throw
+        fighter = _make_fighter()
+        _script_d20_faces(monkeypatch, [5, 18])
+        save = fighter.make_saving_throw(ability="con", dc=1, disadvantage=True)
+        assert save["roll"] == 5
+
+        # Skill check
+        skill_fighter = _make_fighter()
+        _script_d20_faces(monkeypatch, [5, 18])
+        skills = {"athletics": {"ability": "str"}}
+        check = skill_fighter.make_skill_check(
+            "athletics", dc=1, skills_data=skills, disadvantage=True
+        )
+        assert check["roll"] == 5
+
+        # Attack roll — low bonus vs AC 16 keeps it a miss, so no damage
+        # dice are rolled and the scripted faces stay aligned to the d20.
+        _script_d20_faces(monkeypatch, [5, 18])
+        engine = CombatEngine(DiceRoller())
+        attack = engine.resolve_attack(
+            attacker=_make_fighter(),
+            defender=_make_fighter(),
+            attack_bonus=0,
+            damage_dice="1d6",
+            disadvantage=True,
+        )
+        assert attack.attack_roll == 5
 
 
 class TestHeroicInspiration:
