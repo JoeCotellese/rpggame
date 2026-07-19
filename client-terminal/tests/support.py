@@ -37,3 +37,14 @@ def make_lab_game_state(dungeon_name: str = "lab_settlement") -> GameState:
         event_bus=EventBus(),
         data_loader=DataLoader(),
     )
+
+
+def make_arden_game_state() -> GameState:
+    """A GameState on the Town of Arden node surface (The Unquiet Dead)."""
+    return GameState(
+        party=make_test_party(),
+        dungeon_name="town_of_arden",
+        campaign_id="the_unquiet_dead",
+        event_bus=EventBus(),
+        data_loader=DataLoader(),
+    )

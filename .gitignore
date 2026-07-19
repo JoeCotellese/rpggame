@@ -62,3 +62,6 @@ logs/
 # Generated dungeons (runtime artifacts, not source content)
 dnd-engine/dnd_engine/data/content/dungeons/generated_*.json
 saves/
+
+# Serena MCP tool cache
+.serena/

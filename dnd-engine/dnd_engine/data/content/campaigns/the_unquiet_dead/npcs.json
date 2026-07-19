@@ -5,8 +5,8 @@
       "id": "marta_innkeeper",
       "name": "Marta",
       "display_name": "Marta, the Innkeeper",
-      "home_location": "arden.inn_common_room",
-      "current_location": "arden.inn_common_room",
+      "home_location": "arden.crooked_tankard",
+      "current_location": "arden.crooked_tankard",
       "can_move": false,
       "personality": {
         "traits": ["warm", "maternal", "practical", "gossip-loving"],
@@ -59,8 +59,8 @@
       "id": "father_aldric",
       "name": "Father Aldric",
       "display_name": "Father Aldric",
-      "home_location": "arden.chapel_interior",
-      "current_location": "arden.chapel_interior",
+      "home_location": "arden.chapel_of_the_light",
+      "current_location": "arden.chapel_of_the_light",
       "can_move": true,
       "personality": {
         "traits": ["devout", "worried", "scholarly", "gentle"],
@@ -101,10 +101,10 @@
       },
       "reputation_modifiers": null,
       "schedule": {
-        "morning": "arden.chapel_interior",
-        "afternoon": "arden.outside_chapel",
-        "evening": "arden.chapel_interior",
-        "night": "arden.chapel_interior"
+        "morning": "arden.chapel_of_the_light",
+        "afternoon": "arden.chapel_of_the_light",
+        "evening": "arden.chapel_of_the_light",
+        "night": "arden.chapel_of_the_light"
       },
       "services": {
         "healing": {"cost_per_hp": 1, "available": true},
@@ -115,8 +115,8 @@
       "id": "guard_captain_roderick",
       "name": "Captain Roderick",
       "display_name": "Captain Roderick of the Town Guard",
-      "home_location": "arden.town_gate",
-      "current_location": "arden.town_gate",
+      "home_location": "arden.watch_house",
+      "current_location": "arden.watch_house",
       "can_move": true,
       "personality": {
         "traits": ["gruff", "duty-bound", "protective", "suspicious"],
@@ -154,10 +154,10 @@
         "hostile_threshold": -10
       },
       "schedule": {
-        "morning": "arden.town_gate",
-        "afternoon": "arden.market_square",
-        "evening": "arden.town_gate",
-        "night": "arden.guard_barracks"
+        "morning": "arden.town_road",
+        "afternoon": "arden.town_square",
+        "evening": "arden.town_road",
+        "night": "arden.watch_house"
       },
       "services": null
     },
@@ -165,8 +165,8 @@
       "id": "lord_davos",
       "name": "Lord Davos",
       "display_name": "Lord Aldric Davos",
-      "home_location": "arden.manor_interior",
-      "current_location": "arden.manor_interior",
+      "home_location": "arden.davos_manor",
+      "current_location": "arden.davos_manor",
       "can_move": false,
       "personality": {
         "traits": ["elderly", "dignified", "melancholic", "grateful"],
@@ -217,8 +217,8 @@
       "id": "gareth_shopkeeper",
       "name": "Gareth",
       "display_name": "Gareth, the Shopkeeper",
-      "home_location": "arden.general_store",
-      "current_location": "arden.general_store",
+      "home_location": "arden.gareths_goods",
+      "current_location": "arden.gareths_goods",
       "can_move": false,
       "personality": {
         "traits": ["pragmatic", "shrewd", "fair", "talkative"],

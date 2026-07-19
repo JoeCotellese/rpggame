@@ -1,5 +1,5 @@
-# ABOUTME: Integration tests for cross-dungeon navigation using room GUIDs.
-# ABOUTME: Tests moving between town and crypt dungeons via the room registry.
+# ABOUTME: Integration tests for the Arden(node) <-> crypt(grid) seam using real campaign content.
+# ABOUTME: Arden is a node surface; the Town Gate transitions into the crypt and the crypt exits back to the node.
 
 import pytest
 
@@ -28,172 +28,105 @@ def test_party():
     return Party([character])
 
 
+def _town(test_party):
+    return GameState(
+        party=test_party,
+        dungeon_name="town_of_arden",
+        campaign_id="the_unquiet_dead",
+        event_bus=EventBus(),
+        data_loader=DataLoader(),
+    )
+
+
+def _crypt(test_party):
+    return GameState(
+        party=test_party,
+        dungeon_name="crypt",
+        campaign_id="the_unquiet_dead",
+        event_bus=EventBus(),
+        data_loader=DataLoader(),
+    )
+
+
 class TestCrossDungeonNavigation:
-    """Test navigation between different dungeons using room GUIDs."""
+    """Navigation across the Arden node surface <-> crypt grid seam."""
 
-    def test_start_in_town_navigate_to_crypt(self, test_party):
-        """Test starting in town and navigating to crypt."""
-        event_bus = EventBus()
-        data_loader = DataLoader()
+    def test_start_on_town_node_surface(self, test_party):
+        """Arden loads as a node surface; the party starts at the town square."""
+        game_state = _town(test_party)
 
-        # Start in town
-        game_state = GameState(
-            party=test_party,
-            dungeon_name="town_of_arden",
-            campaign_id="the_unquiet_dead",
-            event_bus=event_bus,
-            data_loader=data_loader,
-        )
-
-        # Should start in town square
-        assert game_state.current_room_id == "arden.town_square"
+        assert game_state.is_node_surface()
+        assert game_state.current_node_id == "arden.town_square"
+        assert game_state.current_room_id is None
         assert game_state.dungeon_name == "town_of_arden"
 
-        # Move south to town road
-        success = game_state.move("south", check_for_enemies=False)
-        assert success is True
-        assert game_state.current_room_id == "arden.town_road"
+    def test_town_gate_transition_enters_crypt(self, test_party):
+        """The Town Gate node transitions onto the crypt grid at its entrance (forward seam)."""
+        game_state = _town(test_party)
 
-        # Move south to crypt (cross-dungeon)
-        success = game_state.move("south", check_for_enemies=False)
-        assert success is True
-        assert game_state.current_room_id == "crypt.graveyard_entrance"
+        game_state.enter_node("arden.town_road")
+        result = game_state.node_actions.transition(game_state.party.get_living_members()[0])
+
+        assert result["success"] is True
         assert game_state.dungeon_name == "crypt"
-
-    def test_start_in_crypt_navigate_to_town(self, test_party):
-        """Test starting in crypt and navigating back to town."""
-        event_bus = EventBus()
-        data_loader = DataLoader()
-
-        # Start in crypt
-        game_state = GameState(
-            party=test_party,
-            dungeon_name="crypt",
-            campaign_id="the_unquiet_dead",
-            event_bus=event_bus,
-            data_loader=data_loader,
-        )
-
-        # Should start in graveyard entrance
         assert game_state.current_room_id == "crypt.graveyard_entrance"
-        assert game_state.dungeon_name == "crypt"
+        assert not game_state.is_node_surface()
 
-        # Move north to town (cross-dungeon)
+    def test_crypt_exit_reenters_town_node_surface(self, test_party):
+        """Moving north out of the crypt lands on the Arden node surface (reverse seam)."""
+        game_state = _crypt(test_party)
+        assert game_state.current_room_id == "crypt.graveyard_entrance"
+
         success = game_state.move("north", check_for_enemies=False)
+
         assert success is True
-        assert game_state.current_room_id == "arden.town_road"
+        assert game_state.is_node_surface()
+        assert game_state.current_node_id == "arden.town_road"
+        assert game_state.current_room_id is None
         assert game_state.dungeon_name == "town_of_arden"
 
-    def test_round_trip_navigation(self, test_party):
-        """Test navigating from town to crypt and back."""
-        event_bus = EventBus()
-        data_loader = DataLoader()
+    def test_round_trip_preserves_crypt_room_state(self, test_party):
+        """Crypt -> Arden node -> crypt, preserving crypt room state across the seam."""
+        game_state = _crypt(test_party)
 
-        # Start in town
-        game_state = GameState(
-            party=test_party,
-            dungeon_name="town_of_arden",
-            campaign_id="the_unquiet_dead",
-            event_bus=event_bus,
-            data_loader=data_loader,
-        )
+        # Mark the entrance searched before leaving.
+        game_state.get_current_room()["searched"] = True
 
-        # Go to crypt (south twice)
-        game_state.move("south", check_for_enemies=False)
-        game_state.move("south", check_for_enemies=False)
-        assert game_state.current_room_id == "crypt.graveyard_entrance"
-
-        # Go back to town (north)
+        # Up to the node surface via the reverse seam.
         game_state.move("north", check_for_enemies=False)
-        assert game_state.current_room_id == "arden.town_road"
-        assert game_state.dungeon_name == "town_of_arden"
+        assert game_state.current_node_id == "arden.town_road"
 
-        # Go back to crypt again (south)
-        game_state.move("south", check_for_enemies=False)
-        assert game_state.current_room_id == "crypt.graveyard_entrance"
+        # Back down through the Town Gate transition.
+        result = game_state.node_actions.transition(game_state.party.get_living_members()[0])
+        assert result["success"] is True
         assert game_state.dungeon_name == "crypt"
+        assert game_state.current_room_id == "crypt.graveyard_entrance"
 
-    def test_dungeon_state_preserved_across_transitions(self, test_party):
-        """Test that dungeon state is preserved when moving between dungeons."""
-        event_bus = EventBus()
-        data_loader = DataLoader()
-
-        # Start in crypt
-        game_state = GameState(
-            party=test_party,
-            dungeon_name="crypt",
-            campaign_id="the_unquiet_dead",
-            event_bus=event_bus,
-            data_loader=data_loader,
-        )
-
-        # Mark current room as searched
-        room = game_state.get_current_room()
-        room["searched"] = True
-
-        # Go to town (north)
-        game_state.move("north", check_for_enemies=False)
-        assert game_state.current_room_id == "arden.town_road"
-
-        # Go back to crypt (south)
-        game_state.move("south", check_for_enemies=False)
-
-        # The searched flag should still be set
-        room = game_state.get_current_room()
-        assert room["searched"] is True
+        # The searched flag survived the round trip.
+        assert game_state.get_current_room()["searched"] is True
 
     def test_room_info_after_cross_dungeon_move(self, test_party):
-        """Test that room info is correct after cross-dungeon moves."""
-        event_bus = EventBus()
-        data_loader = DataLoader()
+        """After entering the crypt from town, room info reflects the crypt entrance."""
+        game_state = _town(test_party)
 
-        # Start in town
-        game_state = GameState(
-            party=test_party,
-            dungeon_name="town_of_arden",
-            campaign_id="the_unquiet_dead",
-            event_bus=event_bus,
-            data_loader=data_loader,
-        )
+        game_state.enter_node("arden.town_road")
+        game_state.node_actions.transition(game_state.party.get_living_members()[0])
 
-        # Navigate to crypt (south twice)
-        game_state.move("south", check_for_enemies=False)
-        game_state.move("south", check_for_enemies=False)
-
-        # Check room info
         room = game_state.get_current_room()
         assert room["id"] == "crypt.graveyard_entrance"
         assert room["name"] == "Overgrown Graveyard"
         assert room["location_type"] == "dungeon"
         assert room["parent"] == "crypt"
 
-    def test_exits_available_after_cross_dungeon_move(self, test_party):
-        """Test that exits are correctly reported after cross-dungeon moves."""
-        event_bus = EventBus()
-        data_loader = DataLoader()
+    def test_crypt_exits_after_arrival(self, test_party):
+        """The crypt entrance exposes its interior exit and the road back to the Arden node."""
+        game_state = _crypt(test_party)
 
-        # Start in town
-        game_state = GameState(
-            party=test_party,
-            dungeon_name="town_of_arden",
-            campaign_id="the_unquiet_dead",
-            event_bus=event_bus,
-            data_loader=data_loader,
-        )
-
-        # Navigate to crypt (south twice)
-        game_state.move("south", check_for_enemies=False)
-        game_state.move("south", check_for_enemies=False)
-
-        # Check exits
         room = game_state.get_current_room()
         exits = room.get("exits", {})
 
-        # Should have exit down to hall_of_the_dead and north back to town
+        # Interior exit down, plus the north exit that names the Arden Town Gate node.
         assert "down" in exits
         assert "north" in exits
-
-        # Verify exit destinations
         assert exits["down"] == "crypt.hall_of_the_dead"
-        north_exit = exits["north"]
-        assert north_exit["destination"] == "arden.town_road"
+        assert exits["north"]["destination"] == "arden.town_road"
