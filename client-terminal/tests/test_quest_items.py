@@ -159,7 +159,7 @@ class TestConditionalExits:
 
         game_state = GameState(
             party=test_party,
-            dungeon_name="town_of_arden",
+            dungeon_name="crypt",
             campaign_id="the_unquiet_dead",
             event_bus=event_bus,
             data_loader=data_loader,
@@ -196,7 +196,7 @@ class TestConditionalExits:
 
         game_state = GameState(
             party=test_party,
-            dungeon_name="town_of_arden",
+            dungeon_name="crypt",
             campaign_id="the_unquiet_dead",
             event_bus=event_bus,
             data_loader=data_loader,
@@ -238,15 +238,15 @@ class TestConditionalExits:
 
         game_state = GameState(
             party=test_party,
-            dungeon_name="town_of_arden",
+            dungeon_name="crypt",
             campaign_id="the_unquiet_dead",
             event_bus=event_bus,
             data_loader=data_loader,
         )
 
-        # Check a normal exit (town square has multiple exits without requirements)
-        game_state.current_room_id = "arden.town_square"
-        req_check = game_state.check_exit_requirements("north")
+        # Check a normal exit (the crypt entrance's interior exit has no requirements)
+        game_state.current_room_id = "crypt.graveyard_entrance"
+        req_check = game_state.check_exit_requirements("down")
         assert req_check["met"] is True
 
     def test_move_blocked_without_required_item(self, test_party):
@@ -256,7 +256,7 @@ class TestConditionalExits:
 
         game_state = GameState(
             party=test_party,
-            dungeon_name="town_of_arden",
+            dungeon_name="crypt",
             campaign_id="the_unquiet_dead",
             event_bus=event_bus,
             data_loader=data_loader,

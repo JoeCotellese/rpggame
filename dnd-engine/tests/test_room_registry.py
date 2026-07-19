@@ -227,7 +227,7 @@ class TestRoomRegistryWithRealData:
         assert registry.room_exists("crypt.family_shrine")
 
     def test_town_dungeon_registered(self):
-        """Test that the town of Arden is properly registered."""
+        """Arden is a node surface; its locations resolve through the node index."""
         from dnd_engine.rules.loader import DataLoader
 
         loader = DataLoader()
@@ -238,12 +238,12 @@ class TestRoomRegistryWithRealData:
             content_path=content_path,
         )
 
-        # Should find town rooms
-        assert registry.get_dungeon_for_room("arden.town_square") == "town_of_arden"
-        assert registry.room_exists("arden.town_road")
+        # Arden's nodes resolve to the settlement via the node index, not the room index.
+        assert registry.get_dungeon_for_node("arden.town_square") == "town_of_arden"
+        assert registry.get_dungeon_for_node("arden.town_road") == "town_of_arden"
 
     def test_cross_dungeon_exit_resolution(self):
-        """Test that exits between dungeons can be resolved."""
+        """The Town Gate node authors a transition into the crypt (replaces the old grid exit)."""
         from dnd_engine.rules.loader import DataLoader
 
         loader = DataLoader()
@@ -254,17 +254,12 @@ class TestRoomRegistryWithRealData:
             content_path=content_path,
         )
 
-        # Get the town road room (connects to crypt)
-        town_road = registry.get_room("arden.town_road")
-        assert town_road is not None
+        # The Town Gate node transitions to the crypt.
+        arden = registry.load_dungeon("town_of_arden")
+        town_gate = arden["nodes"]["arden.town_road"]
+        assert town_gate["transition"]["to"] == "crypt"
 
-        # Check the exit to crypt (south direction)
-        graveyard_exit = town_road["exits"].get("south")
-        assert graveyard_exit is not None
-        destination = graveyard_exit["destination"]
-
-        # Should be able to resolve the destination room
-        assert registry.room_exists(destination)
-        crypt_entrance = registry.get_room(destination)
-        assert crypt_entrance is not None
-        assert crypt_entrance["name"] == "Overgrown Graveyard"
+        # The transition target resolves to the crypt's start room.
+        crypt = registry.load_dungeon("crypt")
+        entrance = crypt["rooms"][crypt["start_room"]]
+        assert entrance["name"] == "Overgrown Graveyard"

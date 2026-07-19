@@ -3,250 +3,98 @@
   "name": "Town of Arden",
   "campaign_id": "the_unquiet_dead",
   "description": "A small frontier town nestled at the edge of the wilderness. The townsfolk are hardworking and suspicious of strangers, though they've grown accustomed to adventurers passing through. Recent troubles at the old Davos family crypt have the locals on edge.",
-  "start_room": "arden.town_square",
+  "surface": "node",
+  "start_node": "arden.town_square",
   "level_range": "1-3",
   "estimated_playtime": "varies",
   "focus": "exploration, roleplay",
-  "notes": "Hub town for The Unquiet Dead campaign. Players start here and return between dungeons. Navigation uses compass directions. The Warrens will connect to the Cult Hideout via conditional exit (Issue #102).",
-  "rooms": {
+  "notes": "Hub settlement for The Unquiet Dead, presented as a node surface (issue #684). Players start here and return between dungeons via the Town Gate transition (to the crypt) and the reverse seam: the crypt and cult hideout exits name arden.town_road and arden.warrens_alley, so those node ids are preserved. The Warrens will connect to the Cult Hideout via a conditional transition (Issue #102).",
+  "nodes": {
     "arden.town_square": {
-      "id": "arden.town_square",
-      "location_type": "settlement",
-      "parent": "town_of_arden",
-      "safe_zone": true,
       "name": "Town Square",
-      "description": "You stand in the heart of Arden. Cobblestones worn smooth by generations of foot traffic spread beneath you. A weathered post displays a map of the town and a notice board covered in parchments - one catches your eye, something about trouble at the old Davos crypt. A stone fountain burbles at the square's center, its basin green with moss. To the north, the warm glow of the Crooked Tankard beckons weary travelers. The iron gates of Davos Manor stand to the west, while the spire of a chapel rises to the east. A sturdy timber building with a sign reading 'Gareth's Goods' stands to the northeast. Southward, the main road leads toward the town gate.",
-      "lighting": "bright",
-      "exits": {
-        "north": "arden.outside_inn",
-        "south": "arden.town_road",
-        "east": "arden.outside_chapel",
-        "west": "arden.outside_manor",
-        "northeast": "arden.outside_general_store"
-      },
-      "enemies": [],
-      "items": [],
-      "searched": false,
-      "searchable": false
+      "blurb": "The heart of Arden — a mossy fountain, a notice board, and roads running to every corner of town.",
+      "description": "You stand in the heart of Arden, cobblestones worn smooth by generations underfoot. A stone fountain burbles at the center, its basin green with moss, and a weathered post displays a town map beside a notice board thick with parchments — one scrap catches your eye, something about trouble at the old Davos crypt. The Crooked Tankard glows to the north, the iron gates of Davos Manor stand west, a chapel spire rises east, and Gareth's Goods sits to the northeast. Southward the main road runs down toward the town gate.",
+      "npcs": [],
+      "actions": ["gather_rumors", "read_job_board"]
     },
-    "arden.outside_inn": {
-      "id": "arden.outside_inn",
-      "location_type": "settlement",
-      "parent": "town_of_arden",
-      "safe_zone": true,
-      "name": "Outside the Crooked Tankard",
-      "description": "You stand before a two-story timber building that leans noticeably to one side, as if it had one too many drinks itself. A weathered sign depicting a tilted tankard creaks in the breeze above the door. Warm light spills from the windows, and the smell of roasting meat and fresh bread drifts out whenever the door swings open. A hitching post stands nearby, though no horses are tied there now. Laughter and the clink of mugs can be heard from within.",
-      "lighting": "bright",
-      "exits": {
-        "south": "arden.town_square",
-        "north": {
-          "destination": "arden.inn_common_room",
-          "label": "Enter the Inn"
-        }
-      },
-      "enemies": [],
-      "items": [],
-      "searched": false,
-      "searchable": false
+    "arden.crooked_tankard": {
+      "name": "The Crooked Tankard",
+      "blurb": "Arden's leaning inn — woodsmoke, spilled ale, and the town's best gossip.",
+      "description": "The Crooked Tankard earns its name from a foundation that settled a century ago, leaving the whole two-story building tilted as though it had one too many. Inside, a great stone fireplace throws dancing light across farmers, merchants, and the odd adventurer. Marta, the stout innkeeper, moves between the tables with surprising grace, and the smoky air is thick with rumor — strange lights near the graveyard, robed figures abroad at odd hours. A worn staircase climbs to rooms above.",
+      "npcs": [],
+      "actions": ["talk", "shop", "rest", "gather_rumors"]
     },
-    "arden.inn_common_room": {
-      "id": "arden.inn_common_room",
-      "location_type": "settlement",
-      "parent": "town_of_arden",
-      "safe_zone": true,
-      "name": "The Crooked Tankard - Common Room",
-      "description": "The smell of roasting meat and spilled ale washes over you. The Crooked Tankard earns its name from the building's distinct lean - the result of a foundation that settled unevenly a century ago. Despite this quirk, the inn has become the heart of Arden's social life. A massive stone fireplace dominates one wall, its flames casting dancing shadows across the faces of farmers, merchants, and the occasional adventurer. The innkeeper, a stout woman with arms like hams and a laugh like rolling thunder, moves between tables with surprising grace. A worn staircase leads to rooms above. The murmur of conversation fills the smoky air - rumors of strange lights near the old graveyard, whispers of figures in dark robes seen at odd hours.",
-      "lighting": "dim",
-      "exits": {
-        "south": {
-          "destination": "arden.outside_inn",
-          "label": "Exit to Street"
-        }
-      },
-      "enemies": [],
-      "items": [],
-      "searched": false,
-      "searchable": false
+    "arden.gareths_goods": {
+      "name": "Gareth's Goods",
+      "blurb": "The town outfitter — weapons, armor, and every adventuring sundry, if you can pay.",
+      "description": "A painted sign reads 'Gareth's Goods — Supplies for the Discerning Adventurer.' Within, the shop is a well-ordered maze of merchandise: blades and axes on the walls, leather and mail on the stands, shelves of potions, torches, and rope. A locked glass cabinet guards the finer wares. Behind a worn counter stands Gareth himself, sharp-eyed and ink-stained from his ledgers, ready to do business.",
+      "npcs": [],
+      "actions": ["talk", "shop"]
     },
-    "arden.outside_manor": {
-      "id": "arden.outside_manor",
-      "location_type": "settlement",
-      "parent": "town_of_arden",
-      "safe_zone": true,
-      "name": "Outside Davos Manor",
-      "description": "You stand before the iron gates of Davos Manor. The family crest - a radiant sun over crossed swords - is worked into the metalwork, though rust has claimed much of its former glory. Beyond the gates, manicured grounds have gone slightly wild from neglect. Overgrown hedges line a gravel path leading to the manor's front door. The manor itself is an imposing structure of grey stone, tall windows staring down like hollow eyes. Ivy creeps up the eastern wall unchecked. A servant in faded livery tends to the overgrown hedges, paying you little mind.",
-      "lighting": "bright",
-      "exits": {
-        "east": "arden.town_square",
-        "west": {
-          "destination": "arden.manor_interior",
-          "label": "Enter the Manor"
-        }
-      },
-      "enemies": [],
-      "items": [],
-      "searched": false,
-      "searchable": false
-    },
-    "arden.manor_interior": {
-      "id": "arden.manor_interior",
-      "location_type": "settlement",
-      "parent": "town_of_arden",
-      "safe_zone": true,
-      "name": "Davos Manor - Entry Hall",
-      "description": "The entry hall of Davos Manor speaks of wealth accumulated over generations, now fading into genteel decay. A grand staircase sweeps upward, its banister polished by countless hands over the centuries. Portraits of ancestors line the walls - stern men and women in the formal dress of ages past, and at the center, a larger painting of a man in clerical robes holding a sunburst holy symbol: Davos himself, the legendary cleric who defeated the devil Durgon. Dust motes drift in shafts of light from high windows. The current Lord Davos, old and frail, rarely leaves his study these days. Footsteps echo from somewhere above - servants going about their quiet duties in the old house.",
-      "lighting": "dim",
-      "exits": {
-        "east": {
-          "destination": "arden.outside_manor",
-          "label": "Exit to Grounds"
-        }
-      },
-      "enemies": [],
-      "items": [],
-      "searched": false,
-      "searchable": false
-    },
-    "arden.outside_chapel": {
-      "id": "arden.outside_chapel",
-      "location_type": "settlement",
-      "parent": "town_of_arden",
-      "safe_zone": true,
-      "name": "Outside the Chapel of the Light",
-      "description": "A modest stone chapel stands before you, its single spire topped with a sun-shaped symbol of burnished bronze that catches the light. The building is old - far older than most structures in Arden - its stones fitted together with a precision that modern masons envy. Local legend holds that Davos himself laid the cornerstone after returning victorious from his battle against the devil Durgon. A small graveyard wraps around the chapel's north side, its headstones leaning with age. The wooden doors are carved with scenes of light triumphing over shadow, worn smooth by the hands of generations of faithful.",
-      "lighting": "bright",
-      "exits": {
-        "west": "arden.town_square",
-        "east": {
-          "destination": "arden.chapel_interior",
-          "label": "Enter the Chapel"
-        }
-      },
-      "enemies": [],
-      "items": [],
-      "searched": false,
-      "searchable": false
-    },
-    "arden.chapel_interior": {
-      "id": "arden.chapel_interior",
-      "location_type": "settlement",
-      "parent": "town_of_arden",
-      "safe_zone": true,
-      "name": "Chapel of the Light - Sanctuary",
-      "description": "The interior of the chapel is cool and quiet, a sanctuary from the bustle of town life. Candles flicker in alcoves along the walls, their light playing across faded murals depicting scenes of divine warriors battling creatures of shadow - the victory of Davos over Durgon immortalized in paint and plaster. Wooden pews face a simple altar adorned with a golden sunburst. An elderly priest tends to his duties with slow, purposeful movements, occasionally pausing to offer comfort to those who come to pray. The air carries the faint scent of incense and old parchment. A collection box near the entrance suggests the church's coffers have seen better days, but the faithful still come - and lately, to ask for protection against whatever evil has awakened the dead.",
-      "lighting": "dim",
-      "exits": {
-        "west": {
-          "destination": "arden.outside_chapel",
-          "label": "Exit to Grounds"
-        }
-      },
-      "enemies": [],
-      "items": [],
-      "searched": false,
-      "searchable": false
-    },
-    "arden.town_road": {
-      "id": "arden.town_road",
-      "location_type": "settlement",
-      "parent": "town_of_arden",
-      "safe_zone": true,
-      "name": "Town Road",
-      "description": "The main road of Arden runs north to south, connecting the town square to the southern gate. Here the cobblestones are most worn, grooved by generations of cart wheels and foot traffic. The town gate stands open during daylight hours, watched over by a pair of bored-looking guards. Beyond the wooden palisade, a dirt road winds through farmland before disappearing into a copse of trees - that way lies the Davos family graveyard, and darker things besides. To the east, a narrow alley leads into the Warrens, the older and rougher part of town where the guard rarely ventures after dark.",
-      "lighting": "bright",
-      "exits": {
-        "north": "arden.town_square",
-        "south": {
-          "destination": "crypt.graveyard_entrance",
-          "label": "Road to Davos Family Graveyard"
-        },
-        "east": "arden.warrens_alley"
-      },
-      "enemies": [],
-      "items": [],
-      "searched": false,
-      "searchable": false
-    },
-    "arden.warrens_alley": {
-      "id": "arden.warrens_alley",
-      "location_type": "settlement",
-      "parent": "town_of_arden",
-      "safe_zone": true,
-      "name": "The Warrens - Alley Entrance",
-      "description": "The cobblestones give way to packed dirt as you enter the oldest part of Arden. Here the buildings lean together like drunken conspirators, their upper stories nearly touching across narrow lanes that twist without logic. This is the Warrens - home to those who cannot afford better and those who prefer not to be found. The town guard rarely patrols these streets after dark, and the locals eye strangers with a mixture of suspicion and calculation. Faded signs mark establishments of dubious reputation: a pawnbroker who asks no questions, a fortune teller whose predictions are said to be unsettlingly accurate, a nameless tavern where the ale is cheap and the clientele cheaper. Somewhere in this maze of alleys and abandoned warehouses, darker things stir - though whether the rumors of hooded figures and strange symbols are truth or tavern tales, none can say for certain.",
-      "lighting": "dim",
-      "examinable_objects": [
+    "arden.chapel_of_the_light": {
+      "name": "Chapel of the Light",
+      "blurb": "An ancient sun-spired chapel; the faithful now come asking protection from the restless dead.",
+      "description": "A modest stone chapel, older than most of Arden, its spire crowned with a burnished bronze sun. Legend holds Davos himself laid the cornerstone after defeating the devil Durgon, and faded murals inside show that victory of light over shadow. Candles flicker in wall alcoves; pews face a simple altar and its golden sunburst. Father Aldric tends his duties with slow, purposeful movements — and lately fields more and more pleas for protection against whatever has stirred the dead. A small graveyard wraps the chapel's north side.",
+      "npcs": [],
+      "actions": [
+        "talk",
+        "shop",
         {
-          "id": "basement_door",
-          "name": "weathered basement door",
-          "description": "A heavy wooden door set into the foundation of an abandoned warehouse. A strange symbol is carved deeply into the wood - a horned skull wreathed in flames. The door appears unlocked.",
-          "requires": {
-            "quest_item": "gorgus_journal"
-          },
-          "examine_checks": [
-            {
-              "skill": "religion",
-              "dc": 12,
-              "on_success": "You recognize the symbol as the mark of the Cult of Durgon - an ancient devil-worshipping sect thought to have been destroyed centuries ago. The crude map in the cultist's journal led you right to their door.",
-              "on_failure": "The symbol is unfamiliar to you, though its sinister appearance suggests nothing good lies beyond."
-            }
-          ]
+          "id": "examine_graveyard",
+          "gate": {"skill": "religion", "dc": 12},
+          "on_success": "Among the leaning headstones you find graves disturbed from below — soil pushed up, not dug down. Whatever walks the crypt has been practicing here.",
+          "on_failure": "The little churchyard is old and untended; the weathered stones give up nothing unusual."
         }
       ],
-      "exits": {
-        "west": "arden.town_road",
-        "down": {
-          "destination": "cult_hideout.entrance",
-          "label": "Basement Door",
-          "requires": {
-            "quest_item": "gorgus_journal"
-          },
-          "hidden_until_unlocked": true
-        }
-      },
-      "enemies": [],
-      "items": [],
-      "searched": false,
-      "searchable": false
+      "quest_hook": "investigate_crypt"
     },
-    "arden.outside_general_store": {
-      "id": "arden.outside_general_store",
-      "location_type": "settlement",
-      "parent": "town_of_arden",
-      "safe_zone": true,
-      "name": "Outside Gareth's Goods",
-      "description": "A sturdy two-story building of timber and stone stands before you, its construction more practical than decorative. A painted wooden sign above the door depicts a sword crossed with a potion bottle beneath the words 'Gareth's Goods - Supplies for the Discerning Adventurer'. Crates and barrels are stacked neatly against one wall, and a notice board beside the door advertises various wares and their prices. The door stands open during business hours, inviting customers within.",
-      "lighting": "bright",
-      "exits": {
-        "southwest": "arden.town_square",
-        "north": {
-          "destination": "arden.general_store",
-          "label": "Enter the Shop"
+    "arden.davos_manor": {
+      "name": "Davos Manor",
+      "blurb": "The fading seat of the Davos line, whose ancestor slew the devil Durgon.",
+      "description": "The iron gates bear the Davos crest — a radiant sun over crossed swords — rusted now, the grounds beyond gone half-wild. Within, the entry hall speaks of generations of wealth sliding into genteel decay: a grand staircase, ancestral portraits, and at their center a larger painting of a man in clerical robes holding a sunburst holy symbol — Davos, who bound the devil Durgon. Dust drifts in shafts of high window-light. The current Lord Davos, old and frail, rarely leaves his study, and the footsteps of quiet servants echo from above.",
+      "npcs": [],
+      "actions": [
+        "talk",
+        {
+          "id": "examine_portrait",
+          "gate": {"skill": "history", "dc": 12},
+          "on_success": "You recognize the sunburst Davos holds: the seal of the old ward that bound Durgon. In the painting it is whole — but the relic itself has been missing from the chapel for a generation.",
+          "on_failure": "A dignified portrait of a cleric in sunburst robes. Fine work, but it tells you little."
         }
-      },
-      "enemies": [],
-      "items": [],
-      "searched": false,
-      "searchable": false
+      ]
     },
-    "arden.general_store": {
-      "id": "arden.general_store",
-      "location_type": "settlement",
-      "parent": "town_of_arden",
-      "safe_zone": true,
-      "name": "Gareth's Goods - Interior",
-      "description": "The interior of the shop is a well-organized maze of merchandise. Weapons hang on the walls - swords, axes, and bows of various sizes. Armor stands display leather jerkins and mail shirts. Shelves hold potions, torches, rope, and countless other adventuring necessities. A glass-fronted cabinet near the counter contains more valuable items under lock and key. Behind a worn wooden counter stands Gareth himself, a middle-aged man with sharp eyes and ink-stained fingers from keeping his ledgers. He looks up as you enter, ready to do business.",
-      "lighting": "bright",
-      "exits": {
-        "south": {
-          "destination": "arden.outside_general_store",
-          "label": "Exit to Street"
+    "arden.warrens_alley": {
+      "name": "The Warrens",
+      "blurb": "Arden's oldest, roughest quarter, where the watch won't go after dark.",
+      "description": "The cobbles give way to packed dirt where Arden's oldest quarter leans together overhead, lanes twisting without logic. This is the Warrens — home to those who cannot afford better and those who would rather not be found. Faded signs mark a pawnbroker who asks no questions, a fortune teller of unsettling accuracy, and a nameless tavern with cheap ale and cheaper company. The watch rarely comes here after dark, and locals weigh strangers with equal parts suspicion and calculation. Somewhere in this maze, darker things are said to stir.",
+      "npcs": [],
+      "actions": [
+        "gather_rumors",
+        {
+          "id": "examine_cult_symbol",
+          "gate": {"skill": "investigation", "dc": 13},
+          "on_success": "Chalked beneath a broken sign is a sigil you have seen before — the mark of the Cult of Durgon, and fresh, drawn within the week. Someone here answers to it.",
+          "on_failure": "Grime and graffiti cover the alley walls; nothing in the scrawl resolves into meaning."
         }
-      },
-      "enemies": [],
-      "items": [],
-      "searched": false,
-      "searchable": false
+      ]
+    },
+    "arden.town_road": {
+      "name": "Town Gate",
+      "blurb": "The southern gate and the rutted road out — toward the farms, the Davos graveyard, and the crypt beyond.",
+      "description": "The main road runs down to Arden's southern gate, its cobbles grooved by generations of cart wheels. A pair of bored guards watch the gate, open through daylight hours. Beyond the wooden palisade a dirt road winds through farmland before vanishing into a copse of trees — that way lie the Davos family graveyard and darker things besides. A narrow alley off to the east leads into the Warrens.",
+      "npcs": [],
+      "actions": [],
+      "transition": {
+        "to": "crypt",
+        "on_success": "You pass through the town gate and follow the rutted road south, past the last farmstead, until the leaning stones of the Davos graveyard rise ahead under a bruised sky."
+      }
+    },
+    "arden.watch_house": {
+      "name": "The Watch House",
+      "blurb": "The town watch's cramped posting-house, its bounty board crowded since the dead began to walk.",
+      "description": "A squat, functional building of timber and stone hard by the town gate serves Arden's watch. A weapons rack lines one wall; a battered board by the door bristles with notices and bounties — more of them lately, and grimmer, since the trouble at the crypt began. Captain Roderick keeps order here, harried and short of hands, glad of anyone willing to take a posting.",
+      "npcs": [],
+      "actions": ["talk", "read_job_board"]
     }
   }
 }

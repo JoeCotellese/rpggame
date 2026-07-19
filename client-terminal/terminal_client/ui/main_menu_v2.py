@@ -70,6 +70,23 @@ class MainMenuV2:
 
         return choice_map.get(choice)
 
+    def _resolve_starting_dungeon(self, campaign_id: str, starting_room: str) -> str | None:
+        """Resolve the dungeon file that hosts a campaign's starting location.
+
+        The starting id may be a grid room (e.g. "crypt.entrance") or a
+        settlement node (e.g. "arden.town_square"). Node settlements have no
+        grid rooms, so fall back to node resolution when the room lookup
+        misses.
+        """
+        content_path = self.data_loader.data_path / "content"
+        room_registry = RoomRegistry(
+            campaign_id=campaign_id,
+            content_path=content_path,
+        )
+        return room_registry.get_dungeon_for_room(
+            starting_room
+        ) or room_registry.get_dungeon_for_node(starting_room)
+
     def _build_slot_choice_display(self, slot) -> str:
         """
         Build a display string for a save slot choice.
@@ -363,14 +380,11 @@ class MainMenuV2:
         party = Party(party_characters)
         campaign_progress = campaign_info.get("campaign_progress")
 
-        # Use room registry to find the dungeon containing the starting room
+        # Resolve the dungeon that hosts the campaign's starting location.
         starting_room = campaign_info["starting_room"]
-        content_path = self.data_loader.data_path / "content"
-        room_registry = RoomRegistry(
-            campaign_id=campaign_info["campaign_id"],
-            content_path=content_path,
+        starting_dungeon = self._resolve_starting_dungeon(
+            campaign_info["campaign_id"], starting_room
         )
-        starting_dungeon = room_registry.get_dungeon_for_room(starting_room)
 
         if not starting_dungeon:
             print_error(f"Could not find dungeon for room: {starting_room}")
@@ -385,8 +399,12 @@ class MainMenuV2:
                 campaign_progress=campaign_progress,
             )
 
-            # Override to start at the campaign's specific starting room
-            game_state.current_room_id = starting_room
+            # Grid dungeons need the campaign's specific starting room.
+            # Node settlements position themselves at their start_node
+            # during GameState init; overriding current_room_id would
+            # corrupt the node surface.
+            if not game_state.is_node_surface():
+                game_state.current_room_id = starting_room
 
             # Step 5: Save to slot with campaign progress and sync vault
             self.slot_manager.save_game(
