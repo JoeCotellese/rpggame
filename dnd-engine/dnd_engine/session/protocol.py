@@ -262,6 +262,19 @@ class GameEvent:
         )
 
 
+class ErrorKind(str, Enum):
+    """Why an action did not succeed.
+
+    A client treats these differently. ``RULE`` is ordinary play — the answer is
+    no, show it as flavour and let the player try something else. ``INTERNAL``
+    means the engine misbehaved, which is a defect and should surface as one
+    rather than being dressed up as a game outcome.
+    """
+
+    RULE = "rule"
+    INTERNAL = "internal"
+
+
 class DecisionKind(str, Enum):
     """What sort of question the engine is asking."""
 
@@ -419,6 +432,11 @@ class ActionResult:
             ``None``.
         error: Human-readable reason the action was rejected. ``None`` on
             success.
+        error_kind: Whether the failure was the rules refusing
+            (:attr:`ErrorKind.RULE`) or the engine breaking
+            (:attr:`ErrorKind.INTERNAL`). Always set when ``ok`` is ``False``,
+            defaulting to ``RULE`` since a refused action is the common case.
+            ``None`` on success.
 
     Raises:
         ValueError: If ``ok`` is ``False`` without an ``error``.
@@ -428,11 +446,14 @@ class ActionResult:
     events: tuple[GameEvent, ...] = ()
     pending: PendingDecision | None = None
     error: str | None = None
+    error_kind: ErrorKind | None = None
 
     def __post_init__(self) -> None:
-        """Guarantee a rejection always explains itself."""
+        """Guarantee a rejection always explains itself and names its kind."""
         if not self.ok and self.error is None:
             raise ValueError("ActionResult(ok=False) requires an error explaining the rejection")
+        if not self.ok and self.error_kind is None:
+            object.__setattr__(self, "error_kind", ErrorKind.RULE)
 
     @property
     def is_awaiting_decision(self) -> bool:
@@ -446,6 +467,7 @@ class ActionResult:
             "events": [event.to_dict() for event in self.events],
             "pending": self.pending.to_dict() if self.pending is not None else None,
             "error": self.error,
+            "error_kind": self.error_kind.value if self.error_kind is not None else None,
         }
 
     def to_json(self) -> str:
@@ -456,9 +478,11 @@ class ActionResult:
     def from_dict(data: dict[str, Any]) -> ActionResult:
         """Rebuild from the wire form produced by :meth:`to_dict`."""
         pending = data.get("pending")
+        error_kind = data.get("error_kind")
         return ActionResult(
             ok=data["ok"],
             events=tuple(GameEvent.from_dict(e) for e in data.get("events", ())),
             pending=PendingDecision.from_dict(pending) if pending is not None else None,
             error=data.get("error"),
+            error_kind=ErrorKind(error_kind) if error_kind is not None else None,
         )

@@ -287,7 +287,13 @@ class TestAC5ReusesExistingEventTaxonomy:
         assert GameEvent.from_dict(event.to_dict()).type is event.type
 
     def test_protocol_declares_no_parallel_event_enum(self):
-        """Only IntentKind and DecisionKind may be new enums in this module."""
+        """No enum here may duplicate the engine's event taxonomy.
+
+        The allowed set is a whitelist, widened deliberately as the protocol
+        grows. `ErrorKind` was added in P1-02 to separate a rules rejection from
+        an internal failure; it classifies *failures*, not events, so it does not
+        violate what this test exists to prevent — a second `EventType`.
+        """
         source = Path(__file__).parents[2] / "dnd_engine" / "session" / "protocol.py"
         tree = ast.parse(source.read_text(encoding="utf-8"))
         enum_names = {
@@ -299,7 +305,7 @@ class TestAC5ReusesExistingEventTaxonomy:
                     getattr(base, "id", "") == "str"
                     for base in node.bases)
         }
-        assert enum_names == {"IntentKind", "DecisionKind"}, (
+        assert enum_names == {"IntentKind", "DecisionKind", "ErrorKind"}, (
             f"unexpected enums declared in protocol.py: {enum_names}"
         )
 

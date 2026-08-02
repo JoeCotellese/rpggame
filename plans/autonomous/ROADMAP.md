@@ -31,7 +31,7 @@ Terminal states: `blocked`, `reverted`
 | ID | Title | Status | Stage | Depends on |
 |---|---|---|---|---|
 | P1-01 | Session protocol types: `Intent`, `GameEvent`, `PendingDecision`, `ActionResult` | **done** | shipped | — |
-| P1-02 | `Session` facade owning the turn loop (move + attack) | spec | BUILD next | P1-01 ✅ |
+| P1-02 | `Session` facade owning the turn loop (move + attack) | build | PLAYTEST next | P1-01 ✅ |
 | P1-03 | `PendingDecision` for opportunity attacks (pause-and-ask) | todo | — | P1-02 |
 | P1-04 | Conformance suite: facade vs. legacy path produce identical outcomes | todo | — | P1-02 |
 | P2-05 | LLM DM adjudication: freeform intent → proposed ruling → engine adjudicates | todo | — | P1-02 |

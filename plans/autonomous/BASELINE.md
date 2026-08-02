@@ -115,3 +115,9 @@ Recorded so the loop does not rediscover them at 3am.
 5. **`client_2d.testing.TestHarness` is not the engine.** It defines its own stub
    `GameState` dataclass. Do not use it as an acceptance gate. Use
    `GameSession`.
+
+## client-2d is flaky too (measured P1-02 BUILD)
+
+One run reported **3 failures** rather than the usual 2. Six consecutive runs
+immediately afterwards all reported exactly 2 — the known pre-existing pair.
+Treat client-2d's count as `2–3` and apply the same isolation procedure above.

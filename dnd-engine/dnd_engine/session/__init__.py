@@ -8,7 +8,8 @@ events it produced, and answer any question the engine raises mid-resolution.
 
     from dnd_engine.session import ActionResult, MoveIntent
 
-Currently protocol types only; the session that consumes them lands in P1-02.
+`Session` owns the turn loop: submit an intent, receive everything that
+happened, up to the next point a player must decide.
 """
 
 from dnd_engine.session.protocol import (
@@ -16,6 +17,7 @@ from dnd_engine.session.protocol import (
     AttackIntent,
     DecisionKind,
     DecisionOption,
+    ErrorKind,
     FreeformIntent,
     GameEvent,
     Intent,
@@ -25,9 +27,12 @@ from dnd_engine.session.protocol import (
     WaitIntent,
     to_jsonable,
 )
+from dnd_engine.session.session import Session
 
 __all__ = [
     "ActionResult",
+    "ErrorKind",
+    "Session",
     "AttackIntent",
     "DecisionKind",
     "DecisionOption",

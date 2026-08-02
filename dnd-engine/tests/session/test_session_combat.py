@@ -1,0 +1,286 @@
+# ABOUTME: Integration tests driving real crypt combat entirely through the Session facade.
+# ABOUTME: Proves a client can play a full fight without touching engine internals.
+
+"""Integration verification for P1-02.
+
+The point of the facade is that a caller never implements D&D's turn structure.
+These tests therefore play real combat using only `Session.perform()` and the
+session's public properties — no `initiative_tracker`, no `_check_combat_end`,
+no `process_enemy_turn`.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from dnd_engine.core.character import Character, CharacterClass
+from dnd_engine.core.creature import Abilities
+from dnd_engine.core.dice import DiceRoller
+from dnd_engine.core.entity_ids import pc_entity_id
+from dnd_engine.core.game_state import GameState
+from dnd_engine.core.party import Party
+from dnd_engine.rules.loader import DataLoader
+from dnd_engine.session import AttackIntent, Session, WaitIntent
+from dnd_engine.utils.events import EventBus, EventType
+
+MAX_ROUNDS = 60
+
+
+def _party() -> Party:
+    """Two level-3 fighters, durable enough to finish a fight."""
+    return Party(
+        [
+            Character(
+                name=name,
+                character_class=CharacterClass.FIGHTER,
+                level=3,
+                abilities=Abilities(
+                    strength=16,
+                    dexterity=12,
+                    constitution=14,
+                    intelligence=10,
+                    wisdom=11,
+                    charisma=8,
+                ),
+                max_hp=30,
+                ac=16,
+            )
+            for name in ("Thorin", "Garrick")
+        ]
+    )
+
+
+@pytest.fixture
+def session() -> Session:
+    """A session in the crypt, already in combat at the graveyard entrance."""
+    game = GameState(
+        party=_party(),
+        dungeon_name="crypt",
+        campaign_id="the_unquiet_dead",
+        event_bus=EventBus(),
+        data_loader=DataLoader(),
+        dice_roller=DiceRoller(seed=20260802),
+    )
+    game.start()
+    return Session(game)
+
+
+def _fight_to_the_end(session: Session) -> list:
+    """Play until combat ends, using only the facade. Returns all events."""
+    collected = []
+    for _ in range(MAX_ROUNDS):
+        if session.is_over or not session.in_combat:
+            break
+        actor = session.awaiting_actor_id
+        if actor is None:
+            break
+        enemies = [e for e in session.snapshot()["enemies"] if e["is_alive"]]
+        intent = (
+            AttackIntent(actor_id=actor, target_ref=enemies[0]["name"])
+            if enemies
+            else WaitIntent(actor_id=actor)
+        )
+        result = session.perform(intent)
+        assert result.ok, f"facade rejected a legal action: {result.error}"
+        collected.extend(result.events)
+    return collected
+
+
+class TestAC1PlayableThroughPerformAlone:
+    """AC-1: a full combat is playable through perform() alone."""
+
+    def test_combat_reaches_a_terminal_state(self, session):
+        assert session.in_combat, "expected the crypt entrance to start a fight"
+        _fight_to_the_end(session)
+        assert not session.in_combat or session.is_over
+
+    def test_the_caller_never_needed_engine_internals(self):
+        """This module must not *access* private GameState members.
+
+        Checked over the AST rather than the raw text, so mentioning a name in
+        prose (as this docstring does) is not mistaken for using it.
+        """
+        import ast
+        from pathlib import Path
+
+        forbidden = {"_check_combat_end", "initiative_tracker", "process_enemy_turn"}
+        tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
+
+        accessed = {
+            node.attr for node in ast.walk(tree) if isinstance(node, ast.Attribute)
+        }
+
+        assert not (accessed & forbidden), (
+            f"integration test reaches into engine internals: {sorted(accessed & forbidden)}"
+        )
+
+
+class TestAC2EngineAdvancesTheTurn:
+    """AC-2: the engine advances the turn, not the caller."""
+
+    def test_control_returns_only_on_a_conscious_party_member(self, session):
+        for _ in range(12):
+            if not session.in_combat or session.is_over:
+                break
+            actor = session.awaiting_actor_id
+            if actor is None:
+                break
+
+            party = {p["entity_id"]: p for p in session.snapshot()["party"]}
+            assert actor in party, f"awaiting an actor who is not in the party: {actor}"
+            assert party[actor]["is_alive"], "handed control to a dead character"
+            assert not party[actor]["is_unconscious"], "handed control to an unconscious character"
+
+            session.perform(WaitIntent(actor_id=actor))
+
+    def test_waiting_advances_past_the_actor(self, session):
+        first = session.awaiting_actor_id
+        assert first is not None
+        session.perform(WaitIntent(actor_id=first))
+        assert session.awaiting_actor_id != first or not session.in_combat
+
+
+class TestAC3EnemyTurnsDrained:
+    """AC-3: enemy turns are drained automatically."""
+
+    def test_one_perform_can_surface_multiple_actors(self, session):
+        actors_seen = set()
+        for _ in range(MAX_ROUNDS):
+            if not session.in_combat or session.is_over:
+                break
+            actor = session.awaiting_actor_id
+            if actor is None:
+                break
+            result = session.perform(WaitIntent(actor_id=actor))
+            for event in result.events:
+                name = event.data.get("attacker") or event.data.get("actor")
+                if name:
+                    actors_seen.add(name)
+            if len(actors_seen) > 1:
+                break
+
+        assert len(actors_seen) > 1, (
+            f"expected enemy turns to be drained into the result; saw only {actors_seen}"
+        )
+
+
+class TestAC5WeaponAttacksAppearInEvents:
+    """AC-5: weapon attacks appear in the event stream.
+
+    The engine publishes nothing to the bus for weapon attacks, so if these
+    events are present the facade's synthesis is working.
+    """
+
+    def test_attacking_produces_an_attack_roll_event(self, session):
+        actor = session.awaiting_actor_id
+        assert actor is not None
+        enemies = [e for e in session.snapshot()["enemies"] if e["is_alive"]]
+        assert enemies, "expected living enemies at the crypt entrance"
+
+        result = session.perform(
+            AttackIntent(actor_id=actor, target_ref=enemies[0]["name"])
+        )
+
+        assert result.ok, result.error
+        assert any(e.type is EventType.ATTACK_ROLL for e in result.events), (
+            "no ATTACK_ROLL event — facade is not synthesizing weapon attacks"
+        )
+
+    def test_a_landed_hit_produces_a_damage_event(self, session):
+        for _ in range(MAX_ROUNDS):
+            if not session.in_combat:
+                break
+            actor = session.awaiting_actor_id
+            if actor is None:
+                break
+            enemies = [e for e in session.snapshot()["enemies"] if e["is_alive"]]
+            if not enemies:
+                break
+            result = session.perform(
+                AttackIntent(actor_id=actor, target_ref=enemies[0]["name"])
+            )
+            hits = [
+                e
+                for e in result.events
+                if e.type is EventType.ATTACK_ROLL and e.data.get("hit")
+            ]
+            if hits:
+                assert any(e.type is EventType.DAMAGE_DEALT for e in result.events), (
+                    "an attack hit but produced no DAMAGE_DEALT event"
+                )
+                return
+        pytest.skip("no attack landed within the round budget")
+
+
+class TestAC6EventOrdering:
+    """AC-6: events preserve real chronological order."""
+
+    def test_sequence_numbers_are_contiguous_from_zero(self, session):
+        actor = session.awaiting_actor_id
+        assert actor is not None
+        result = session.perform(WaitIntent(actor_id=actor))
+        assert [e.sequence for e in result.events] == list(range(len(result.events)))
+
+    def test_ordering_holds_across_a_whole_fight(self, session):
+        for _ in range(10):
+            if not session.in_combat or session.is_over:
+                break
+            actor = session.awaiting_actor_id
+            if actor is None:
+                break
+            result = session.perform(WaitIntent(actor_id=actor))
+            assert [e.sequence for e in result.events] == list(range(len(result.events)))
+
+
+class TestAC7RejectionsAreTyped:
+    """AC-7: rejections are distinguishable from internal failures."""
+
+    def test_acting_out_of_turn_is_a_rule_rejection(self, session):
+        from dnd_engine.session import ErrorKind
+
+        actor = session.awaiting_actor_id
+        assert actor is not None
+        other = next(
+            p["entity_id"] for p in session.snapshot()["party"] if p["entity_id"] != actor
+        )
+
+        result = session.perform(WaitIntent(actor_id=other))
+
+        assert not result.ok
+        assert result.error_kind is ErrorKind.RULE
+        assert "turn" in result.error
+
+    def test_attacking_a_nonexistent_target_is_a_rule_rejection(self, session):
+        from dnd_engine.session import ErrorKind
+
+        actor = session.awaiting_actor_id
+        assert actor is not None
+        result = session.perform(
+            AttackIntent(actor_id=actor, target_ref="a dragon that is not here")
+        )
+        assert not result.ok
+        assert result.error_kind is ErrorKind.RULE
+
+    def test_a_rejected_action_does_not_consume_the_turn(self, session):
+        actor = session.awaiting_actor_id
+        session.perform(AttackIntent(actor_id=actor, target_ref="nonexistent"))
+        assert session.awaiting_actor_id == actor, "a rejection consumed the actor's turn"
+
+
+class TestSnapshotIsRenderable:
+    """A client must be able to render from the snapshot without engine types."""
+
+    def test_snapshot_is_json_native(self, session):
+        import json
+
+        json.dumps(session.snapshot())
+
+    def test_snapshot_names_the_awaiting_actor(self, session):
+        snap = session.snapshot()
+        if snap["awaiting_actor_id"] is not None:
+            ids = {p["entity_id"] for p in snap["party"]}
+            assert snap["awaiting_actor_id"] in ids
+
+    def test_entity_ids_match_the_engine_convention(self, session):
+        for member in session.snapshot()["party"]:
+            assert member["entity_id"] == pc_entity_id(member["name"])
