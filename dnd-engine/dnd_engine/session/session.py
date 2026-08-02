@@ -877,6 +877,8 @@ class Session:
         if result is None:
             return False
 
+        self._record_enemy_turn(result)
+
         if result.error:
             self._recorder.record(
                 EventType.TURN_END,
@@ -902,6 +904,31 @@ class Session:
                 ),
             )
         return not result.combat_ended
+
+    def _record_enemy_turn(self, result: Any) -> None:
+        """Carry the whole `EnemyTurnResult` so a client can render the turn.
+
+        The synthesized attack events below describe the roll and the damage,
+        which is enough for a log line and not enough for a client that shows
+        what a player sees today: turn-start and turn-end condition effects,
+        incapacitation, condition-removal attempts, saving throws and the
+        conditions they applied, concentration breaks, and how far the monster
+        moved. All of that is on the result object and was previously discarded,
+        so a client wanting it had to call `process_enemy_turn` itself — which is
+        exactly the engine reach-through the facade exists to remove.
+
+        `attack_text` carries `AttackResult.__str__` separately because
+        serialising the dataclass keeps its fields but loses its rendering, and
+        that rendered line is what the combat log prints.
+        """
+        payload = to_jsonable(result)
+        if result.attack_result is not None:
+            payload["attack_text"] = str(result.attack_result)
+        self._recorder.record(
+            EventType.ENEMY_TURN,
+            payload,
+            message=f"{result.enemy_display_name} takes its turn.",
+        )
 
     # ------------------------------------------------------------------
     # Event synthesis

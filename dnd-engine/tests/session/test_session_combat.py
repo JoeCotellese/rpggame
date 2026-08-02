@@ -451,6 +451,96 @@ class TestEnemiesAreDistinguishable:
         )
 
 
+class TestEnemyTurnPayload:
+    """An enemy turn must be renderable in full from its event alone.
+
+    The synthesized attack events carry the roll and the damage, which is enough
+    for a log line but not enough for a client that shows what `client-terminal`
+    shows today: turn-start and turn-end condition effects, incapacitation,
+    condition-removal attempts, saving throws and the conditions they applied,
+    concentration breaks, and how far the monster moved. Those live on
+    `EnemyTurnResult`, which the facade otherwise discards. `ENEMY_TURN` carries
+    the whole thing so no client has to call `process_enemy_turn` to get it.
+    """
+
+    def _first_enemy_turn_event(self, session):
+        """Play until an enemy takes a turn, and return that event."""
+        for _ in range(MAX_ROUNDS):
+            if not session.in_combat or session.is_over:
+                return None
+            actor = session.awaiting_actor_id
+            if actor is None:
+                result = session.advance()
+            else:
+                result = session.perform(WaitIntent(actor_id=actor))
+            for event in result.events:
+                if event.type is EventType.ENEMY_TURN:
+                    return event
+        return None
+
+    def test_an_enemy_turn_emits_an_enemy_turn_event(self, session):
+        assert self._first_enemy_turn_event(session) is not None, (
+            "no ENEMY_TURN event — a client cannot render what the monster did"
+        )
+
+    def test_the_payload_carries_every_display_field(self, session):
+        event = self._first_enemy_turn_event(session)
+        assert event is not None
+
+        for field in (
+            "enemy_name",
+            "enemy_display_name",
+            "action_taken",
+            "target_name",
+            "target_killed",
+            "action_data",
+            "saving_throw_triggered",
+            "save_ability",
+            "save_dc",
+            "save_succeeded",
+            "conditions_applied",
+            "condition_removal",
+            "concentration_broken",
+            "turn_start_effects",
+            "turn_end_effects",
+            "incapacitating_conditions",
+            "moved_squares",
+        ):
+            assert field in event.data, f"ENEMY_TURN payload is missing {field!r}"
+
+    def test_the_payload_is_json_native(self, session):
+        import json
+
+        event = self._first_enemy_turn_event(session)
+        assert event is not None
+        json.dumps(event.data)
+
+    def test_an_attacking_enemy_carries_a_rendered_attack_line(self, session):
+        """`AttackResult.__str__` is the mechanics line players read today.
+
+        Serialising the dataclass loses it, so the facade carries the rendered
+        text alongside the fields.
+        """
+        for _ in range(MAX_ROUNDS):
+            if not session.in_combat or session.is_over:
+                break
+            actor = session.awaiting_actor_id
+            if actor is None:
+                result = session.advance()
+            else:
+                result = session.perform(WaitIntent(actor_id=actor))
+            for event in result.events:
+                if event.type is not EventType.ENEMY_TURN:
+                    continue
+                if event.data.get("attack_result") is None:
+                    continue
+                assert event.data.get("attack_text"), (
+                    "an attacking enemy turn carries no rendered attack line"
+                )
+                return
+        pytest.skip("no enemy landed an attack within the round budget")
+
+
 class TestEnemyIdentityIsStable:
     """Regression: enemy ids must be unique and survive the whole session.
 

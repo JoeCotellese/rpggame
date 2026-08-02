@@ -25,6 +25,10 @@ class EventType(Enum):
     SURPRISE_ROUND = "surprise_round"
     TURN_START = "turn_start"
     TURN_END = "turn_end"
+    # Synthesized by the session facade, never published on the bus: carries a
+    # whole EnemyTurnResult so a client can render a monster's turn in full
+    # without calling GameState.process_enemy_turn itself.
+    ENEMY_TURN = "enemy_turn"
     ATTACK_ROLL = "attack_roll"
     SAVING_THROW = "saving_throw"
     DAMAGE_DEALT = "damage_dealt"
