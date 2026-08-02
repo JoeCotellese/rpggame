@@ -37,9 +37,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from dnd_engine.session import ActionResult, GameEvent
 
 # The synthesized events that restate an attack an ENEMY_TURN already rendered.
-_ATTACK_ECHO = frozenset(
-    {EventType.ATTACK_ROLL, EventType.DAMAGE_DEALT, EventType.CHARACTER_DEATH}
-)
+_ATTACK_ECHO = frozenset({EventType.ATTACK_ROLL, EventType.DAMAGE_DEALT, EventType.CHARACTER_DEATH})
 
 
 class SessionEventRenderer:
@@ -77,15 +75,11 @@ class SessionEventRenderer:
         self._cli = cli
 
     def render(self, result: ActionResult) -> None:
-        """Print everything in one action's result, in order.
+        """Print everything in one accepted action's result, in order.
 
-        A rejected result prints its reason instead: a rules refusal is ordinary
-        play, an internal fault is a defect and is labelled as one.
+        Rejections are the CLI's to display: whether a refused turn is worth a
+        line depends on why it was asked for, which this class cannot see.
         """
-        if not result.ok:
-            self._render_rejection(result)
-            return
-
         swallow_attack_echo = False
         for event in result.events:
             if swallow_attack_echo and event.type in _ATTACK_ECHO:
@@ -98,15 +92,6 @@ class SessionEventRenderer:
                 continue
 
             self._render_event(event)
-
-    def _render_rejection(self, result: ActionResult) -> None:
-        """Show why an action did not happen."""
-        from dnd_engine.session import ErrorKind
-
-        if result.error_kind is ErrorKind.INTERNAL:
-            print_error(f"The engine failed to resolve that: {result.error}")
-        else:
-            print_status_message(result.error or "That is not possible.", "warning")
 
     def _render_event(self, event: GameEvent) -> None:
         """Dispatch a single event to its display."""
@@ -202,9 +187,7 @@ class SessionEventRenderer:
             conditions = data.get("conditions") or []
             condition_names = ", ".join(c.upper() for c in conditions)
             if condition_names:
-                print_status_message(
-                    f"{actor} is {condition_names} and cannot act!", "warning"
-                )
+                print_status_message(f"{actor} is {condition_names} and cannot act!", "warning")
             else:
                 print_status_message(f"{actor} cannot act this turn!", "warning")
             return
@@ -218,9 +201,7 @@ class SessionEventRenderer:
             print_status_message(message, "warning")
         if data.get("creature_died"):
             condition = str(data.get("condition", "")).replace("_", " ")
-            print_status_message(
-                f"💀 {data.get('actor', '')} is killed by {condition}!", "warning"
-            )
+            print_status_message(f"💀 {data.get('actor', '')} is killed by {condition}!", "warning")
 
     def _render_condition_change(self, data: dict[str, Any], message: str | None) -> None:
         """Report end-of-turn condition outcomes."""
@@ -241,9 +222,7 @@ class SessionEventRenderer:
             # Surprise wears off at the end of the first round every fight;
             # announcing it was noise, so it never was announced.
             if condition != "surprised":
-                print_status_message(
-                    f"⏱ {condition.upper()} on {actor} has expired!", "info"
-                )
+                print_status_message(f"⏱ {condition.upper()} on {actor} has expired!", "info")
             return
 
         if message:
@@ -372,9 +351,7 @@ class SessionEventRenderer:
                 f"✓ {target_name} succeeds on {ability} save (DC {dc})!", "success"
             )
 
-    def _render_attack_narrative(
-        self, data: dict[str, Any], attack_result: AttackResult
-    ) -> None:
+    def _render_attack_narrative(self, data: dict[str, Any], attack_result: AttackResult) -> None:
         """Ask the LLM to describe a landed blow, if narrative is enabled."""
         if not self._cli.llm_enhancer:
             return

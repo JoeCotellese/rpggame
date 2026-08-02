@@ -3857,13 +3857,17 @@ class CLI:
         nowhere left to go (combat ended, or the party was wiped), and the run
         loop already says so. An internal failure is a defect and must not pass
         silently.
-        """
-        if not result.ok:
-            if result.error_kind is ErrorKind.INTERNAL:
-                print_error(f"The engine failed to advance the turn: {result.error}")
-            return
 
-        self.session_render.render(result)
+        Outstanding decisions are drained either way. A refusal is most often
+        *caused* by one — the session rejects every intent while a question is
+        open — so returning early would leave the player answering commands
+        that can never be accepted.
+        """
+        if result.ok:
+            self.session_render.render(result)
+        elif result.error_kind is ErrorKind.INTERNAL:
+            print_error(f"The engine failed to advance the turn: {result.error}")
+
         self._resolve_pending_decisions()
 
     def _resolve_pending_decisions(self) -> None:
@@ -5899,7 +5903,7 @@ class CLI:
         stalled_advances = 0
 
         while self.running and not self.session.is_over:
-            if self.game_state.in_combat:
+            if self.session.in_combat:
                 # Only show full combat status at start of combat or when explicitly requested
                 if not self.combat_status_shown:
                     self.display_combat_status()

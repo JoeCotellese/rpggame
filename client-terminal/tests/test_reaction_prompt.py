@@ -110,6 +110,26 @@ class TestPromptingForAReaction:
 
         assert cli.session.resolve.call_count == 1
 
+    def test_a_refused_action_still_drains_the_question(self, cli):
+        """The refusal is usually *because* a decision is outstanding.
+
+        Leaving it unanswered would soft-lock the fight: the session refuses
+        every further intent while a decision is pending, so the player would
+        be asked for commands that could never be accepted.
+        """
+        cli.session.pending_decision = _decision()
+
+        def stop_after_one(*args, **kwargs):
+            cli.session.pending_decision = None
+            return Mock(ask=Mock(return_value=DECLINE_OPTION_ID))
+
+        with patch("terminal_client.ui.cli.questionary.select", side_effect=stop_after_one):
+            cli._render_session_result(
+                ActionResult(ok=False, error="a decision is outstanding (oa-1)")
+            )
+
+        cli.session.resolve.assert_called_once_with("oa-1", DECLINE_OPTION_ID)
+
     def test_nothing_is_asked_when_no_decision_is_pending(self, cli):
         cli.session.pending_decision = None
 
