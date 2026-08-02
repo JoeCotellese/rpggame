@@ -418,3 +418,33 @@ fine — the script was testing something the product no longer does. Verified
 through the real `resolve()` instead. Worth remembering that a probe written
 against the old shape keeps reporting the old answer.
 Next: P1-03 SHIP.
+
+## 2026-08-02 06:2x UTC — P1-03 — SHIP ✅ ISSUE COMPLETE
+Did: Verified the Definition of Done fresh, marked P1-03 done, queued P1-04.
+Gate: PASS — every item confirmed:
+  - session suite 105 passed (22 reaction tests)
+  - engine 3760 passed, 0 failed; **35 existing OA tests unmodified**
+  - client-2d at pre-existing baseline; client-terminal 506 passed
+  - 2D client boots and renders; terminal client boots at v0.2.0
+  - zero unresolved critical findings; non-critical in FOLLOWUPS.md
+  - working tree clean, all commits pushed
+The finished capability, both ways:
+```
+"Skeleton is leaving Thorin's reach. Take an opportunity attack?"  (asked of pc_thorin)
+
+DECLINE → "Thorin lets Skeleton go."          mover HP 13 → 13, reaction kept
+ATTACK  → "Thorin takes an opportunity attack on Skeleton — miss."
+```
+Honest reading of that output: the reaction flag shows True→True in both runs
+because turn advancement refreshes it after the decision resolves. Consumption was
+verified during PLAYTEST by reading the flag *immediately* after the attack
+(True → False). The demo is not evidence of consumption; the playtest measurement is.
+**P1-03 delivered:** opportunity attacks are a player decision. `Session.resolve()`,
+`Session.pending_decision`, a deferring handler that reuses the engine's real
+geometry, party-only deferral, stale-decision guards, and ordering that survives a
+bad answer.
+Correction to my last summary: I said P2-05 was next. It is not — **P1-04 (the
+conformance suite) is next** in roadmap order. P1-04 was redesigned during P1-01
+PLAYTEST from "run the scenario twice and compare" to a same-run comparison,
+because the engine has no determinism seam (QUESTIONS.md Q-002).
+Next: P1-04 SPEC.
