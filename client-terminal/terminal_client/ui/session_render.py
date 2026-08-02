@@ -73,7 +73,7 @@ class SessionEventRenderer:
                 and are reused rather than reimplemented.
         """
         self._cli = cli
-        self._swallow_attack_echo = False
+        self._echo_events_to_swallow = 0
 
     def render_event(self, event: GameEvent) -> None:
         """Print one event as the engine produces it.
@@ -84,13 +84,14 @@ class SessionEventRenderer:
         CLI also subscribes to the bus directly, and those handlers print
         mid-resolution.
         """
-        if self._swallow_attack_echo and event.type in _ATTACK_ECHO:
+        if self._echo_events_to_swallow and event.type in _ATTACK_ECHO:
+            self._echo_events_to_swallow -= 1
             return
-        self._swallow_attack_echo = False
+        self._echo_events_to_swallow = 0
 
         if event.type is EventType.ENEMY_TURN:
             self.render_enemy_turn(event.data)
-            self._swallow_attack_echo = event.data.get("attack_result") is not None
+            self._echo_events_to_swallow = _echo_event_count(event.data)
             return
 
         self._render_event(event)
@@ -102,13 +103,21 @@ class SessionEventRenderer:
         are the CLI's to display: whether a refused turn is worth a line depends
         on why it was asked for, which this class cannot see.
         """
-        self._swallow_attack_echo = False
+        self._echo_events_to_swallow = 0
         for event in result.events:
             self.render_event(event)
 
     def _render_event(self, event: GameEvent) -> None:
-        """Dispatch a single event to its display."""
-        if event.type in self.BUS_OWNED:
+        """Dispatch a single event to its display.
+
+        A bus-owned type is suppressed only when it actually came from the bus.
+        The session records bus events without a message and always gives its
+        own synthesized events one, so that is the discriminator — and it
+        matters, because the two overlap: freeform adjudication synthesizes a
+        `SKILL_CHECK` carrying the roll, while the CLI also subscribes to
+        `SKILL_CHECK` on the bus.
+        """
+        if event.type in self.BUS_OWNED and event.message is None:
             return
 
         handler = {
@@ -414,6 +423,27 @@ class SessionEventRenderer:
             if condition == "surprised":
                 continue
             print_status_message(f"⏱ {condition.upper()} on {enemy_name} has expired!", "info")
+
+
+def _echo_event_count(enemy_turn: dict[str, Any]) -> int:
+    """How many synthesized events restate the attack an `ENEMY_TURN` described.
+
+    The facade emits `ATTACK_ROLL` for every attack, `DAMAGE_DEALT` only for a
+    hit that dealt damage, and `CHARACTER_DEATH` only when the target dropped.
+    Counting them exactly is what keeps the suppression scoped to this turn: an
+    open-ended "swallow until something else arrives" would still be armed when
+    the next attack from another source came through, and would eat it.
+    """
+    attack = enemy_turn.get("attack_result")
+    if not attack:
+        return 0
+
+    count = 1
+    if attack.get("hit") and attack.get("damage"):
+        count += 1
+    if enemy_turn.get("target_killed"):
+        count += 1
+    return count
 
 
 def _rebuild_attack_result(payload: dict[str, Any] | None) -> AttackResult | None:

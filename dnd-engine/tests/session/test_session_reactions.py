@@ -31,7 +31,7 @@ from dnd_engine.systems.action_economy import ActionType
 from dnd_engine.systems.initiative import InitiativeTracker
 from dnd_engine.systems.opportunity_attacks import publish_movement_provoke
 from dnd_engine.systems.reactions import ReactionDispatcher
-from dnd_engine.utils.events import EventBus
+from dnd_engine.utils.events import EventBus, EventType
 
 
 class _ScriptedRandom:
@@ -129,9 +129,46 @@ class _OutOfCombatGameState:
         return None
 
 
-def _session_over(combat: dict) -> Session:
-    """A session already holding the queue the fixture filled."""
-    session = Session(_OutOfCombatGameState(combat["tracker"], [combat["guard"]]))
+class _AlwaysHits:
+    """A combat engine stand-in whose attacks always land for 1 damage.
+
+    Resolution is the engine's to verify; these tests only care about *whether*
+    an opportunity attack was taken.
+    """
+
+    def resolve_attack(self, attacker, defender, apply_damage=True, **kwargs):
+        if apply_damage:
+            defender.current_hp -= 1
+        return type(
+            "_Hit",
+            (),
+            {"hit": True, "damage": 1, "attack_roll": 15, "target_ac": 12,
+             "total_attack": 15, "critical_hit": False},
+        )()
+
+
+class _InCombatGameState(_OutOfCombatGameState):
+    """Same slice, but in combat, so answering a decision advances turns."""
+
+    def __init__(self, tracker: InitiativeTracker, characters: list[Creature]) -> None:
+        super().__init__(tracker, characters)
+        self.in_combat = True
+        self.combat_engine = _AlwaysHits()
+
+
+def _session_over(combat: dict, *, in_combat: bool = False) -> Session:
+    """A session already holding the queue the fixture filled.
+
+    In combat the party is left empty: the fixture's combatants are plain
+    ``Creature`` objects, and the advance loop reads ``Character``-only state
+    (``is_unconscious``, ``can_take_actions``) off party members. What these
+    tests measure — whether initiative moved and whether a reaction was spent —
+    is unaffected by which branch the loop takes.
+    """
+    if in_combat:
+        session = Session(_InCombatGameState(combat["tracker"], []))
+    else:
+        session = Session(_OutOfCombatGameState(combat["tracker"], [combat["guard"]]))
     session._opportunities = combat["queue"]
     return session
 
@@ -216,6 +253,69 @@ class TestAC3DecliningCostsNothing:
         assert len(combat["queue"].pending) == 2, (
             "the reactor was locked out of a later trigger despite not reacting"
         )
+
+
+class TestAnsweringDoesNotStealSomeoneElsesTurn:
+    """A reaction interrupts a turn; answering it must not consume another one.
+
+    An opportunity is nearly always provoked by an enemy withdrawing on its own
+    turn — and `GameState.process_enemy_turn` advances initiative itself before
+    returning. Advancing again on the way out of `resolve()` therefore skips
+    whoever was next in the order.
+    """
+
+    def test_resolving_an_enemy_provoked_decision_advances_nobody(self, combat):
+        publish_movement_provoke(
+            combat["dispatcher"], combat["mover"], Position(6, 5), Position(8, 5)
+        )
+        session = _session_over(combat, in_combat=True)
+        tracker = combat["tracker"]
+        before = tracker.get_current_combatant().creature.name
+
+        pending = session.pending_decision
+        assert pending is not None
+        session.resolve(pending.decision_id, DECLINE_OPTION_ID)
+
+        assert tracker.get_current_combatant().creature.name == before, (
+            "answering a reaction advanced initiative a second time - the "
+            "enemy's turn had already advanced it, so a combatant lost their turn"
+        )
+
+
+class TestOneReactionPerRound:
+    """SRD: a creature gets one reaction per round.
+
+    Deferring the question deliberately leaves the slot intact, and two
+    creatures can withdraw from the same reactor in one round — so nothing
+    stops a player answering "attack" twice unless resolution checks.
+    """
+
+    def test_a_second_opportunity_cannot_be_taken_in_the_same_round(self, combat):
+        publish_movement_provoke(
+            combat["dispatcher"], combat["mover"], Position(6, 5), Position(8, 5)
+        )
+        publish_movement_provoke(
+            combat["dispatcher"], combat["mover"], Position(6, 5), Position(9, 5)
+        )
+        session = _session_over(combat, in_combat=True)
+
+        first = session.pending_decision
+        assert first is not None
+        first_result = session.resolve(first.decision_id, ATTACK_OPTION_ID)
+        assert any(
+            e.type is EventType.OPPORTUNITY_ATTACK for e in first_result.events
+        ), "the first opportunity attack did not resolve"
+
+        second = session.pending_decision
+        assert second is not None
+        second_result = session.resolve(second.decision_id, ATTACK_OPTION_ID)
+
+        assert not any(
+            e.type is EventType.OPPORTUNITY_ATTACK for e in second_result.events
+        ), "the reactor took two opportunity attacks in one round"
+        assert any(
+            e.type is EventType.REACTION_DECLINED for e in second_result.events
+        ), "a spent reaction was not reported to the player"
 
 
 class TestAC4DefaultPreservesTodaysBehaviour:
@@ -410,7 +510,12 @@ class TestOnlyPlayersAreAsked:
         game.set_position("skeleton_0", 11, 10)
 
         session = Session(game)
-        session._ensure_deferred_reactions()
+        # advance() is the documented entry point when an enemy holds the first
+        # initiative slot, which is exactly when the opening round's reactions
+        # are provoked. If it does not arm the deferring handlers, that round's
+        # opportunity attacks resolve automatically and the player is never
+        # asked — the behaviour this module exists to replace.
+        session.advance()
 
         deferred_for = {
             sub.creature.name

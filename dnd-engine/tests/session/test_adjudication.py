@@ -498,6 +498,28 @@ class TestLLMRulingSourceBridge:
         provider = self._provider(None, raises=TimeoutError("model timed out"))
         assert LLMRulingSource(provider).propose("I shove the door", {}) is None
 
+    async def test_it_works_from_inside_a_running_event_loop(self, recwarn):
+        """A client driving the session from async code must still get a ruling.
+
+        `asyncio.run` refuses to start when a loop is already running in the
+        thread, and a second loop cannot be driven there either — so the work
+        has to go somewhere else. Getting this wrong also leaves the coroutine
+        un-awaited, which prints a RuntimeWarning the project's pristine-output
+        rule treats as a failure.
+        """
+        from dnd_engine.session import LLMRulingSource
+
+        provider = self._provider('{"ability":"strength","dc":15,'
+                                  '"success_text":"a","failure_text":"b"}')
+
+        proposal = LLMRulingSource(provider).propose("I shove the door", {})
+
+        assert proposal is not None, "no ruling came back from inside a running loop"
+        assert proposal["dc"] == 15
+        assert not [w for w in recwarn if "never awaited" in str(w.message)], (
+            "the un-awaited coroutine left a RuntimeWarning behind"
+        )
+
     def test_player_text_is_delimited_in_the_prompt(self):
         """Defence in depth — the real guarantee is validation, not the prompt."""
         from dnd_engine.session import LLMRulingSource

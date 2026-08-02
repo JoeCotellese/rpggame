@@ -419,21 +419,40 @@ class LLMRulingSource:
 
     def propose(self, text: str, context: dict[str, Any]) -> dict[str, Any] | None:
         """Ask the provider for a ruling, returning ``None`` if it cannot give one."""
-        import asyncio
-
         prompt = self.build_prompt(text, context)
         try:
-            reply = asyncio.run(self._provider.generate(prompt, self._temperature))
-        except RuntimeError:
-            # Already inside a running loop — run the coroutine on its own.
-            loop = asyncio.new_event_loop()
-            try:
-                reply = loop.run_until_complete(
-                    self._provider.generate(prompt, self._temperature)
-                )
-            finally:
-                loop.close()
+            reply = self._generate(prompt)
         except Exception:  # noqa: BLE001 - a failing DM must not break the session
             return None
 
         return extract_ruling_json(reply)
+
+    def _generate(self, prompt: str) -> str:
+        """Await the provider from synchronous code, running loop or not.
+
+        `propose` is called from `Session.perform`, which is synchronous, but the
+        client calling it may itself be running inside an event loop. In that
+        case `asyncio.run` refuses to start, and a second loop cannot be driven
+        on the same thread either — so the work goes to a worker thread with a
+        loop of its own.
+
+        The running-loop check happens *before* the coroutine is created. Build
+        it first and the failed `asyncio.run` leaves it un-awaited, which prints
+        a `RuntimeWarning` the project's pristine-output rule treats as a
+        failure.
+        """
+        import asyncio
+
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(self._provider.generate(prompt, self._temperature))
+
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(
+                lambda: asyncio.run(
+                    self._provider.generate(prompt, self._temperature)
+                )
+            ).result()

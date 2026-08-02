@@ -108,6 +108,19 @@ def demo_combat() -> None:
             elif event.type is EventType.COMBAT_END:
                 print(f"   [COMBAT END] {event.data}")
 
+        # A withdrawing enemy can leave a reaction unanswered, and the session
+        # refuses to advance until it is. A demo has nobody to ask, so it takes
+        # the decision's own default — which is the automatic attack the engine
+        # always used to make. Without this the loop spins: `advance()` keeps
+        # returning nothing and `turns` never grows past the bound.
+        while session.pending_decision is not None:
+            decision = session.pending_decision
+            answer = decision.default_option_id or decision.options[0].option_id
+            print(f"   [DECISION] {decision.prompt} -> {answer}")
+            for event in session.resolve(decision.decision_id, answer).events:
+                if event.message:
+                    print(f"   {event.message}")
+
     print(f"\n   Resolved in {turns} player turns.")
     print("   Note the enemies are 'Skeleton 1' and 'Skeleton 2' — every client")
     print("   now gets that disambiguation, not just the terminal one.\n")
@@ -134,7 +147,9 @@ def demo_reaction() -> None:
         game.set_position("skeleton_0", 11, 10)
 
         session = Session(game)
-        session._ensure_deferred_reactions()
+        # Arms the deferring handlers, which is also what a client does at
+        # combat start when an enemy holds the first initiative slot.
+        session.advance()
 
         mover = game._find_creature_by_id("skeleton_0")
         publish_movement_provoke(

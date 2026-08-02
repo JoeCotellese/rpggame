@@ -165,12 +165,25 @@ class Session:
         self._numbered_combat = False
         self._opportunities = OpportunityQueue()
         self._deferred_reactions = False
+        # Whether the actor whose turn was interrupted still owes an
+        # advancement once the reaction is answered. A player's own move
+        # provokes before `perform()` has advanced anything, so answering must
+        # then end that turn. An enemy's move provokes from inside
+        # `process_enemy_turn`, which advances initiative itself — advancing
+        # again there would skip whoever is next in the order.
+        self._interrupted_turn_needs_advancing = False
         # Display names are only derivable while the initiative tracker exists —
         # the engine drops it when combat ends, at which point two skeletons
         # collapse back to one indistinguishable "Skeleton". Remembering the
         # names once assigned keeps them stable for the whole session, so a
         # client can still correlate enemies across the combat-end boundary.
-        self._enemy_names: dict[int, str] = {}
+        #
+        # Keyed by the creature itself rather than by `id()`: the engine drops
+        # its combatants when a fight ends, and CPython reuses addresses, so an
+        # id-keyed entry could be handed to an unrelated monster allocated for
+        # the next encounter. Holding the object also keeps it alive, which is
+        # what makes the key stable.
+        self._enemy_names: dict[Creature, str] = {}
 
     # ------------------------------------------------------------------
     # Read-only state a client needs to render, in JSON-native form
@@ -244,7 +257,7 @@ class Session:
             creature = entry.creature
             if self._as_party_character(creature) is not None:
                 continue
-            self._enemy_names[id(creature)] = entry.display_name or creature.name
+            self._enemy_names[creature] = entry.display_name or creature.name
 
     def _ensure_deferred_reactions(self) -> None:
         """Take over opportunity-attack decisions from the engine's auto-handler.
@@ -299,7 +312,7 @@ class Session:
         indistinguishable "Skeleton"s exactly when a client is summarising the
         fight.
         """
-        remembered = self._enemy_names.get(id(enemy))
+        remembered = self._enemy_names.get(enemy)
         if remembered is not None:
             return remembered
 
@@ -308,7 +321,7 @@ class Session:
             for entry in tracker.get_all_combatants():
                 if entry.creature is enemy:
                     name = entry.display_name or enemy.name
-                    self._enemy_names[id(enemy)] = name
+                    self._enemy_names[enemy] = name
                     return name
         return enemy.name
 
@@ -399,7 +412,11 @@ class Session:
                 # A step may have provoked. Hold the turn open until every
                 # reaction has been answered — advancing now would resolve
                 # turns out of order.
-                if not self._opportunities.pending:
+                if self._opportunities.pending:
+                    # This actor's turn has not been advanced yet, so whoever
+                    # answers the reaction owes that advancement.
+                    self._interrupted_turn_needs_advancing = True
+                else:
                     self._advance_to_next_actionable_turn()
         except Exception as exc:  # noqa: BLE001 - boundary: never leak engine faults
             self._recorder.drain()
@@ -498,7 +515,9 @@ class Session:
                         ),
                     )
                 if not self._opportunities.pending:
-                    self._advance_to_next_actionable_turn()
+                    needs_advancing = self._interrupted_turn_needs_advancing
+                    self._interrupted_turn_needs_advancing = False
+                    self._advance_to_next_actionable_turn(skip_current=needs_advancing)
         except Exception as exc:  # noqa: BLE001 - boundary: never leak engine faults
             self._recorder.drain()
             return ActionResult(
@@ -557,7 +576,25 @@ class Session:
         if turn_state is not None:
             from dnd_engine.systems.action_economy import ActionType
 
-            turn_state.consume_action(ActionType.REACTION)
+            # One reaction per round. Deferring deliberately leaves the slot
+            # intact so the question costs nothing, and two creatures can
+            # withdraw from the same reactor in a round — so this is the only
+            # place the limit gets enforced. `consume_action` reports whether
+            # the slot was actually there.
+            if not turn_state.consume_action(ActionType.REACTION):
+                self._recorder.record(
+                    EventType.REACTION_DECLINED,
+                    {
+                        "reactor": opportunity.reactor.name,
+                        "mover": opportunity.mover.name,
+                        "reason": "reaction_already_spent",
+                    },
+                    message=(
+                        f"{opportunity.reactor.name} has already used their "
+                        f"reaction this round."
+                    ),
+                )
+                return
 
         result = self._game.combat_engine.resolve_attack(
             attacker=opportunity.reactor,
@@ -613,6 +650,12 @@ class Session:
             return ActionResult(ok=True)
 
         self._ensure_combat_numbers()
+        # Armed here as well as in `perform()`: this is the documented entry
+        # point for combat start, which is exactly when an enemy holding the
+        # first initiative slot can withdraw and provoke. Without it the
+        # opening round's opportunity attacks resolve automatically and the
+        # player is never asked.
+        self._ensure_deferred_reactions()
 
         try:
             with self._recording():
@@ -777,6 +820,9 @@ class Session:
             # while a player's reaction is unanswered resolves combat out of
             # order. `resolve()` re-enters this loop once the queue is empty.
             if self._opportunities.pending:
+                # Whatever provoked did so from a turn this loop has already
+                # advanced past, so the answer must not advance again.
+                self._interrupted_turn_needs_advancing = False
                 return
 
             current = tracker.get_current_combatant()

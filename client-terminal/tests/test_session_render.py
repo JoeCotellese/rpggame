@@ -262,6 +262,44 @@ class TestEnemyTurns:
         assert "hits Thorin with scimitar" not in out
         assert out.count("has fallen") == 1
 
+    def test_the_swallow_does_not_outlast_the_turn_it_belongs_to(self, renderer, capsys):
+        """A later attack from another source must still be shown.
+
+        The echo suppression is scoped to the enemy attack that preceded it. If
+        it stayed armed, the next attack events to arrive — a player's, once
+        their attacks route through the session — would vanish.
+        """
+        renderer.render(
+            _result(
+                _enemy_turn(
+                    attack_result=_attack_result(),
+                    attack_text="Skeleton attacks Thorin: HIT for 5 damage",
+                    target_name="Thorin",
+                ),
+                # The pair the facade emits for a damaging hit.
+                _event(
+                    EventType.ATTACK_ROLL,
+                    {"attacker": "Skeleton 2", "target": "Thorin", "hit": True},
+                    message="Skeleton 2 hits Thorin with scimitar.",
+                ),
+                _event(
+                    EventType.DAMAGE_DEALT,
+                    {"attacker": "Skeleton 2", "target": "Thorin", "amount": 5},
+                    message="Thorin takes 5 damage.",
+                ),
+                # A different attack entirely — this one must be shown.
+                _event(
+                    EventType.ATTACK_ROLL,
+                    {"attacker": "Thorin", "target": "Skeleton 2", "hit": True},
+                    message="Thorin hits Skeleton 2 with longsword.",
+                ),
+            )
+        )
+
+        assert "Thorin hits Skeleton 2 with longsword" in capsys.readouterr().out, (
+            "echo suppression leaked past the enemy turn it belonged to"
+        )
+
 
 class TestDeathSaves:
     """Death saves used to print from `process_death_save_turn`."""
@@ -503,11 +541,36 @@ class TestEventsTheBusAlreadyOwns:
         ],
     )
     def test_bus_owned_events_render_nothing(self, renderer, capsys, event_type):
-        renderer.render(
-            _result(_event(event_type, {"anything": True}, message="should not print"))
-        )
+        # No message: that is how the session records an event it captured from
+        # the bus, and it is what marks the event as one the CLI's own
+        # subscriber has already printed.
+        renderer.render(_result(_event(event_type, {"anything": True})))
 
         assert capsys.readouterr().out.strip() == ""
+
+    def test_a_synthesized_event_of_a_bus_owned_type_still_renders(self, renderer, capsys):
+        """The overlap is real: the facade synthesizes `SKILL_CHECK` too.
+
+        Freeform adjudication records a `SKILL_CHECK` carrying the roll the
+        player needs to see, and the CLI separately subscribes to `SKILL_CHECK`
+        on the bus. Suppressing the type outright would swallow the facade's
+        line. Bus-sourced events never carry a message, so that is what tells
+        the two apart.
+        """
+        renderer.render(
+            _result(
+                _event(
+                    EventType.SKILL_CHECK,
+                    {"actor": "Thorin", "skill": "athletics", "total": 17, "dc": 15},
+                    message="Thorin rolls Strength (Athletics): 14 + 3 = 17 vs DC 15",
+                )
+            )
+        )
+
+        assert "vs DC 15" in capsys.readouterr().out, (
+            "the facade's own skill-check line was suppressed as if it came "
+            "from the bus"
+        )
 
     def test_every_bus_subscription_in_the_cli_is_covered(self):
         """Guard: a new CLI bus subscription must be added to the ignore set.
