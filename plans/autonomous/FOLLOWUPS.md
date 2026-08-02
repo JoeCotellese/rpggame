@@ -111,3 +111,17 @@ Format: `- [<issue id>] <finding> — <file:line>`
   nothing. The pytest test asserts `actions > 0`, but the matrix script only
   checks in aggregate. Assert non-vacuity per run.
   — `plans/autonomous` playtest tooling
+
+## P2-05
+
+- [P2-05] A ruling can make a check trivially easy by choosing the character's
+  best ability plus a proficient skill at the floor DC of 5 — measured 50/50
+  successes. Not a bug (DC 5 with +7 *is* an auto-success in D&D, and the SRD
+  tells DMs not to roll when the outcome is not in doubt), but it is the one
+  route to an effectively free success that does not go through the DC clamp.
+  Mitigation belongs in DM-prompt guidance, not an artificial mechanical floor.
+  — `dnd-engine/dnd_engine/session/adjudication.py`
+- [P2-05] `extract_ruling_json` scans for balanced braces and is O(n²) on a reply
+  full of unmatched `{`. Bounded in practice by provider `max_tokens`, but a
+  single-pass parse would be tidier.
+  — `dnd-engine/dnd_engine/session/adjudication.py`

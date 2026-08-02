@@ -676,3 +676,30 @@ Two corrections I made to my own work rather than to the product:
      answered. Corrected the expectation rather than degrading the code to match a
      carelessly written test.
 Next: P2-05 REVIEW.
+
+## 2026-08-02 08:4x UTC — P2-05 — REVIEW
+Did: Adversarial pass on the validation boundary.
+**C-1 (critical, fixed): control characters reached the player's terminal.** ANSI
+escapes survived validation — `\x1b[31m`, `\x07`, `\x08` stored intact. A terminal
+client executes those, and cursor movement can overwrite lines already printed, so
+a proposal could **misrepresent what the engine actually did** in the combat log.
+In a module whose whole premise is that the proposal is untrusted, that was the
+stance not being carried through. C0/C1 control characters are now stripped,
+keeping newlines and tabs.
+Attacked and found sound: DC typing rejects floats, numeric strings, `None`, lists
+and dicts (with `True` already covered); the ability whitelist refuses a Cyrillic
+lookalike, abbreviations, and injection-shaped strings while normalising case and
+whitespace; a proposal still has no field in which to express an outcome; a hostile
+or failing provider cannot break the session.
+**One known limitation documented rather than patched.** A ruling can make a check
+trivially easy — best ability + proficient skill at the floor DC of 5 succeeded
+50/50 in measurement. The model cannot decide the outcome, but it can choose levers
+that make failure unreachable. That is not a defect: DC 5 with a +7 modifier *is*
+an auto-success in D&D, and the SRD tells DMs not to call for a roll when the
+result is not in doubt. An artificial floor would break legitimate easy checks and
+make the engine less faithful. Logged with the reasoning so it reads as a decision
+rather than an oversight.
+Gate: PASS — zero unresolved critical findings.
+  - session 158 passed; engine 3813 passed / 0 failed; clients at baseline
+  - ruff + mypy clean; strangler regression playtest PASS
+Next: P2-05 SHIP — the final stage of the final issue in scope.

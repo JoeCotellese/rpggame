@@ -585,3 +585,38 @@ class TestPlayerInjectionIsContained:
         after = [(e.name, e.current_hp) for e in game.active_enemies]
 
         assert before == after, "a ruling's text changed enemy hit points"
+
+
+class TestConsequenceTextIsSanitised:
+    """Regression: control characters must not reach a player's terminal.
+
+    Found in P2-05 REVIEW. Consequence text is rendered verbatim, and ANSI
+    escapes can recolour, ring the bell, or move the cursor to overwrite lines
+    already printed — so a proposal could misrepresent what the engine actually
+    did in the combat log.
+    """
+
+    def test_ansi_escapes_are_stripped(self):
+        ruling, _ = validate_ruling(
+            {**VALID_RULING, "success_text": "ok\x1b[31mRED\x1b[0m done"}
+        )
+        assert "\x1b" not in ruling.success_text
+        assert "ok" in ruling.success_text and "done" in ruling.success_text
+
+    def test_bell_and_backspace_are_stripped(self):
+        ruling, _ = validate_ruling(
+            {**VALID_RULING, "failure_text": "no\x07thing\x08here"}
+        )
+        assert "\x07" not in ruling.failure_text
+        assert "\x08" not in ruling.failure_text
+
+    def test_newlines_and_tabs_survive(self):
+        ruling, _ = validate_ruling(
+            {**VALID_RULING, "success_text": "line one\nline\ttwo"}
+        )
+        assert "\n" in ruling.success_text
+        assert "\t" in ruling.success_text
+
+    def test_rationale_is_sanitised_too(self):
+        ruling, _ = validate_ruling({**VALID_RULING, "rationale": "why\x1b[2Jcleared"})
+        assert "\x1b" not in ruling.rationale

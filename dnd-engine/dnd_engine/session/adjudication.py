@@ -49,6 +49,25 @@ ABILITIES: tuple[str, ...] = (
 # obvious place to smuggle instructions at whatever reads the log next.
 MAX_CONSEQUENCE_CHARS = 400
 
+
+def _sanitise_text(value: str) -> str:
+    """Strip control characters from text destined for a player's screen.
+
+    Consequence text is rendered verbatim by a terminal client, and ANSI escape
+    sequences can recolour, ring the bell, or move the cursor to overwrite lines
+    already printed — which in a combat log means a proposal could misrepresent
+    what the engine actually did. Newlines and tabs are kept; everything else in
+    the C0/C1 ranges goes.
+
+    Cheap, and consistent with the rest of this module treating the proposal as
+    untrusted rather than merely unreliable.
+    """
+    return "".join(
+        ch
+        for ch in value
+        if ch in "\n\t" or (ord(ch) >= 0x20 and not 0x7F <= ord(ch) <= 0x9F)
+    )
+
 _ABILITY_MOD_ATTR = {
     "strength": "str_mod",
     "dexterity": "dex_mod",
@@ -216,10 +235,10 @@ def validate_ruling(raw: dict[str, Any] | None) -> tuple[ProposedRuling, int | N
         ProposedRuling(
             ability=ability,
             dc=dc,
-            success_text=success_text[:MAX_CONSEQUENCE_CHARS],
-            failure_text=failure_text[:MAX_CONSEQUENCE_CHARS],
+            success_text=_sanitise_text(success_text)[:MAX_CONSEQUENCE_CHARS],
+            failure_text=_sanitise_text(failure_text)[:MAX_CONSEQUENCE_CHARS],
             skill=skill,
-            rationale=rationale[:MAX_CONSEQUENCE_CHARS],
+            rationale=_sanitise_text(rationale)[:MAX_CONSEQUENCE_CHARS],
         ),
         clamped_from,
     )
