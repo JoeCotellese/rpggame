@@ -48,3 +48,20 @@ Format: `- [<issue id>] <finding> — <file:line>`
   `DiceRoller`, so playthroughs cannot be made reproducible. See QUESTIONS.md
   Q-002.
   — `dnd-engine/dnd_engine/systems/ai/targeting.py:80`
+- [P1-01] `ActionResult` cannot distinguish "the rules said no" (occupied tile,
+  not your turn) from "something broke internally" — both are `ok=False` +
+  `error`. A UI wants to treat those differently, and it matters more once
+  freeform DM adjudication lands. Worth a `rejected` vs `failed` split in P1-02.
+  — `dnd-engine/dnd_engine/session/protocol.py`
+- [P1-01] `Intent.from_dict` raises a raw `TypeError` on unknown keys rather than
+  a protocol-level error naming the offending field. Unknown/missing `kind`
+  already give good `ValueError`s; extra keys should match.
+  — `dnd-engine/dnd_engine/session/protocol.py`
+- [P1-01] `GameEvent` is unhashable because `data` is a dict, despite
+  `frozen=True` generating `__hash__`. Fine today (nothing sets-of-events), but
+  it will surprise someone eventually.
+  — `dnd-engine/dnd_engine/session/protocol.py`
+- [P1-01] The engine suite is flaky in at least two independent places
+  (`test_party_defeats_enemy`, `test_attack_on_unconscious_character`), both
+  RNG-dependent. Same root cause as Q-002: no determinism seam.
+  — `dnd-engine/tests/`

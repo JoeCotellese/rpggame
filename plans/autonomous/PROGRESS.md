@@ -86,3 +86,30 @@ roadmap sketches of the issues they affect:
      redesigned in `ROADMAP.md` to a same-run comparison that has no RNG
      dependence. Logged as Q-002 for Joe.
 Next: P1-01 REVIEW.
+
+## 2026-08-02 04:0x UTC — P1-01 — REVIEW
+Did: Adversarial pass framed as "which AC can I prove is NOT met" rather than a
+diff read. Found one critical defect and one spec/implementation mismatch.
+**CRITICAL (fixed): `GameEvent` could not carry real movement payloads.**
+`CREATURE_MOVED` carries `Position` objects, which are not JSON-serialisable, so
+`ActionResult.to_json()` raised `TypeError` on any grid movement — and P1-02's
+facade will emit exactly those. Tuples were separately lossy (returned as lists,
+compared unequal). PLAYTEST missed it because crypt navigation is room-based and
+never touches the grid path. Fixed by normalising payloads through a new
+`to_jsonable()` at construction, so in-memory form == wire form; `Position(1,2)`
+now renders as `{"x":1,"y":2}` and unknown objects degrade to `str()` rather than
+breaking a turn. 8 regression tests added.
+**Spec corrected: AC-3 claimed four outcome states, the design has three.**
+Amended the AC rather than leaving a spec the code doesn't meet; logged the
+rejected-vs-error distinction to FOLLOWUPS for P1-02.
+Attacked and found sound: no transitive `core` import (AC-1 holds beyond its
+static check), malformed wire input rejected cleanly, no strangler violation.
+Gate: PASS — zero unresolved critical findings.
+  - session tests 44 passed; engine 3699 passed; client-2d 576 (2 pre-existing);
+    client-terminal 506; ruff + mypy clean; both clients boot and play
+Baseline correction: a new engine failure appeared that was NOT mine. Applied the
+isolation procedure — 10/10 passes isolated, and 4 of 5 full runs fully green with
+identical code. The engine suite is flaky in at least two independent places, so a
+raw failure count is not a usable gate. `BASELINE.md` now carries an explicit
+3-step procedure to follow before ever declaring a regression.
+Next: P1-01 SHIP.

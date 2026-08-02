@@ -23,6 +23,7 @@ from dnd_engine.session.protocol import (
     MoveIntent,
     PendingDecision,
     WaitIntent,
+    to_jsonable,
 )
 
 __all__ = [
@@ -37,4 +38,5 @@ __all__ = [
     "MoveIntent",
     "PendingDecision",
     "WaitIntent",
+    "to_jsonable",
 ]

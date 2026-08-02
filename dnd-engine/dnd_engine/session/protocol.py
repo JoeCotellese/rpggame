@@ -22,11 +22,61 @@ vocabulary serves an in-process client, an MCP tool response, and a save file.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field, fields
+from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from enum import Enum
 from typing import Any, ClassVar
 
 from dnd_engine.utils.events import EventType
+
+
+def to_jsonable(value: Any) -> Any:
+    """Coerce an arbitrary engine value into JSON-native form.
+
+    Engine event payloads are free-form dicts assembled by whichever system
+    emits them, and they routinely contain values JSON knows nothing about —
+    ``CREATURE_MOVED`` carries :class:`~dnd_engine.core.position.Position`
+    objects, other payloads carry enums and tuples. Passing those straight to
+    ``json.dumps`` either raises (``Position``) or silently changes type on the
+    way back (a tuple returns as a list, so the value no longer compares equal).
+
+    Normalising once, at construction, means the in-memory payload is already
+    identical to its wire form, which is what makes round-tripping lossless
+    rather than approximately lossless.
+
+    Conversions, in order:
+
+    - ``None``/``str``/``bool``/``int``/``float`` — returned unchanged
+    - :class:`Enum` — replaced by its ``value``
+    - ``list``/``tuple``/``set`` — a list of normalised members
+    - ``dict`` — keys coerced to ``str``, values normalised
+    - objects exposing ``to_dict()`` — the normalised result of that call
+    - dataclass instances — normalised ``asdict()``, so ``Position(1, 2)``
+      becomes ``{"x": 1, "y": 2}`` and stays useful to a client
+    - anything else — ``str(value)``, so an unexpected object degrades to
+      something renderable instead of breaking the turn
+
+    Args:
+        value: Any value found in an engine event payload.
+
+    Returns:
+        A structure containing only JSON-native types.
+    """
+    if value is None or isinstance(value, (str, bool, int, float)):
+        return value
+    if isinstance(value, Enum):
+        return to_jsonable(value.value)
+    if isinstance(value, dict):
+        return {str(k): to_jsonable(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [to_jsonable(v) for v in value]
+
+    to_dict = getattr(value, "to_dict", None)
+    if callable(to_dict):
+        return to_jsonable(to_dict())
+    if is_dataclass(value) and not isinstance(value, type):
+        return to_jsonable(asdict(value))
+
+    return str(value)
 
 
 class IntentKind(str, Enum):
@@ -166,10 +216,15 @@ class GameEvent:
         type: Reuses the engine's existing :class:`EventType`. Not a parallel
             enum — a second taxonomy would immediately drift from the event
             types the engine already emits.
-        data: Structured payload. Must be JSON-serialisable; the schema is owned
-            by whatever emits the event. Held as a plain dict, so ``frozen``
-            prevents rebinding but not mutation of the dict itself, and a
-            ``GameEvent`` is only hashable when its payload is.
+        data: Structured payload; the schema is owned by whatever emits the
+            event. Normalised through :func:`to_jsonable` at construction, so
+            whatever the engine hands over — ``Position`` objects, enums,
+            tuples — is stored already in JSON-native form. That normalisation
+            is what makes round-tripping lossless: without it a tuple would
+            return as a list and no longer compare equal, and a ``Position``
+            would not serialise at all. Held as a plain dict, so ``frozen``
+            prevents rebinding but not mutation, and a ``GameEvent`` is not
+            hashable.
         sequence: Position within one :class:`ActionResult`, counting from 0.
             Lets a client replay or animate events in order without relying on
             list ordering surviving serialisation.
@@ -182,6 +237,10 @@ class GameEvent:
     data: dict[str, Any]
     sequence: int
     message: str | None = None
+
+    def __post_init__(self) -> None:
+        """Normalise the payload so the in-memory form matches the wire form."""
+        object.__setattr__(self, "data", to_jsonable(self.data))
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise to a JSON-compatible dict."""
@@ -284,7 +343,9 @@ class PendingDecision:
     context: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        """Reject decisions a client could not render or auto-answer."""
+        """Normalise the context, then reject decisions a client could not use."""
+        object.__setattr__(self, "context", to_jsonable(self.context))
+
         if not self.options:
             raise ValueError(
                 f"PendingDecision {self.decision_id!r} has no options; "

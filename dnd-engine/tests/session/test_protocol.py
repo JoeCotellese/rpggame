@@ -164,7 +164,10 @@ class TestAC2JsonRoundTrip:
 
 
 class TestAC3ActionResultOutcomeStates:
-    """AC-3: ActionResult distinguishes the four outcomes a caller must handle."""
+    """AC-3: ActionResult distinguishes the outcomes a caller must handle.
+
+    Three states, not four — see the AC-3 amendment note in the issue file.
+    """
 
     def test_succeeded_and_continue(self):
         result = ActionResult(ok=True, events=(GameEvent(EventType.TURN_END, {}, 0),))
@@ -299,3 +302,92 @@ class TestAC5ReusesExistingEventTaxonomy:
         assert enum_names == {"IntentKind", "DecisionKind"}, (
             f"unexpected enums declared in protocol.py: {enum_names}"
         )
+
+
+class TestPayloadNormalisation:
+    """Regression guard for the P1-01 review finding.
+
+    `CREATURE_MOVED` — emitted on every grid movement — carries `Position`
+    objects, which are not JSON-serialisable at all. Before normalisation
+    `ActionResult.to_json()` raised `TypeError` on any movement event, and
+    tuples silently returned as lists so payloads no longer compared equal.
+    """
+
+    def test_dataclass_payload_values_become_dicts(self):
+        from dnd_engine.core.position import Position
+
+        event = GameEvent(
+            type=EventType.CREATURE_MOVED,
+            data={"entity_id": "pc_1", "origin": Position(1, 2), "to": Position(3, 4)},
+            sequence=0,
+        )
+        assert event.data["origin"] == {"x": 1, "y": 2}
+        assert event.data["to"] == {"x": 3, "y": 4}
+
+    def test_movement_event_serialises_and_round_trips(self):
+        from dnd_engine.core.position import Position
+
+        event = GameEvent(
+            type=EventType.CREATURE_MOVED,
+            data={"entity_id": "pc_1", "origin": Position(1, 2), "to": Position(3, 4)},
+            sequence=0,
+        )
+        assert GameEvent.from_dict(json.loads(json.dumps(event.to_dict()))) == event
+
+    def test_tuples_round_trip_by_normalising_to_lists(self):
+        event = GameEvent(type=EventType.CREATURE_MOVED, data={"to": (3, 4)}, sequence=0)
+        assert event.data["to"] == [3, 4]
+        assert GameEvent.from_dict(json.loads(json.dumps(event.to_dict()))) == event
+
+    def test_enum_payload_values_become_their_value(self):
+        event = GameEvent(
+            type=EventType.TURN_START, data={"phase": DecisionKind.REACTION}, sequence=0
+        )
+        assert event.data["phase"] == "reaction"
+
+    def test_nested_structures_are_normalised_recursively(self):
+        event = GameEvent(
+            type=EventType.COMBAT_START,
+            data={"sides": [{"members": ({"id": "a"}, {"id": "b"})}]},
+            sequence=0,
+        )
+        assert event.data == {"sides": [{"members": [{"id": "a"}, {"id": "b"}]}]}
+        assert GameEvent.from_dict(json.loads(json.dumps(event.to_dict()))) == event
+
+    def test_unknown_object_degrades_to_string_rather_than_breaking_the_turn(self):
+        class Opaque:
+            def __repr__(self) -> str:
+                return "<opaque>"
+
+        event = GameEvent(type=EventType.TURN_END, data={"thing": Opaque()}, sequence=0)
+        assert event.data["thing"] == "<opaque>"
+        json.dumps(event.to_dict())
+
+    def test_pending_decision_context_is_normalised_too(self):
+        from dnd_engine.core.position import Position
+
+        decision = PendingDecision(
+            decision_id="d1",
+            kind=DecisionKind.REACTION,
+            actor_id="pc_thorin",
+            prompt="React?",
+            options=(DecisionOption("yes", "Yes"),),
+            context={"provoker_at": Position(5, 6)},
+        )
+        assert decision.context["provoker_at"] == {"x": 5, "y": 6}
+        assert PendingDecision.from_dict(json.loads(json.dumps(decision.to_dict()))) == decision
+
+    def test_action_result_with_movement_events_serialises(self):
+        from dnd_engine.core.position import Position
+
+        result = ActionResult(
+            ok=True,
+            events=(
+                GameEvent(
+                    type=EventType.CREATURE_MOVED,
+                    data={"to": Position(3, 4)},
+                    sequence=0,
+                ),
+            ),
+        )
+        assert ActionResult.from_dict(json.loads(result.to_json())) == result

@@ -14,8 +14,20 @@ Run per package, from that package's directory.
 | `client-2d` | `uv run pytest -q --no-cov` | **2 failed**, 576 passed, 2 skipped |
 | `client-terminal` | `uv run pytest -q --no-cov` | 0 failed, 506 passed |
 
-**Total pre-existing failures: 3.** Any run showing more than 3 means the loop
-broke something.
+**Total pre-existing failures: 0-3, varying.** The engine suite is **flaky in
+more than one place**, so a raw failure count is not a usable gate.
+
+Measured 2026-08-02 during P1-01 REVIEW, five consecutive full engine runs with
+identical code: **4 runs fully green, 1 run with a single failure** — and the
+failing test differed from the previously-known flaky one
+(`test_death_saves_integration.py::test_attack_on_unconscious_character`, which
+then passed 10/10 in isolation).
+
+**Gate procedure — follow this before ever declaring a regression:**
+1. Re-run the failing test in isolation ~10 times.
+2. If it passes in isolation, it is flaky. Note it and move on.
+3. Only treat it as a regression if it fails consistently *and* the change
+   plausibly touches that code path.
 
 Known-failing tests:
 
