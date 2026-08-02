@@ -60,6 +60,7 @@ class StubEntry:
 
     def __init__(self, creature: Any) -> None:
         self.creature = creature
+        self.display_name = getattr(creature, "name", "")
 
 
 class StubTracker:
@@ -69,6 +70,14 @@ class StubTracker:
         self._creatures = creatures
         self.index = 0
         self.advance_count = 0
+        self.numbering_calls = 0
+
+    def assign_combat_numbers(self, player_creatures: list[Any]) -> None:
+        """Real trackers disambiguate same-named enemies; record that we asked."""
+        self.numbering_calls += 1
+
+    def get_all_combatants(self) -> list[StubEntry]:
+        return [StubEntry(c) for c in self._creatures]
 
     def get_current_combatant(self) -> StubEntry | None:
         if not self._creatures:

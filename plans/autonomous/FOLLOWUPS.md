@@ -80,3 +80,8 @@ Format: `- [<issue id>] <finding> — <file:line>`
 - [P1-02] `TURN_END` is synthesized but no engine path emits it. Harmless today;
   worth confirming the engine should not own it before more clients depend on it.
   — `dnd-engine/dnd_engine/session/session.py`
+- [P1-02] `assign_combat_numbers()` is called by `client-terminal` (`cli.py:6243`)
+  and now also by the session facade. Once the terminal client migrates to the
+  facade its own call becomes redundant. The engine arguably ought to do this at
+  combat start so no caller has to — that would be a non-additive change.
+  — `client-terminal/terminal_client/ui/cli.py:6243`

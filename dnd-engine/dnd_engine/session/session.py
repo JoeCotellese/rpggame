@@ -123,6 +123,7 @@ class Session:
         self._game = game_state
         self._recorder = _EventRecorder()
         self._subscribed = False
+        self._numbered_combat = False
 
     # ------------------------------------------------------------------
     # Read-only state a client needs to render, in JSON-native form
@@ -151,6 +152,37 @@ class Session:
         character = self._current_player_character()
         return pc_entity_id(character.name) if character is not None else None
 
+    def _ensure_combat_numbers(self) -> None:
+        """Give same-named enemies distinct display names ("Skeleton 1", "2").
+
+        `InitiativeTracker.assign_combat_numbers` exists for exactly this, but
+        nothing in the engine calls it — only `client-terminal` does
+        (`cli.py:6243`). The consequence is that terminal players can tell two
+        skeletons apart and every other client cannot, which makes precise
+        targeting impossible: a caller asking for one of them silently gets
+        whichever the engine lists first.
+
+        Doing it here means every client inherits the disambiguation, which is
+        the whole point of the facade.
+        """
+        if self._numbered_combat or not self.in_combat:
+            return
+        tracker = getattr(self._game, "initiative_tracker", None)
+        assign = getattr(tracker, "assign_combat_numbers", None)
+        if assign is None:
+            return
+        assign(list(self._game.party.characters))
+        self._numbered_combat = True
+
+    def _enemy_display_name(self, enemy: Creature) -> str:
+        """The enemy's combat-numbered display name, falling back to its name."""
+        tracker = getattr(self._game, "initiative_tracker", None)
+        if tracker is not None:
+            for entry in tracker.get_all_combatants():
+                if entry.creature is enemy:
+                    return entry.display_name or enemy.name
+        return enemy.name
+
     def snapshot(self) -> dict[str, Any]:
         """Renderable state as JSON-native data.
 
@@ -174,7 +206,12 @@ class Session:
                     for c in self._game.party.characters
                 ],
                 "enemies": [
-                    {"name": e.name, "hp": e.current_hp, "is_alive": e.is_alive}
+                    {
+                        "name": e.name,
+                        "display_name": self._enemy_display_name(e),
+                        "hp": e.current_hp,
+                        "is_alive": e.is_alive,
+                    }
                     for e in (self._game.active_enemies or [])
                 ],
             }
@@ -203,6 +240,7 @@ class Session:
         if self.is_over:
             return self._reject("the game is over")
 
+        self._ensure_combat_numbers()
         actor_error = self._validate_actor(intent)
         if actor_error is not None:
             return self._reject(actor_error)
@@ -244,6 +282,8 @@ class Session:
         if self.is_over or not self.in_combat:
             return ActionResult(ok=True)
 
+        self._ensure_combat_numbers()
+
         try:
             with self._recording():
                 self._advance_to_next_actionable_turn(skip_current=False)
@@ -255,6 +295,7 @@ class Session:
                 error_kind=ErrorKind.INTERNAL,
             )
 
+        self._reset_numbering_if_combat_ended()
         return ActionResult(ok=True, events=self._recorder.drain())
 
     # ------------------------------------------------------------------
@@ -283,13 +324,17 @@ class Session:
         if target is None:
             return f"no living target matching {intent.target_ref!r}"
 
+        target_display = self._enemy_display_name(target)
         result = self._game.execute_player_attack(attacker, target)
         if result.error:
             return result.error
 
         self._record_attack(
             attacker_name=result.attacker_name,
-            target_name=result.target_name,
+            # Display name, not `result.target_name`: the raw name is ambiguous
+            # when two creatures share it, and a combat log that reads
+            # "Skeleton takes 9 damage" cannot tell the player which one.
+            target_name=target_display,
             weapon=result.weapon_name,
             attack_result=result.attack_result,
             target_killed=result.target_killed,
@@ -381,6 +426,11 @@ class Session:
                 continue
 
             return  # A conscious player character is up: hand control back.
+
+    def _reset_numbering_if_combat_ended(self) -> None:
+        """Let the next fight assign its own combat numbers."""
+        if not self.in_combat:
+            self._numbered_combat = False
 
     def _should_skip(self, creature: Creature) -> bool:
         """Whether this combatant is skipped outright.
@@ -544,7 +594,10 @@ class Session:
             return None  # Exploration: no initiative to respect.
         awaiting = self.awaiting_actor_id
         if awaiting is None:
-            return "no player character is currently able to act"
+            return (
+                "no player character is currently able to act — an enemy holds "
+                "initiative; call Session.advance() to run the game forward"
+            )
         if intent.actor_id != awaiting:
             return f"it is not {intent.actor_id}'s turn (waiting on {awaiting})"
         return None
@@ -591,11 +644,18 @@ class Session:
         """Resolve a target by entity id or display name, living enemies only."""
         wanted = target_ref.strip().lower()
         living = [e for e in (self._game.active_enemies or []) if e.is_alive]
+
+        # Display name first: it is the only handle guaranteed unique within a
+        # fight, so "Skeleton 2" resolves to the intended creature rather than
+        # to whichever skeleton the engine happens to list first.
+        for enemy in living:
+            if self._enemy_display_name(enemy).lower() == wanted:
+                return enemy
         for enemy in living:
             if enemy.name.lower() == wanted:
                 return enemy
         for enemy in living:
-            if wanted in enemy.name.lower():
+            if wanted in self._enemy_display_name(enemy).lower():
                 return enemy
         return None
 

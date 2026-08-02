@@ -231,3 +231,31 @@ was rewritten to say what AC-3 means — a waiting player still sees enemy activ
 Gate: PASS — 80 session tests; engine 3735 passed / 0 failed; clients at baseline;
 ruff + mypy clean; strangler playtest PASS.
 Next: P1-02 REVIEW.
+
+## 2026-08-02 04:5x UTC — P1-02 — REVIEW
+Did: Adversarial pass against the ACs. Found two critical defects, both fixed.
+**C-1 (critical): a client could not target one of two identical enemies.** Both
+crypt skeletons reported as "Skeleton" with different HP; `_resolve_target`
+silently attacked whichever came first, so aiming at the wounded one hit the
+healthy one — incorrect adjudication, not cosmetics. Root cause is precisely the
+pattern this issue exists to remove: `assign_combat_numbers()` exists to produce
+"Skeleton 1"/"Skeleton 2" but **nothing in the engine calls it — only
+`client-terminal` does** (`cli.py:6243`), so terminal players could distinguish
+enemies and every other client could not. The facade now assigns numbers itself
+and resolves targets by display name. Verified: attacks on "Skeleton 2" took it
+12→0 while "Skeleton 1" stayed at 13.
+**C-2 (critical): the combat log named targets ambiguously**, using the raw name
+while the snapshot used the display name. Now consistent.
+Also completed the P1-02 PLAYTEST deadlock fix: the rejection message now names
+the remedy rather than just stating the problem.
+Re-examined the enum-gate relaxation I flagged at SPEC. Verdict: legitimate — the
+assertion is exact set equality, so any new enum still fails it, and `ErrorKind`
+classifies failures rather than events. The guard's purpose is intact.
+One honest note: adding numbering broke 11 unit tests because my stub tracker
+lacked the methods. That was the test double being incomplete, not a product
+defect — but it did reveal the call was undefended, so it now degrades via
+`getattr` instead of assuming the method exists.
+Gate: PASS — zero unresolved critical findings.
+  - session 83 passed; engine 3738 passed / 0 failed; clients at baseline
+  - ruff + mypy clean; strangler playtest PASS
+Next: P1-02 SHIP.

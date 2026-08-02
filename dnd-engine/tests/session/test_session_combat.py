@@ -375,3 +375,77 @@ class TestCombatStartWithEnemyInitiative:
             result = session.advance()
             assert result.ok
             assert result.events == ()
+
+
+class TestEnemiesAreDistinguishable:
+    """Regression: a caller must be able to target one of two identical enemies.
+
+    Found during P1-02 REVIEW. `InitiativeTracker.assign_combat_numbers` exists to
+    turn two skeletons into "Skeleton 1" and "Skeleton 2", but nothing in the
+    engine called it — only `client-terminal` did (`cli.py:6243`). Every other
+    client saw two identical names, and `_resolve_target` silently attacked
+    whichever the engine listed first. The facade now assigns the numbers itself,
+    so all clients inherit the disambiguation.
+    """
+
+    def test_same_named_enemies_get_distinct_display_names(self, session):
+        session.advance()
+        enemies = [e for e in session.snapshot()["enemies"] if e["is_alive"]]
+        if len({e["name"] for e in enemies}) == len(enemies):
+            pytest.skip("this encounter has no duplicate enemy names")
+
+        display_names = [e["display_name"] for e in enemies]
+        assert len(set(display_names)) == len(display_names), (
+            f"enemies are not distinguishable: {display_names}"
+        )
+
+    def test_attacks_land_on_the_named_target_only(self, session):
+        session.advance()
+        enemies = [e for e in session.snapshot()["enemies"] if e["is_alive"]]
+        if len(enemies) < 2:
+            pytest.skip("need at least two living enemies to test precise targeting")
+
+        target_name = enemies[1]["display_name"]
+        untouched_name = enemies[0]["display_name"]
+        untouched_hp_before = enemies[0]["hp"]
+
+        for _ in range(MAX_ROUNDS):
+            if not session.in_combat or session.is_over:
+                break
+            actor = session.awaiting_actor_id
+            if actor is None:
+                session.advance()
+                continue
+            current = {
+                e["display_name"]: e
+                for e in session.snapshot()["enemies"]
+                if e["is_alive"]
+            }
+            if target_name not in current:
+                break
+            session.perform(AttackIntent(actor_id=actor, target_ref=target_name))
+
+        after = {e["display_name"]: e for e in session.snapshot()["enemies"]}
+        if untouched_name in after:
+            assert after[untouched_name]["hp"] == untouched_hp_before, (
+                f"attacks aimed at {target_name} damaged {untouched_name}"
+            )
+
+    def test_combat_log_uses_the_disambiguated_name(self, session):
+        session.advance()
+        enemies = [e for e in session.snapshot()["enemies"] if e["is_alive"]]
+        if len(enemies) < 2 or len({e["name"] for e in enemies}) == len(enemies):
+            pytest.skip("this encounter has no duplicate enemy names")
+
+        actor = session.awaiting_actor_id
+        if actor is None:
+            pytest.skip("no player actor available")
+        target_name = enemies[1]["display_name"]
+        result = session.perform(AttackIntent(actor_id=actor, target_ref=target_name))
+
+        targets = {
+            e.data.get("target") for e in result.events if e.data.get("target")
+        }
+        assert targets == {target_name}, (
+            f"combat log names the target ambiguously: {targets} (wanted {target_name})"
+        )
