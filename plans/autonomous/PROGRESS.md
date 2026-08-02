@@ -535,3 +535,26 @@ Gate: PASS — all 7 ACs verified with evidence in `issues/P1-04.md`.
   - session 109 passed; engine 3764 passed / 0 failed; clients at baseline
   - ruff + mypy clean; strangler regression playtest PASS
 Next: P1-04 REVIEW.
+
+## 2026-08-02 07:2x UTC — P1-04 — REVIEW
+Did: Attacked the suite on the question that matters for a conformance harness —
+not "is it correct" but **"how much does it actually verify?"** A check that
+silently skips everything passes trivially and is worse than no check, because it
+advertises safety it does not provide.
+Instrumented the skip branches across 28 runs / 93 actions: **104 damage events
+seen, 104 reconciled, 0 silently skipped — 100% coverage.** The suite genuinely
+verifies; the defensive skip branches are never the reason it passes. That is the
+result I most wanted to check and it came back clean.
+**C-1 (critical, fixed): `entity_id` collided before combat numbering ran.** Two
+enemies both answered to `"skeleton"` until `_ensure_combat_numbers()` fired, so a
+client reading `snapshot()` to render the *opening* state of a fight saw two
+enemies sharing one id — the same ambiguity the PLAYTEST fix removed, one level
+deeper. Both `snapshot()` and `_enemy_entity_id()` now ensure numbering first, so
+the id is unique whenever it is observable.
+Also re-ran the mutations after the fixes: over-reported damage still fails the
+suite. Worth doing explicitly — it would have been easy to make the failures go
+away by blunting the check rather than fixing the product.
+Gate: PASS — zero unresolved critical findings.
+  - session 112 passed; engine 3767 passed / 0 failed; matrix 35 runs / 0 failures
+  - clients at baseline; ruff + mypy clean; strangler regression playtest PASS
+Next: P1-04 SHIP.

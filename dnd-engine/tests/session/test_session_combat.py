@@ -449,3 +449,40 @@ class TestEnemiesAreDistinguishable:
         assert targets == {target_name}, (
             f"combat log names the target ambiguously: {targets} (wanted {target_name})"
         )
+
+
+class TestEnemyIdentityIsStable:
+    """Regression: enemy ids must be unique and survive the whole session.
+
+    Two defects found in P1-04. Display names collapsed back to the raw name
+    once the engine dropped the initiative tracker at combat end, and
+    `entity_id` collided before combat numbering had run — so a client reading
+    the opening state of a fight saw two enemies sharing one id.
+    """
+
+    def test_entity_ids_are_unique_before_any_action(self, session):
+        enemies = session.snapshot()["enemies"]
+        ids = [e["entity_id"] for e in enemies]
+        assert len(set(ids)) == len(ids), (
+            f"enemies share an entity_id before the first action: {ids}"
+        )
+
+    def test_entity_ids_are_unique_after_the_fight(self, session):
+        session.advance()
+        _fight_to_the_end(session)
+        ids = [e["entity_id"] for e in session.snapshot()["enemies"]]
+        assert len(set(ids)) == len(ids), (
+            f"enemies share an entity_id after combat ended: {ids}"
+        )
+
+    def test_display_names_survive_combat_end(self, session):
+        session.advance()
+        before = {e["entity_id"]: e["display_name"] for e in session.snapshot()["enemies"]}
+        _fight_to_the_end(session)
+        after = {e["entity_id"]: e["display_name"] for e in session.snapshot()["enemies"]}
+        for entity_id, name in before.items():
+            if entity_id in after:
+                assert after[entity_id] == name, (
+                    f"{entity_id} was '{name}' during combat and "
+                    f"'{after[entity_id]}' afterwards"
+                )

@@ -104,3 +104,10 @@ Format: `- [<issue id>] <finding> — <file:line>`
   `unregister` before re-registering, or a per-(creature, trigger) replace,
   would bound it.
   — `dnd-engine/dnd_engine/systems/reactions.py:120`
+
+## P1-04
+
+- [P1-04] One matrix configuration yields a run with zero actions, which verifies
+  nothing. The pytest test asserts `actions > 0`, but the matrix script only
+  checks in aggregate. Assert non-vacuity per run.
+  — `plans/autonomous` playtest tooling

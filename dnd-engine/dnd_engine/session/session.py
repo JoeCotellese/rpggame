@@ -198,7 +198,12 @@ class Session:
 
         `display_name` is for humans; this is for code. Derived from the display
         name so it stays readable, and stable for the life of the session.
+
+        Ensures numbering first so the id is unique even when called before the
+        first action — otherwise two skeletons both answer to ``"skeleton"``,
+        which defeats the point of having an id at all.
         """
+        self._ensure_combat_numbers()
         return self._enemy_display_name(enemy).lower().replace(" ", "_")
 
     def _remember_enemy_names(self) -> None:
@@ -283,7 +288,14 @@ class Session:
 
         Deliberately not a `GameState` handle: a client that renders from this
         plus :class:`ActionResult` never needs engine objects.
+
+        Combat numbering is ensured first. Without it a client that reads the
+        snapshot *before* its first action — to render the opening state of a
+        fight — would get two enemies sharing the id ``"skeleton"``, which is
+        exactly the ambiguity ``entity_id`` exists to remove. This is lazy
+        initialisation of display state, not a game mutation.
         """
+        self._ensure_combat_numbers()
         snapshot: dict[str, Any] = to_jsonable(
             {
                 "in_combat": self.in_combat,
