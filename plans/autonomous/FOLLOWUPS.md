@@ -85,3 +85,7 @@ Format: `- [<issue id>] <finding> — <file:line>`
   facade its own call becomes redundant. The engine arguably ought to do this at
   combat start so no caller has to — that would be a non-additive change.
   — `client-terminal/terminal_client/ui/cli.py:6243`
+- [P1-02] `TIME_ADVANCED` accumulates float drift — `elapsed_minutes` reaches
+  `0.30000000000000004` after three combat rounds. Cosmetic, pre-existing, but a
+  client rendering elapsed time will show it. Integer seconds would avoid it.
+  — `dnd-engine/dnd_engine/systems/time_manager.py`

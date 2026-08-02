@@ -259,3 +259,40 @@ Gate: PASS — zero unresolved critical findings.
   - session 83 passed; engine 3738 passed / 0 failed; clients at baseline
   - ruff + mypy clean; strangler playtest PASS
 Next: P1-02 SHIP.
+
+## 2026-08-02 05:0x UTC — P1-02 — SHIP ✅ ISSUE COMPLETE
+Did: Verified the full Definition of Done fresh, then marked P1-02 done and queued
+P1-03.
+Gate: PASS — every item confirmed:
+  - session suite 83 passed (39 protocol + 5 protocol-integration + 17 unit + 22
+    combat-integration)
+  - engine 3738 passed, 0 failed
+  - client-2d 576 passed, 2 failed (pre-existing baseline)
+  - client-terminal 506 passed
+  - 2D client boots and renders; terminal client boots at v0.2.0
+  - zero unresolved critical findings; non-critical in FOLLOWUPS.md
+  - working tree clean, all commits pushed
+End-to-end proof — a complete crypt fight rendered from `ActionResult` alone, with
+no client-side turn logic at all:
+```
+Thorin misses Skeleton 1 with unarmed strike.
+Skeleton 1 hits Thorin with Shortsword.
+Thorin takes 4 damage.
+Skeleton 2 misses Thorin with Shortsword.
+Garrick hits Skeleton 1 with unarmed strike.
+Skeleton 1 takes 10 damage.
+Thorin hits Skeleton 1 with unarmed strike.
+Skeleton 1 falls.
+Thorin hits Skeleton 2 with unarmed strike.
+Skeleton 2 falls.
+[COMBAT_END] victory, 100 xp, 50 per character
+```
+Resolved in 7 player turns. Enemies correctly disambiguated, damage tracked,
+initiative order visible — the log reads as D&D rather than as a state dump.
+**P1-02 delivered:** `Session.perform()` / `Session.advance()` / `snapshot()`, with
+the engine owning turn advancement, death saves, enemy draining, combat-end
+detection, and enemy disambiguation. Purely additive — both clients untouched.
+Next: P1-03 SPEC — `PendingDecision` for opportunity attacks. Note from P1-01:
+`InitiativeTracker` already has `pause_for_reaction()` / `resume_paused_turn()` /
+`is_paused_for_reaction`, and `EventType` has **no** opportunity-attack or reaction
+member yet, so one will need adding (additive, safe).
