@@ -558,3 +558,25 @@ Gate: PASS — zero unresolved critical findings.
   - session 112 passed; engine 3767 passed / 0 failed; matrix 35 runs / 0 failures
   - clients at baseline; ruff + mypy clean; strangler regression playtest PASS
 Next: P1-04 SHIP.
+
+## 2026-08-02 07:3x UTC — P1-04 — SHIP ✅ ISSUE COMPLETE
+Did: Verified the Definition of Done fresh, marked P1-04 done, queued P2-05.
+Gate: PASS — every item confirmed:
+  - session suite 112 passed (4 conformance + 3 identity-stability regressions)
+  - engine 3767 passed, 0 failed
+  - matrix: 35 runs across 5 party shapes × 7 seeds, 0 failures
+  - clients at pre-existing baseline; 2D boots and renders; terminal at v0.2.0
+  - zero unresolved critical findings; non-critical in FOLLOWUPS.md
+  - working tree clean, all commits pushed
+**P1-04 delivered:** a conformance suite that is *demonstrably* able to fail —
+mutation-verified twice — and that reconciles 100% of the damage events the facade
+emits against real engine HP deltas. Plus the AC-6 guarantee that the legacy path
+can still drive a facade-touched `GameState` to a terminal state, which is what
+makes incremental client migration possible rather than merely hoped for.
+The suite paid for itself before it shipped: it found two real product defects
+(enemy identity lost at combat end; `entity_id` colliding before numbering), both
+of which would have shown a player two identical enemies.
+Next: P2-05 SPEC — the final issue in scope. Constraint already recorded in
+`BASELINE.md` and `QUESTIONS.md` Q-001: no API key in this container, so the work
+must be built against the `LLMProvider` interface and verified with
+`llm/debug_provider.py`. The real-provider path needs Joe's manual validation.
