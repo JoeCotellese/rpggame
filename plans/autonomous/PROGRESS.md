@@ -476,3 +476,31 @@ while engine creatures carry the raw name, so reconciliation must map through th
 display name or compare on identity — otherwise two skeletons get summed together.
 Gate: pass — Definition of Ready fully satisfied.
 Next: P1-04 BUILD.
+
+## 2026-08-02 06:4x UTC — P1-04 — BUILD
+Did: Implemented `tests/session/test_conformance.py` — five named invariants
+(`check_hp_matches`, `check_damage_reconciles`, `check_turn_matches`,
+`check_flags_match`, `check_deaths_are_real`) applied after **every** action of a
+real crypt fight, plus the AC-6 legacy-interop tests.
+All four tests passed on the first run — which is exactly when a conformance suite
+is least trustworthy, so I mutation-tested it rather than taking the green at face
+value. Deliberately broke the facade twice and confirmed the suite caught both:
+  1. **Over-report damage by 1** → `test_a_whole_fight_stays_conformant` FAILED.
+  2. **Announce a death on every attack** → *"a death was reported for Skeleton 1,
+     but it is still alive with 14 HP"*.
+Restored after each; suite green again. A conformance suite that has never failed
+is indistinguishable from one that cannot fail, and this one can.
+Two implementation details the spec flagged, both handled:
+  - HP is keyed by `id()` rather than name, because two skeletons share a name and
+    summing them would produce a phantom discrepancy.
+  - Damage reconciliation asserts `>=` for a creature that died (overkill is
+    legitimate on a killing blow) and `==` otherwise, and skips negative deltas
+    (healing). Getting either wrong in the *test* would produce false alarms.
+AC-6 result is the notable one: the legacy path — `initiative_tracker.next_turn()`,
+`execute_player_attack()`, `process_enemy_turn()`, `_check_combat_end()` — drives a
+facade-touched `GameState` to a terminal state without complaint. Incremental
+migration is therefore actually possible, not just assumed.
+Gate: PASS.
+  - session suite 109 passed (4 conformance); engine 3764 passed / 0 failed
+  - clients at baseline; ruff clean; strangler regression playtest PASS
+Next: P1-04 PLAYTEST.
