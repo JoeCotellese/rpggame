@@ -35,3 +35,27 @@ The engine can already pause mid-turn — P1-03 only needs to add the channel th
 routes the question to a human, which de-risks it substantially.
 Gate: pass — Definition of Ready fully satisfied.
 Next: P1-01 BUILD.
+
+## 2026-08-02 03:4x UTC — P1-01 — BUILD
+Did: TDD. Wrote `tests/session/test_protocol.py` (31 tests, one class per AC),
+confirmed it failed on `ModuleNotFoundError`, then implemented
+`dnd_engine/session/protocol.py` and `__init__.py`. Matched the `core/move_result.py`
+house style: frozen + slots, per-field docs covering `None` semantics.
+Design note worth keeping: intent `from_dict` dispatch uses an explicit registry
+built after the class definitions rather than `__init_subclass__`, because
+`slots=True` makes the dataclass decorator return a *replacement* class object —
+a subclass hook would have registered the pre-slots class and silently broken
+deserialisation.
+Gate: PASS.
+  - new tests: 31 passed
+  - engine suite: 3686 passed, 0 failed
+  - client-2d: 576 passed, 2 failed (both pre-existing baseline)
+  - client-terminal: 506 passed
+  - total failures 2, at or under the pinned baseline
+  - ruff clean, mypy clean on new code
+  - strangler gate: 2D client boots and renders; terminal client imports clean
+Finding: the engine's "1 pre-existing failure" is **flaky, not stable**.
+`test_party_defeats_enemy` failed 2 of 12 isolated runs (~17%) — it asserts a kill
+against an unseeded 1d8+10 roll. `BASELINE.md` updated to treat the engine count as
+0–1 and to require an isolated re-run before calling anything a regression.
+Next: P1-01 PLAYTEST.

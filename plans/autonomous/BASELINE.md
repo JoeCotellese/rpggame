@@ -20,7 +20,14 @@ broke something.
 Known-failing tests:
 
 - `dnd-engine/tests/test_party_combat.py::TestPartyCombat::test_party_defeats_enemy`
-  — asserts `not goblin_enemy.is_alive` after a 1d8+10 hit; enemy survives.
+  — **FLAKY, not stably red.** Measured 2026-08-02 during P1-01 BUILD: 12
+  consecutive isolated runs produced **10 passes, 2 failures (~17% failure
+  rate)**. The test asserts `not goblin_enemy.is_alive` after a 1d8+10 hit
+  against an unseeded dice roll. A full-suite run may therefore report either
+  0 or 1 engine failure with no code change.
+  **Gate implication:** treat the engine's failure count as `0–1`, and never
+  conclude a regression from this test alone — re-run it in isolation before
+  believing it. Do not "fix" it; it is out of scope (see `ROADMAP.md`).
 - `client-2d/tests/test_game_session.py::TestSessionTick::test_tick_does_not_auto_drain_enemy_turns_when_mcp_active`
 - `client-2d/tests/test_game_session.py::TestSessionTick::test_tick_auto_drains_enemy_turns_in_windowed_mcp_mode`
 

@@ -20,3 +20,19 @@ Format: `- [<issue id>] <finding> — <file:line>`
 - [setup] Running pytest from the repo root produces 57 collection errors because
   each package sets its own `pythonpath`. Tests must be run per package.
   — `pyproject.toml`
+
+## P1-01
+
+- [P1-01] `test_party_defeats_enemy` is flaky at ~17% (10 pass / 2 fail over 12
+  isolated runs) because it asserts a kill against an unseeded 1d8+10 roll.
+  Pre-existing and out of scope, but it makes any failure-count gate unreliable.
+  Worth seeding the roll or asserting on damage rather than death.
+  — `dnd-engine/tests/test_party_combat.py:160`
+- [P1-01] `GameEvent.data` is an untyped `dict[str, Any]`. Typing the ~60 event
+  payloads would give clients real guarantees instead of a serialisability
+  check. Deliberate scope call, noted in the P1-01 design.
+  — `dnd-engine/dnd_engine/session/protocol.py`
+- [P1-01] `EventType` has no opportunity-attack or reaction members. P1-03 will
+  need to add one; adding an enum member is additive and safe, but worth knowing
+  before that issue starts.
+  — `dnd-engine/dnd_engine/utils/events.py`
