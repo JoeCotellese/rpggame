@@ -143,24 +143,34 @@ class TestAC2EngineAdvancesTheTurn:
 class TestAC3EnemyTurnsDrained:
     """AC-3: enemy turns are drained automatically."""
 
-    def test_one_perform_can_surface_multiple_actors(self, session):
-        actors_seen = set()
+    def test_one_perform_surfaces_events_from_enemies(self, session):
+        """A player who merely waits should still see what the enemies did.
+
+        This is the observable consequence of draining: the caller made one
+        call, took no action itself, and the result nonetheless describes enemy
+        activity.
+        """
+        party_names = {p["name"] for p in session.snapshot()["party"]}
+        enemy_actor_seen = False
+
         for _ in range(MAX_ROUNDS):
             if not session.in_combat or session.is_over:
                 break
             actor = session.awaiting_actor_id
             if actor is None:
-                break
+                session.advance()
+                continue
+
             result = session.perform(WaitIntent(actor_id=actor))
             for event in result.events:
                 name = event.data.get("attacker") or event.data.get("actor")
-                if name:
-                    actors_seen.add(name)
-            if len(actors_seen) > 1:
+                if name and name not in party_names:
+                    enemy_actor_seen = True
+            if enemy_actor_seen:
                 break
 
-        assert len(actors_seen) > 1, (
-            f"expected enemy turns to be drained into the result; saw only {actors_seen}"
+        assert enemy_actor_seen, (
+            "a waiting player saw no enemy activity — enemy turns were not drained"
         )
 
 
@@ -284,3 +294,84 @@ class TestSnapshotIsRenderable:
     def test_entity_ids_match_the_engine_convention(self, session):
         for member in session.snapshot()["party"]:
             assert member["entity_id"] == pc_entity_id(member["name"])
+
+
+class TestSynthesisDoesNotDuplicateTheBus:
+    """Synthesis must cover only what the engine does not publish.
+
+    P1-02 PLAYTEST found every death save reported twice: once from the bus and
+    once synthesized. Measured across five seeded fights, `ATTACK_ROLL`,
+    `DAMAGE_DEALT` and `CHARACTER_DEATH` came only from synthesis (the bus is
+    silent for weapon attacks), while `DEATH_SAVE` came from both. This guard
+    stops a future synthesized type from silently double-reporting.
+    """
+
+    def test_no_event_type_arrives_from_both_sources(self, session):
+        from collections import Counter
+
+        from dnd_engine.session import session as session_module
+
+        bus_types: Counter = Counter()
+        synth_types: Counter = Counter()
+
+        original_record = session_module._EventRecorder.record
+        original_bus = session_module._EventRecorder.record_bus_event
+
+        def traced_bus(self, event):
+            bus_types[event.type.name] += 1
+            self._from_bus = True
+            try:
+                original_bus(self, event)
+            finally:
+                self._from_bus = False
+
+        def traced_record(self, event_type, data, message=None):
+            if not getattr(self, "_from_bus", False):
+                synth_types[event_type.name] += 1
+            original_record(self, event_type, data, message)
+
+        session_module._EventRecorder.record = traced_record
+        session_module._EventRecorder.record_bus_event = traced_bus
+        try:
+            session.advance()
+            _fight_to_the_end(session)
+        finally:
+            session_module._EventRecorder.record = original_record
+            session_module._EventRecorder.record_bus_event = original_bus
+
+        both = sorted(set(bus_types) & set(synth_types))
+        assert both == [], (
+            f"event types reported twice — once from the bus and once synthesized: {both}"
+        )
+
+
+class TestCombatStartWithEnemyInitiative:
+    """Regression: an enemy holding the first initiative slot must not deadlock.
+
+    Found during P1-02 PLAYTEST. Enemy turns drain only inside a session call, so
+    when combat opened with an enemy up, `awaiting_actor_id` was None and a client
+    following the documented contract had no legal move at all.
+    """
+
+    def test_advance_yields_an_actor_or_ends_combat(self, session):
+        session.advance()
+        assert (
+            session.awaiting_actor_id is not None
+            or not session.in_combat
+            or session.is_over
+        ), "advance() left the session with nobody to act as"
+
+    def test_advance_is_safe_when_a_player_is_already_up(self, session):
+        session.advance()
+        before = session.awaiting_actor_id
+        result = session.advance()
+        assert result.ok
+        assert session.awaiting_actor_id == before, "advance() skipped a waiting player's turn"
+
+    def test_advance_out_of_combat_is_a_noop(self, session):
+        session.advance()
+        _fight_to_the_end(session)
+        if not session.in_combat:
+            result = session.advance()
+            assert result.ok
+            assert result.events == ()

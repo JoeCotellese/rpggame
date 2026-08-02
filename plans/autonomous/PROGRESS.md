@@ -200,3 +200,34 @@ Baseline correction: one client-2d run showed 3 failures instead of 2; six
 consecutive runs after it showed exactly 2. client-2d is flaky as well —
 `BASELINE.md` updated to treat its count as 2–3.
 Next: P1-02 PLAYTEST.
+
+## 2026-08-02 04:4x UTC — P1-02 — PLAYTEST
+Did: Played real games through the facade instead of only asserting — a healthy
+party through a full fight, four fragile-party runs to force characters down, and
+exploration after combat. All 9 ACs now verified with evidence in `issues/P1-02.md`.
+Confirmed working under real play: death saves fire for real (seed 11 produced 4,
+with a character going unconscious then dying), combat ends with XP, exploration
+moves are accepted and illegal ones rejected as `RULE`, and the event stream reads
+like a D&D log rather than a state dump.
+**Two defects found, both fixed — neither reachable by the unit tests:**
+  1. **CRITICAL — deadlock at combat start.** When an enemy held the first
+     initiative slot, `awaiting_actor_id` was `None` while `in_combat` was True.
+     Enemy turns drain only inside a session call, so a client following the
+     documented contract had no legal move — roughly a coin flip on every fight.
+     AC-2 was not met. Fixed by adding `Session.advance()`, which drains until a
+     player is up or combat ends, with `_advance_to_next_actionable_turn` taking a
+     `skip_current` flag so entering the loop cold does not skip whoever is up.
+  2. **Every death save was reported twice.** The bus already emits `DEATH_SAVE`
+     with a richer payload (roll, success, natural_20, stabilized, dead), and I was
+     synthesizing a thinner one alongside it. Rather than guess at the general
+     case, I measured: across 5 seeded fights, `ATTACK_ROLL` was 0 bus / 33 synth,
+     `DAMAGE_DEALT` 0/20, `CHARACTER_DEATH` 0/12, and `DEATH_SAVE` 7/7 — exactly
+     one duplicate. Dropped the synthesized version and added a guard test that
+     fails if any type ever arrives from both sources again.
+Also fixed a test that was **passing for the wrong reason**: AC-3's check counted
+distinct actor names, and the second name came from the duplicate death-save event
+I removed. Seeing only the enemy actually proves draining worked, so the assertion
+was rewritten to say what AC-3 means — a waiting player still sees enemy activity.
+Gate: PASS — 80 session tests; engine 3735 passed / 0 failed; clients at baseline;
+ruff + mypy clean; strangler playtest PASS.
+Next: P1-02 REVIEW.

@@ -72,3 +72,11 @@ Format: `- [<issue id>] <finding> — <file:line>`
   (`cli.py:104`) even though `GameState` already owns one
   (`game_state.py:767`). Two managers over the same creatures invites drift.
   — `client-terminal/terminal_client/ui/cli.py:104`
+- [P1-02] Integration fixtures build `Character` objects directly, so nobody is
+  equipped and every attack resolves as "unarmed strike". The synthesis path is
+  identical, so the ACs still hold, but tests would be more faithful using
+  `CharacterFactory`, which grants starting equipment.
+  — `dnd-engine/tests/session/test_session_combat.py`
+- [P1-02] `TURN_END` is synthesized but no engine path emits it. Harmless today;
+  worth confirming the engine should not own it before more clients depend on it.
+  — `dnd-engine/dnd_engine/session/session.py`

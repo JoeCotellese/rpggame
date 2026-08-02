@@ -106,6 +106,11 @@ class Session:
     After every :meth:`perform`, either :attr:`awaiting_actor_id` names a
     conscious player character whose input is needed, or the session is out of
     combat or over. A caller never has to ask whose turn it is or advance it.
+
+    The one exception is entering combat: an enemy may hold the first initiative
+    slot, so a freshly-started fight can begin with nobody to act as. Call
+    :meth:`advance` whenever :attr:`awaiting_actor_id` is ``None`` while
+    :attr:`in_combat` is ``True``.
     """
 
     def __init__(self, game_state: GameState) -> None:
@@ -219,6 +224,39 @@ class Session:
 
         return ActionResult(ok=True, events=self._recorder.drain())
 
+    def advance(self) -> ActionResult:
+        """Run the game forward while nobody's input is needed.
+
+        Call this when :attr:`awaiting_actor_id` is ``None`` but
+        :attr:`in_combat` is ``True`` — most importantly **right after combat
+        starts**, because an enemy may hold the first initiative slot. Enemy
+        turns are drained only inside a session call, so without this a client
+        that waits for an actor it can act as would wait forever.
+
+        Safe to call at any time; a no-op when a player is already up.
+
+        Returns:
+            An :class:`ActionResult` carrying everything that happened while
+            control was not with a player.
+        """
+        self._recorder.drain()
+
+        if self.is_over or not self.in_combat:
+            return ActionResult(ok=True)
+
+        try:
+            with self._recording():
+                self._advance_to_next_actionable_turn(skip_current=False)
+        except Exception as exc:  # noqa: BLE001 - boundary: never leak engine faults
+            self._recorder.drain()
+            return ActionResult(
+                ok=False,
+                error=f"{type(exc).__name__}: {exc}",
+                error_kind=ErrorKind.INTERNAL,
+            )
+
+        return ActionResult(ok=True, events=self._recorder.drain())
+
     # ------------------------------------------------------------------
     # Intent dispatch
     # ------------------------------------------------------------------
@@ -286,8 +324,14 @@ class Session:
     # Turn advancement — the rules the clients currently carry
     # ------------------------------------------------------------------
 
-    def _advance_to_next_actionable_turn(self) -> None:
+    def _advance_to_next_actionable_turn(self, *, skip_current: bool = True) -> None:
         """Advance until a conscious player character is up, or combat ends.
+
+        Args:
+            skip_current: Whether the combatant currently up has already acted
+                and should be passed over. True after an intent resolves; False
+                when entering the loop cold, as :meth:`advance` does at combat
+                start where nobody has acted yet.
 
         Mirrors the branch structure of `client-terminal`'s run loop so the
         facade is behaviourally faithful to what players experience today:
@@ -299,8 +343,9 @@ class Session:
             return
 
         tracker = self._require_tracker()
-        tracker.next_turn()
-        self._game._check_combat_end()
+        if skip_current:
+            tracker.next_turn()
+            self._game._check_combat_end()
 
         for _ in range(MAX_TURN_ADVANCE_STEPS):
             if not self.in_combat or self.is_over:
@@ -362,17 +407,11 @@ class Session:
 
         result = self._game.process_unconscious_turn()
         if result is not None:
-            self._recorder.record(
-                EventType.DEATH_SAVE,
-                to_jsonable(
-                    {
-                        "actor": character.name,
-                        "successes": character.death_save_successes,
-                        "failures": character.death_save_failures,
-                    }
-                ),
-                message=f"{character.name} makes a death saving throw.",
-            )
+            # Deliberately not synthesized: the engine publishes DEATH_SAVE to the
+            # bus already, with a richer payload (roll, success, natural_20,
+            # stabilized, dead, conscious). Synthesizing here too made every death
+            # save appear twice in the stream. Synthesis exists only to cover what
+            # the bus does not emit — see `_record_attack`.
             # process_unconscious_turn advances initiative itself.
             self._game._check_combat_end()
             return
