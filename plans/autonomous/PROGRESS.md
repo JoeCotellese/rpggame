@@ -296,3 +296,37 @@ Next: P1-03 SPEC — `PendingDecision` for opportunity attacks. Note from P1-01:
 `InitiativeTracker` already has `pause_for_reaction()` / `resume_paused_turn()` /
 `is_paused_for_reaction`, and `EventType` has **no** opportunity-attack or reaction
 member yet, so one will need adding (additive, safe).
+
+## 2026-08-02 05:1x UTC — P1-03 — SPEC
+Did: Wrote `issues/P1-03.md` — opportunity attacks as `PendingDecision`. 8 ACs,
+each with a named verification method; interception flow; per-file risk table; UI
+contract; rollback plan.
+Read the whole reaction stack before designing, and it is in better shape than the
+roadmap assumed. Three things make this small and cleanly additive:
+  1. `ReactionDispatcher.publish()` **already** wraps each handler in
+     `pause_for_reaction()` / `resume_paused_turn()`, so the engine can already
+     halt mid-turn and report the reactor as current.
+  2. `register()` is documented **"last wins"** (`reactions.py:120`), so the
+     session can register its own OA handler after the engine's default and take
+     precedence — interception with no engine change.
+  3. `publish()` consumes the reaction slot **only** on `reacted=True`, so a
+     handler that defers the decision returns False and leaves the slot intact,
+     which is exactly the SRD rule for a declined reaction.
+So the missing piece really is only the channel to a human — which is what
+`PendingDecision` was built for in P1-01. Good sign the P1-01 design was right.
+Two decisions flagged for REVIEW:
+  1. **AC-4 pins `default_option_id` to "attack".** The engine currently always
+     takes the OA, so any other default would silently change the game for every
+     existing caller. Preserving current behaviour matters more than picking the
+     tactically "better" default.
+  2. **One engine file gets touched.** `opportunity_attacks.py` gains a
+     `build_default_opportunity_handler()` and the existing registrar becomes a
+     thin wrapper over it. Behaviour-identical, and the alternative was
+     duplicating ~20 lines of reach/visibility geometry into the session — two
+     copies of a rule that must agree. Existing OA tests must pass unmodified.
+Also recorded a real fidelity limitation rather than letting it pass unnoticed:
+the engine steps the mover *then* publishes the provoke, so the OA resolves after
+the move rather than interrupting it. Same outcome except when the attack would
+have stopped the movement. Logged to FOLLOWUPS.
+Gate: pass — Definition of Ready fully satisfied.
+Next: P1-03 BUILD.

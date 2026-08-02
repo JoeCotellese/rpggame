@@ -89,3 +89,12 @@ Format: `- [<issue id>] <finding> — <file:line>`
   `0.30000000000000004` after three combat rounds. Cosmetic, pre-existing, but a
   client rendering elapsed time will show it. Integer seconds would avoid it.
   — `dnd-engine/dnd_engine/systems/time_manager.py`
+
+## P1-03
+
+- [P1-03] Opportunity attacks resolve *after* the mover's step completes — the
+  engine moves, then publishes `OPPORTUNITY_PROVOKED`. At a table the attack
+  interrupts the movement. Same outcome in the common case, but it differs when
+  the attack would have stopped the move (dropping the mover to 0 mid-step).
+  Known limitation, not an accident.
+  — `dnd-engine/dnd_engine/core/game_state.py:1268`
