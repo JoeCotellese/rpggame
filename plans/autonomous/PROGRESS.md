@@ -613,3 +613,32 @@ against the `LLMProvider` interface and verified with a stub plus
 `llm/debug_provider.py`. The real-provider path needs Joe (Q-001).
 Gate: pass — Definition of Ready fully satisfied.
 Next: P2-05 BUILD.
+
+## 2026-08-02 08:0x UTC — P2-05 — BUILD
+Did: Implemented `session/adjudication.py` (`ProposedRuling`, `Adjudication`,
+`RulingSource`, `validate_ruling`, `adjudicate`, `describe_check`) and wired
+`FreeformIntent` through it. 29 new tests; session suite now 141.
+The boundary is enforced structurally, not just by convention: **`ProposedRuling`
+has no field for a roll, a total, or a success flag**, so a proposal cannot express
+an outcome even by accident. A test asserts that absence directly, because a future
+edit adding a `success` field would silently hand the model the verdict.
+Used the engine's own `D20Result.succeeds_against()` rather than reimplementing the
+comparison, so there is one source of truth for what "meets the DC" means.
+Gate: PASS.
+  - session 141 passed; engine 3796 passed / 0 failed
+  - clients at baseline; ruff + mypy clean; strangler regression playtest PASS
+  - AC-6 verified: with no ruling source configured, freeform is rejected exactly
+    as before, so existing callers see no change
+Honest note on a test I got wrong first: my AC-3 check drove `perform()` and
+asserted HP was unchanged. It failed — HP went 24 → 21. That was **not** the
+proposal mutating state; it was the turn advancing so enemies attacked, which is
+correct D&D (spending your action on a freeform attempt costs you the turn). The
+test conflated two things. Rewrote it to measure at the `adjudicate()` level, where
+the question is actually answerable, and kept a separate test asserting the turn
+*does* advance. Loosening the original assertion would have hidden the real
+invariant instead of testing it.
+Process note: the state-file updates for this stage initially ran from the wrong
+working directory and silently did nothing while the code commit succeeded. Caught
+and corrected in the same stage. Same class of failure as the P1-03 silent patch —
+worth checking that a state edit actually landed, not just that a command exited.
+Next: P2-05 PLAYTEST.
