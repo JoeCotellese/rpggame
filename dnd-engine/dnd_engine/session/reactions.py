@@ -91,6 +91,18 @@ class OpportunityQueue:
         """Queue an opportunity for a human answer."""
         self.pending.append(opportunity)
 
+    def find(self, decision_id: str) -> PendingOpportunity | None:
+        """Look up a queued opportunity without removing it.
+
+        Validation reads through this so a rejected answer cannot disturb the
+        queue: removing and re-adding sent the entry to the back, silently
+        reordering who gets asked next.
+        """
+        for opportunity in self.pending:
+            if opportunity.decision_id == decision_id:
+                return opportunity
+        return None
+
     def take(self, decision_id: str) -> PendingOpportunity | None:
         """Remove and return the queued opportunity with this id."""
         for index, opportunity in enumerate(self.pending):

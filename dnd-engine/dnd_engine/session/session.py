@@ -385,16 +385,20 @@ class Session:
         """
         self._recorder.drain()
 
-        opportunity = self._opportunities.take(decision_id)
+        # Validate before removing. Taking the entry out and putting it back on
+        # a bad answer appended it to the end of the queue, silently reordering
+        # who gets asked next — which broke initiative order for a typo.
+        opportunity = self._opportunities.find(decision_id)
         if opportunity is None:
             return self._reject(f"no pending decision with id {decision_id!r}")
 
         if option_id not in (ATTACK_OPTION_ID, DECLINE_OPTION_ID):
-            self._opportunities.add(opportunity)  # unanswered; put it back
             return self._reject(
                 f"unknown option {option_id!r}; expected "
                 f"{ATTACK_OPTION_ID!r} or {DECLINE_OPTION_ID!r}"
             )
+
+        self._opportunities.take(decision_id)
 
         try:
             with self._recording():
@@ -430,7 +434,43 @@ class Session:
         )
 
     def _resolve_opportunity_attack(self, opportunity: Any) -> None:
-        """Spend the reaction and resolve the attack the player chose to take."""
+        """Spend the reaction and resolve the attack the player chose to take.
+
+        A queued decision can go stale: another reactor earlier in initiative may
+        have dropped the mover, or the reactor themselves may have fallen before
+        answering. Resolving anyway would roll an attack against a corpse and
+        re-announce a death that already happened.
+        """
+        if not opportunity.reactor.is_alive:
+            self._recorder.record(
+                EventType.REACTION_DECLINED,
+                {
+                    "reactor": opportunity.reactor.name,
+                    "mover": opportunity.mover.name,
+                    "reason": "reactor_down",
+                },
+                message=(
+                    f"{opportunity.reactor.name} is in no state to take the "
+                    f"opportunity attack."
+                ),
+            )
+            return
+
+        if not opportunity.mover.is_alive:
+            self._recorder.record(
+                EventType.REACTION_DECLINED,
+                {
+                    "reactor": opportunity.reactor.name,
+                    "mover": opportunity.mover.name,
+                    "reason": "target_already_down",
+                },
+                message=(
+                    f"{opportunity.mover.name} is already down — "
+                    f"{opportunity.reactor.name} holds the blow."
+                ),
+            )
+            return
+
         tracker = self._require_tracker()
         turn_state = tracker.turn_states.get(opportunity.reactor)
         if turn_state is not None:

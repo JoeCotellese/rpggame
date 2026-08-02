@@ -98,3 +98,9 @@ Format: `- [<issue id>] <finding> — <file:line>`
   the attack would have stopped the move (dropping the mover to 0 mid-step).
   Known limitation, not an accident.
   — `dnd-engine/dnd_engine/core/game_state.py:1268`
+- [P1-03] `ReactionDispatcher` subscriptions accumulate — registering a handler
+  for the same creature four times leaves four subscriptions. Behaviour is
+  correct (last-wins picks one) but the list grows across fights. An
+  `unregister` before re-registering, or a per-(creature, trigger) replace,
+  would bound it.
+  — `dnd-engine/dnd_engine/systems/reactions.py:120`

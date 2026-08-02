@@ -406,3 +406,78 @@ class TestPerformSurfacesTheDecision:
             "perform() does not surface pending_decision — the question would "
             "be queued but never asked"
         )
+
+
+class TestQueueSurvivesABadAnswer:
+    """Regression: a rejected answer must not reorder who gets asked next.
+
+    Found during P1-03 REVIEW. `resolve()` removed the entry to validate it and
+    re-added it on a bad option, sending it to the back of the queue — so a
+    player typo silently swapped the order two threatening creatures were asked
+    in, breaking initiative order.
+    """
+
+    def test_finding_does_not_remove(self):
+        queue = OpportunityQueue()
+        first = PendingOpportunity(
+            reactor=_creature("Guard"),
+            mover=_creature("Mover"),
+            from_position=Position(0, 0),
+            to_position=Position(3, 0),
+            reach_feet=5,
+            decision_id=queue.next_decision_id(),
+        )
+        queue.add(first)
+        assert queue.find(first.decision_id) is first
+        assert queue.pending == [first], "find() removed the entry"
+
+    def test_order_is_stable_across_a_rejected_option(self):
+        queue = OpportunityQueue()
+        names = []
+        for name in ("Guard", "Sentry"):
+            opportunity = PendingOpportunity(
+                reactor=_creature(name),
+                mover=_creature("Mover"),
+                from_position=Position(0, 0),
+                to_position=Position(3, 0),
+                reach_feet=5,
+                decision_id=queue.next_decision_id(),
+            )
+            queue.add(opportunity)
+            names.append(name)
+
+        # A bad answer validates through find(), which must leave the queue be.
+        queue.find(queue.pending[0].decision_id)
+
+        assert [p.reactor.name for p in queue.pending] == names, (
+            "a rejected answer reordered the queue"
+        )
+
+
+class TestStaleDecisionsDoNotResolve:
+    """Regression: a queued decision can go stale before it is answered.
+
+    Found during P1-03 REVIEW. Another reactor earlier in initiative may drop
+    the mover first, or the reactor may fall. Resolving anyway rolled an attack
+    against a corpse and re-announced a death that had already happened.
+    """
+
+    def test_resolution_is_skipped_when_the_target_is_already_down(self):
+        import inspect
+
+        from dnd_engine.session.session import Session
+
+        source = inspect.getsource(Session._resolve_opportunity_attack)
+        assert "opportunity.mover.is_alive" in source, (
+            "no guard against attacking a mover who is already down"
+        )
+
+    def test_resolution_is_skipped_when_the_reactor_is_down(self):
+        import inspect
+
+        from dnd_engine.session.session import Session
+
+        source = inspect.getsource(Session._resolve_opportunity_attack)
+        assert "opportunity.reactor.is_alive" in source, (
+            "no guard against a fallen reactor taking an opportunity attack"
+        )

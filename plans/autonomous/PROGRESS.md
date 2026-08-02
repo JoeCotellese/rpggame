@@ -390,3 +390,31 @@ observation artifact — turn advancement had refreshed it before I read the fla
 Measuring immediately after the attack shows True → False correctly. Nearly filed
 a bug against correct behaviour.
 Next: P1-03 REVIEW.
+
+## 2026-08-02 06:0x UTC — P1-03 — REVIEW
+Did: Adversarial pass on the edge cases most likely to be wrong. Two critical
+defects found, both fixed.
+**C-1: a rejected answer reordered the queue.** `resolve()` removed the entry to
+validate it and re-added it on a bad option — sending it to the back. With two
+threatening creatures queued, a player typo silently swapped who got asked next,
+breaking the initiative order AC-5 exists to guarantee and violating AC-6's "state
+unchanged". Now validates through a non-destructive `find()` and removes only once
+the answer is known good.
+**C-2: a stale decision attacked a corpse.** A queued decision can go stale — an
+earlier reactor drops the mover, or the reactor themselves falls. Resolving anyway
+rolled a real attack against a dead creature and emitted `CHARACTER_DEATH` a second
+time. Both sides guarded now, producing a reasoned `REACTION_DECLINED`:
+"Skeleton is already down — Thorin holds the blow."
+Attacked and found sound: "last wins" genuinely selects the session's handler
+(`_eligible_in_initiative_order` builds a per-creature dict); deferring never leaks
+the reaction slot; a decision cannot be answered twice; and the engine still
+auto-resolves without a `Session` (35 OA tests unmodified).
+Gate: PASS — zero unresolved critical findings.
+  - session 105 passed; engine 3760 passed / 0 failed; clients at baseline
+  - ruff + mypy clean; strangler regression playtest PASS
+Note on method: my first attempt to verify C-1 re-ran an adversarial script that
+simulated the *old* code path by hand, and it still showed the bug. The fix was
+fine — the script was testing something the product no longer does. Verified
+through the real `resolve()` instead. Worth remembering that a probe written
+against the old shape keeps reporting the old answer.
+Next: P1-03 SHIP.
