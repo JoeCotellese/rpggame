@@ -78,6 +78,36 @@ def register_default_opportunity_attack(
 ) -> None:
     """Register the default OA reaction for ``reactor``.
 
+    Thin wrapper over :func:`build_default_opportunity_handler` — see there for
+    the firing conditions. Kept as the registration entry point so existing
+    callers are unaffected.
+    """
+    dispatcher.register(
+        reactor,
+        Trigger.OPPORTUNITY_PROVOKED,
+        build_default_opportunity_handler(
+            reactor,
+            get_position,
+            reach_feet=reach_feet,
+            can_see=can_see,
+        ),
+    )
+
+
+def build_default_opportunity_handler(
+    reactor: Creature,
+    get_position: Callable[[], Position | None],
+    reach_feet: int = 5,
+    can_see: Callable[[Position], bool] | None = None,
+) -> Callable[[TriggerContext], ReactionOutcome]:
+    """Build the default OA handler for ``reactor`` without registering it.
+
+    Split out from :func:`register_default_opportunity_attack` so a caller that
+    wants to *intervene* in the decision — for example, asking a human whether
+    to spend the reaction — can reuse the exact reach-and-visibility geometry
+    instead of reimplementing it. Two copies of this rule would be two things
+    that must agree; there is one.
+
     The handler fires (consuming the Reaction slot) iff:
         - the mover was within ``reach_feet`` of the reactor at
           ``from_position``, AND
@@ -161,4 +191,4 @@ def register_default_opportunity_attack(
             },
         )
 
-    dispatcher.register(reactor, Trigger.OPPORTUNITY_PROVOKED, handler)
+    return handler

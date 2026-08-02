@@ -25,6 +25,10 @@ class EventType(Enum):
     SURPRISE_ROUND = "surprise_round"
     TURN_START = "turn_start"
     TURN_END = "turn_end"
+    # Synthesized by the session facade, never published on the bus: carries a
+    # whole EnemyTurnResult so a client can render a monster's turn in full
+    # without calling GameState.process_enemy_turn itself.
+    ENEMY_TURN = "enemy_turn"
     ATTACK_ROLL = "attack_roll"
     SAVING_THROW = "saving_throw"
     DAMAGE_DEALT = "damage_dealt"
@@ -38,6 +42,10 @@ class EventType(Enum):
     MASSIVE_DAMAGE_DEATH = "massive_damage_death"
     CHARACTER_STABILIZED = "character_stabilized"
     STABLE_RECOVERY = "stable_recovery"
+
+    # Reaction events
+    OPPORTUNITY_ATTACK = "opportunity_attack"
+    REACTION_DECLINED = "reaction_declined"
 
     # Creature spatial events (plan-03 P4)
     CREATURE_PLACED = "creature_placed"

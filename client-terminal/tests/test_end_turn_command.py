@@ -7,7 +7,9 @@ import pytest
 
 from dnd_engine.core.character import Character
 from dnd_engine.core.creature import Creature
+from dnd_engine.core.entity_ids import pc_entity_id
 from dnd_engine.core.game_state import GameState
+from dnd_engine.session import ActionResult, WaitIntent
 from dnd_engine.systems.initiative import InitiativeEntry, InitiativeTracker
 from terminal_client.ui.cli import CLI
 
@@ -46,6 +48,9 @@ class TestEndTurnCommand:
             campaign_name="test_campaign",
         )
         cli_instance.running = True
+        cli_instance.session = Mock()
+        cli_instance.session.perform.return_value = ActionResult(ok=True)
+        cli_instance.session.pending_decision = None
         return cli_instance
 
     def test_end_turn_command_variants(self, cli, mock_game_state, mock_character):
@@ -56,37 +61,35 @@ class TestEndTurnCommand:
         mock_game_state.initiative_tracker.get_current_combatant.return_value = combatant
         mock_game_state.party.characters = [mock_character]
 
-        # Mock process_enemy_turns to prevent it from running
-        cli.process_enemy_turns = Mock()
-
         # Test all command variants
         commands = ["end turn", "end", "done", "pass", "skip"]
         for command in commands:
-            # Reset mocks
-            mock_game_state.initiative_tracker.next_turn.reset_mock()
-            mock_game_state._check_combat_end.reset_mock()
+            cli.session.perform.reset_mock()
 
             # Execute command
             cli.process_combat_command(command)
 
-            # Verify turn was advanced
-            mock_game_state.initiative_tracker.next_turn.assert_called_once()
-            mock_game_state._check_combat_end.assert_called_once()
+            # Verify the turn was handed back to the engine exactly once. The
+            # facade — not the CLI — advances initiative and checks combat end.
+            cli.session.perform.assert_called_once_with(
+                WaitIntent(actor_id=pc_entity_id(mock_character.name))
+            )
 
     def test_end_turn_advances_to_enemy_turns(self, cli, mock_game_state, mock_character):
-        """Test that ending turn processes enemy turns"""
+        """Test that ending turn hands control to the session, which drains enemy turns"""
         # Setup
         combatant = Mock(spec=InitiativeEntry)
         combatant.creature = mock_character
         mock_game_state.initiative_tracker.get_current_combatant.return_value = combatant
         mock_game_state.party.characters = [mock_character]
-        cli.process_enemy_turns = Mock()
 
         # Execute
         cli.handle_end_turn()
 
-        # Verify enemy turns are processed
-        cli.process_enemy_turns.assert_called_once()
+        # Verify the turn was submitted; enemy turns are the facade's to run
+        cli.session.perform.assert_called_once_with(
+            WaitIntent(actor_id=pc_entity_id(mock_character.name))
+        )
 
     def test_end_turn_not_in_combat(self, cli, mock_game_state):
         """Test that end turn fails when not in combat"""
@@ -97,7 +100,7 @@ class TestEndTurnCommand:
             mock_error.assert_called_with("You're not in combat!")
 
         # Verify turn was NOT advanced
-        mock_game_state.initiative_tracker.next_turn.assert_not_called()
+        cli.session.perform.assert_not_called()
 
     def test_end_turn_no_initiative_tracker(self, cli, mock_game_state):
         """Test that end turn fails when no initiative tracker exists"""
@@ -130,7 +133,7 @@ class TestEndTurnCommand:
             mock_error.assert_called_with("It's not a party member's turn!")
 
         # Verify turn was NOT advanced
-        mock_game_state.initiative_tracker.next_turn.assert_not_called()
+        cli.session.perform.assert_not_called()
 
     def test_end_turn_shows_message(self, cli, mock_game_state, mock_character):
         """Test that ending turn shows appropriate message"""
@@ -138,27 +141,54 @@ class TestEndTurnCommand:
         combatant.creature = mock_character
         mock_game_state.initiative_tracker.get_current_combatant.return_value = combatant
         mock_game_state.party.characters = [mock_character]
-        cli.process_enemy_turns = Mock()
 
         with patch("terminal_client.ui.cli.print_status_message") as mock_status:
             cli.handle_end_turn()
             mock_status.assert_called_with(f"{mock_character.name} ends their turn.", "info")
 
-    def test_end_turn_stops_if_combat_ends(self, cli, mock_game_state, mock_character):
-        """Test that enemy turns are not processed if combat ends"""
+    def test_end_turn_leaves_turn_structure_to_the_engine(
+        self, cli, mock_game_state, mock_character
+    ):
+        """Whether enemy turns follow is the facade's call, never the CLI's.
+
+        Replaces an older test that asserted the CLI skipped its own enemy-turn
+        loop once combat had ended. That decision moved into the engine, so what
+        is worth guarding here is that the CLI does not make it at all: no
+        initiative advancement, no combat-end check.
+        """
         combatant = Mock(spec=InitiativeEntry)
         combatant.creature = mock_character
         mock_game_state.initiative_tracker.get_current_combatant.return_value = combatant
         mock_game_state.party.characters = [mock_character]
 
-        # Combat ends after checking
-        mock_game_state.in_combat = False
-        cli.process_enemy_turns = Mock()
-
         cli.handle_end_turn()
 
-        # Verify enemy turns were NOT processed
-        cli.process_enemy_turns.assert_not_called()
+        mock_game_state.initiative_tracker.next_turn.assert_not_called()
+        mock_game_state._check_combat_end.assert_not_called()
+
+
+class TestTurnStructureLivesInTheEngine:
+    """#697 AC: the CLI must not implement D&D's turn structure any more."""
+
+    def test_cli_never_advances_initiative_or_checks_combat_end(self):
+        """Checked over the AST so prose mentioning the names does not count."""
+        import ast
+        from pathlib import Path
+
+        forbidden = {"next_turn", "_check_combat_end"}
+        tree = ast.parse(
+            Path("terminal_client/ui/cli.py").read_text(encoding="utf-8")
+        )
+
+        called = {
+            node.func.attr
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+        }
+
+        assert not (called & forbidden), (
+            f"cli.py still drives the turn loop itself: {sorted(called & forbidden)}"
+        )
 
 
 class TestEndTurnIntegration:
