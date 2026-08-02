@@ -39,6 +39,10 @@ class EventType(Enum):
     CHARACTER_STABILIZED = "character_stabilized"
     STABLE_RECOVERY = "stable_recovery"
 
+    # Reaction events
+    OPPORTUNITY_ATTACK = "opportunity_attack"
+    REACTION_DECLINED = "reaction_declined"
+
     # Creature spatial events (plan-03 P4)
     CREATURE_PLACED = "creature_placed"
     CREATURE_MOVED = "creature_moved"

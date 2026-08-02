@@ -330,3 +330,31 @@ the move rather than interrupting it. Same outcome except when the attack would
 have stopped the movement. Logged to FOLLOWUPS.
 Gate: pass — Definition of Ready fully satisfied.
 Next: P1-03 BUILD.
+
+## 2026-08-02 05:3x UTC — P1-03 — BUILD
+Did: Implemented deferred opportunity attacks — `session/reactions.py`
+(`OpportunityQueue`, `PendingOpportunity`, `register_deferred_opportunity_attack`),
+plus `Session.resolve()`, `Session.pending_decision`, and a guard so `perform()`
+refuses new intents while a question is outstanding. Added `OPPORTUNITY_ATTACK`
+and `REACTION_DECLINED` event types (additive enum members).
+The interception works exactly as the spec predicted: the session registers its
+handler after the engine's default, wins the documented "last wins" contest, runs
+the **real** geometry via the extracted `build_default_opportunity_handler`, queues
+the decision, and returns `reacted=False` — so the engine resolves nothing and the
+reactor keeps their reaction until the player actually spends it.
+Gate: PASS.
+  - session suite 98 passed (15 new reaction tests)
+  - engine 3753 passed, 0 failed
+  - **35 existing opportunity-attack tests pass unmodified** — the strongest
+    evidence for AC-8: a `GameState` without a `Session` still auto-resolves OAs
+    exactly as before, so the engine refactor really is behaviour-identical
+  - client-2d at baseline; client-terminal 506; ruff + mypy clean
+  - strangler regression playtest PASS
+Two test-infrastructure notes, both my own errors rather than product defects:
+  1. `InitiativeTracker.add_combatant()` rolls initiative internally — there is no
+     `initiative_roll` kwarg. Pinned turn order by scripting the roller's
+     randomness instead, which keeps the real `DiceRoll` construction path so
+     modifiers still apply as in play.
+  2. My first attempt patched `DiceRoll.total`, which is a read-only property.
+     Controlling the underlying `randint` is both simpler and more faithful.
+Next: P1-03 PLAYTEST — the stage that found real defects in both previous issues.

@@ -26,13 +26,23 @@ from dnd_engine.core.entity_ids import pc_entity_id
 from dnd_engine.session.protocol import (
     ActionResult,
     AttackIntent,
+    DecisionKind,
+    DecisionOption,
     ErrorKind,
     FreeformIntent,
     GameEvent,
     Intent,
     MoveIntent,
+    PendingDecision,
     WaitIntent,
     to_jsonable,
+)
+from dnd_engine.session.reactions import (
+    ATTACK_OPTION_ID,
+    DECLINE_OPTION_ID,
+    OpportunityQueue,
+    describe,
+    register_deferred_opportunity_attack,
 )
 from dnd_engine.utils.events import Event, EventType
 
@@ -124,6 +134,8 @@ class Session:
         self._recorder = _EventRecorder()
         self._subscribed = False
         self._numbered_combat = False
+        self._opportunities = OpportunityQueue()
+        self._deferred_reactions = False
 
     # ------------------------------------------------------------------
     # Read-only state a client needs to render, in JSON-native form
@@ -173,6 +185,43 @@ class Session:
             return
         assign(list(self._game.party.characters))
         self._numbered_combat = True
+
+    def _ensure_deferred_reactions(self) -> None:
+        """Take over opportunity-attack decisions from the engine's auto-handler.
+
+        Registered once per fight and only while a session is driving. A
+        ``GameState`` used without a ``Session`` keeps the engine's automatic
+        behaviour untouched, which is what makes this additive.
+        """
+        if self._deferred_reactions or not self.in_combat:
+            return
+        dispatcher = getattr(self._game, "reaction_dispatcher", None)
+        spatial = getattr(self._game, "spatial", None)
+        if dispatcher is None or spatial is None:
+            return
+
+        for entity_id in list(spatial.occupants().keys()):
+            creature = self._game._find_creature_by_id(entity_id)
+            if creature is None:
+                continue
+
+            def _position_lookup(eid: str = entity_id) -> Any:
+                return spatial.position_of(eid)
+
+            def _can_see(target: Any, eid: str = entity_id) -> bool:
+                origin = spatial.position_of(eid)
+                if origin is None:
+                    return False
+                return bool(spatial.has_line_of_sight(origin, target))
+
+            register_deferred_opportunity_attack(
+                dispatcher,
+                self._opportunities,
+                creature,
+                get_position=_position_lookup,
+                can_see=_can_see,
+            )
+        self._deferred_reactions = True
 
     def _enemy_display_name(self, enemy: Creature) -> str:
         """The enemy's combat-numbered display name, falling back to its name."""
@@ -240,7 +289,15 @@ class Session:
         if self.is_over:
             return self._reject("the game is over")
 
+        outstanding = self.pending_decision
+        if outstanding is not None:
+            return self._reject(
+                f"a decision is outstanding ({outstanding.decision_id}: "
+                f"{outstanding.prompt}) — call Session.resolve() first"
+            )
+
         self._ensure_combat_numbers()
+        self._ensure_deferred_reactions()
         actor_error = self._validate_actor(intent)
         if actor_error is not None:
             return self._reject(actor_error)
@@ -251,7 +308,11 @@ class Session:
                 if rejection is not None:
                     self._recorder.drain()
                     return self._reject(rejection)
-                self._advance_to_next_actionable_turn()
+                # A step may have provoked. Hold the turn open until every
+                # reaction has been answered — advancing now would resolve
+                # turns out of order.
+                if not self._opportunities.pending:
+                    self._advance_to_next_actionable_turn()
         except Exception as exc:  # noqa: BLE001 - boundary: never leak engine faults
             self._recorder.drain()
             return ActionResult(
@@ -261,6 +322,142 @@ class Session:
             )
 
         return ActionResult(ok=True, events=self._recorder.drain())
+
+    @property
+    def pending_decision(self) -> PendingDecision | None:
+        """The question the engine is waiting on, or ``None``.
+
+        While this is set, :meth:`perform` refuses new intents — the engine is
+        mid-interrupt and letting an action through would resolve turns out of
+        order.
+        """
+        opportunity = self._opportunities.peek()
+        if opportunity is None:
+            return None
+
+        wording = describe(opportunity, self._enemy_display_name(opportunity.mover))
+        return PendingDecision(
+            decision_id=opportunity.decision_id,
+            kind=DecisionKind.REACTION,
+            actor_id=pc_entity_id(opportunity.reactor.name),
+            prompt=wording["prompt"],
+            options=(
+                DecisionOption(
+                    ATTACK_OPTION_ID,
+                    "Take the opportunity attack",
+                    "Spend your reaction to strike as they withdraw",
+                ),
+                DecisionOption(
+                    DECLINE_OPTION_ID,
+                    "Decline",
+                    "Keep your reaction for something else this round",
+                ),
+            ),
+            # Attacking is the default because it is what the engine has always
+            # done. A caller that cannot ask a human must keep getting today's
+            # behaviour, not a quietly different game.
+            default_option_id=ATTACK_OPTION_ID,
+            context=wording["context"],
+        )
+
+    def resolve(self, decision_id: str, option_id: str) -> ActionResult:
+        """Answer an outstanding decision and continue play.
+
+        Args:
+            decision_id: The id from the :class:`PendingDecision`.
+            option_id: Which option the player chose.
+
+        Returns:
+            The events produced by the answer, plus the next decision if more
+            creatures are waiting to be asked.
+        """
+        self._recorder.drain()
+
+        opportunity = self._opportunities.take(decision_id)
+        if opportunity is None:
+            return self._reject(f"no pending decision with id {decision_id!r}")
+
+        if option_id not in (ATTACK_OPTION_ID, DECLINE_OPTION_ID):
+            self._opportunities.add(opportunity)  # unanswered; put it back
+            return self._reject(
+                f"unknown option {option_id!r}; expected "
+                f"{ATTACK_OPTION_ID!r} or {DECLINE_OPTION_ID!r}"
+            )
+
+        try:
+            with self._recording():
+                if option_id == ATTACK_OPTION_ID:
+                    self._resolve_opportunity_attack(opportunity)
+                else:
+                    self._recorder.record(
+                        EventType.REACTION_DECLINED,
+                        {
+                            "reactor": opportunity.reactor.name,
+                            "mover": opportunity.mover.name,
+                        },
+                        message=(
+                            f"{opportunity.reactor.name} lets "
+                            f"{opportunity.mover.name} go."
+                        ),
+                    )
+                if not self._opportunities.pending:
+                    self._advance_to_next_actionable_turn()
+        except Exception as exc:  # noqa: BLE001 - boundary: never leak engine faults
+            self._recorder.drain()
+            return ActionResult(
+                ok=False,
+                error=f"{type(exc).__name__}: {exc}",
+                error_kind=ErrorKind.INTERNAL,
+            )
+
+        self._reset_numbering_if_combat_ended()
+        return ActionResult(
+            ok=True,
+            events=self._recorder.drain(),
+            pending=self.pending_decision,
+        )
+
+    def _resolve_opportunity_attack(self, opportunity: Any) -> None:
+        """Spend the reaction and resolve the attack the player chose to take."""
+        tracker = self._require_tracker()
+        turn_state = tracker.turn_states.get(opportunity.reactor)
+        if turn_state is not None:
+            from dnd_engine.systems.action_economy import ActionType
+
+            turn_state.consume_action(ActionType.REACTION)
+
+        result = self._game.combat_engine.resolve_attack(
+            attacker=opportunity.reactor,
+            defender=opportunity.mover,
+            attack_bonus=getattr(opportunity.reactor, "attack_bonus", 0),
+            damage_dice=getattr(opportunity.reactor, "damage_dice", "1d4"),
+            apply_damage=True,
+        )
+
+        self._recorder.record(
+            EventType.OPPORTUNITY_ATTACK,
+            to_jsonable(
+                {
+                    "attacker": opportunity.reactor.name,
+                    "target": opportunity.mover.name,
+                    "hit": getattr(result, "hit", False),
+                    "attack_roll": getattr(result, "attack_roll", None),
+                    "target_ac": getattr(result, "target_ac", None),
+                }
+            ),
+            message=(
+                f"{opportunity.reactor.name} takes an opportunity attack on "
+                f"{opportunity.mover.name} — "
+                f"{'hit' if getattr(result, 'hit', False) else 'miss'}."
+            ),
+        )
+        self._record_attack(
+            attacker_name=opportunity.reactor.name,
+            target_name=opportunity.mover.name,
+            weapon="opportunity attack",
+            attack_result=result,
+            target_killed=not opportunity.mover.is_alive,
+        )
 
     def advance(self) -> ActionResult:
         """Run the game forward while nobody's input is needed.
@@ -296,7 +493,9 @@ class Session:
             )
 
         self._reset_numbering_if_combat_ended()
-        return ActionResult(ok=True, events=self._recorder.drain())
+        return ActionResult(
+            ok=True, events=self._recorder.drain(), pending=self.pending_decision
+        )
 
     # ------------------------------------------------------------------
     # Intent dispatch
@@ -431,6 +630,8 @@ class Session:
         """Let the next fight assign its own combat numbers."""
         if not self.in_combat:
             self._numbered_combat = False
+            self._deferred_reactions = False
+            self._opportunities.clear()
 
     def _should_skip(self, creature: Creature) -> bool:
         """Whether this combatant is skipped outright.
