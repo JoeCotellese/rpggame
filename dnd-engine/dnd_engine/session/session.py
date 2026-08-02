@@ -841,6 +841,11 @@ class Session:
 
     def _handle_incapacitated_turn(self, character: Character) -> None:
         """Process end-of-turn conditions for a character who cannot act."""
+        # Captured before processing: a repeat save or an expiring duration can
+        # clear the very condition that caused the skip, so a client reading the
+        # character afterwards could no longer say why the turn was lost.
+        conditions = list(getattr(character, "active_conditions", {}) or {})
+
         for outcome in character.process_end_of_turn_conditions(self._game.event_bus):
             self._recorder.record(
                 EventType.CONDITION_REMOVED
@@ -850,7 +855,11 @@ class Session:
             )
         self._recorder.record(
             EventType.TURN_END,
-            {"actor": character.name, "reason": "incapacitated"},
+            {
+                "actor": character.name,
+                "reason": "incapacitated",
+                "conditions": conditions,
+            },
             message=f"{character.name} cannot act this turn.",
         )
         self._require_tracker().next_turn()
@@ -867,7 +876,17 @@ class Session:
         for effect in manager.process_turn_start_effects(character):
             self._recorder.record(
                 EventType.DAMAGE_TAKEN,
-                to_jsonable({"actor": character.name, "condition": effect.condition_id}),
+                to_jsonable(
+                    {
+                        "actor": character.name,
+                        "condition": effect.condition_id,
+                        "damage": getattr(effect, "damage", 0),
+                        # Ongoing damage can finish a character off. The client
+                        # announces that death, and cannot infer it from the
+                        # event stream alone.
+                        "creature_died": getattr(effect, "creature_died", False),
+                    }
+                ),
                 message=getattr(effect, "message", None),
             )
 

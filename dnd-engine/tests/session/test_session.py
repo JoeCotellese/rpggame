@@ -46,6 +46,7 @@ class StubCharacter:
         self.death_save_failures = 0
         self._can_act = can_act
         self.end_of_turn_calls = 0
+        self.active_conditions: dict[str, Any] = {}
 
     def can_take_actions(self) -> bool:
         return self._can_act
@@ -189,6 +190,62 @@ class TestAC4TurnStructureRulesLiveInTheFacade:
         session.perform(WaitIntent(actor_id=pc_entity_id("Thorin")))
 
         assert game.initiative_tracker.advance_count < 500
+
+
+class TestSkippedTurnsAreRenderable:
+    """A skipped turn must say why in its payload, not just that it happened.
+
+    `client-terminal` tells the player *which* conditions stopped a character
+    ("Garrick is PARALYZED and cannot act!") and announces a death caused by an
+    ongoing effect. Both facts are known while the turn is being skipped and
+    unrecoverable afterwards — the conditions may be cleared by the very
+    end-of-turn processing that follows. So they travel in the event.
+    """
+
+    def test_incapacitated_turn_names_the_conditions(self):
+        actor = StubCharacter("Thorin")
+        stunned = StubCharacter("Garrick", can_act=False)
+        stunned.active_conditions = {"paralyzed": {}, "stunned": {}}
+        session = Session(StubGameState([actor, stunned]))
+
+        result = session.perform(WaitIntent(actor_id=pc_entity_id("Thorin")))
+
+        skipped = [
+            e
+            for e in result.events
+            if e.data.get("reason") == "incapacitated" and e.data.get("actor") == "Garrick"
+        ]
+        assert skipped, "no incapacitated turn-end event for the stunned character"
+        assert skipped[0].data.get("conditions") == ["paralyzed", "stunned"], (
+            "the event does not say which conditions stopped the character"
+        )
+
+    def test_a_turn_start_effect_that_kills_says_so(self):
+        class KillingEffect:
+            condition_id = "on_fire"
+            message = "Thorin takes 4 fire damage!"
+            damage = 4
+            creature_died = True
+
+        class StubConditionManager:
+            def process_turn_start_effects(self, creature: Any) -> list[Any]:
+                creature.is_alive = False
+                return [KillingEffect()]
+
+        actor = StubCharacter("Thorin")
+        burning = StubCharacter("Garrick")
+        game = StubGameState([actor, burning])
+        game.condition_manager = StubConditionManager()
+        session = Session(game)
+
+        result = session.perform(WaitIntent(actor_id=pc_entity_id("Thorin")))
+
+        effects = [e for e in result.events if e.data.get("condition") == "on_fire"]
+        assert effects, "no event for the turn-start effect"
+        assert effects[0].data.get("creature_died") is True, (
+            "a fatal turn-start effect does not report the death"
+        )
+        assert effects[0].data.get("damage") == 4
 
 
 class TestAC8InternalFailuresAreContained:
