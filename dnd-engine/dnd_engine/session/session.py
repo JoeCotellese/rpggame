@@ -205,6 +205,13 @@ class Session:
             if creature is None:
                 continue
 
+            # Only a party member's reaction is the player's to spend. A
+            # monster keeps the engine's default auto-attack handler — asking
+            # "should the skeleton strike you?" is not a decision anyone wants,
+            # and it also keeps NPC behaviour identical to today.
+            if self._as_party_character(creature) is None:
+                continue
+
             def _position_lookup(eid: str = entity_id) -> Any:
                 return spatial.position_of(eid)
 
@@ -321,7 +328,12 @@ class Session:
                 error_kind=ErrorKind.INTERNAL,
             )
 
-        return ActionResult(ok=True, events=self._recorder.drain())
+        self._reset_numbering_if_combat_ended()
+        return ActionResult(
+            ok=True,
+            events=self._recorder.drain(),
+            pending=self.pending_decision,
+        )
 
     @property
     def pending_decision(self) -> PendingDecision | None:
@@ -593,6 +605,13 @@ class Session:
 
         for _ in range(MAX_TURN_ADVANCE_STEPS):
             if not self.in_combat or self.is_over:
+                return
+
+            # A reaction was provoked mid-advancement — most often by an enemy
+            # withdrawing on its own turn. Stop here: draining further turns
+            # while a player's reaction is unanswered resolves combat out of
+            # order. `resolve()` re-enters this loop once the queue is empty.
+            if self._opportunities.pending:
                 return
 
             current = tracker.get_current_combatant()

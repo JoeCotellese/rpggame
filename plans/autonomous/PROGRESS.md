@@ -358,3 +358,35 @@ Two test-infrastructure notes, both my own errors rather than product defects:
   2. My first attempt patched `DiceRoll.total`, which is a read-only property.
      Controlling the underlying `randint` is both simpler and more faithful.
 Next: P1-03 PLAYTEST — the stage that found real defects in both previous issues.
+
+## 2026-08-02 05:5x UTC — P1-03 — PLAYTEST
+Did: Drove a real provoking move through `Session.perform(MoveIntent)` against a
+bootstrapped spatial index — a path the BUILD tests never exercised, since they
+drove the queue and dispatcher directly. AC-1 was effectively untested. Three
+defects surfaced, all fixed.
+**D-1 (critical): `perform()` never surfaced the decision.** The queue filled
+correctly but the `ActionResult` was built without a `pending` field, so a client
+following the documented contract would never see the question and play would
+silently continue. Root cause was **mine, and procedural**: a `str.replace` patch
+during BUILD did not match, the edit was a silent no-op, and I never verified it
+applied. Now asserted by a regression test, and I verify patches from here on.
+**D-2 (critical): the player was asked to decide the monster's reaction.** The
+session registered deferring handlers for *every* placed creature, so walking away
+from a skeleton prompted "Thorin is leaving Skeleton's reach — take an opportunity
+attack?" with a nonsense `actor_id` of `pc_skeleton`. Only party members' reactions
+are the player's to spend; monsters keep the engine's automatic handler, which also
+leaves NPC behaviour exactly as before.
+**D-3 (critical): turn advancement ignored pending decisions.** A reaction is
+usually provoked by an enemy withdrawing on its *own* turn — from inside the
+advancement loop — and the loop kept draining subsequent turns regardless,
+resolving combat past a question the player had not answered. The loop now yields
+when the queue is non-empty and `resolve()` re-enters it once empty.
+Gate: PASS — all 8 ACs verified with evidence in `issues/P1-03.md`.
+  - session 101 passed (18 reaction tests); engine 3756 passed / 0 failed
+  - 35 existing OA tests still unmodified; clients at baseline
+  - ruff + mypy clean; strangler regression playtest PASS
+Also worth recording: an apparent "reaction not consumed" turned out to be an
+observation artifact — turn advancement had refreshed it before I read the flag.
+Measuring immediately after the attack shows True → False correctly. Nearly filed
+a bug against correct behaviour.
+Next: P1-03 REVIEW.

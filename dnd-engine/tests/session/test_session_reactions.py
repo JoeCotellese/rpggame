@@ -291,3 +291,118 @@ class TestReactionSlotAccounting:
         assert turn_state.reaction_available
         turn_state.consume_action(ActionType.REACTION)
         assert not turn_state.reaction_available
+
+
+class TestOnlyPlayersAreAsked:
+    """Regression: the player must not be asked to decide a monster's reaction.
+
+    Found during P1-03 PLAYTEST. The session originally registered deferring
+    handlers for *every* placed creature, so a player walking away from a
+    skeleton was prompted "Thorin is leaving Skeleton's reach — take an
+    opportunity attack?" — asking them to spend the monster's reaction, with a
+    nonsense `actor_id` of "pc_skeleton". Monsters keep the engine's automatic
+    handler, which also leaves NPC behaviour exactly as it was.
+    """
+
+    def test_deferral_is_registered_only_for_party_members(self):
+        from dnd_engine.core.character import Character, CharacterClass
+        from dnd_engine.core.game_state import GameState
+        from dnd_engine.core.map import Map, TileType
+        from dnd_engine.core.party import Party
+        from dnd_engine.rules.loader import DataLoader
+        from dnd_engine.session import Session
+        from dnd_engine.utils.events import EventBus
+
+        party = Party(
+            [
+                Character(
+                    name="Thorin",
+                    character_class=CharacterClass.FIGHTER,
+                    level=3,
+                    abilities=Abilities(
+                        strength=16,
+                        dexterity=12,
+                        constitution=14,
+                        intelligence=10,
+                        wisdom=11,
+                        charisma=8,
+                    ),
+                    max_hp=30,
+                    ac=16,
+                )
+            ]
+        )
+        game = GameState(
+            party=party,
+            dungeon_name="crypt",
+            campaign_id="the_unquiet_dead",
+            event_bus=EventBus(),
+            data_loader=DataLoader(),
+            dice_roller=DiceRoller(seed=5),
+        )
+        game.start()
+        game.bootstrap_spatial(
+            Map(
+                width=20,
+                height=20,
+                tiles={(x, y): TileType.FLOOR for y in range(20) for x in range(20)},
+            ),
+            replace=True,
+        )
+        from dnd_engine.core.entity_ids import pc_entity_id
+
+        game.set_position(pc_entity_id("Thorin"), 10, 10)
+        game.set_position("skeleton_0", 11, 10)
+
+        session = Session(game)
+        session._ensure_deferred_reactions()
+
+        deferred_for = {
+            sub.creature.name
+            for sub in game.reaction_dispatcher._subs
+            if "deferring_handler" in getattr(sub.handler, "__qualname__", "")
+        }
+        assert deferred_for == {"Thorin"}, (
+            f"deferral must cover party members only, got {deferred_for}"
+        )
+
+
+class TestAdvancementYieldsToPendingDecisions:
+    """Regression: turn advancement must stop while a reaction is unanswered.
+
+    Found during P1-03 PLAYTEST. A reaction is usually provoked by an enemy
+    withdrawing on its *own* turn — i.e. from inside the advancement loop. The
+    loop originally kept draining subsequent turns regardless, resolving combat
+    past a decision the player had not made yet.
+    """
+
+    def test_the_advance_loop_checks_the_queue(self):
+        import inspect
+
+        from dnd_engine.session.session import Session
+
+        source = inspect.getsource(Session._advance_to_next_actionable_turn)
+        assert "self._opportunities.pending" in source, (
+            "advancement no longer yields to a pending decision — enemy turns "
+            "would drain past an unanswered player reaction"
+        )
+
+
+class TestPerformSurfacesTheDecision:
+    """Regression: perform() must actually return the pending decision.
+
+    Found during P1-03 PLAYTEST. The queue filled correctly but `perform()`
+    built its `ActionResult` without a `pending` field, so a client following
+    the documented contract never saw the question and play silently continued.
+    """
+
+    def test_perform_returns_pending_from_the_queue(self):
+        import inspect
+
+        from dnd_engine.session.session import Session
+
+        source = inspect.getsource(Session.perform)
+        assert "pending=self.pending_decision" in source, (
+            "perform() does not surface pending_decision — the question would "
+            "be queued but never asked"
+        )
