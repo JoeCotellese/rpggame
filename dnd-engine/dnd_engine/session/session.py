@@ -136,6 +136,12 @@ class Session:
         self._numbered_combat = False
         self._opportunities = OpportunityQueue()
         self._deferred_reactions = False
+        # Display names are only derivable while the initiative tracker exists —
+        # the engine drops it when combat ends, at which point two skeletons
+        # collapse back to one indistinguishable "Skeleton". Remembering the
+        # names once assigned keeps them stable for the whole session, so a
+        # client can still correlate enemies across the combat-end boundary.
+        self._enemy_names: dict[int, str] = {}
 
     # ------------------------------------------------------------------
     # Read-only state a client needs to render, in JSON-native form
@@ -185,6 +191,26 @@ class Session:
             return
         assign(list(self._game.party.characters))
         self._numbered_combat = True
+        self._remember_enemy_names()
+
+    def _enemy_entity_id(self, enemy: Creature) -> str:
+        """A session-stable id a client can correlate on.
+
+        `display_name` is for humans; this is for code. Derived from the display
+        name so it stays readable, and stable for the life of the session.
+        """
+        return self._enemy_display_name(enemy).lower().replace(" ", "_")
+
+    def _remember_enemy_names(self) -> None:
+        """Cache each enemy's display name while the tracker can still supply it."""
+        tracker = getattr(self._game, "initiative_tracker", None)
+        if tracker is None:
+            return
+        for entry in tracker.get_all_combatants():
+            creature = entry.creature
+            if self._as_party_character(creature) is not None:
+                continue
+            self._enemy_names[id(creature)] = entry.display_name or creature.name
 
     def _ensure_deferred_reactions(self) -> None:
         """Take over opportunity-attack decisions from the engine's auto-handler.
@@ -231,12 +257,25 @@ class Session:
         self._deferred_reactions = True
 
     def _enemy_display_name(self, enemy: Creature) -> str:
-        """The enemy's combat-numbered display name, falling back to its name."""
+        """The enemy's combat-numbered display name.
+
+        Prefers the remembered name, because the engine drops the initiative
+        tracker when combat ends and the live lookup would then fall back to the
+        raw name — turning "Skeleton 1" and "Skeleton 2" back into two
+        indistinguishable "Skeleton"s exactly when a client is summarising the
+        fight.
+        """
+        remembered = self._enemy_names.get(id(enemy))
+        if remembered is not None:
+            return remembered
+
         tracker = getattr(self._game, "initiative_tracker", None)
         if tracker is not None:
             for entry in tracker.get_all_combatants():
                 if entry.creature is enemy:
-                    return entry.display_name or enemy.name
+                    name = entry.display_name or enemy.name
+                    self._enemy_names[id(enemy)] = name
+                    return name
         return enemy.name
 
     def snapshot(self) -> dict[str, Any]:
@@ -263,6 +302,7 @@ class Session:
                 ],
                 "enemies": [
                     {
+                        "entity_id": self._enemy_entity_id(e),
                         "name": e.name,
                         "display_name": self._enemy_display_name(e),
                         "hp": e.current_hp,

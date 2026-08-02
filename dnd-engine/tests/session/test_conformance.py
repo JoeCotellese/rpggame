@@ -94,7 +94,10 @@ def _creatures_by_display_name(session: Session, game: GameState) -> dict[str, A
     for character in game.party.characters:
         mapping[character.name] = character
     for enemy in game.active_enemies or []:
+        # Register under both, since events may carry either depending on which
+        # engine path emitted them.
         mapping[session._enemy_display_name(enemy)] = enemy
+        mapping.setdefault(enemy.name, enemy)
     return mapping
 
 
@@ -114,11 +117,15 @@ def check_hp_matches(session: Session, game: GameState, result, before, after) -
             f"engine has {engine_character.current_hp}"
         )
 
+    # Correlate on the stable entity_id, not the display name. Display names
+    # are human-facing and were briefly ambiguous once the engine dropped the
+    # initiative tracker at combat end — keying a comparison on them silently
+    # matched one snapshot entry against a different engine creature.
     engine_enemies = {
-        session._enemy_display_name(e): e for e in (game.active_enemies or [])
+        session._enemy_entity_id(e): e for e in (game.active_enemies or [])
     }
     for enemy in snapshot["enemies"]:
-        engine_enemy = engine_enemies.get(enemy["display_name"])
+        engine_enemy = engine_enemies.get(enemy["entity_id"])
         if engine_enemy is None:
             continue
         assert enemy["hp"] == engine_enemy.current_hp, (

@@ -504,3 +504,34 @@ Gate: PASS.
   - session suite 109 passed (4 conformance); engine 3764 passed / 0 failed
   - clients at baseline; ruff clean; strangler regression playtest PASS
 Next: P1-04 PLAYTEST.
+
+## 2026-08-02 07:0x UTC — P1-04 — PLAYTEST
+Did: Ran the conformance invariants across a matrix instead of the single seeded
+fixture — 5 party shapes (sturdy, fragile, solo, four-member, 1-HP glass) × 7 seeds
+= 35 runs, 119 actions.
+**10 of 35 runs failed.** The BUILD fixture passed because it exercised exactly one
+encounter; the matrix broke it immediately. Every failure read like
+*"snapshot reports Skeleton at 0 HP, engine has 4"*.
+**D-1 (critical): enemy display names silently become ambiguous when combat ends.**
+The engine sets `initiative_tracker` to `None` at combat end, and
+`_enemy_display_name` fell back to the raw name — so "Skeleton 1" and "Skeleton 2"
+collapsed back into two indistinguishable "Skeleton"s exactly when a client would
+be summarising the fight. The P1-02 disambiguation fix quietly unwound at the
+boundary. My conformance check, which keyed on display name, then compared one
+snapshot entry against a *different* engine creature.
+Fixed on both sides, product first:
+  - The session now remembers each enemy's display name while the tracker can
+    still supply it, so names stay stable for the life of the session.
+  - `snapshot()` enemies gained a stable `entity_id` — `display_name` is for
+    humans, `entity_id` is for code. A client correlating enemies across the
+    combat-end boundary now has something reliable to key on.
+  - The conformance check correlates on `entity_id` rather than the human-facing
+    name.
+Result: 35 runs, 119 actions, **0 failures**. Mutations still caught after the fix
+(over-reported damage still fails the suite), so the fix did not blunt it.
+Worth stating plainly: the D-1 defect was in the product, not just the test. A
+client rendering a post-combat summary would have shown two identical enemies.
+Gate: PASS — all 7 ACs verified with evidence in `issues/P1-04.md`.
+  - session 109 passed; engine 3764 passed / 0 failed; clients at baseline
+  - ruff + mypy clean; strangler regression playtest PASS
+Next: P1-04 REVIEW.
