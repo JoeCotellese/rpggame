@@ -15,11 +15,13 @@ happened, up to the next point a player must decide.
 from dnd_engine.session.adjudication import (
     ABILITIES,
     Adjudication,
+    LLMRulingSource,
     ProposedRuling,
     RulingRefused,
     RulingSource,
     adjudicate,
     describe_check,
+    extract_ruling_json,
     validate_ruling,
 )
 from dnd_engine.session.protocol import (
@@ -45,9 +47,11 @@ __all__ = [
     "Adjudication",
     "ProposedRuling",
     "RulingRefused",
+    "LLMRulingSource",
     "RulingSource",
     "adjudicate",
     "describe_check",
+    "extract_ruling_json",
     "validate_ruling",
     "ErrorKind",
     "Session",
