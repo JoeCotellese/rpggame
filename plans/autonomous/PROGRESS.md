@@ -113,3 +113,25 @@ identical code. The engine suite is flaky in at least two independent places, so
 raw failure count is not a usable gate. `BASELINE.md` now carries an explicit
 3-step procedure to follow before ever declaring a regression.
 Next: P1-01 SHIP.
+
+## 2026-08-02 04:1x UTC — P1-01 — SHIP ✅ ISSUE COMPLETE
+Did: Verified the full Definition of Done rather than rubber-stamping it, then
+marked P1-01 done and queued P1-02.
+Gate: PASS — every DoD item confirmed fresh:
+  - session tests 44 passed (31 unit + 5 integration + 8 normalisation regression)
+  - engine 3699 passed, 0 failed
+  - client-2d 576 passed, 2 failed (both pre-existing baseline)
+  - client-terminal 506 passed
+  - regression playtest PASS (5/5 moves, party 44/44, explored 255→270/300)
+  - terminal client boots: "D&D 5E Terminal Game v0.2.0"
+  - zero unresolved critical findings; non-critical logged to FOLLOWUPS.md
+  - working tree clean, all 4 commits pushed
+Corrected the AC-2 evidence row to record that its first PASS was wrong — the
+playtest never carried a `Position` because crypt navigation is room-based, so
+the gap only surfaced under adversarial review. The evidence table should show
+what actually happened, not a tidied version.
+**P1-01 delivered:** `dnd_engine/session/` — `Intent` (+4 subclasses),
+`GameEvent`, `PendingDecision`, `ActionResult`, `to_jsonable`. Purely additive;
+nothing outside its own tests imports it yet. P1-02 gives it a producer.
+Next: P1-02 SPEC — with two design inputs already captured in the roadmap sketch
+(weapon attacks emit nothing to the bus; the rejected-vs-error split).
