@@ -282,6 +282,12 @@ class TestDeathSaves:
         data.update(overrides)
         return _event(EventType.DEATH_SAVE, data)
 
+    def test_the_turn_is_introduced_before_the_roll(self, renderer, capsys):
+        renderer.render(_result(self._death_save()))
+        out = capsys.readouterr().out
+        assert "Thorin's Turn - Death Save" in out
+        assert "must make a death saving throw" in out
+
     def test_a_success_reports_the_roll_and_the_tally(self, renderer, capsys):
         renderer.render(_result(self._death_save()))
         out = capsys.readouterr().out

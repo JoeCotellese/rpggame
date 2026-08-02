@@ -18,6 +18,7 @@ import pytest
 from dnd_engine.core.creature import Abilities, Creature
 from dnd_engine.core.dice import DiceRoller
 from dnd_engine.core.position import Position
+from dnd_engine.session import Session
 from dnd_engine.session.reactions import (
     ATTACK_OPTION_ID,
     DECLINE_OPTION_ID,
@@ -30,6 +31,7 @@ from dnd_engine.systems.action_economy import ActionType
 from dnd_engine.systems.initiative import InitiativeTracker
 from dnd_engine.systems.opportunity_attacks import publish_movement_provoke
 from dnd_engine.systems.reactions import ReactionDispatcher
+from dnd_engine.utils.events import EventBus
 
 
 class _ScriptedRandom:
@@ -102,6 +104,38 @@ def combat():
     }
 
 
+class _OutOfCombatGameState:
+    """The slice of `GameState` a session needs to answer a queued decision.
+
+    Out of combat on purpose: answering the question is what is under test, not
+    the turn advancement that follows it.
+    """
+
+    def __init__(self, tracker: InitiativeTracker, characters: list[Creature]) -> None:
+        self.initiative_tracker = tracker
+        self.party = type("_Party", (), {"characters": characters})()
+        self.in_combat = False
+        self.event_bus = EventBus()
+        self.active_enemies: list[Creature] = []
+        self.condition_manager = None
+
+    def is_game_over(self) -> bool:
+        return False
+
+    def _check_combat_end(self) -> None:
+        return None
+
+    def process_enemy_turn(self) -> None:
+        return None
+
+
+def _session_over(combat: dict) -> Session:
+    """A session already holding the queue the fixture filled."""
+    session = Session(_OutOfCombatGameState(combat["tracker"], [combat["guard"]]))
+    session._opportunities = combat["queue"]
+    return session
+
+
 class TestAC1LeavingReachAsksInsteadOfAttacking:
     """AC-1: leaving reach queues a decision and resolves nothing."""
 
@@ -149,6 +183,27 @@ class TestAC3DecliningCostsNothing:
         turn_state = combat["tracker"].turn_states[combat["guard"]]
         assert turn_state.reaction_available, (
             "deferring the question consumed the reaction before the player chose"
+        )
+
+    def test_declining_leaves_the_reaction_unspent(self, combat):
+        """The SRD is explicit: a reaction you do not take is still yours.
+
+        The deferral test above only proves the *question* costs nothing.
+        Answering "no" must cost nothing either, or a player who declines one
+        opportunity is silently locked out of Shield later in the round.
+        """
+        publish_movement_provoke(
+            combat["dispatcher"], combat["mover"], Position(6, 5), Position(8, 5)
+        )
+        session = _session_over(combat)
+        pending = session.pending_decision
+        assert pending is not None, "no decision to decline"
+
+        result = session.resolve(pending.decision_id, DECLINE_OPTION_ID)
+
+        assert result.ok, result.error
+        assert combat["tracker"].turn_states[combat["guard"]].reaction_available, (
+            "declining an opportunity attack consumed the reaction"
         )
 
     def test_a_second_provoke_can_still_be_asked_about(self, combat):

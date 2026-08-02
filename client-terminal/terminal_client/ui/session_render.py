@@ -29,6 +29,7 @@ from dnd_engine.utils.events import EventType
 from terminal_client.ui.rich_ui import (
     console,
     print_error,
+    print_section,
     print_status_message,
 )
 
@@ -139,6 +140,11 @@ class SessionEventRenderer:
     def _render_death_save(self, data: dict[str, Any], message: str | None) -> None:
         """Report a death saving throw and its consequences."""
         name = data.get("character", "")
+
+        print_section(f"{name}'s Turn - Death Save")
+        print_status_message(
+            f"{name} is unconscious and must make a death saving throw!", "warning"
+        )
 
         if data.get("natural_20"):
             print_status_message(f"Natural 20! {name} regains 1 HP and consciousness!", "success")
