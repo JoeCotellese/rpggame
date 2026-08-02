@@ -65,3 +65,10 @@ Format: `- [<issue id>] <finding> — <file:line>`
   (`test_party_defeats_enemy`, `test_attack_on_unconscious_character`), both
   RNG-dependent. Same root cause as Q-002: no determinism seam.
   — `dnd-engine/tests/`
+
+## P1-02
+
+- [P1-02] The terminal client constructs its own `ConditionManager`
+  (`cli.py:104`) even though `GameState` already owns one
+  (`game_state.py:767`). Two managers over the same creatures invites drift.
+  — `client-terminal/terminal_client/ui/cli.py:104`

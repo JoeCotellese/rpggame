@@ -135,3 +135,35 @@ what actually happened, not a tidied version.
 nothing outside its own tests imports it yet. P1-02 gives it a producer.
 Next: P1-02 SPEC — with two design inputs already captured in the roadmap sketch
 (weapon attacks emit nothing to the bus; the rejected-vs-error split).
+
+## 2026-08-02 04:2x UTC — P1-02 — SPEC
+Did: Wrote `issues/P1-02.md` — the `Session` facade that owns the turn loop.
+9 acceptance criteria, each with a named verification method; exact signatures; a
+turn-advancement table mapping every branch to the `cli.py` line it absorbs; UI
+contract for terminal / 2D / MCP; rollback plan.
+Studied the real turn loops first rather than designing in the abstract. The
+terminal client's `run()` (`cli.py:6100-6230`) carries ~100 lines of turn-structure
+*rules* in the UI: skip-dead using an `is_dead` vs `is_alive` distinction, death
+saves, stabilized skip, incapacitation handling, turn-start effects, five separate
+`next_turn()` calls, and the private `_check_combat_end()`. That whole block is
+what the facade absorbs, and each branch is now a row in the design table with its
+source line.
+Worth noting the engine is not uniformly leaky: the *enemy* side is already clean —
+`process_enemy_turn()` advances initiative itself and `EnemyTurnResult` is
+explicitly documented as needing no game logic from the UI. The gap is an owner for
+the loop and a unified event stream, not missing engine capability.
+Two design decisions recorded for scrutiny at REVIEW:
+  1. AC-5 exists because weapon attacks emit nothing to the bus (P1-01 finding), so
+     the facade must synthesize attack/damage events from `PlayerAttackResult` and
+     merge them with real bus events in true chronological order (AC-6). This is
+     why the facade cannot be a thin passthrough.
+  2. AC-7 adds `ErrorKind` to split "the rules said no" from "something broke",
+     honouring the P1-01 AC-3 amendment. Doing so requires relaxing my own P1-01
+     test that allows only two enums in `protocol.py`. That test's purpose was to
+     block a parallel *event* taxonomy, which `ErrorKind` is not — but relaxing a
+     gate I wrote needs calling out, so it is flagged in the AC and must be
+     re-examined at REVIEW.
+Also logged: the CLI builds its own `ConditionManager` despite `GameState` already
+owning one. The facade will use the engine's.
+Gate: pass — Definition of Ready fully satisfied.
+Next: P1-02 BUILD.
