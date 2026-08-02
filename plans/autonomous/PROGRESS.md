@@ -448,3 +448,31 @@ conformance suite) is next** in roadmap order. P1-04 was redesigned during P1-01
 PLAYTEST from "run the scenario twice and compare" to a same-run comparison,
 because the engine has no determinism seam (QUESTIONS.md Q-002).
 Next: P1-04 SPEC.
+
+## 2026-08-02 06:3x UTC — P1-04 — SPEC
+Did: Wrote `issues/P1-04.md` — the conformance suite, built on the redesigned
+premise. 7 ACs, each with a named verification method; a single drive-and-check
+loop shape so each property is one named check rather than seven playthroughs.
+Renamed the roadmap entry from "facade vs. legacy path produce identical outcomes"
+to "facade reporting matches engine reality", because the old title described the
+unsound design and would have misled whoever picked this up next.
+The two ACs that carry the most weight:
+  - **AC-2 (damage events match real HP deltas).** An event stream that lies about
+    damage is worse than none — every client renders the lie identically and
+    confidently. The spec calls out two wrinkles that must be handled rather than
+    papered over: healing makes deltas negative, and overkill means reported
+    damage can legitimately exceed the delta on a killing blow. Getting either
+    wrong *in the test* produces a false alarm, which is worse than no test.
+  - **AC-6 (the engine stays usable by the legacy path afterwards).** This is the
+    strangler's real guarantee. Migration will be incremental, so both paths will
+    touch the same `GameState` for a while. If the facade leaves state the legacy
+    path cannot continue from, incremental migration is impossible — and nobody
+    would find out until they tried.
+AC-5 (death events match reality) exists because this class of bug has already
+occurred twice: P1-02 PLAYTEST found death saves reported twice, P1-03 REVIEW found
+a death re-announced for an already-dead creature. It deserves a standing guard.
+Also recorded a trap for BUILD: events carry the P1-02 disambiguated display name
+while engine creatures carry the raw name, so reconciliation must map through the
+display name or compare on identity — otherwise two skeletons get summed together.
+Gate: pass — Definition of Ready fully satisfied.
+Next: P1-04 BUILD.
