@@ -2,7 +2,7 @@
 
 **Working branch:** `claude/dnd-engine-game-integration-kwrd0j`
 **Mode:** strangler / additive only — see `README.md`
-**Scope for this run:** P1-01 → P1-04, then P2-05.
+**Scope for this run:** P1-01 → P1-04, then P2-05. — **ALL COMPLETE ✅**
 
 ## Why this order
 
@@ -34,7 +34,7 @@ Terminal states: `blocked`, `reverted`
 | P1-02 | `Session` facade owning the turn loop (move + attack) | **done** | shipped | P1-01 ✅ |
 | P1-03 | `PendingDecision` for opportunity attacks (pause-and-ask) | **done** | shipped | P1-02 ✅ |
 | P1-04 | Conformance suite: facade reporting matches engine reality | **done** | shipped | P1-02 ✅ |
-| P2-05 | LLM DM adjudication: freeform intent → proposed ruling → engine adjudicates | review | SHIP next | P1-02 ✅ |
+| P2-05 | LLM DM adjudication: freeform intent → proposed ruling → engine adjudicates | **done** | shipped | P1-02 ✅ |
 
 ## Issue sketches
 

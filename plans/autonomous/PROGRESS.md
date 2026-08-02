@@ -703,3 +703,22 @@ Gate: PASS — zero unresolved critical findings.
   - session 158 passed; engine 3813 passed / 0 failed; clients at baseline
   - ruff + mypy clean; strangler regression playtest PASS
 Next: P2-05 SHIP — the final stage of the final issue in scope.
+
+## 2026-08-02 09:0x UTC — P2-05 — SHIP ✅ ISSUE COMPLETE — ROADMAP SCOPE COMPLETE
+Did: Verified the Definition of Done fresh, marked P2-05 done. **All five issues in
+scope are shipped.**
+Gate: PASS — session 158 passed; engine 3813 passed / 0 failed; clients at baseline
+and booting; zero unresolved critical findings; tree clean and pushed.
+Final demonstration — open-ended play, adjudicated:
+```
+> "I shove the brazier into the webs"
+  Nyx rolls Strength (Athletics): 2 + 4 = 6 vs DC 15 — failure.
+  It grinds across the flagstones but refuses to tip.
+> "I study the carvings on the wall"
+  Nyx rolls Intelligence (History): 8 + 3 = 11 vs DC 12 — failure.
+> "I press my ear to the wall and listen"
+  Nyx rolls Wisdom (Perception): 1 + 3 = 4 vs DC 10 — failure.
+```
+All three failed on rolls of 2, 8 and 1. Unlucky — and a **better** demonstration
+than successes would have been: the model's success text was sitting right there,
+unused, three times. The engine decided.

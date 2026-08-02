@@ -50,3 +50,42 @@ seam (thread the `DiceRoller` through AI targeting instead of using global
 and is probably worth doing — but it changes existing behaviour, so it is
 non-additive and outside tonight's strangler constraint.
 **Blocking:** no.
+
+---
+
+## Morning summary — what needs you
+
+Two items, neither blocking. Everything in scope shipped.
+
+### Q-001 (open) — does the DM feel like a DM?
+P2-05 is built and its invariants are proven, but **no API key exists in this
+container**, so I could never ask a real model for a ruling. Everything was
+verified with stubs and `DebugProvider`.
+
+What is proven: the wiring, the JSON handling, and — most importantly — that a
+model *cannot* decide outcomes, cannot mutate state, and cannot be talked into an
+easier check by a player. Verified against a deliberately **obedient** model that
+did exactly what a malicious player demanded.
+
+What is not proven, and cannot be by me: whether a real model returns rulings
+that feel like a competent DM. That is a taste judgement.
+
+**To try it:** set `ANTHROPIC_API_KEY`, then
+
+```python
+from dnd_engine.llm.factory import create_llm_provider
+from dnd_engine.session import LLMRulingSource, Session, FreeformIntent
+
+session = Session(game_state, ruling_source=LLMRulingSource(create_llm_provider()))
+session.perform(FreeformIntent(actor_id="pc_thorin", text="I shove the brazier into the webs"))
+```
+
+### Q-002 (open) — should the engine get a determinism seam?
+Enemy AI targeting calls global `random` instead of the injected `DiceRoller`
+(`systems/ai/targeting.py:80,156,162`, `core/game_state.py:5969`), so playthroughs
+cannot be made reproducible. This forced P1-04 to be redesigned, and it is the
+root cause of the flaky tests in both the engine and client-2d.
+
+Threading the roller through would make scripted scenarios and reproducible
+playtests possible. It changes existing behaviour, so it was outside tonight's
+additive constraint — it needs your call.
