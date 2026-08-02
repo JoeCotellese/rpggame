@@ -30,7 +30,7 @@ Terminal states: `blocked`, `reverted`
 
 | ID | Title | Status | Stage | Depends on |
 |---|---|---|---|---|
-| P1-01 | Session protocol types: `Intent`, `GameEvent`, `PendingDecision`, `ActionResult` | build | PLAYTEST next | — |
+| P1-01 | Session protocol types: `Intent`, `GameEvent`, `PendingDecision`, `ActionResult` | playtest | REVIEW next | — |
 | P1-02 | `Session` facade owning the turn loop (move + attack) | todo | — | P1-01 |
 | P1-03 | `PendingDecision` for opportunity attacks (pause-and-ask) | todo | — | P1-02 |
 | P1-04 | Conformance suite: facade vs. legacy path produce identical outcomes | todo | — | P1-02 |
@@ -53,6 +53,16 @@ should be able to render everything it needs from `ActionResult` alone, without
 reaching into `GameState`.
 
 ### P1-02 — `Session` facade owning the turn loop
+
+> **Design input from P1-01 PLAYTEST:** the facade **cannot** build its event
+> stream by subscribing to the `EventBus` alone. Weapon attacks emit nothing to
+> the bus — `ATTACK_ROLL` is emitted only from the *spell* path
+> (`core/combat.py:720`) and only when an `event_bus` is passed in, while
+> `CombatEngine` is constructed with a dice roller and no bus at all
+> (`core/game_state.py:754`). A real playthrough resolving 16 weapon attacks
+> produced **zero** `ATTACK_ROLL` or `DAMAGE_DEALT` events. The facade must
+> synthesize `GameEvent`s from returned result objects (`PlayerAttackResult`,
+> `MoveResult`, `EnemyTurnResult`) and merge those with bus events.
 
 `Session.perform(intent) -> ActionResult`. Wraps an existing `GameState`.
 Movement and attack intents only. Critically, the facade — not the caller —
@@ -77,10 +87,18 @@ for existing callers.
 
 ### P1-04 — Conformance suite
 
-Drive the same seeded scenario twice — once through the facade, once through the
-legacy `GameState` path — and assert identical final state (positions, HP,
-initiative order, combat status). This is what keeps the strangler honest: if
-the facade ever drifts from the engine's real behaviour, this fails.
+> **The original premise is unsound — see `QUESTIONS.md` Q-002.** "Run the same
+> seeded scenario twice and assert identical outcomes" cannot work: the engine
+> has no complete determinism seam. Measured during P1-01 PLAYTEST, a fixed
+> `DiceRoller` seed still yielded 5-6 distinct event types across runs; adding
+> `random.seed()` made it worse (9 to 46 events); pinning `PYTHONHASHSEED`
+> stabilised the count but not the type set.
+>
+> **Redesign to a same-run comparison instead:** drive one scenario through the
+> facade and assert the facade's reported `ActionResult` agrees with that *same*
+> `GameState`'s actual internal state (positions, HP, initiative index, combat
+> flag). One run, no RNG dependence, and it tests the thing that actually
+> matters — that the facade does not misreport what the engine did.
 
 ### P2-05 — LLM DM adjudication
 

@@ -36,3 +36,15 @@ Format: `- [<issue id>] <finding> — <file:line>`
   need to add one; adding an enum member is additive and safe, but worth knowing
   before that issue starts.
   — `dnd-engine/dnd_engine/utils/events.py`
+- [P1-01] Weapon attacks emit no bus events. `ATTACK_ROLL` fires only from the
+  spell path and only when an `event_bus` argument is passed; `CombatEngine` is
+  built without a bus. A real playthrough resolving 16 weapon attacks produced
+  zero `ATTACK_ROLL`/`DAMAGE_DEALT` events, so a bus subscriber cannot observe
+  combat at all. Existing clients paper over this by reading the returned
+  `PlayerAttackResult`. Folded into the P1-02 design rather than fixed, since
+  adding emissions would change behaviour for existing subscribers.
+  — `dnd-engine/dnd_engine/core/combat.py:720`, `core/game_state.py:754`
+- [P1-01] Enemy AI targeting uses global `random` rather than the injected
+  `DiceRoller`, so playthroughs cannot be made reproducible. See QUESTIONS.md
+  Q-002.
+  — `dnd-engine/dnd_engine/systems/ai/targeting.py:80`

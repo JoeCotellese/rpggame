@@ -59,3 +59,30 @@ Finding: the engine's "1 pre-existing failure" is **flaky, not stable**.
 against an unseeded 1d8+10 roll. `BASELINE.md` updated to treat the engine count as
 0–1 and to require an isolated re-run before calling anything a regression.
 Next: P1-01 PLAYTEST.
+
+## 2026-08-02 03:5x UTC — P1-01 — PLAYTEST
+Did: Forward verification by driving a **real crypt playthrough** (walk, fight
+skeletons, 16 resolved weapon attacks) and asserting the protocol carries what the
+engine actually emits — added as a permanent test,
+`tests/session/test_protocol_integration.py`, with an explicit non-vacuity guard so
+it cannot pass on an empty run. Regression verification via `GameSession`: 5/5 moves
+accepted, party 44/44, explored 255→270/300.
+Gate: PASS — all 6 ACs verified with evidence recorded in `issues/P1-01.md`.
+  - session tests: 36 passed (31 unit + 5 integration)
+  - engine 3686 / client-2d 576 (2 pre-existing) / client-terminal 506
+  - ruff clean
+Two findings the unit tests could never have caught, both folded into the
+roadmap sketches of the issues they affect:
+  1. **Weapon attacks emit nothing to the event bus.** `ATTACK_ROLL` fires only
+     from the spell path, and `CombatEngine` is constructed without a bus at all.
+     16 real attacks produced zero attack/damage events. P1-02 therefore cannot
+     build its event stream from bus subscriptions — it must synthesize events
+     from returned result objects and merge them with bus events.
+  2. **The engine has no determinism seam.** Enemy AI targeting calls global
+     `random`, bypassing the injected `DiceRoller`. Seeding the dice leaves the
+     type set varying 5-6; adding `random.seed()` made it worse (9 to 46 events);
+     pinning `PYTHONHASHSEED` stabilised the count but not the types. This makes
+     P1-04's "run twice, assert identical" premise unsound, so P1-04 was
+     redesigned in `ROADMAP.md` to a same-run comparison that has no RNG
+     dependence. Logged as Q-002 for Joe.
+Next: P1-01 REVIEW.

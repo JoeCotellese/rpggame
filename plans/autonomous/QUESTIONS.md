@@ -19,3 +19,34 @@ but it cannot prove that a real model returns usable rulings.
 whether the proposed rulings feel like a competent DM. That is a taste
 judgement the loop cannot make.
 **Blocking:** no — P2-05 proceeds against the debug provider.
+
+### Q-002 — The engine has no determinism seam, which breaks P1-04 as originally specified
+**Raised:** 2026-08-02, P1-01 PLAYTEST
+**Issue:** P1-04 (redesigned in `ROADMAP.md`, not blocked)
+**Context:** P1-04 was specified as "drive the same seeded scenario twice and
+assert identical outcomes". That cannot work today. Measured on a real crypt
+playthrough:
+
+| Seeding | Events | Distinct types |
+|---|---|---|
+| `DiceRoller(seed=…)` only | stable 9 | **5–6, varies** |
+| + `random.seed(…)` | **9 to 46, varies** | 5–7 |
+| + `PYTHONHASHSEED=0` | stable 9 | **5–6, varies** |
+
+Cause: enemy AI target selection calls the global `random` module directly
+(`systems/ai/targeting.py:80,156,162` and `core/game_state.py:5969`), bypassing
+the seedable `DiceRoller`. Some variance survives even with that seeded and hash
+randomisation pinned, so there is at least one more source.
+
+**What the loop did:** redesigned P1-04 in `ROADMAP.md` to a *same-run*
+comparison — drive one scenario through the facade and assert the facade's
+reported `ActionResult` agrees with that same `GameState`'s actual internal
+state. One run, no RNG dependence, and it tests the thing that actually matters.
+Proceeding on that basis rather than blocking.
+
+**Needs from you:** a call on whether the engine should gain a real determinism
+seam (thread the `DiceRoller` through AI targeting instead of using global
+`random`). That would make reproducible playtests and scripted scenarios possible
+and is probably worth doing — but it changes existing behaviour, so it is
+non-additive and outside tonight's strangler constraint.
+**Blocking:** no.
