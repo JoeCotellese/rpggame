@@ -20,6 +20,7 @@ existing caller changes behaviour.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from dnd_engine.core.entity_ids import pc_entity_id
@@ -80,22 +81,24 @@ class _EventRecorder:
     keeps ``sequence`` faithful to what actually happened.
     """
 
-    def __init__(self) -> None:
-        """Start an empty recording."""
+    def __init__(self, on_event: Callable[[GameEvent], None] | None = None) -> None:
+        """Start an empty recording, optionally streaming to a listener."""
         self._events: list[GameEvent] = []
+        self._on_event = on_event
 
     def record(
         self, event_type: EventType, data: dict[str, Any], message: str | None = None
     ) -> None:
-        """Append one event, numbering it by arrival."""
-        self._events.append(
-            GameEvent(
-                type=event_type,
-                data=data,
-                sequence=len(self._events),
-                message=message,
-            )
+        """Append one event, numbering it by arrival, and stream it onward."""
+        event = GameEvent(
+            type=event_type,
+            data=data,
+            sequence=len(self._events),
+            message=message,
         )
+        self._events.append(event)
+        if self._on_event is not None:
+            self._on_event(event)
 
     def record_bus_event(self, event: Event) -> None:
         """Append an event published on the engine's bus."""
@@ -131,7 +134,10 @@ class Session:
     """
 
     def __init__(
-        self, game_state: GameState, ruling_source: RulingSource | None = None
+        self,
+        game_state: GameState,
+        ruling_source: RulingSource | None = None,
+        event_listener: Callable[[GameEvent], None] | None = None,
     ) -> None:
         """Wrap an already-started :class:`GameState`.
 
@@ -142,10 +148,19 @@ class Session:
                 intent. With none configured, freeform intent is rejected
                 exactly as before — so adding this changes nothing for an
                 existing caller.
+            event_listener: Optional callback invoked with each event the moment
+                it is recorded, rather than only in the returned
+                :class:`ActionResult`. A client that also subscribes to the
+                engine's `EventBus` needs this: those subscribers fire
+                mid-resolution, so rendering the session's events afterwards
+                interleaves the two streams in the wrong order — a party wipe
+                gets announced above the blows that caused it. Exceptions raised
+                by the listener are the caller's to handle; the session does not
+                swallow them.
         """
         self._game = game_state
         self._ruling_source = ruling_source
-        self._recorder = _EventRecorder()
+        self._recorder = _EventRecorder(on_event=event_listener)
         self._subscribed = False
         self._numbered_combat = False
         self._opportunities = OpportunityQueue()

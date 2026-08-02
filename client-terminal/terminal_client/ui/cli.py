@@ -100,9 +100,11 @@ class CLI:
                 status_callback=print_status_message,
             )
 
-        # Session facade: owns D&D's turn structure so the UI does not
-        self.session = Session(game_state)
+        # Session facade: owns D&D's turn structure so the UI does not.
+        # Events are rendered as the engine produces them, not from the
+        # returned result — see `_render_session_event`.
         self.session_render = SessionEventRenderer(self)
+        self.session = Session(game_state, event_listener=self._render_session_event)
 
         # Enemy AI for combat decisions
         self.enemy_ai = EnemyAI()
@@ -3850,12 +3852,34 @@ class CLI:
         )
         self._render_session_result(result)
 
-    def _render_session_result(self, result) -> None:
-        """Display a session result, surfacing engine faults as faults.
+    def _render_session_event(self, event) -> None:
+        """Display one event the moment the engine produces it.
 
-        A rules-level refusal here is not worth showing: the turn simply had
-        nowhere left to go (combat ended, or the party was wiped), and the run
-        loop already says so. An internal failure is a defect and must not pass
+        Streaming rather than rendering the finished result is what keeps the
+        transcript in the order things happened. This class also subscribes to
+        the `EventBus` directly for combat start and end, level ups and item
+        pickups, and those handlers print mid-resolution — so batching the
+        session's own events until the call returned put the party wipe above
+        the blows that caused it.
+
+        A display failure must not abort a turn that has already been applied to
+        the game state, so it is reported and stepped over here rather than
+        raised back into the engine.
+        """
+        try:
+            self.session_render.render_event(event)
+        except Exception as exc:  # noqa: BLE001 - a broken display must not end the fight
+            print_error(f"Could not display a game event: {type(exc).__name__}: {exc}")
+
+    def _render_session_result(self, result) -> None:
+        """Close out a session call: report faults, then answer any question.
+
+        The events themselves were already printed as they happened, by
+        `_render_session_event`.
+
+        A rules-level refusal is not worth showing: the turn simply had nowhere
+        left to go (combat ended, or the party was wiped), and the run loop
+        already says so. An internal failure is a defect and must not pass
         silently.
 
         Outstanding decisions are drained either way. A refusal is most often
@@ -3863,9 +3887,7 @@ class CLI:
         open — so returning early would leave the player answering commands
         that can never be accepted.
         """
-        if result.ok:
-            self.session_render.render(result)
-        elif result.error_kind is ErrorKind.INTERNAL:
+        if not result.ok and result.error_kind is ErrorKind.INTERNAL:
             print_error(f"The engine failed to advance the turn: {result.error}")
 
         self._resolve_pending_decisions()
@@ -3889,7 +3911,7 @@ class CLI:
                 # The decision is still queued, so asking again would loop.
                 print_error(f"That answer was refused: {result.error}")
                 return
-            self.session_render.render(result)
+            # The events were printed as they resolved; nothing to render here.
 
     def _ask_decision(self, pending) -> str:
         """Put a pending decision to the player and return their answer.

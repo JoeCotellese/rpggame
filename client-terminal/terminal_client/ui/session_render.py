@@ -73,25 +73,38 @@ class SessionEventRenderer:
                 and are reused rather than reimplemented.
         """
         self._cli = cli
+        self._swallow_attack_echo = False
+
+    def render_event(self, event: GameEvent) -> None:
+        """Print one event as the engine produces it.
+
+        This is the streaming entry point, and the one the CLI wires to the
+        session. Rendering event by event rather than batching a whole
+        `ActionResult` is what keeps output in the order things happened: the
+        CLI also subscribes to the bus directly, and those handlers print
+        mid-resolution.
+        """
+        if self._swallow_attack_echo and event.type in _ATTACK_ECHO:
+            return
+        self._swallow_attack_echo = False
+
+        if event.type is EventType.ENEMY_TURN:
+            self.render_enemy_turn(event.data)
+            self._swallow_attack_echo = event.data.get("attack_result") is not None
+            return
+
+        self._render_event(event)
 
     def render(self, result: ActionResult) -> None:
         """Print everything in one accepted action's result, in order.
 
-        Rejections are the CLI's to display: whether a refused turn is worth a
-        line depends on why it was asked for, which this class cannot see.
+        For callers holding a finished result rather than streaming. Rejections
+        are the CLI's to display: whether a refused turn is worth a line depends
+        on why it was asked for, which this class cannot see.
         """
-        swallow_attack_echo = False
+        self._swallow_attack_echo = False
         for event in result.events:
-            if swallow_attack_echo and event.type in _ATTACK_ECHO:
-                continue
-            swallow_attack_echo = False
-
-            if event.type is EventType.ENEMY_TURN:
-                self.render_enemy_turn(event.data)
-                swallow_attack_echo = event.data.get("attack_result") is not None
-                continue
-
-            self._render_event(event)
+            self.render_event(event)
 
     def _render_event(self, event: GameEvent) -> None:
         """Dispatch a single event to its display."""

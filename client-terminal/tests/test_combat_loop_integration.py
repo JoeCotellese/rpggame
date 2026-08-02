@@ -30,8 +30,8 @@ from terminal_client.ui.cli import CLI
 MAX_COMMANDS = 80
 
 
-def _party() -> Party:
-    """Two level-3 fighters, durable enough to finish the fight."""
+def _party(max_hp: int = 30, ac: int = 16) -> Party:
+    """Two level-3 fighters. Lower the HP and AC to script a party wipe."""
     return Party(
         [
             Character(
@@ -46,19 +46,18 @@ def _party() -> Party:
                     wisdom=11,
                     charisma=8,
                 ),
-                max_hp=30,
-                ac=16,
+                max_hp=max_hp,
+                ac=ac,
             )
             for name in ("Thorin", "Garrick")
         ]
     )
 
 
-@pytest.fixture
-def cli() -> CLI:
+def _cli_for(party: Party) -> CLI:
     """A CLI over a real laboratory game state, with narrative disabled."""
     game_state = GameState(
-        party=_party(),
+        party=party,
         dungeon_name="laboratory",
         campaign_id="poisoned_laboratory",
         event_bus=EventBus(),
@@ -71,6 +70,17 @@ def cli() -> CLI:
         campaign_name="integration_test",
         auto_save_enabled=False,
     )
+
+
+@pytest.fixture
+def cli() -> CLI:
+    return _cli_for(_party())
+
+
+@pytest.fixture
+def doomed_cli() -> CLI:
+    """A party that cannot survive the goblins, for the wipe path."""
+    return _cli_for(_party(max_hp=1, ac=1))
 
 
 def _play(cli: CLI) -> str:
@@ -150,3 +160,24 @@ class TestAFullFightThroughTheMigratedLoop:
         output = _play(cli)
 
         assert "HIT" in output or "MISS" in output, "no attack mechanics were shown"
+
+
+class TestEventsPrintInTheOrderTheyHappened:
+    """Found in playtest: the defeat was announced before the blows that caused it.
+
+    The CLI subscribes to the bus directly for combat end, and that handler
+    prints the instant the engine emits — mid-resolution. Rendering the
+    session's own events afterwards, in a batch, therefore put every enemy turn
+    and death save *below* the "Defeat!" line they led up to.
+    """
+
+    def test_combat_end_is_announced_after_the_turns_that_ended_it(self, doomed_cli):
+        output = _play(doomed_cli)
+
+        assert "Defeat!" in output, "the doomed party did not get wiped"
+        assert "'s turn..." in output, "no enemy turn was rendered"
+
+        assert output.index("'s turn...") < output.index("Defeat!"), (
+            "the defeat was announced before the enemy turns that caused it - "
+            "session events are being rendered after the fact instead of as they happen"
+        )

@@ -248,6 +248,54 @@ class TestSkippedTurnsAreRenderable:
         assert effects[0].data.get("damage") == 4
 
 
+class TestStreamingEventsToAListener:
+    """A client that also watches the bus needs events as they happen.
+
+    Found in a `client-terminal` playtest. The CLI subscribes to `COMBAT_END`
+    directly, so that handler printed the moment the engine emitted — while the
+    session's own events were rendered afterwards from the returned result. The
+    transcript put "Defeat!" above the enemy turns and death saves that led to
+    it. Streaming puts both on one timeline.
+    """
+
+    def test_the_listener_sees_every_event_the_result_carries(self):
+        seen = []
+        actor = StubCharacter("Thorin")
+        stunned = StubCharacter("Garrick", can_act=False)
+        session = Session(StubGameState([actor, stunned]), event_listener=seen.append)
+
+        result = session.perform(WaitIntent(actor_id=pc_entity_id("Thorin")))
+
+        assert [e.sequence for e in seen] == [e.sequence for e in result.events]
+
+    def test_the_listener_is_called_before_the_call_returns(self):
+        """Streaming is only worth having if it beats the return."""
+        arrived_during: list[bool] = []
+        actor = StubCharacter("Thorin")
+        stunned = StubCharacter("Garrick", can_act=False)
+        game = StubGameState([actor, stunned])
+
+        original = game.initiative_tracker.next_turn
+        streamed: list[object] = []
+
+        def record_when_advancing() -> None:
+            arrived_during.append(bool(streamed))
+            original()
+
+        game.initiative_tracker.next_turn = record_when_advancing  # type: ignore[method-assign]
+        session = Session(game, event_listener=streamed.append)
+        session.perform(WaitIntent(actor_id=pc_entity_id("Thorin")))
+
+        assert any(arrived_during), (
+            "no event reached the listener until resolution had finished"
+        )
+
+    def test_no_listener_leaves_behaviour_unchanged(self):
+        actor = StubCharacter("Thorin")
+        session = Session(StubGameState([actor]))
+        assert session.perform(WaitIntent(actor_id=pc_entity_id("Thorin"))).ok
+
+
 class TestAC8InternalFailuresAreContained:
     """AC-8: an engine exception never corrupts the session."""
 
