@@ -23,6 +23,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from dnd_engine.core.entity_ids import pc_entity_id
+from dnd_engine.session.adjudication import (
+    RulingRefused,
+    RulingSource,
+    adjudicate,
+    describe_check,
+    validate_ruling,
+)
 from dnd_engine.session.protocol import (
     ActionResult,
     AttackIntent,
@@ -123,14 +130,21 @@ class Session:
     :attr:`in_combat` is ``True``.
     """
 
-    def __init__(self, game_state: GameState) -> None:
+    def __init__(
+        self, game_state: GameState, ruling_source: RulingSource | None = None
+    ) -> None:
         """Wrap an already-started :class:`GameState`.
 
         Args:
             game_state: The engine state to drive. Not modified by this class;
                 the session only calls its public surface.
+            ruling_source: Optional DM that proposes rulings for freeform
+                intent. With none configured, freeform intent is rejected
+                exactly as before — so adding this changes nothing for an
+                existing caller.
         """
         self._game = game_state
+        self._ruling_source = ruling_source
         self._recorder = _EventRecorder()
         self._subscribed = False
         self._numbered_combat = False
@@ -614,7 +628,7 @@ class Session:
         if isinstance(intent, WaitIntent):
             return None
         if isinstance(intent, FreeformIntent):
-            return "freeform intents are not adjudicated yet"
+            return self._do_freeform(intent)
         return f"unsupported intent kind: {type(intent).__name__}"
 
     def _do_attack(self, intent: AttackIntent) -> str | None:
@@ -641,6 +655,50 @@ class Session:
             weapon=result.weapon_name,
             attack_result=result.attack_result,
             target_killed=result.target_killed,
+        )
+        return None
+
+    def _do_freeform(self, intent: FreeformIntent) -> str | None:
+        """Adjudicate freeform player text as a rules check.
+
+        The ruling source proposes; this method validates that proposal, and the
+        **engine** rolls and decides. A refused proposal is a rules-level
+        rejection, not an engine fault — asking a model a question and getting
+        an unusable answer back is ordinary.
+        """
+        if self._ruling_source is None:
+            return "freeform intents are not adjudicated yet"
+
+        actor = self._character_for(intent.actor_id)
+        if actor is None:
+            return f"no such actor: {intent.actor_id}"
+
+        try:
+            raw = self._ruling_source.propose(intent.text, self.snapshot())
+        except Exception as exc:  # noqa: BLE001 - a flaky DM must not break play
+            return f"the ruling source failed: {type(exc).__name__}: {exc}"
+
+        try:
+            ruling, clamped_from = validate_ruling(raw)
+        except RulingRefused as refused:
+            return str(refused)
+
+        outcome = adjudicate(
+            ruling,
+            actor,
+            roller=getattr(self._game, "dice_roller", None),
+            clamped_dc_from=clamped_from,
+        )
+
+        self._recorder.record(
+            EventType.SKILL_CHECK if ruling.skill else EventType.ABILITY_CHECK,
+            to_jsonable({"actor": actor.name, **outcome.to_dict()}),
+            message=describe_check(actor.name, outcome),
+        )
+        self._recorder.record(
+            EventType.DESCRIPTION_ENHANCED,
+            to_jsonable({"actor": actor.name, "text": outcome.outcome_text}),
+            message=outcome.outcome_text,
         )
         return None
 

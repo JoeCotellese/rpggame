@@ -12,6 +12,16 @@ events it produced, and answer any question the engine raises mid-resolution.
 happened, up to the next point a player must decide.
 """
 
+from dnd_engine.session.adjudication import (
+    ABILITIES,
+    Adjudication,
+    ProposedRuling,
+    RulingRefused,
+    RulingSource,
+    adjudicate,
+    describe_check,
+    validate_ruling,
+)
 from dnd_engine.session.protocol import (
     ActionResult,
     AttackIntent,
@@ -30,7 +40,15 @@ from dnd_engine.session.protocol import (
 from dnd_engine.session.session import Session
 
 __all__ = [
+    "ABILITIES",
     "ActionResult",
+    "Adjudication",
+    "ProposedRuling",
+    "RulingRefused",
+    "RulingSource",
+    "adjudicate",
+    "describe_check",
+    "validate_ruling",
     "ErrorKind",
     "Session",
     "AttackIntent",
